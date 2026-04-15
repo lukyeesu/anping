@@ -127,7 +127,7 @@ const StatCard = ({ title, value, icon: Icon, color }) => {
   return (
     <div className={`${theme.card} flex items-center gap-4 hover:shadow-md transition-shadow`}>
       <div className={`p-4 rounded-2xl ${colorStyles[color]}`}><Icon size={24} /></div>
-      <div><p className="text-sm font-medium text-slate-500">{title}</p><p className="text-2xl font-bold text-slate-800">{value}</p></div>
+      <div><p className="text-sm font-medium text-slate-500">{title}</p><p className="text-2xl font-bold text-slate-800 font-data">{value}</p></div>
     </div>
   );
 };
@@ -254,7 +254,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           title={`${timeStr} ${ev.name} (${ev.artist})`}
        >
           <div className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full shrink-0 ${dotColor} hidden sm:block`}></div>
-          <span className="truncate font-medium tracking-tighter">{displayText}</span>
+          <span className="truncate font-medium tracking-tighter font-data">{displayText}</span>
        </button>
      );
   };
@@ -383,7 +383,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                               <span className="font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg text-xs w-fit whitespace-nowrap">
                                   {ev.hn || '-'}
                               </span>
-                              <span className="text-sm font-bold text-slate-600 block mt-1">
+                              <span className="text-sm font-bold text-slate-600 block mt-1 font-data">
                                   {ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'}
                               </span>
                           </div>
@@ -447,7 +447,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                               <span className="font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg text-xs w-fit whitespace-nowrap">
                                                   {ev.hn || '-'}
                                               </span>
-                                              <span>{ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'} น.</span>
+                                              <span className="font-data">{ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'} น.</span>
                                           </div>
                                           <div className="flex-1 min-w-0 border-l border-slate-100 pl-4">
                                               <div className="flex justify-between items-start mb-1">
@@ -481,8 +481,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       if (!selectedDayDetails) return null;
       const { date, events } = selectedDayDetails;
 
-      return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      return createPortal(
+        <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 100 }}>
             <div 
                 className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm ${isDayModalClosing ? 'backdrop-animate-out' : 'animate-in fade-in duration-300'}`} 
                 onClick={closeDayDetailsModal} 
@@ -533,7 +533,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                                 <span className="font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg text-xs w-fit whitespace-nowrap">
                                                                     {item.hn || '-'}
                                                                 </span>
-                                                                <span className="mt-1 text-sm">{time} น.</span>
+                                                                <span className="mt-1 text-sm font-data">{time} น.</span>
                                                             </div>
                                                         </td>
                                                         <td className="p-4 align-top">
@@ -543,7 +543,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                         <td className="p-4 align-top text-center">
                                                             <div className="flex justify-center">
                                                                 {item.phone && item.phone[0] ? (
-                                                                  <a href={`tel:${item.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
+                                                                  <a href={`tel:${item.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors font-data">
                                                                     <Phone size={14} /> {item.phone[0]}
                                                                   </a>
                                                                 ) : <span className="text-slate-400">-</span>}
@@ -585,7 +585,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                     <span className="font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg text-xs w-fit whitespace-nowrap">{item.hn || '-'}</span>
                                                     <div className="flex items-center gap-1.5 mt-1">
                                                          <Clock className="w-4 h-4 text-slate-400" />
-                                                         <span className="text-sm font-bold text-slate-600">{time} น.</span>
+                                                         <span className="text-sm font-bold text-slate-600 font-data">{time} น.</span>
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col gap-1 items-end">
@@ -613,7 +613,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                 <div className="col-span-2 mt-1">
                                                     <p className="text-[10px] font-semibold text-slate-400 mb-0.5">เบอร์โทร</p>
                                                     {item.phone && item.phone.length > 0 && item.phone[0] ? (
-                                                        <a href={`tel:${item.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-sky-600 font-bold">
+                                                        <a href={`tel:${item.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-sky-600 font-bold font-data">
                                                             <Phone size={14} /> {item.phone[0]}
                                                         </a>
                                                     ) : <span className="text-slate-400">-</span>}
@@ -634,7 +634,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
       );
   };
 
@@ -725,6 +726,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isFilterStuck, setIsFilterStuck] = useState(false);
   const filterRef = React.useRef(null);
+  const sentinelRef = React.useRef(null); // เพิ่ม Sentinel Ref สำหรับจับพิกัด
 
   // --- New States for Sticky Header & Filter ---
   const [isApptHeaderScrolled, setIsApptHeaderScrolled] = useState(false);
@@ -762,6 +764,18 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const [apptYearPageStart, setApptYearPageStart] = useState(0);
   const [apptTime, setApptTime] = useState({ h: '09', m: '00' });
   const [apptCalendarPos, setApptCalendarPos] = useState({ top: 0, left: 0 });
+
+  // --- State สำหรับแอนิเมชันปิด Modal ของ AppointmentManager ---
+  const [isModalClosing, setIsModalClosing] = useState(false);
+  const [isApptCalClosing, setIsApptCalClosing] = useState(false);
+  const [isAlertClosing, setIsAlertClosing] = useState(false);
+
+  // Fix: Add ref for Calendar wrapper to replace document.getElementById
+  const apptDatetimeWrapperRef = React.useRef(null);
+
+  const closeApptModal = () => { setIsModalClosing(true); setTimeout(() => { setIsModalOpen(false); setIsModalClosing(false); }, 300); };
+  const closeApptCalendar = () => { setIsApptCalClosing(true); setTimeout(() => { setShowApptCalendar(false); setIsApptCalClosing(false); }, 300); };
+  const closeApptAlert = () => { setIsAlertClosing(true); setTimeout(() => { setSweetAlert(prev => ({...prev, isOpen: false})); setIsAlertClosing(false); }, 300); };
 
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
   const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -816,42 +830,59 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     setIsLoadingMore(false);
   }, [search, viewMode]);
 
-  // คำนวณความสูงของ Header ใหม่เมื่อมีการเลื่อนและย่อขนาด
+  // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
   useEffect(() => {
-    if (headerRef.current) {
-      const timer = setTimeout(() => {
-        setHeaderHeight(headerRef.current.offsetHeight);
-      }, 350); // รอให้ CSS Transition ทำงานเสร็จ
-      return () => clearTimeout(timer);
-    }
-  }, [isApptHeaderScrolled]);
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+            // ป้องกันการเซ็ตค่า Height เป็น 0 เมื่อ Component ถูกซ่อน (display: none)
+            if (entry.target.offsetHeight > 0) {
+                setHeaderHeight(entry.target.offsetHeight);
+            }
+        }
+    });
+
+    observer.observe(headerEl);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
-    const mainElement = document.querySelector('main');
+    const mainElement = document.getElementById('main-scroll-container');
     if (!mainElement || viewMode !== 'table') return;
 
-    // คำนวณความสูงครั้งแรก
-    const updateHeaderHeight = () => { if (headerRef.current) setHeaderHeight(headerRef.current.offsetHeight); };
-    updateHeaderHeight();
-    setTimeout(updateHeaderHeight, 100);
+    // --- เพิ่มการเช็คสถานะทันทีเมื่อโหลด Component ---
+    setTimeout(() => {
+        if (mainElement && headerRef.current && headerRef.current.offsetHeight > 0) {
+            setIsApptHeaderScrolled(mainElement.scrollTop > 20);
+            if (sentinelRef.current) {
+                const sentinelRect = sentinelRef.current.getBoundingClientRect();
+                const headerRect = headerRef.current.getBoundingClientRect();
+                // เช็คว่าขอบบนของ Sentinel ชนกับ ขอบล่างของเฮดเดอร์หรือยัง
+                setIsFilterStuck(sentinelRect.top <= headerRect.bottom + 2);
+            }
+        }
+    }, 50);
 
     const handleScroll = (e) => {
+      // ป้องกันไม่ให้คำนวณและอัปเดต State ถ้า Component ถูกซ่อนอยู่
+      if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
+
       const { scrollTop, scrollHeight, clientHeight } = e.target;
       
-      // แก้ไขบั๊ก Scroll ค้างด้วยเทคนิค Hysteresis (แยกจุดยืดและหดให้อยู่คนละระยะกัน)
-      // ป้องกันเบราว์เซอร์เด้ง ScrollTop กลับเมื่อความสูงของ Header เปลี่ยนแปลง
-      setIsApptHeaderScrolled(prev => {
-         if (prev && scrollTop <= 10) return false; // เลื่อนขึ้นมาจนเกือบถึงบนสุด (<=10) ค่อยขยาย Header กลับ
-         if (!prev && scrollTop > 80) return true;  // เลื่อนลงไปลึกพอสมควร (>80) ค่อยย่อ Header ลง
-         return prev;
-      });
+      setIsApptHeaderScrolled(scrollTop > 20);
 
-      if (filterRef.current && headerRef.current) {
-         const hHeight = headerRef.current.offsetHeight;
-         const rect = filterRef.current.getBoundingClientRect();
-         // ใช้ hHeight เป็นเกณฑ์ (เมื่อขอบบนของ Filter แตะขอบล่างของ Header)
-         if (rect.top <= hHeight + 2) setIsFilterStuck(true);
-         else if (rect.top > hHeight + 20) setIsFilterStuck(false);
+      if (sentinelRef.current && headerRef.current) {
+         const sentinelRect = sentinelRef.current.getBoundingClientRect();
+         const headerRect = headerRef.current.getBoundingClientRect();
+
+         // ใช้ Sentinel Element (ที่ไม่ได้เป็น sticky) มาคำนวณ เพื่อป้องกันค่า top เพี้ยนตอนติด Header
+         if (sentinelRect.top <= headerRect.bottom + 2) {
+             setIsFilterStuck(true);
+         } else {
+             setIsFilterStuck(false);
+         }
       }
 
       if (scrollTop + clientHeight >= scrollHeight - 100) {
@@ -864,19 +895,14 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         }
       }
     };
+    
     mainElement.addEventListener('scroll', handleScroll);
-    window.addEventListener('resize', updateHeaderHeight);
-
-    return () => { 
-        mainElement.removeEventListener('scroll', handleScroll);
-        window.removeEventListener('resize', updateHeaderHeight);
-    };
+    return () => mainElement.removeEventListener('scroll', handleScroll);
   }, [visibleCount, filteredData.length, isLoadingMore, viewMode]);
 
   const handleOpenApptCalendar = () => {
-    const wrapper = document.getElementById('appt-datetime-wrapper');
-    if (wrapper) {
-      const rect = wrapper.getBoundingClientRect();
+    if (apptDatetimeWrapperRef.current) {
+      const rect = apptDatetimeWrapperRef.current.getBoundingClientRect();
       setApptCalendarPos({ top: rect.bottom, left: rect.left });
     }
     const dtStr = formData.datetime;
@@ -971,7 +997,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         title: 'ยืนยันการลบการนัดหมาย?',
         text: 'คุณแน่ใจหรือไม่ว่าต้องการลบการนัดหมายนี้?',
         onConfirm: async () => {
-            setSweetAlert({ ...sweetAlert, isOpen: false });
+            closeApptAlert(); 
             setIsProcessing(true);
             try {
                await callAppScript('DELETE_DATA', 'Queue', { id });
@@ -993,6 +1019,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     
     // 5. หากไม่ค้นหาและไม่มีผู้ป่วย (ไม่มี HN แต่มีชื่อ) ให้เพิ่มผู้ป่วยเข้าระบบ
     if (!finalHn && formData.patientName) {
+        // Fix: Generate HN at save time to avoid duplicate HN race condition
         finalHn = generateNextHN(patientsData);
         
         // แยกคำนำหน้า ชื่อ นามสกุล และเพศ อัตโนมัติ
@@ -1031,7 +1058,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         doctor: formData.doctor,
         reason: formData.reason,
         status: formData.status,
-        phone: formData.phones, // เก็บเป็น Array
+        phone: formData.phones, 
         lineId: formData.lineId,
         facebook: formData.facebook,
         instagram: formData.instagram,
@@ -1050,7 +1077,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         if (editingId) setQueueData(queueData.map(a => a.id === editingId ? payload : a));
         else setQueueData([payload, ...queueData]);
         
-        setIsModalOpen(false);
+        closeApptModal(); 
         showToast(editingId ? 'แก้ไขนัดหมายสำเร็จ' : 'เพิ่มนัดหมายสำเร็จ', 'success');
     } catch(e) {
         showToast('บันทึกไม่สำเร็จ', 'error');
@@ -1079,11 +1106,15 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         </div>
 
         {/* --- 2. ปฏิทิน --- */}
-        <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-2 mb-3 relative z-30">
+        {/* ลบ relative z-30 ออก เพื่อไม่ให้มันขัง Modal เอาไว้ข้างใต้ Header */}
+        <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-2 mb-3">
           <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100/50 shrink-0">
              <CalendarView activities={queueData} onEventClick={(ev) => handleOpenEdit(ev.originalData || ev, true)} onDayClick={(date) => console.log('Day clicked:', date)} dealStatuses={systemStatusTypes} />
           </div>
         </div>
+
+        {/* เพิ่ม Sentinel ตรงนี้ เพื่อเป็นตัวจับพิกัดที่แท้จริงแทนการจับที่ตัวฟิลเตอร์โดยตรง */}
+        <div ref={sentinelRef} className="w-full h-px opacity-0 pointer-events-none -mt-px"></div>
 
         {/* --- 3. Sticky Filter ซ้อนกันเมื่อชน Header --- */}
         <div ref={filterRef} className="sticky z-40 w-full pointer-events-none transition-all duration-300" style={{ top: headerHeight }}>
@@ -1133,28 +1164,28 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                              const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
 
                              return (
-                             <tr key={`${appt.id || 'appt'}-${index}`} onClick={() => handleOpenEdit(appt, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group">
+                             <tr key={`${appt.id || 'appt'}-${index}`} onClick={() => handleOpenEdit(appt, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group font-data space-row-animation">
                                 <td className="py-4 text-slate-700 font-medium text-center">
                                   <div className="flex flex-col items-center justify-center gap-1">
                                     <span>{datePart}</span>
-                                    {/* ปรับขนาดเวลาเป็น text-sm ตรงนี้ให้เท่ากับชื่อ */}
                                     {timePart && <span className="text-sm text-slate-500 font-medium">{timePart}</span>}
                                   </div>
                                 </td>
-                                <td className="py-4 text-sky-600 font-medium text-center">{appt.hn}</td>
+                                <td className="py-4 text-sky-600 font-medium text-center kanit-text">{appt.hn}</td>
                                 <td className="py-4 text-slate-700 text-left px-2">{appt.patientName}</td>
                                 <td className="py-4 text-center">
                                   <div className="flex justify-center">
-                                    {appt.phone && appt.phone[0] ? (
-                                      <a href={`tel:${appt.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
-                                        <Phone size={14} /> {appt.phone[0]}
+                                    {/* Fix: Handle both Array and String for backward compatibility */}
+                                    {(Array.isArray(appt.phone) ? appt.phone[0] : appt.phone) ? (
+                                      <a href={`tel:${Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
+                                        <Phone size={14} /> {Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}
                                       </a>
                                     ) : <span className="text-slate-400">-</span>}
                                   </div>
                                 </td>
                                 <td className="py-4 text-slate-600 text-left px-2">{appt.doctor}</td>
                                 <td className="py-4 text-slate-500 text-left px-2 max-w-[200px] truncate">{appt.reason}</td>
-                                <td className="py-4 text-center">
+                                <td className="py-4 text-center kanit-text">
                                   <div className="flex justify-center">
                                     <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                                       appt.status === 'confirmed' ? 'bg-emerald-100 text-emerald-600' :
@@ -1174,7 +1205,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                              </tr>
                           )})}
                           {filteredData.length === 0 && (
-                            <tr><td colSpan="8" className="text-center py-10 text-slate-400">ไม่พบข้อมูลการนัดหมาย</td></tr>
+                            <tr><td colSpan="8" className="text-center py-10 text-slate-400 kanit-text">ไม่พบข้อมูลการนัดหมาย</td></tr>
                           )}
                         </tbody>
                     </table>
@@ -1182,7 +1213,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                        <div className="w-full py-8 text-center fade-in">
                            <div className="flex flex-col items-center justify-center gap-3">
                               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
-                              <span className="text-sm font-medium text-slate-500">กำลังโหลดข้อมูลเพิ่มเติม...</span>
+                              <span className="text-sm font-medium text-slate-500 kanit-text">กำลังโหลดข้อมูลเพิ่มเติม...</span>
                            </div>
                        </div>
                     )}
@@ -1193,39 +1224,40 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] shadow-2xl flex flex-col transform scale-in border border-slate-100 relative overflow-hidden">
+        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-3xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0 z-10">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner">
                   {isViewMode ? <FileText size={24} /> : (editingId ? <Pencil size={24} /> : <CalendarRange size={24} />)}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800">{isViewMode ? 'รายละเอียดการนัดหมาย' : (editingId ? 'แก้ไขข้อมูลนัดหมาย' : 'เพิ่มนัดหมายใหม่')}</h3>
-                  <p className="text-sm text-slate-500">{isViewMode ? 'ข้อมูลการนัดหมายสำหรับเรียกดู' : 'ระบุรายละเอียดการนัดหมายคนไข้ล่วงหน้า'}</p>
+                  <h3 className="text-xl font-bold text-slate-800 kanit-text">{isViewMode ? 'รายละเอียดการนัดหมาย' : (editingId ? 'แก้ไขข้อมูลนัดหมาย' : 'เพิ่มนัดหมายใหม่')}</h3>
+                  <p className="text-sm text-slate-500 kanit-text">{isViewMode ? 'ข้อมูลการนัดหมายสำหรับเรียกดู' : 'ระบุรายละเอียดการนัดหมายคนไข้ล่วงหน้า'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 {isViewMode && (
-                    <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`px-5 py-2 rounded-2xl font-semibold shadow-md transition-all active:scale-95 ${theme.primary} flex items-center gap-2 text-sm`}><Pencil size={16} /> แก้ไขข้อมูล</button>
+                    <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`px-5 py-2 rounded-2xl font-semibold shadow-md transition-all active:scale-95 ${theme.primary} flex items-center gap-2 text-sm kanit-text`}><Pencil size={16} /> แก้ไขข้อมูล</button>
                 )}
-                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={20} /></button>
+                <button onClick={closeApptModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={20} /></button>
               </div>
             </div>
             
             <div className="p-6 flex-1 bg-slate-50/30 overflow-y-auto custom-scrollbar">
-              <form id="appt-form" onSubmit={handleSaveAppt} className="pb-4">
+              {/* Fix: Add pb-32 to allow dropdown suggestions to not be cut off by scroll container */}
+              <form id="appt-form" onSubmit={handleSaveAppt} className="pb-32">
                 <fieldset disabled={isViewMode} className="space-y-5 border-none p-0 m-0 min-w-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     
-                    {/* ค้นหา HN หรือ ชื่อคนไข้ */}
-                    <div className="md:col-span-2 relative">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1">ข้อมูลผู้ป่วย (ค้นหาด้วย HN หรือ ชื่อ) <span className="text-rose-500">*</span></label>
+                    {/* ค้นหา HN หรือ ชื่อคนไข้ (เพิ่ม z-index ป้องกัน Dropdown โดนช่องอื่นทับ) */}
+                    <div className="md:col-span-2 relative" style={{ zIndex: 20 }}>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">ข้อมูลผู้ป่วย (ค้นหาด้วย HN หรือ ชื่อ) <span className="text-rose-500">*</span></label>
                         <div className="relative">
                            <input 
                               required 
                               type="text" 
-                              className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" 
+                              className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" 
                               value={formData.searchPatient} 
                               onChange={handlePatientSearchChange} 
                               onFocus={() => setShowPatientSuggest(true)}
@@ -1241,8 +1273,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                                     return fName.includes(s) || fId.includes(s);
                                  }).slice(0, 5).map((p, i) => (
                                     <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
-                                       <span className="font-semibold text-slate-800 text-sm">{getPatientId(p)} - {getPatientFullName(p)}</span>
-                                       <span className="text-xs text-slate-500">{p.phone || p.phone1 ? `📞 ${p.phone || p.phone1}` : 'ไม่มีเบอร์โทรศัพท์'}</span>
+                                       <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
+                                       <span className="text-xs text-slate-500 font-data">{p.phone || p.phone1 ? `📞 ${p.phone || p.phone1}` : 'ไม่มีเบอร์โทรศัพท์'}</span>
                                     </div>
                                  ))}
                                  {patientsData.filter(p => {
@@ -1251,7 +1283,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                                     const s = formData.searchPatient.toLowerCase();
                                     return fName.includes(s) || fId.includes(s);
                                  }).length === 0 && (
-                                    <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2">
+                                    <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2 kanit-text">
                                        <Plus size={16} className="text-sky-500" /> สร้างเป็นผู้ป่วยใหม่: "{formData.searchPatient}"
                                     </div>
                                  )}
@@ -1261,19 +1293,19 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     </div>
 
                     <div className="relative">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1">วันที่นัดหมาย <span className="text-rose-500">*</span></label>
-                        <div id="appt-datetime-wrapper" className="relative group">
-                          <input required type="text" className="w-full px-4 py-3 pr-12 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" value={formData.datetime} onChange={(e) => setFormData({...formData, datetime: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." />
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">วันที่นัดหมาย <span className="text-rose-500">*</span></label>
+                        <div ref={apptDatetimeWrapperRef} className="relative group">
+                          <input required type="text" className="w-full px-4 py-3 pr-12 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.datetime} onChange={(e) => setFormData({...formData, datetime: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." />
                           <button type="button" onClick={handleOpenApptCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>
                         </div>
                     </div>
 
-                    {/* ค้นหาแพทย์ */}
-                    <div className="relative">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1">แพทย์ผู้นัด</label>
+                    {/* ค้นหาแพทย์ (เพิ่ม z-index) */}
+                    <div className="relative" style={{ zIndex: 10 }}>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">แพทย์ผู้นัด</label>
                         <input 
                             type="text" 
-                            className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" 
+                            className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" 
                             value={formData.doctor} 
                             onChange={(e) => setFormData({...formData, doctor: e.target.value})} 
                             onFocus={() => setShowDoctorSuggest(true)}
@@ -1283,7 +1315,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                         {showDoctorSuggest && (
                             <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
                                 {mockDoctors.filter(d => d.includes(formData.doctor)).map((doc, i) => (
-                                    <div key={i} onMouseDown={() => setFormData({...formData, doctor: doc})} className="px-4 py-3 hover:bg-sky-50 cursor-pointer text-sm text-slate-700 border-b border-slate-50 last:border-0">
+                                    <div key={i} onMouseDown={() => setFormData({...formData, doctor: doc})} className="px-4 py-3 hover:bg-sky-50 cursor-pointer text-sm text-slate-700 border-b border-slate-50 last:border-0 font-data">
                                         {doc}
                                     </div>
                                 ))}
@@ -1292,8 +1324,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     </div>
                     
                     <div>
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1">ประเภทบริการ</label>
-                        <select className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm appearance-none cursor-pointer" value={formData.serviceType} onChange={(e) => setFormData({...formData, serviceType: e.target.value})}>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">ประเภทบริการ</label>
+                        <select className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm appearance-none cursor-pointer font-data" value={formData.serviceType} onChange={(e) => setFormData({...formData, serviceType: e.target.value})}>
                             <option value="">เลือกประเภทบริการ</option>
                             <option value="ตรวจโรคทั่วไป">ตรวจโรคทั่วไป</option>
                             <option value="ทันตกรรม">ทันตกรรม</option>
@@ -1305,8 +1337,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1">สถานะนัดหมาย</label>
-                        <select className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-medium appearance-none cursor-pointer" value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})}>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">สถานะนัดหมาย</label>
+                        <select className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-medium appearance-none cursor-pointer font-data" value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})}>
                             <option value="pending">🟡 รอยืนยัน (Pending)</option>
                             <option value="confirmed">🟢 ยืนยันแล้ว (Confirmed)</option>
                             <option value="cancelled">🔴 ยกเลิก (Cancelled)</option>
@@ -1314,46 +1346,46 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     </div>
 
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1">อาการ</label>
-                        <textarea rows="2" className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm resize-none" value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})} placeholder="เช่น ติดตามอาการ, ฟังผลเลือด..."></textarea>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">อาการ</label>
+                        <textarea rows="2" className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm resize-none font-data" value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})} placeholder="เช่น ติดตามอาการ, ฟังผลเลือด..."></textarea>
                     </div>
 
                     {/* กลุ่มข้อมูลติดต่อเพิ่มเติม */}
                     <div className="md:col-span-2 mt-2 pt-4 border-t border-slate-100">
-                        <h4 className="text-sm font-bold text-sky-600 mb-4 flex items-center gap-2"><Phone size={16} /> ข้อมูลการติดต่อ (Social & Phone)</h4>
+                        <h4 className="text-sm font-bold text-sky-600 mb-4 flex items-center gap-2 kanit-text"><Phone size={16} /> ข้อมูลการติดต่อ (Social & Phone)</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="md:col-span-2">
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
                                 <div className="space-y-2">
                                     {formData.phones.map((phone, idx) => (
                                         <div key={idx} className="flex items-center gap-2">
-                                            <input required type="tel" className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" value={phone} onChange={(e) => handlePhoneChange(idx, e.target.value)} placeholder="08X-XXX-XXXX" />
+                                            <input required type="tel" className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={phone} onChange={(e) => handlePhoneChange(idx, e.target.value)} placeholder="08X-XXX-XXXX" />
                                             {formData.phones.length > 1 && !isViewMode && (
                                                 <button type="button" onClick={() => removePhone(idx)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={18} /></button>
                                             )}
                                         </div>
                                     ))}
                                     {!isViewMode && (
-                                        <button type="button" onClick={addPhone} className="text-xs font-medium text-sky-500 hover:text-sky-600 flex items-center gap-1 mt-1"><Plus size={14} /> เพิ่มเบอร์โทรศัพท์</button>
+                                        <button type="button" onClick={addPhone} className="text-xs font-medium text-sky-500 hover:text-sky-600 flex items-center gap-1 mt-1 kanit-text"><Plus size={14} /> เพิ่มเบอร์โทรศัพท์</button>
                                     )}
                                 </div>
                             </div>
                             
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Line ID</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" value={formData.lineId} onChange={(e) => setFormData({...formData, lineId: e.target.value})} placeholder="Line ID" />
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Line ID</label>
+                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.lineId} onChange={(e) => setFormData({...formData, lineId: e.target.value})} placeholder="Line ID" />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Facebook</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" value={formData.facebook} onChange={(e) => setFormData({...formData, facebook: e.target.value})} placeholder="ชื่อ Facebook" />
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Facebook</label>
+                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.facebook} onChange={(e) => setFormData({...formData, facebook: e.target.value})} placeholder="ชื่อ Facebook" />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">Instagram</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" value={formData.instagram} onChange={(e) => setFormData({...formData, instagram: e.target.value})} placeholder="@username" />
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Instagram</label>
+                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.instagram} onChange={(e) => setFormData({...formData, instagram: e.target.value})} placeholder="@username" />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1">TikTok</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm" value={formData.tiktok} onChange={(e) => setFormData({...formData, tiktok: e.target.value})} placeholder="@username" />
+                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">TikTok</label>
+                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.tiktok} onChange={(e) => setFormData({...formData, tiktok: e.target.value})} placeholder="@username" />
                             </div>
                         </div>
                     </div>
@@ -1364,8 +1396,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             
             {!isViewMode && (
                 <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white shrink-0">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm">ยกเลิก</button>
-                    <button type="submit" form="appt-form" disabled={isProcessing} className="px-6 py-3 text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2">
+                    <button type="button" onClick={closeApptModal} className="px-6 py-3 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text">ยกเลิก</button>
+                    <button type="submit" form="appt-form" disabled={isProcessing} className="px-6 py-3 text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2 kanit-text">
                         {isProcessing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={18} />}
                         {editingId ? 'บันทึกการแก้ไข' : 'ยืนยันการนัดหมาย'}
                     </button>
@@ -1377,32 +1409,25 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
       {showApptCalendar && (
         <div className="fixed inset-0 z-[200]">
-          <div className="absolute inset-0" onClick={() => setShowApptCalendar(false)}></div>
-          <div className="absolute z-[210] w-[300px] max-w-[85vw] bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-5 scale-in origin-top-left" style={{ top: apptCalendarPos.top + 8, left: Math.min(apptCalendarPos.left, window.innerWidth - 310) }}>
+          <div className={`absolute inset-0 bg-slate-900/10 backdrop-blur-sm ${isApptCalClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeApptCalendar}></div>
+          <div className={`absolute z-[210] w-[300px] max-w-[85vw] bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-5 origin-top-left ${isApptCalClosing ? 'modal-animate-out' : 'modal-animate-in'}`} style={{ top: apptCalendarPos.top + 8, left: Math.min(apptCalendarPos.left, window.innerWidth - 310) }}>
             {apptCalView === 'days' && (
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() - 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setApptCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl hover:bg-slate-50 transition-colors text-sm">{thaiMonths[apptCalDate.getMonth()]} {apptCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setApptCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl hover:bg-slate-50 transition-colors text-sm kanit-text">{thaiMonths[apptCalDate.getMonth()]} {apptCalDate.getFullYear() + 543}</button>
                   <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() + 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={18} /></button>
                 </div>
                 <div className="grid grid-cols-7 gap-1 text-center mb-1">
-                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-xs font-semibold tracking-wide py-1 ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
+                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
                 </div>
                 <div className="grid grid-cols-7 gap-y-1 text-center">
                   {Array.from({ length: new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-8 h-8"></div>)}
                   {Array.from({ length: new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
-                    const dtStr = formData.datetime;
-                    let isSelected = false;
-                    if (dtStr && dtStr.includes('/')) {
-                        const dateParts = dtStr.split(' ')[0].split('/');
-                        if(dateParts.length === 3 && parseInt(dateParts[0],10) === day && parseInt(dateParts[1],10) === apptCalDate.getMonth()+1 && parseInt(dateParts[2],10) === apptCalDate.getFullYear()+543) isSelected = true;
-                    } else {
-                        isSelected = apptCalDate.getDate() === day;
-                    }
+                    const isSelected = apptCalDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === apptCalDate.getMonth() && new Date().getFullYear() === apptCalDate.getFullYear();
                     return (
-                      <button key={day} type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), day))} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-bold transition-all ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
+                      <button key={day} type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), day))} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-bold transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
                     )
                   })}
                 </div>
@@ -1412,11 +1437,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
               <div className="space-y-3">
                 <div className="flex justify-between items-center mb-2">
                   <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear() - 1, apptCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setApptCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl text-sm">{apptCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setApptCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl text-sm font-data">{apptCalDate.getFullYear() + 543}</button>
                   <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear() + 1, apptCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setApptCalDate(new Date(apptCalDate.getFullYear(), i, 1)); setApptCalView('days');}} className={`py-3 rounded-2xl text-xs font-bold transition-all ${apptCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
+                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setApptCalDate(new Date(apptCalDate.getFullYear(), i, 1)); setApptCalView('days');}} className={`py-3 rounded-2xl text-xs font-bold transition-all kanit-text ${apptCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
                 </div>
               </div>
             )}
@@ -1424,11 +1449,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 <div className="space-y-3">
                 <div className="flex justify-between items-center mb-2 px-1">
                   <button type="button" onClick={() => setApptYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <span className="font-bold text-slate-800 text-sm">{apptYearPageStart} - {apptYearPageStart + 11}</span>
+                  <span className="font-bold text-slate-800 text-sm font-data">{apptYearPageStart} - {apptYearPageStart + 11}</span>
                   <button type="button" onClick={() => setApptYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {Array.from({length: 12}, (_, i) => apptYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setApptCalDate(new Date(y - 543, apptCalDate.getMonth(), 1)); setApptCalView('months');}} className={`py-3 rounded-2xl text-xs font-bold transition-all ${(apptCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
+                  {Array.from({length: 12}, (_, i) => apptYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setApptCalDate(new Date(y - 543, apptCalDate.getMonth(), 1)); setApptCalView('months');}} className={`py-3 rounded-2xl text-xs font-bold transition-all font-data ${(apptCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
                 </div>
               </div>
             )}
@@ -1436,11 +1461,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
                     <Clock size={14} className="text-sky-500" />
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8" value={apptTime.h} onChange={e => setApptTime({...apptTime, h: e.target.value})}>
+                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={apptTime.h} onChange={e => setApptTime({...apptTime, h: e.target.value})}>
                         {Array.from({length:24}, (_,i)=>String(i).padStart(2,'0')).map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
-                    <span className="text-slate-400 font-bold">:</span>
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8" value={apptTime.m} onChange={e => setApptTime({...apptTime, m: e.target.value})}>
+                    <span className="text-slate-400 font-bold kanit-text">:</span>
+                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={apptTime.m} onChange={e => setApptTime({...apptTime, m: e.target.value})}>
                         {Array.from({length:60}, (_,i)=>String(i).padStart(2,'0')).map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                 </div>
@@ -1451,14 +1476,14 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                           setApptCalDate(now);
                           setApptTime({h: String(now.getHours()).padStart(2,'0'), m: String(now.getMinutes()).padStart(2,'0')});
                           setApptCalView('days');
-                    }} className="px-3 py-1.5 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">ปัจจุบัน</button>
+                    }} className="px-3 py-1.5 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors kanit-text">ปัจจุบัน</button>
                     <button type="button" onClick={() => {
                           const d = String(apptCalDate.getDate()).padStart(2, '0');
                           const m = String(apptCalDate.getMonth() + 1).padStart(2, '0');
                           const y = apptCalDate.getFullYear() + 543;
                           setFormData({...formData, datetime: `${d}/${m}/${y} ${apptTime.h}:${apptTime.m} น.`});
-                          setShowApptCalendar(false);
-                    }} className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md transition-colors">ตกลง</button>
+                          closeApptCalendar();
+                    }} className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md transition-colors kanit-text">ตกลง</button>
                 </div>
             </div>
           </div>
@@ -1466,11 +1491,20 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       )}
 
       {sweetAlert.isOpen && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm fade-in">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center sweet-alert-pop">
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isAlertClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2">{sweetAlert.title}</h3><p className="text-slate-500 mb-8">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={() => setSweetAlert({ ...sweetAlert, isOpen: false })} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30">ยืนยันลบ</button></div>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
+            <div className="flex gap-3 w-full"><button onClick={closeApptAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยันลบ</button></div>
+          </div>
+        </div>
+      )}
+
+      {isProcessing && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm fade-in">
+          <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 modal-animate-in">
+            <div className="relative w-16 h-16"><div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div><div className="absolute inset-0 border-4 border-sky-500 rounded-full border-t-transparent animate-spin"></div></div>
+            <p className="font-semibold text-slate-700 kanit-text">กำลังประมวลผล...</p>
           </div>
         </div>
       )}
@@ -1491,10 +1525,10 @@ const Dashboard = () => {
     <div className="space-y-6 fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">ภาพรวมคลินิก</h1>
-          <p className="text-slate-500 mt-1">ข้อมูลสรุปประจำวันของสาขานี้</p>
+          <h1 className="text-3xl font-bold text-slate-800 tracking-tight kanit-text">ภาพรวมคลินิก</h1>
+          <p className="text-slate-500 mt-1 kanit-text">ข้อมูลสรุปประจำวันของสาขานี้</p>
         </div>
-        <div className="px-4 py-2 bg-sky-50 rounded-2xl text-sky-600 font-medium flex items-center gap-2">
+        <div className="px-4 py-2 bg-sky-50 rounded-2xl text-sky-600 font-medium flex items-center gap-2 font-data">
           <CalendarRange size={18} />{`${d}/${m}/${y}`} เวลา {currentTime.toLocaleTimeString('th-TH')} น.
         </div>
       </div>
@@ -1506,18 +1540,18 @@ const Dashboard = () => {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={`lg:col-span-2 ${theme.card}`}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">แนวโน้มคนไข้ {GOOGLE_SCRIPT_URL ? '' : '(จำลอง)'}</h3>
-          <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">แนวโน้มคนไข้ {GOOGLE_SCRIPT_URL ? '' : '(จำลอง)'}</h3>
+          <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 kanit-text">
             {GOOGLE_SCRIPT_URL ? 'ไม่มีข้อมูลสถิติ' : '[ กราฟแสดงแนวโน้มคนไข้ ]'}
           </div>
         </div>
         <div className={theme.card}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">คิวถัดไป</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">คิวถัดไป</h3>
           <div className="space-y-4">
-            {GOOGLE_SCRIPT_URL ? <div className="text-center py-8 text-slate-400 text-sm">ไม่มีคิวถัดไป</div> : [1, 2, 3].map((i) => (
+            {GOOGLE_SCRIPT_URL ? <div className="text-center py-8 text-slate-400 text-sm kanit-text">ไม่มีคิวถัดไป</div> : [1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold">{i}</div>
-                <div><p className="font-semibold text-slate-700">คุณลูกค้า ท่านที่ {i}</p><p className="text-sm text-slate-500 flex items-center gap-1"><Clock size={14} /> 10:{i * 15} น. - ตรวจทั่วไป</p></div>
+                <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold font-data">{i}</div>
+                <div><p className="font-semibold text-slate-700 kanit-text">คุณลูกค้า ท่านที่ {i}</p><p className="text-sm text-slate-500 flex items-center gap-1 font-data"><Clock size={14} /> 10:{i * 15} น. - <span className="kanit-text">ตรวจทั่วไป</span></p></div>
               </div>
             ))}
           </div>
@@ -1568,6 +1602,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const [opdTime, setOpdTime] = useState({ h: '08', m: '00' });
   const [opdCalendarPos, setOpdCalendarPos] = useState({ top: 0, left: 0 });
 
+  const [isModalClosing, setIsModalClosing] = useState(false);
+  const [isCalendarClosing, setIsCalendarClosing] = useState(false);
+  const [isOpdCalendarClosing, setIsOpdCalendarClosing] = useState(false);
+  const [isAlertClosing, setIsAlertClosing] = useState(false);
+
+  // Fix: Use refs instead of direct DOM manipulation
+  const dobWrapperRef = React.useRef(null);
+  const opdWrapperRef = React.useRef(null);
+  const opdSectionRef = React.useRef(null);
+  const opdFormSectionRef = React.useRef(null);
+
+  const closeMedModal = () => { setIsModalClosing(true); setTimeout(() => { setIsModalOpen(false); setIsModalClosing(false); }, 300); };
+  const closeMedCalendar = () => { setIsCalendarClosing(true); setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300); };
+  const closeMedOpdCalendar = () => { setIsOpdCalendarClosing(true); setTimeout(() => { setShowOpdCalendar(false); setIsOpdCalendarClosing(false); }, 300); };
+  const closeMedAlert = () => { setIsAlertClosing(true); setTimeout(() => { setSweetAlert(prev => ({...prev, isOpen: false})); setIsAlertClosing(false); }, 300); };
+
   // --- Constants ---
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
   const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -1584,6 +1634,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   };
 
   const handleDobChange = (e) => {
+    // Fix: Prevent cursor jump on delete
+    if (e.nativeEvent && e.nativeEvent.inputType && e.nativeEvent.inputType.includes('delete')) {
+        setFormData({ ...formData, dob: e.target.value });
+        return;
+    }
     let value = e.target.value.replace(/\D/g, ''); 
     if (value.length > 8) value = value.slice(0, 8);
     if (value.length > 4) value = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(4)}`;
@@ -1629,12 +1684,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             bValue = b.id || b.hn || '';
         }
         if (sortConfig.key === 'age') {
-            aValue = parseInt(getAgeString(a.dob)) || 0;
-            bValue = parseInt(getAgeString(b.dob)) || 0;
+            // Fix Date Sorting Bug: Convert DD/MM/YYYY to YYYYMMDD for correct string comparison
+            aValue = a.dob ? a.dob.split('/').reverse().join('') : '';
+            bValue = b.dob ? b.dob.split('/').reverse().join('') : '';
         }
         if (sortConfig.key === 'lastVisit') {
-            aValue = a.opdRecords && a.opdRecords.length > 0 ? a.opdRecords[0].datetime : (a.lastVisit || '');
-            bValue = b.opdRecords && b.opdRecords.length > 0 ? b.opdRecords[0].datetime : (b.lastVisit || '');
+            // Fix Date Sorting Bug: Convert DD/MM/YYYY to YYYYMMDD for correct string comparison
+            const getIsoDateStr = (p) => {
+                const dt = p.opdRecords && p.opdRecords.length > 0 ? p.opdRecords[0].datetime : (p.lastVisit || '');
+                if (!dt) return '';
+                const parts = dt.split(' ')[0].split('/');
+                return parts.length === 3 ? `${parts[2]}${parts[1]}${parts[0]}` : dt;
+            };
+            aValue = getIsoDateStr(a);
+            bValue = getIsoDateStr(b);
         }
         if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
@@ -1646,14 +1709,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   // --- 4. Effects & Infinity Scroll Logic ---
   useEffect(() => {
-    // กลับไปแสดง 20 รายการใหม่ทุกครั้งที่ Filter เปลี่ยน
-    setVisibleCount(20);
-    setIsLoadingMore(false);
-  }, [search, currentBranch, sortConfig]);
-
-  useEffect(() => {
-    // หา Element <main> ที่เป็นตัว Scroll ของหน้าหลัก
-    const mainElement = document.querySelector('main');
+    // Fix: Use ID instead of element selector
+    const mainElement = document.getElementById('main-scroll-container');
     if (!mainElement) return;
 
     const handleScroll = (e) => {
@@ -1690,9 +1747,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   // --- 5. Event Handlers ---
   const handleOpenCalendar = () => {
-    const wrapper = document.getElementById('dob-input-wrapper');
-    if (wrapper) {
-      const rect = wrapper.getBoundingClientRect();
+    if (dobWrapperRef.current) {
+      const rect = dobWrapperRef.current.getBoundingClientRect();
       setCalendarPos({ top: rect.bottom, left: rect.left });
     }
     if (formData.dob?.length === 10) {
@@ -1709,7 +1765,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const handleNextMonth = () => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() + 1, 1));
   const handleSelectDate = (day) => {
     setFormData({ ...formData, dob: `${String(day).padStart(2, '0')}/${String(calDate.getMonth() + 1).padStart(2, '0')}/${calDate.getFullYear() + 543}` });
-    setShowCalendar(false);
+    closeMedCalendar();
   };
 
   const handleOpenEdit = (patient, isView = false) => {
@@ -1730,23 +1786,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(isView); setIsModalOpen(true);
     
     setTimeout(() => {
-      const opdSection = document.getElementById('opd-section');
-      if (opdSection) {
-        opdSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (opdSectionRef.current) {
+        opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 150);
   };
 
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData({ ...initialFormState, hn: generateNextHN(patientsData), createdAt: new Date().toISOString(), opdRecords: [] });
+    // Fix: Don't generate HN yet to prevent race condition, do it on save
+    setFormData({ ...initialFormState, hn: '', createdAt: new Date().toISOString(), opdRecords: [] });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(false); setIsModalOpen(true);
   };
 
   const handleOpenOpdCalendar = () => {
-    const wrapper = document.getElementById('opd-datetime-wrapper');
-    if (wrapper) {
-      const rect = wrapper.getBoundingClientRect();
+    if (opdWrapperRef.current) {
+      const rect = opdWrapperRef.current.getBoundingClientRect();
       setOpdCalendarPos({ top: rect.bottom, left: rect.left });
     }
 
@@ -1794,9 +1849,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     setShowOpdForm(true);
 
     setTimeout(() => {
-      const opdFormSection = document.getElementById('opd-form-section');
-      if (opdFormSection) {
-        opdFormSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (opdFormSectionRef.current) {
+        opdFormSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }, 150);
   };
@@ -1809,9 +1863,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       setEditingOpdIndex(null);
       setIsClosingOpdForm(false);
       
-      const opdSection = document.getElementById('opd-section');
-      if (opdSection) {
-        opdSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (opdSectionRef.current) {
+        opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 250); 
   };
@@ -1834,9 +1887,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     setIsProcessing(true);
 
     setTimeout(() => {
-      const opdSection = document.getElementById('opd-section');
-      if (opdSection) {
-        opdSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (opdSectionRef.current) {
+        opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 50);
 
@@ -1865,7 +1917,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       title: 'ยืนยันการลบประวัติ?',
       text: 'คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการรักษานี้?',
       onConfirm: async () => {
-        setSweetAlert({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
+        closeMedAlert();
         setIsProcessing(true);
         
         const newRecords = [...(formData.opdRecords || [])];
@@ -1897,26 +1949,29 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const handleSavePatient = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
-    
+
+    // Fix: Generate HN at save time to avoid duplicate HN race condition
+    const currentHn = editingId || formData.hn || generateNextHN(patientsData);
     const combinedData = {
       ...formData,
       name: `${formData.prefix}${formData.firstName} ${formData.lastName}`.trim(),
       phone: formData.phone1,
-      id: editingId || formData.hn || `HN00${patientsData.length + 1}`
+      hn: currentHn
     };
+    delete combinedData.id;
 
     try {
       await callAppScript('SAVE_DATA', 'Patients', combinedData);
       
       if (editingId) {
-        setPatientsData(patientsData.map(p => p.id === editingId ? { ...p, ...combinedData } : p));
+        setPatientsData(patientsData.map(p => (p.hn || p.id) === editingId ? { ...p, ...combinedData } : p));
       } else {
         const newPatient = { ...combinedData, lastVisit: new Date().toISOString().split('T')[0], branchId: currentBranch === 'all' ? 'b1' : currentBranch };
         setPatientsData([newPatient, ...patientsData]);
       }
       
       setIsProcessing(false);
-      setIsModalOpen(false);
+      closeMedModal();
       showToast(editingId ? 'บันทึกการแก้ไขข้อมูลเรียบร้อยแล้ว' : 'เพิ่มข้อมูลผู้ป่วยใหม่เรียบร้อยแล้ว', 'success');
       
     } catch (error) {
@@ -1933,11 +1988,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       title: 'ยืนยันการลบข้อมูล?',
       text: `คุณแน่ใจหรือไม่ว่าต้องการลบประวัติของ ${getPatientFullName(patient)}? การกระทำนี้ไม่สามารถย้อนกลับได้`,
       onConfirm: async () => {
-        setSweetAlert({ ...sweetAlert, isOpen: false });
+        closeMedAlert();
         setIsProcessing(true);
         try {
-          await callAppScript('DELETE_DATA', 'Patients', { id: getPatientId(patient) });
-          setPatientsData(patientsData.filter(p => getPatientId(p) !== getPatientId(patient)));
+          await callAppScript('DELETE_DATA', 'Patients', { hn: patientHn, id: patientHn });
+          setPatientsData(patientsData.filter(p => (p.hn || p.id) !== patientHn));
           setIsProcessing(false);
           showToast('ลบข้อมูลเรียบร้อยแล้ว', 'success');
         } catch (error) {
@@ -1956,10 +2011,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             {/* เปลี่ยน max-w-7xl เป็น w-full และเพิ่ม 2xl:px-12 ให้เท่ากับหน้านัดหมาย */}
             <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 pt-4 pb-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">ระบบเวชระเบียน</h1>
-                <p className="text-slate-500 mt-1">จัดการข้อมูลคนไข้ ศูนย์รวมข้อมูลทุกสาขา</p>
+                <h1 className="text-3xl font-bold text-slate-800 tracking-tight kanit-text">ระบบเวชระเบียน</h1>
+                <p className="text-slate-500 mt-1 kanit-text">จัดการข้อมูลคนไข้ ศูนย์รวมข้อมูลทุกสาขา</p>
               </div>
-              <button onClick={handleOpenAdd} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 ${theme.primary}`}>
+              <button onClick={handleOpenAdd} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 ${theme.primary} kanit-text`}>
                 <Plus size={20} /> <span className="hidden sm:inline">เพิ่มประวัติใหม่</span>
               </button>
             </div>
@@ -1970,7 +2025,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             {/* ปรับแก้โครงสร้างให้เหมือน Sticky Search ของหน้านัดหมาย เพื่อให้แสดงผลลอยและยืดได้ถูกต้อง */}
             <div className={`absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 transition-all duration-300 ease-in-out pointer-events-auto origin-top ${isRecordsScrolled ? 'w-full mt-0 py-3 px-4 md:px-8 2xl:px-12 border-b shadow-sm rounded-b-[2rem] rounded-t-none' : 'w-[calc(100%-2rem)] md:w-[calc(100%-4rem)] 2xl:w-[calc(100%-6rem)] mt-2 p-4 rounded-[2rem] border shadow-sm'}`}>
               <div className="relative w-full">
-                <input type="text" placeholder="ค้นหาชื่อ, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner" />
+                <input type="text" placeholder="ค้นหาชื่อ, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data" />
                 <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
               </div>
             </div>
@@ -1981,28 +2036,28 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-2">
           <div className={`${theme.card} relative overflow-hidden p-0 sm:p-0`}>
             {isGlobalLoading ? (
-              <div className="flex flex-col items-center justify-center text-slate-400 gap-4 p-12">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-500"></div><p className="font-medium text-slate-500">กำลังเตรียมข้อมูล...</p>
+              <div className="flex flex-col items-center justify-center text-slate-400 gap-4 p-12 h-[30vh]">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-500"></div><p className="font-medium text-slate-500 kanit-text">กำลังเตรียมข้อมูล...</p>
               </div>
             ) : (
               <div className="overflow-x-auto px-1 sm:px-4 py-4">
                 <table className="w-full text-left border-collapse min-w-[1100px]">
                   <thead>
                     <tr className="text-slate-500 border-b border-slate-100 text-sm">
-                      <th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('name')}><div className="flex items-center gap-1">ชื่อ-สกุล <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'name' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('gender')}><div className="flex items-center gap-1">เพศ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'gender' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('age')}><div className="flex items-center gap-1">อายุ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'age' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                      <th className="pt-6 pb-4 font-medium text-right pr-6">จัดการ</th>
+                      <th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('name')}><div className="flex items-center gap-1">ชื่อ-สกุล <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'name' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('gender')}><div className="flex items-center gap-1">เพศ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'gender' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('age')}><div className="flex items-center gap-1">อายุ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'age' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                      <th className="pt-6 pb-4 font-medium text-right pr-6 kanit-text">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sortedPatients.slice(0, visibleCount).map((patient, index) => (
-                      <tr key={`${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0">
-                        <td className="py-4 pl-6 font-medium text-sky-600">{getPatientId(patient)}</td><td className="py-4 text-slate-700 font-medium">{getPatientFullName(patient)}</td>
+                      <tr key={`${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation">
+                        <td className="py-4 pl-6 font-medium text-sky-600 kanit-text">{getPatientId(patient)}</td><td className="py-4 text-slate-700 font-medium font-data">{getPatientFullName(patient)}</td>
                         <td className="py-4 text-slate-500">{patient.gender || '-'}</td><td className="py-4 text-slate-500">{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
                         <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
                         <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
@@ -2020,7 +2075,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                    <div className="w-full py-8 text-center fade-in">
                        <div className="flex flex-col items-center justify-center gap-3">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
-                          <span className="text-sm font-medium text-slate-500">กำลังโหลดข้อมูลเพิ่มเติม...</span>
+                          <span className="text-sm font-medium text-slate-500 kanit-text">กำลังโหลดข้อมูลเพิ่มเติม...</span>
                        </div>
                    </div>
                 )}
@@ -2031,23 +2086,23 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-5xl max-h-[95vh] sm:max-h-[90vh] shadow-2xl flex flex-col transform scale-in border border-slate-100 relative overflow-hidden">
+        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-4 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-3xl w-full max-w-5xl max-h-[95vh] sm:max-h-[90vh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0 z-10">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner">{isViewMode ? <FileText size={24} /> : (editingId ? <Pencil size={24} /> : <Plus size={24} />)}</div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName} (อายุ ${calculatedAge})` : 'เพิ่มเวชระเบียนใหม่'}</h3>
-                  <p className="text-sm text-slate-500">{isViewMode ? 'ข้อมูลผู้ป่วยสำหรับเรียกดู' : (editingId ? 'แก้ไขข้อมูลเวชระเบียน' : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}</p>
+                  <h3 className="text-xl font-bold text-slate-800 kanit-text">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName} (อายุ ${calculatedAge})` : 'เพิ่มเวชระเบียนใหม่'}</h3>
+                  <p className="text-sm text-slate-500 kanit-text">{isViewMode ? 'ข้อมูลผู้ป่วยสำหรับเรียกดู' : (editingId ? 'แก้ไขข้อมูลเวชระเบียน' : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 {isViewMode ? (
-                  <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`px-5 py-2 rounded-2xl font-semibold shadow-md transition-all active:scale-95 ${theme.primary} flex items-center gap-2 text-sm`}><Pencil size={16} /> แก้ไขข้อมูล</button>
+                  <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`px-5 py-2 rounded-2xl font-semibold shadow-md transition-all active:scale-95 ${theme.primary} flex items-center gap-2 text-sm kanit-text`}><Pencil size={16} /> แก้ไขข้อมูล</button>
                 ) : (
-                  <button type="submit" form="patient-form" className={`px-5 py-2 rounded-2xl font-semibold shadow-md transition-all active:scale-95 ${theme.primary} text-sm`}>{editingId ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผู้ป่วย'}</button>
+                  <button type="submit" form="patient-form" className={`px-5 py-2 rounded-2xl font-semibold shadow-md transition-all active:scale-95 ${theme.primary} text-sm kanit-text`}>{editingId ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผู้ป่วย'}</button>
                 )}
-                <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={20} /></button>
+                <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={20} /></button>
               </div>
             </div>
             
@@ -2056,116 +2111,116 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                 <fieldset disabled={isViewMode} className="space-y-8 border-none p-0 m-0 min-w-0">
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
                   <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2"><Users size={20} /> ข้อมูลส่วนตัว</h4>
-                    <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100"><Clock size={16} className="text-slate-400" /><span>ลงทะเบียน: {formatDateTime(formData.createdAt)}</span></div>
+                    <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><Users size={20} /> ข้อมูลส่วนตัว</h4>
+                    <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 kanit-text"><Clock size={16} className="text-slate-400" /><span>ลงทะเบียน: {formatDateTime(formData.createdAt)}</span></div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">HN <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} bg-slate-100 text-slate-500 cursor-not-allowed`} value={formData.hn} disabled readOnly /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">คำนำหน้า <span className="text-rose-500">*</span></label><select required className={`${theme.input} appearance-none cursor-pointer`} value={formData.prefix} onChange={(e) => setFormData({...formData, prefix: e.target.value})}><option value="">เลือก</option><option value="นาย">นาย</option><option value="นาง">นาง</option><option value="นางสาว">นางสาว</option><option value="ด.ช.">ด.ช.</option><option value="ด.ญ.">ด.ญ.</option><option value="พระ">พระ</option></select></div>
-                    <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ชื่อ <span className="text-rose-500">*</span></label><input required type="text" className={theme.input} value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} /></div>
-                    <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">นามสกุล <span className="text-rose-500">*</span></label><input required type="text" className={theme.input} value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ชื่อเล่น</label><input type="text" className={theme.input} value={formData.nickname} onChange={(e) => setFormData({...formData, nickname: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">HN <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} bg-slate-100 text-slate-500 cursor-not-allowed font-data`} value={formData.hn} disabled readOnly /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label><select required className={`${theme.input} appearance-none cursor-pointer font-data`} value={formData.prefix} onChange={(e) => setFormData({...formData, prefix: e.target.value})}><option value="">เลือก</option><option value="นาย">นาย</option><option value="นาง">นาง</option><option value="นางสาว">นางสาว</option><option value="ด.ช.">ด.ช.</option><option value="ด.ญ.">ด.ญ.</option><option value="พระ">พระ</option></select></div>
+                    <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อ <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} /></div>
+                    <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">นามสกุล <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อเล่น</label><input type="text" className={`${theme.input} font-data`} value={formData.nickname} onChange={(e) => setFormData({...formData, nickname: e.target.value})} /></div>
                     <div className="relative">
-                      <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">วัน/เดือน/ปีเกิด <span className="text-rose-500">*</span></label>
-                      <div id="dob-input-wrapper" className="relative group">
-                        <input required type="text" className={`${theme.input} pr-12`} value={formData.dob} onChange={handleDobChange} placeholder="วว/ดด/ปปปป" maxLength="10" />
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">วัน/เดือน/ปีเกิด <span className="text-rose-500">*</span></label>
+                      <div ref={dobWrapperRef} className="relative group">
+                        <input required type="text" className={`${theme.input} pr-12 font-data`} value={formData.dob} onChange={handleDobChange} placeholder="วว/ดด/ปปปป" maxLength="10" />
                         {!isViewMode && (<button type="button" onClick={handleOpenCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>)}
                       </div>
                     </div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">อายุ</label><input type="text" className={`${theme.input} bg-slate-100 text-slate-500`} value={calculatedAge} disabled readOnly /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เพศ <span className="text-rose-500">*</span></label><select required className={`${theme.input} appearance-none cursor-pointer`} value={formData.gender} onChange={(e) => setFormData({...formData, gender: e.target.value})}><option value="">เลือก</option><option value="ชาย">ชาย</option><option value="หญิง">หญิง</option><option value="ไม่ระบุ">ไม่ระบุ</option></select></div>
-                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">หมายเลขบัตรประชาชน/พาสปอร์ต</label><input type="text" className={theme.input} value={formData.idCard} onChange={(e) => setFormData({...formData, idCard: e.target.value})} maxLength="13" /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">สัญชาติ</label><input type="text" className={theme.input} value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เชื้อชาติ</label><input type="text" className={theme.input} value={formData.ethnicity} onChange={(e) => setFormData({...formData, ethnicity: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ศาสนา</label><input type="text" className={theme.input} value={formData.religion} onChange={(e) => setFormData({...formData, religion: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">อาชีพ</label><input type="text" className={theme.input} value={formData.occupation} onChange={(e) => setFormData({...formData, occupation: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อายุ</label><input type="text" className={`${theme.input} bg-slate-100 text-slate-500 font-data`} value={calculatedAge} disabled readOnly /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เพศ <span className="text-rose-500">*</span></label><select required className={`${theme.input} appearance-none cursor-pointer font-data`} value={formData.gender} onChange={(e) => setFormData({...formData, gender: e.target.value})}><option value="">เลือก</option><option value="ชาย">ชาย</option><option value="หญิง">หญิง</option><option value="ไม่ระบุ">ไม่ระบุ</option></select></div>
+                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมายเลขบัตรประชาชน/พาสปอร์ต</label><input type="text" className={`${theme.input} font-data`} value={formData.idCard} onChange={(e) => setFormData({...formData, idCard: e.target.value})} maxLength="13" /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">สัญชาติ</label><input type="text" className={`${theme.input} font-data`} value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เชื้อชาติ</label><input type="text" className={`${theme.input} font-data`} value={formData.ethnicity} onChange={(e) => setFormData({...formData, ethnicity: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ศาสนา</label><input type="text" className={`${theme.input} font-data`} value={formData.religion} onChange={(e) => setFormData({...formData, religion: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อาชีพ</label><input type="text" className={`${theme.input} font-data`} value={formData.occupation} onChange={(e) => setFormData({...formData, occupation: e.target.value})} /></div>
                   </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
-                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2"><MapPin size={20} /> ข้อมูลติดต่อ</h4>
+                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><MapPin size={20} /> ข้อมูลติดต่อ</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ที่อยู่ (เลขที่)</label><input type="text" className={theme.input} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">หมู่</label><input type="text" className={theme.input} value={formData.moo} onChange={(e) => setFormData({...formData, moo: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ถนน</label><input type="text" className={theme.input} value={formData.road} onChange={(e) => setFormData({...formData, road: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">แขวง/ตำบล</label><input type="text" className={theme.input} value={formData.subDistrict} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เขต/อำเภอ</label><input type="text" className={theme.input} value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">จังหวัด</label><input type="text" className={theme.input} value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">รหัสไปรษณีย์</label><input type="text" className={theme.input} value={formData.zipcode} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เบอร์โทรศัพท์ 1 <span className="text-rose-500">*</span></label><input required type="tel" className={theme.input} value={formData.phone1} onChange={(e) => setFormData({...formData, phone1: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เบอร์โทรศัพท์ 2</label><input type="tel" className={theme.input} value={formData.phone2} onChange={(e) => setFormData({...formData, phone2: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่)</label><input type="text" className={`${theme.input} font-data`} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่</label><input type="text" className={`${theme.input} font-data`} value={formData.moo} onChange={(e) => setFormData({...formData, moo: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.road} onChange={(e) => setFormData({...formData, road: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.subDistrict} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.zipcode} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ 1 <span className="text-rose-500">*</span></label><input required type="tel" className={`${theme.input} font-data`} value={formData.phone1} onChange={(e) => setFormData({...formData, phone1: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ 2</label><input type="tel" className={`${theme.input} font-data`} value={formData.phone2} onChange={(e) => setFormData({...formData, phone2: e.target.value})} /></div>
                   </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2"><Phone size={20} /> ผู้ติดต่อกรณีฉุกเฉิน</h4>
+                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Phone size={20} /> ผู้ติดต่อกรณีฉุกเฉิน</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ชื่อผู้ติดต่อ</label><input type="text" className={theme.input} value={formData.emName} onChange={(e) => setFormData({...formData, emName: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เกี่ยวข้องเป็น</label><input type="text" className={theme.input} value={formData.emRelation} onChange={(e) => setFormData({...formData, emRelation: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input type="tel" className={theme.input} value={formData.emPhone} onChange={(e) => setFormData({...formData, emPhone: e.target.value})} /></div>
-                    <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ที่อยู่ที่ติดต่อได้</label><input type="text" className={theme.input} value={formData.emAddress} onChange={(e) => setFormData({...formData, emAddress: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อผู้ติดต่อ</label><input type="text" className={`${theme.input} font-data`} value={formData.emName} onChange={(e) => setFormData({...formData, emName: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เกี่ยวข้องเป็น</label><input type="text" className={`${theme.input} font-data`} value={formData.emRelation} onChange={(e) => setFormData({...formData, emRelation: e.target.value})} /></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input type="tel" className={`${theme.input} font-data`} value={formData.emPhone} onChange={(e) => setFormData({...formData, emPhone: e.target.value})} /></div>
+                    <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ที่ติดต่อได้</label><input type="text" className={`${theme.input} font-data`} value={formData.emAddress} onChange={(e) => setFormData({...formData, emAddress: e.target.value})} /></div>
                   </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
-                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2"><Stethoscope size={20} /> ข้อมูลสุขภาพเบื้องต้น</h4>
+                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Stethoscope size={20} /> ข้อมูลสุขภาพเบื้องต้น</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">หมู่เลือด</label><select className={`${theme.input} appearance-none cursor-pointer`} value={formData.bloodGroup} onChange={(e) => setFormData({...formData, bloodGroup: e.target.value})}><option value="">ไม่ทราบ</option><option value="A">A</option><option value="B">B</option><option value="O">O</option><option value="AB">AB</option></select></div>
-                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">อาการสำคัญที่มาพบแพทย์ <span className="text-rose-500">*</span></label><textarea required rows="2" className={`${theme.input} resize-none`} value={formData.chiefComplaint} onChange={(e) => setFormData({...formData, chiefComplaint: e.target.value})}></textarea></div>
-                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">ประวัติการแพ้อาหาร/ยา/สมุนไพร (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none`} value={formData.allergies} onChange={(e) => setFormData({...formData, allergies: e.target.value})}></textarea></div>
-                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1">โรคประจำตัว (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none`} value={formData.underlyingDisease} onChange={(e) => setFormData({...formData, underlyingDisease: e.target.value})}></textarea></div>
+                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่เลือด</label><select className={`${theme.input} appearance-none cursor-pointer font-data`} value={formData.bloodGroup} onChange={(e) => setFormData({...formData, bloodGroup: e.target.value})}><option value="">ไม่ทราบ</option><option value="A">A</option><option value="B">B</option><option value="O">O</option><option value="AB">AB</option></select></div>
+                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อาการสำคัญที่มาพบแพทย์ <span className="text-rose-500">*</span></label><textarea required rows="2" className={`${theme.input} resize-none font-data`} value={formData.chiefComplaint} onChange={(e) => setFormData({...formData, chiefComplaint: e.target.value})}></textarea></div>
+                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ประวัติการแพ้อาหาร/ยา/สมุนไพร (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none font-data`} value={formData.allergies} onChange={(e) => setFormData({...formData, allergies: e.target.value})}></textarea></div>
+                    <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">โรคประจำตัว (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none font-data`} value={formData.underlyingDisease} onChange={(e) => setFormData({...formData, underlyingDisease: e.target.value})}></textarea></div>
                   </div>
                 </div>
                 </fieldset>
 
-                <div id="opd-section" className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10 mt-8">
+                <div ref={opdSectionRef} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10 mt-8">
                   <div className="border-b border-sky-100 pb-3 mb-5 flex justify-between items-center">
-                    <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2"><FileText size={20} /> ประวัติการรักษา (OPD)</h4>
-                    {!showOpdForm && (<button type="button" onClick={() => handleOpenOpdForm()} className="text-sm px-4 py-2 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl font-medium transition-colors flex items-center gap-2"><Plus size={16} /> เพิ่มประวัติการรักษา</button>)}
+                    <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><FileText size={20} /> ประวัติการรักษา (OPD)</h4>
+                    {!showOpdForm && (<button type="button" onClick={() => handleOpenOpdForm()} className="text-sm px-4 py-2 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl font-medium transition-colors flex items-center gap-2 kanit-text"><Plus size={16} /> เพิ่มประวัติการรักษา</button>)}
                   </div>
                   {showOpdForm && (
-                    <div id="opd-form-section" className={`bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-inner ${isClosingOpdForm ? 'fade-out-up' : 'fade-in-up'}`}>
-                      <h5 className="font-semibold text-slate-700 mb-4">{editingOpdIndex !== null ? 'แก้ไขบันทึกการรักษา' : 'บันทึกการรักษาใหม่'}</h5>
+                    <div ref={opdFormSectionRef} className={`bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 shadow-inner ${isClosingOpdForm ? 'fade-out-up' : 'fade-in-up'}`}>
+                      <h5 className="font-semibold text-slate-700 mb-4 kanit-text">{editingOpdIndex !== null ? 'แก้ไขบันทึกการรักษา' : 'บันทึกการรักษาใหม่'}</h5>
                       
                       <div className="flex flex-col gap-4">
                         {/* แถวที่ 1: วันที่/เวลา, แพทย์ */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="relative">
-                            <label className="block text-xs font-medium text-slate-600 mb-1 ml-1">วันที่/เวลา</label>
-                            <div id="opd-datetime-wrapper" className="relative group">
-                              <input type="text" className={`${theme.input} bg-white py-2 text-sm pr-9`} value={newOpdRecord.datetime} onChange={(e) => setNewOpdRecord({...newOpdRecord, datetime: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." />
+                            <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">วันที่/เวลา</label>
+                            <div ref={opdWrapperRef} className="relative group">
+                              <input type="text" className={`${theme.input} bg-white py-2 text-sm pr-9 font-data`} value={newOpdRecord.datetime} onChange={(e) => setNewOpdRecord({...newOpdRecord, datetime: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." />
                               <button type="button" onClick={handleOpenOpdCalendar} className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-sky-500 rounded-lg transition-colors"><CalendarIcon size={16} /></button>
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1 ml-1">แพทย์ผู้รักษา</label>
-                            <input type="text" className={`${theme.input} bg-white py-2 text-sm`} value={newOpdRecord.doctor} onChange={(e) => setNewOpdRecord({...newOpdRecord, doctor: e.target.value})} placeholder="ระบุชื่อแพทย์" />
+                            <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">แพทย์ผู้รักษา</label>
+                            <input type="text" className={`${theme.input} bg-white py-2 text-sm font-data`} value={newOpdRecord.doctor} onChange={(e) => setNewOpdRecord({...newOpdRecord, doctor: e.target.value})} placeholder="ระบุชื่อแพทย์" />
                           </div>
                         </div>
 
                         {/* แถวที่ 2: Vitals */}
                         <div className="grid grid-cols-5 gap-2">
-                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1">อุณหภูมิ (°C)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center`} value={newOpdRecord.temp} onChange={(e) => setNewOpdRecord({...newOpdRecord, temp: e.target.value})} placeholder="36.5" /></div>
-                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1">สัญญาณชีพ (/min)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center`} value={newOpdRecord.pulse} onChange={(e) => setNewOpdRecord({...newOpdRecord, pulse: e.target.value})} placeholder="80" /></div>
-                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1">ความดัน</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center`} value={newOpdRecord.bp} onChange={(e) => setNewOpdRecord({...newOpdRecord, bp: e.target.value})} placeholder="120/80" /></div>
-                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1">น้ำหนัก (kg)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center`} value={newOpdRecord.weight} onChange={(e) => setNewOpdRecord({...newOpdRecord, weight: e.target.value})} placeholder="60" /></div>
-                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1">ส่วนสูง (cm)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center`} value={newOpdRecord.height} onChange={(e) => setNewOpdRecord({...newOpdRecord, height: e.target.value})} placeholder="170" /></div>
+                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">อุณหภูมิ (°C)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.temp} onChange={(e) => setNewOpdRecord({...newOpdRecord, temp: e.target.value})} placeholder="36.5" /></div>
+                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">สัญญาณชีพ (/min)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.pulse} onChange={(e) => setNewOpdRecord({...newOpdRecord, pulse: e.target.value})} placeholder="80" /></div>
+                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">ความดัน</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.bp} onChange={(e) => setNewOpdRecord({...newOpdRecord, bp: e.target.value})} placeholder="120/80" /></div>
+                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">น้ำหนัก (kg)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.weight} onChange={(e) => setNewOpdRecord({...newOpdRecord, weight: e.target.value})} placeholder="60" /></div>
+                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">ส่วนสูง (cm)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.height} onChange={(e) => setNewOpdRecord({...newOpdRecord, height: e.target.value})} placeholder="170" /></div>
                         </div>
 
                         {/* แถวที่ 3: CC, Dx */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div><label className="block text-xs font-medium text-slate-600 mb-1 ml-1">อาการสำคัญ (CC)</label><textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none`} value={newOpdRecord.cc} onChange={(e) => setNewOpdRecord({...newOpdRecord, cc: e.target.value})} placeholder="เช่น มีไข้ ไอ เจ็บคอ..."></textarea></div>
-                          <div><label className="block text-xs font-medium text-slate-600 mb-1 ml-1">การวินิจฉัย (Dx)</label><textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none`} value={newOpdRecord.dx} onChange={(e) => setNewOpdRecord({...newOpdRecord, dx: e.target.value})} placeholder="เช่น Acute Pharyngitis..."></textarea></div>
+                          <div><label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">อาการสำคัญ (CC)</label><textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none font-data`} value={newOpdRecord.cc} onChange={(e) => setNewOpdRecord({...newOpdRecord, cc: e.target.value})} placeholder="เช่น มีไข้ ไอ เจ็บคอ..."></textarea></div>
+                          <div><label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">การวินิจฉัย (Dx)</label><textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none font-data`} value={newOpdRecord.dx} onChange={(e) => setNewOpdRecord({...newOpdRecord, dx: e.target.value})} placeholder="เช่น Acute Pharyngitis..."></textarea></div>
                         </div>
 
                         {/* แถวที่ 4: Tx */}
                         <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1 ml-1">การรักษาที่ให้</label>
+                          <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">การรักษาที่ให้</label>
                           <div className="flex flex-col gap-2">
                             {newOpdRecord.tx.map((treatment, txIndex) => (
                               <div key={txIndex} className="flex gap-2 items-stretch w-full">
                                 <div className="relative flex-1">
-                                  <select className={`${theme.input} bg-white py-2 text-sm appearance-none cursor-pointer pr-10`} value={treatment} onChange={(e) => {
+                                  <select className={`${theme.input} bg-white py-2 text-sm appearance-none cursor-pointer pr-10 font-data`} value={treatment} onChange={(e) => {
                                       const updatedTx = [...newOpdRecord.tx];
                                       updatedTx[txIndex] = e.target.value;
                                       setNewOpdRecord({...newOpdRecord, tx: updatedTx});
@@ -2194,7 +2249,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                                 )}
                               </div>
                             ))}
-                            <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start">
+                            <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
                               <Plus size={16} /> เพิ่มรายการรักษา
                             </button>
                           </div>
@@ -2202,14 +2257,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
                         {/* แถวที่ 5: Note */}
                         <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1 ml-1">หมายเหตุเพิ่มเติม</label>
-                          <textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none`} value={newOpdRecord.note} onChange={(e) => setNewOpdRecord({...newOpdRecord, note: e.target.value})} placeholder="รายละเอียดหรือคำแนะนำเพิ่มเติม..."></textarea>
+                          <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">หมายเหตุเพิ่มเติม</label>
+                          <textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none font-data`} value={newOpdRecord.note} onChange={(e) => setNewOpdRecord({...newOpdRecord, note: e.target.value})} placeholder="รายละเอียดหรือคำแนะนำเพิ่มเติม..."></textarea>
                         </div>
                       </div>
                       
                       <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-200">
-                        <button type="button" onClick={handleCancelOpdForm} className="px-4 py-2 text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors">ยกเลิก</button>
-                        <button type="button" onClick={handleSaveOpdRecord} className="px-4 py-2 text-sm text-white bg-sky-500 hover:bg-sky-600 rounded-xl font-medium shadow-md transition-colors">
+                        <button type="button" onClick={handleCancelOpdForm} className="px-4 py-2 text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors kanit-text">ยกเลิก</button>
+                        <button type="button" onClick={handleSaveOpdRecord} className="px-4 py-2 text-sm text-white bg-sky-500 hover:bg-sky-600 rounded-xl font-medium shadow-md transition-colors kanit-text">
                           {editingOpdIndex !== null ? 'บันทึกการแก้ไข' : 'ยืนยันการเพิ่มบันทึก'}
                         </button>
                       </div>
@@ -2220,16 +2275,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                     <div className="overflow-x-auto border border-slate-100 rounded-xl">
                       <table className="w-full text-left border-collapse min-w-[800px] text-sm">
                         <thead>
-                          <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                          <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 kanit-text">
                             <th className="p-3 font-medium">วันที่/เวลา</th><th className="p-3 font-medium">Vitals</th><th className="p-3 font-medium">อาการ/วินิจฉัย</th><th className="p-3 font-medium">การรักษา</th><th className="p-3 font-medium">แพทย์</th><th className="p-3 font-medium text-right">จัดการ</th>
                           </tr>
                         </thead>
                         <tbody>
                           {formData.opdRecords.map((record, index) => (
-                            <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top">
+                            <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top font-data">
                               <td className="p-3 text-slate-700 whitespace-nowrap"><div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div><div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div></td>
-                              <td className="p-3 text-slate-500 text-xs">T: {record.temp || '-'} | PR: {record.pulse || '-'} | BP: {record.bp || '-'} <br/>W: {record.weight || '-'} | H: {record.height || '-'}</td>
-                              <td className="p-3 text-slate-600 text-xs max-w-[200px]"><div className="truncate" title={record.cc}><span className="font-semibold">CC:</span> {record.cc || '-'}</div><div className="truncate" title={record.dx}><span className="font-semibold text-sky-600">Dx:</span> {record.dx || '-'}</div></td>
+                              <td className="p-3 text-slate-500 text-xs kanit-text">T: <span className="font-data">{record.temp || '-'}</span> | PR: <span className="font-data">{record.pulse || '-'}</span> | BP: <span className="font-data">{record.bp || '-'}</span> <br/>W: <span className="font-data">{record.weight || '-'}</span> | H: <span className="font-data">{record.height || '-'}</span></td>
+                              <td className="p-3 text-slate-600 text-xs max-w-[200px]"><div className="truncate" title={record.cc}><span className="font-semibold kanit-text">CC:</span> {record.cc || '-'}</div><div className="truncate" title={record.dx}><span className="font-semibold text-sky-600 kanit-text">Dx:</span> {record.dx || '-'}</div></td>
                               <td className="p-3 text-slate-600 text-xs max-w-[150px]">
                                 {Array.isArray(record.tx) ? (
                                   record.tx.filter(t => t).map((t, idx) => (
@@ -2257,7 +2312,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                       </table>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 border-dashed"><FileText size={32} className="mx-auto mb-2 text-slate-300" /><p className="text-sm">ยังไม่มีประวัติการรักษา</p></div>
+                    <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 border-dashed kanit-text"><FileText size={32} className="mx-auto mb-2 text-slate-300" /><p className="text-sm">ยังไม่มีประวัติการรักษา</p></div>
                   )}
                 </div>
               </form>
@@ -2268,29 +2323,29 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
       {showCalendar && (
         <div className="fixed inset-0 z-[200]">
-          <div className="absolute inset-0" onClick={() => setShowCalendar(false)}></div>
-          <div className="absolute z-[210] w-[300px] max-w-[85vw] bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-5 scale-in origin-top-left" style={{ top: calendarPos.top + 8, left: Math.min(calendarPos.left, window.innerWidth - 310) }}>
+          <div className={`absolute inset-0 bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeMedCalendar}></div>
+          <div className={`absolute z-[210] w-[300px] max-w-[85vw] bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-5 origin-top-left ${isCalendarClosing ? 'modal-animate-out' : 'modal-animate-in'}`} style={{ top: calendarPos.top + 8, left: Math.min(calendarPos.left, window.innerWidth - 310) }}>
             {calView === 'days' && (
               <>
-                <div className="flex justify-between items-center mb-4"><button type="button" onClick={handlePrevMonth} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button><button type="button" onClick={handleNextMonth} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
-                <div className="grid grid-cols-7 gap-1 text-center mb-3">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (<div key={d} className={`text-xs font-semibold tracking-wide py-1 ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}</div>
+                <div className="flex justify-between items-center mb-4"><button type="button" onClick={handlePrevMonth} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button><button type="button" onClick={handleNextMonth} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-3">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (<div key={d} className={`text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}</div>
                 <div className="grid grid-cols-7 gap-1 text-center">{blankDays.map(b => <div key={`blank-${b}`} className="w-8 h-8"></div>)}{monthDays.map(day => {
                   const isSelected = formData.dob === `${String(day).padStart(2, '0')}/${String(calDate.getMonth() + 1).padStart(2, '0')}/${calDate.getFullYear() + 543}`;
                   const isToday = new Date().getDate() === day && new Date().getMonth() === calDate.getMonth() && new Date().getFullYear() === calDate.getFullYear();
-                  return (<button key={day} type="button" onClick={() => handleSelectDate(day)} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-sm font-medium transition-all ${isSelected ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 transform scale-110' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>)
+                  return (<button key={day} type="button" onClick={() => handleSelectDate(day)} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-sm font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 transform scale-110' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>)
                 })}</div>
               </>
             )}
             {calView === 'months' && (
               <>
-                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors">{calDate.getFullYear() + 543}</button><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
-                <div className="grid grid-cols-3 gap-2">{thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 rounded-2xl text-sm font-medium transition-all ${calDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}</div>
+                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors font-data">{calDate.getFullYear() + 543}</button><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
+                <div className="grid grid-cols-3 gap-2">{thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 rounded-2xl text-sm font-medium transition-all kanit-text ${calDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}</div>
               </>
             )}
             {calView === 'years' && (
               <>
-                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><span className="font-bold text-slate-800 px-3 py-1.5">{yearPageStart} - {yearPageStart + 11}</span><button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
-                <div className="grid grid-cols-3 gap-2">{Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 rounded-2xl text-sm font-medium transition-all ${(calDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}</div>
+                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><span className="font-bold text-slate-800 px-3 py-1.5 font-data">{yearPageStart} - {yearPageStart + 11}</span><button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
+                <div className="grid grid-cols-3 gap-2">{Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 rounded-2xl text-sm font-medium transition-all font-data ${(calDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}</div>
               </>
             )}
           </div>
@@ -2300,17 +2355,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       {/* --- ปฏิทินประวัติการรักษา (OPD Calendar) แสดงผลชั้นบนสุด ทะลุ Modal --- */}
       {showOpdCalendar && (
         <div className="fixed inset-0 z-[200]">
-          <div className="absolute inset-0" onClick={() => setShowOpdCalendar(false)}></div>
-          <div className="absolute z-[210] w-[300px] max-w-[85vw] bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-5 scale-in origin-top-left" style={{ top: opdCalendarPos.top + 8, left: Math.min(opdCalendarPos.left, window.innerWidth - 310) }}>
+          <div className={`absolute inset-0 bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeMedOpdCalendar}></div>
+          <div className={`absolute z-[210] w-[300px] max-w-[85vw] bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-5 origin-top-left ${isOpdCalendarClosing ? 'modal-animate-out' : 'modal-animate-in'}`} style={{ top: opdCalendarPos.top + 8, left: Math.min(opdCalendarPos.left, window.innerWidth - 310) }}>
             {opdCalView === 'days' && (
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() - 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl hover:bg-slate-50 transition-colors text-sm">{thaiMonths[opdCalDate.getMonth()]} {opdCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl hover:bg-slate-50 transition-colors text-sm kanit-text">{thaiMonths[opdCalDate.getMonth()]} {opdCalDate.getFullYear() + 543}</button>
                   <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() + 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={18} /></button>
                 </div>
                 <div className="grid grid-cols-7 gap-1 text-center">
-                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[10px] font-bold uppercase tracking-wider ${i === 0 ? 'text-rose-500' : 'text-slate-400'}`}>{d}</div>))}
+                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[10px] font-bold uppercase tracking-wider kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-400'}`}>{d}</div>))}
                 </div>
                 <div className="grid grid-cols-7 gap-y-1 text-center">
                   {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-8 h-8"></div>)}
@@ -2318,7 +2373,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                     const isSelected = opdCalDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === opdCalDate.getMonth() && new Date().getFullYear() === opdCalDate.getFullYear();
                     return (
-                      <button key={day} type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), day))} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-medium transition-all ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
+                      <button key={day} type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), day))} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
                     )
                   })}
                 </div>
@@ -2328,11 +2383,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
               <div className="space-y-3">
                 <div className="flex justify-between items-center mb-2">
                   <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() - 1, opdCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl text-sm">{opdCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl text-sm font-data">{opdCalDate.getFullYear() + 543}</button>
                   <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() + 1, opdCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setOpdCalDate(new Date(opdCalDate.getFullYear(), i, 1)); setOpdCalView('days');}} className={`py-3 rounded-2xl text-xs font-bold transition-all ${opdCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
+                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setOpdCalDate(new Date(opdCalDate.getFullYear(), i, 1)); setOpdCalView('days');}} className={`py-3 rounded-2xl text-xs font-bold transition-all kanit-text ${opdCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
                 </div>
               </div>
             )}
@@ -2340,11 +2395,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                 <div className="space-y-3">
                 <div className="flex justify-between items-center mb-2 px-1">
                   <button type="button" onClick={() => setOpdYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <span className="font-bold text-slate-800 text-sm">{opdYearPageStart} - {opdYearPageStart + 11}</span>
+                  <span className="font-bold text-slate-800 text-sm font-data">{opdYearPageStart} - {opdYearPageStart + 11}</span>
                   <button type="button" onClick={() => setOpdYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {Array.from({length: 12}, (_, i) => opdYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setOpdCalDate(new Date(y - 543, opdCalDate.getMonth(), 1)); setOpdCalView('months');}} className={`py-3 rounded-2xl text-xs font-bold transition-all ${(opdCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
+                  {Array.from({length: 12}, (_, i) => opdYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setOpdCalDate(new Date(y - 543, opdCalDate.getMonth(), 1)); setOpdCalView('months');}} className={`py-3 rounded-2xl text-xs font-bold transition-all font-data ${(opdCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
                 </div>
               </div>
             )}
@@ -2353,11 +2408,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
                     <Clock size={14} className="text-sky-500" />
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8" value={opdTime.h} onChange={e => setOpdTime({...opdTime, h: e.target.value})}>
+                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={opdTime.h} onChange={e => setOpdTime({...opdTime, h: e.target.value})}>
                         {Array.from({length:24}, (_,i)=>String(i).padStart(2,'0')).map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
-                    <span className="text-slate-400 font-bold">:</span>
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8" value={opdTime.m} onChange={e => setOpdTime({...opdTime, m: e.target.value})}>
+                    <span className="text-slate-400 font-bold kanit-text">:</span>
+                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={opdTime.m} onChange={e => setOpdTime({...opdTime, m: e.target.value})}>
                         {Array.from({length:60}, (_,i)=>String(i).padStart(2,'0')).map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                 </div>
@@ -2368,14 +2423,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                           setOpdCalDate(now);
                           setOpdTime({h: String(now.getHours()).padStart(2,'0'), m: String(now.getMinutes()).padStart(2,'0')});
                           setOpdCalView('days');
-                    }} className="px-3 py-1.5 text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">ปัจจุบัน</button>
+                    }} className="px-3 py-1.5 text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors kanit-text">ปัจจุบัน</button>
                     <button type="button" onClick={() => {
                           const d = String(opdCalDate.getDate()).padStart(2, '0');
                           const m = String(opdCalDate.getMonth() + 1).padStart(2, '0');
                           const y = opdCalDate.getFullYear() + 543;
                           setNewOpdRecord({...newOpdRecord, datetime: `${d}/${m}/${y} ${opdTime.h}:${opdTime.m} น.`});
-                          setShowOpdCalendar(false);
-                    }} className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md transition-colors">ตกลง</button>
+                          closeMedOpdCalendar();
+                    }} className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md transition-colors kanit-text">ตกลง</button>
                 </div>
             </div>
           </div>
@@ -2383,20 +2438,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       )}
 
       {sweetAlert.isOpen && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm fade-in">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center sweet-alert-pop">
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isAlertClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2">{sweetAlert.title}</h3><p className="text-slate-500 mb-8">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={() => setSweetAlert({ ...sweetAlert, isOpen: false })} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30">ยืนยันลบ</button></div>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
+            <div className="flex gap-3 w-full"><button onClick={closeMedAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยันลบ</button></div>
           </div>
         </div>
       )}
 
       {isProcessing && (
         <div className="fixed inset-0 z-[170] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm fade-in">
-          <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4">
+          <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 modal-animate-in">
             <div className="relative w-16 h-16"><div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div><div className="absolute inset-0 border-4 border-sky-500 rounded-full border-t-transparent animate-spin"></div></div>
-            <p className="font-semibold text-slate-700">กำลังประมวลผล...</p>
+            <p className="font-semibold text-slate-700 kanit-text">กำลังประมวลผล...</p>
           </div>
         </div>
       )}
@@ -2498,25 +2553,32 @@ export default function App() {
         <aside className={`hidden md:flex flex-col w-64 ${theme.glassPanel} relative z-10 border-r border-slate-200/50`}>
           <div className="p-6 flex items-center gap-3 border-b border-slate-100/50">
             <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30"><Stethoscope size={24} /></div>
-            <div><h2 className="font-bold text-slate-800 leading-tight">Clinic<span className="text-sky-500">Hub</span></h2><p className="text-xs text-slate-400">Management System</p></div>
+            <div><h2 className="font-bold text-slate-800 leading-tight kanit-text">Clinic<span className="text-sky-500">Hub</span></h2><p className="text-xs text-slate-400 kanit-text">Management System</p></div>
           </div>
           <div className="px-4 py-4">
-            <select value={currentBranch} onChange={(e) => setCurrentBranch(e.target.value)} className="w-full bg-slate-50 border border-slate-100 text-sm rounded-xl px-3 py-2 text-slate-700 outline-none focus:ring-2 focus:ring-sky-500/20 appearance-none cursor-pointer"><option value="all">ดูข้อมูลทุกสาขารวม</option>{GOOGLE_SCRIPT_URL ? null : mockBranches.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}</select>
+            <select value={currentBranch} onChange={(e) => setCurrentBranch(e.target.value)} className="w-full bg-slate-50 border border-slate-100 text-sm rounded-xl px-3 py-2 text-slate-700 outline-none focus:ring-2 focus:ring-sky-500/20 appearance-none cursor-pointer kanit-text"><option value="all">ดูข้อมูลทุกสาขารวม</option>{GOOGLE_SCRIPT_URL ? null : mockBranches.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}</select>
           </div>
-          <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (<button key={item.id} onClick={() => handleTabClick(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />{item.label}</button>))}
+          <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+            {navItems.map((item) => (<button key={item.id} onClick={() => handleTabClick(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 kanit-text ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />{item.label}</button>))}
           </nav>
           <div className="p-4 border-t border-slate-100/50">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-50"><div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div><div className="text-left"><p className="text-xs font-semibold text-slate-700">Admin User</p><p className="text-[10px] text-slate-400">ออนไลน์</p></div></div>
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-50"><div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div><div className="text-left"><p className="text-xs font-semibold text-slate-700 kanit-text">Admin User</p><p className="text-[10px] text-slate-400 kanit-text">ออนไลน์</p></div></div>
           </div>
         </aside>
 
         {/* เพิ่ม ref={mainRef} ให้กล่องหลัก */}
-        <main ref={mainRef} className="flex-1 overflow-y-auto pb-24 md:pb-0 w-full relative z-20" style={{ overflowAnchor: 'none' }}>
+        <main id="main-scroll-container" ref={mainRef} className="flex-1 overflow-y-auto pb-24 md:pb-0 w-full relative z-20 custom-scrollbar" style={{ overflowAnchor: 'none' }}>
           <div className="min-h-full">
-            {currentTab === 'dashboard' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><Dashboard /></div>}
-            {currentTab === 'records' && <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />}
-            {currentTab === 'queue' && <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />}
+            {/* Fix: Render all tabs with display:none to preserve scroll and states (fixes unmount memory leak & scroll jump) */}
+            <div style={{ display: currentTab === 'dashboard' ? 'block' : 'none' }}>
+                <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><Dashboard /></div>
+            </div>
+            <div style={{ display: currentTab === 'records' ? 'block' : 'none' }}>
+                <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+            </div>
+            <div style={{ display: currentTab === 'queue' ? 'block' : 'none' }}>
+                <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+            </div>
             {currentTab === 'pos' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="ระบบ POS (การเงิน)" desc="ออกบิล รับชำระเงิน และจัดการใบเสร็จ" icon={Calculator} /></div>}
             {currentTab === 'inventory' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="ระบบคลังสินค้า" desc="จัดการสต๊อกยาและเวชภัณฑ์ (เช็คข้ามสาขาได้)" icon={Package} /></div>}
             {currentTab === 'reports' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="รายงานระดับองค์กร" desc="ดูสถิติ รายได้ และประสิทธิภาพการทำงานของคลินิก" icon={BarChart3} /></div>}
@@ -2525,7 +2587,7 @@ export default function App() {
           </div>
 
           <div className={`md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-sm ${theme.glassPanel} rounded-full px-2 py-2 flex justify-between items-center z-[40]`}>
-            {navItems.slice(0, 5).map((item) => (<button key={item.id} onClick={() => handleTabClick(item.id)} className={`p-3 rounded-full transition-all flex flex-col items-center gap-1 ${currentTab === item.id ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30 transform -translate-y-2' : 'text-slate-400 hover:text-slate-700'}`}><item.icon size={20} /><span className={`text-[9px] font-medium ${currentTab === item.id ? 'opacity-100' : 'hidden'}`}>{item.label}</span></button>))}
+            {navItems.slice(0, 5).map((item) => (<button key={item.id} onClick={() => handleTabClick(item.id)} className={`p-3 rounded-full transition-all flex flex-col items-center gap-1 kanit-text ${currentTab === item.id ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30 transform -translate-y-2' : 'text-slate-400 hover:text-slate-700'}`}><item.icon size={20} /><span className={`text-[9px] font-medium ${currentTab === item.id ? 'opacity-100' : 'hidden'}`}>{item.label}</span></button>))}
           </div>
         </main> 
 
@@ -2535,7 +2597,7 @@ export default function App() {
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] fade-in">
           <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl backdrop-blur-md border ${toast.type === 'success' ? 'bg-emerald-500/90 border-emerald-400' : 'bg-rose-500/90 border-rose-400'} text-white`}>
             {toast.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
-            <span className="font-bold">{toast.message}</span>
+            <span className="font-bold kanit-text">{toast.message}</span>
           </div>
         </div>
       )}
@@ -2551,8 +2613,41 @@ export default function App() {
         td, input, select, textarea, .font-data { font-family: 'Leelawadee UI', 'Segoe UI', Tahoma, sans-serif !important; }
 
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        .scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .sweet-alert-pop { animation: sweetPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* --- ทำให้ Modal ทุกตัวเด้งใหญ่ขึ้นและลดลงแบบ Smooth เหมือนกันทั้งหมด --- */
+        .scale-in, .modal-animate-in, .sweet-alert-pop { 
+            animation: bounceIn 0.45s ease-out forwards !important; 
+            transform-origin: center;
+        }
+        
+        /* เพิ่ม Animation ตอนปิดให้เด้งขึ้นและหดลง พร้อมกับฉากหลังที่ค่อยๆ จาง */
+        .modal-animate-out { 
+            animation: bounceOut 0.3s ease-in-out forwards !important; 
+            transform-origin: center;
+        }
+        .backdrop-animate-out {
+            animation: fadeOut 0.3s ease-out forwards !important;
+        }
+
+        /* กำหนดจังหวะการเด้ง (ใหญ่ขึ้นไปที่ 1.05 แล้วหดลงมาที่ 0.98 ก่อนหยุดที่ 1.0) */
+        @keyframes bounceIn { 
+            0% { transform: scale(0.6); opacity: 0; } 
+            55% { transform: scale(1.05); opacity: 1; } 
+            80% { transform: scale(0.98); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; } 
+        }
+        
+        /* กำหนดจังหวะตอนปิด (เด้งขยายไปที่ 1.05 แล้วค่อยๆ หดและจางหายไปที่ 0.5) */
+        @keyframes bounceOut { 
+            0% { transform: scale(1); opacity: 1; } 
+            30% { transform: scale(1.05); opacity: 1; } 
+            100% { transform: scale(0.5); opacity: 0; } 
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeOutUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
         .fade-in-up { animation: fadeInUp 0.25s ease-out forwards; }
@@ -2562,8 +2657,29 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes sweetPop { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        /* กำหนดจุดเริ่มต้นและจุดสิ้นสุดของการเคลื่อนไหว */
+        @keyframes spaceRowEnter {
+          0% {
+            opacity: 0;
+            transform: translateY(20px); /* เริ่มต้น: โปร่งใส และอยู่ต่ำลงไป 20px */
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0); /* สิ้นสุด: ชัดเจน 100% และกลับมาตำแหน่งปกติ */
+          }
+        }
+
+        /* คลาสที่จะเอาไปใส่ให้แต่ละแถว */
+        .space-row-animation {
+          opacity: 0; /* ซ่อนไว้ก่อนที่แอนิเมชันจะเริ่ม */
+          
+          /* เล่นแอนิเมชันนาน 0.8 วินาที ใช้ cubic-bezier เพื่อความนุ่มนวลแบบหน่วงปลาย */
+          animation: spaceRowEnter 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; 
+          
+          /* บอกเบราว์เซอร์ล่วงหน้าว่าจะมีการเปลี่ยน 2 ค่านี้ เพื่อให้ประมวลผลลื่นไหลขึ้น (Hardware Acceleration) */
+          will-change: transform, opacity; 
+        }
       `}} />
     </div>
   );
