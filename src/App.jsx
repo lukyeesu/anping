@@ -1923,11 +1923,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(isView); setIsModalOpen(true);
     
-    setTimeout(() => {
-      if (opdSectionRef.current) {
-        opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 150);
+    // เปลี่ยนเงื่อนไขให้เลื่อนลงไปที่ประวัติการรักษาเฉพาะตอนที่เข้ามาเพื่อดูรายละเอียด (isView = true) เท่านั้น
+    if (isView) {
+      setTimeout(() => {
+        if (opdSectionRef.current) {
+          opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 150);
+    }
   };
 
   const handleOpenAdd = () => {
