@@ -1243,7 +1243,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         const datePart = dtParts[0] || '-';
         const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
         return (
-            <div key={`mobile-appt-${appt.id || index}`} onClick={() => handleOpenEdit(appt, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(index % 20) * 50}ms` }}>
+            <div key={`mobile-appt-${appt.id || index}`} onClick={() => handleOpenEdit(appt, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
                 
                 {/* แถวที่ 1: รหัส HN, สถานะ และปุ่มจัดการ */}
                 <div className="flex justify-between items-center mb-1.5">
@@ -1405,6 +1405,18 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                                   </tr>
                                 ))
                               ) : memoizedApptTableRows}
+                              {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                                  <tr key={`skel-more-${i}`} className="border-b border-slate-50">
+                                    <td className="py-4"><div className="flex flex-col items-center gap-2"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"></div><div className="h-3 w-12 bg-slate-100 rounded animate-pulse"></div></div></td>
+                                    <td className="py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
+                                    <td className="py-4"><div className="flex justify-center gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                                  </tr>
+                              ))}
                             </tbody>
                         </table>
                     </div>
@@ -1444,18 +1456,31 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                                 {!isGlobalLoading && filteredData.length === 0 && (
                                     <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลการนัดหมาย</div>
                                 )}
+                                {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                                    <div key={`skel-mob-more-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <div className="h-5 w-16 bg-slate-200 rounded animate-pulse"></div>
+                                            <div className="h-5 w-16 bg-slate-200 rounded-md animate-pulse"></div>
+                                        </div>
+                                        <div className="mb-3">
+                                            <div className="h-6 w-40 bg-slate-200 rounded animate-pulse mb-2"></div>
+                                            <div className="h-6 w-24 bg-slate-200 rounded-lg animate-pulse"></div>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                                <div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div>
+                                            </div>
+                                            <div className="flex items-start gap-2">
+                                                <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                                <div className="h-4 w-48 bg-slate-200 rounded animate-pulse"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </>
                         )}
                     </div>
-
-                    {isLoadingMore && (
-                       <div className="w-full py-8 text-center fade-in">
-                           <div className="flex flex-col items-center justify-center gap-3">
-                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
-                              <span className="text-sm font-medium text-slate-500 kanit-text">กำลังโหลดข้อมูลเพิ่มเติม...</span>
-                           </div>
-                       </div>
-                    )}
                 </div>
           </div>
         </div>
@@ -2354,7 +2379,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         const isNewPatient = !(patient.opdRecords && patient.opdRecords.length > 0);
         
         return (
-            <div key={`mobile-${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(index % 20) * 50}ms` }}>
+            <div key={`mobile-${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
                 
                 {/* แถวที่ 1: รหัส HN, ป้ายสถานะ และปุ่มจัดการ */}
                 <div className="flex justify-between items-center mb-1.5">
@@ -2488,6 +2513,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                           </tr>
                         ))
                       ) : memoizedPatientTableRows}
+                      {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                          <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
+                            <td className="py-4 pl-6"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-8 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-12 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                          </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -2519,10 +2556,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                                         <div className="h-4 w-28 bg-slate-200 rounded animate-pulse"></div>
                                     </div>
                                 </div>
-                                <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
-                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
-                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
-                                </div>
                             </div>
                         ))
                     ) : (
@@ -2531,18 +2564,27 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                             {!isGlobalLoading && sortedPatients.length === 0 && (
                                 <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลผู้ป่วย</div>
                             )}
+                            {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
+                                <div key={`skel-med-mob-more-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <div className="h-5 w-16 bg-slate-200 rounded animate-pulse"></div>
+                                        <div className="h-5 w-16 bg-slate-200 rounded-md animate-pulse"></div>
+                                    </div>
+                                    <div className="mb-3">
+                                        <div className="h-6 w-40 bg-slate-200 rounded animate-pulse mb-2"></div>
+                                        <div className="h-6 w-24 bg-slate-200 rounded-lg animate-pulse"></div>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                            <div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </>
                     )}
                 </div>
-
-                {isLoadingMore && (
-                   <div className="w-full py-8 text-center fade-in">
-                       <div className="flex flex-col items-center justify-center gap-3">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
-                          <span className="text-sm font-medium text-slate-500 kanit-text">กำลังโหลดข้อมูลเพิ่มเติม...</span>
-                       </div>
-                   </div>
-                )}
               </div>
           </div>
         </div>
@@ -2786,7 +2828,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                       {/* --- Mobile View (Cards) --- */}
                       <div className="lg:hidden flex flex-col divide-y divide-slate-100">
                           {formData.opdRecords.map((record, index) => (
-                              <div key={`opd-mobile-${index}`} className="p-4 flex flex-col gap-3 hover:bg-slate-50 transition-colors space-row-animation" style={{ animationDelay: `${(index % 20) * 50}ms` }}>
+                              <div key={`opd-mobile-${index}`} className="p-4 flex flex-col gap-3 hover:bg-slate-50 transition-colors space-row-animation" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
                                   <div className="flex justify-between items-start">
                                       <div>
                                           <div className="font-bold text-slate-800 flex items-center gap-2">
@@ -3439,7 +3481,7 @@ export default function App() {
             55% { transform: scale(1.05); opacity: 1; } 
             80% { transform: scale(0.98); opacity: 1; }
             100% { transform: scale(1); opacity: 1; } 
-        }30
+        }
         
         /* กำหนดจังหวะตอนปิด (เด้งขยายไปที่ 1.05 แล้วค่อยๆ หดและจางหายไปที่ 0.5) */
         @keyframes bounceOut { 
