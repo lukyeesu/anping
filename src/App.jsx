@@ -990,7 +990,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         if (visibleCount < filteredData.length && !isLoadingMore) {
            setIsLoadingMore(true);
            setTimeout(() => {
-              setVisibleCount(prev => prev + 20);
+              setVisibleCount(prev => prev + 10);
               setIsLoadingMore(false);
            }, 1000);
         }
@@ -1990,6 +1990,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     return sortableItems;
   }, [filteredPatients, sortConfig]);
 
+  useEffect(() => {
+    setVisibleCount(20);
+    setIsLoadingMore(false);
+  }, [search, sortConfig, currentBranch]);
+
   // --- 4. Effects & Infinity Scroll Logic ---
   useEffect(() => {
     const headerEl = headerRef.current;
@@ -2031,7 +2036,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         if (visibleCount < sortedPatients.length && !isLoadingMore) {
            setIsLoadingMore(true);
            setTimeout(() => {
-              setVisibleCount(prev => prev + 20);
+              setVisibleCount(prev => prev + 10);
               setIsLoadingMore(false);
            }, 1000);
         }
