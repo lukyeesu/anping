@@ -1034,9 +1034,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             try {
                await callAppScript('DELETE_DATA', 'Queue', { id });
                setQueueData(queueData.filter(a => a.id !== id));
-               showToast('ลบสำเร็จ', 'success');
+               showToast('ลบข้อมูลการนัดหมายแล้ว', 'danger');
             } catch(e) {
-               showToast('ลบไม่สำเร็จ', 'error');
+               showToast('ลบไม่สำเร็จ กรุณาลองใหม่', 'warning');
             }
             setIsProcessing(false);
         }
@@ -1112,7 +1112,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         closeApptModal(); 
         showToast(editingId ? 'แก้ไขนัดหมายสำเร็จ' : 'เพิ่มนัดหมายสำเร็จ', 'success');
     } catch(e) {
-        showToast('บันทึกไม่สำเร็จ', 'error');
+        showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'warning');
     }
     setIsProcessing(false);
   };
@@ -2048,7 +2048,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       showToast('บันทึกประวัติการรักษาเรียบร้อยแล้ว', 'success');
     } catch (error) {
       setIsProcessing(false);
-      showToast('เกิดข้อผิดพลาดในการบันทึกประวัติการรักษา', 'error');
+      showToast('เกิดข้อผิดพลาดในการบันทึกประวัติการรักษา', 'warning');
     }
   };
 
@@ -2079,10 +2079,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
           await callAppScript('SAVE_DATA', 'Patients', combinedData);
           setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));
           setIsProcessing(false);
-          showToast('ลบประวัติการรักษาเรียบร้อยแล้ว', 'success');
+          showToast('ลบประวัติการรักษาเรียบร้อยแล้ว', 'danger');
         } catch (error) {
           setIsProcessing(false);
-          showToast('เกิดข้อผิดพลาดในการลบประวัติการรักษา', 'error');
+          showToast('เกิดข้อผิดพลาดในการลบประวัติการรักษา', 'warning');
         }
       }
     });
@@ -2118,7 +2118,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       
     } catch (error) {
       setIsProcessing(false);
-      showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+      showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'warning');
     }
   };
 
@@ -2136,10 +2136,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
           await callAppScript('DELETE_DATA', 'Patients', { hn: patientHn, id: patientHn });
           setPatientsData(patientsData.filter(p => (p.hn || p.id) !== patientHn));
           setIsProcessing(false);
-          showToast('ลบข้อมูลเรียบร้อยแล้ว', 'success');
+          showToast('ลบข้อมูลผู้ป่วยเรียบร้อยแล้ว', 'danger');
         } catch (error) {
           setIsProcessing(false);
-          showToast('ลบข้อมูลไม่สำเร็จ', 'error');
+          showToast('ลบข้อมูลไม่สำเร็จ', 'warning');
         }
       }
     });
@@ -2819,9 +2819,26 @@ export default function App() {
 
   // แจ้งเตือนแบบ State ปลอดภัยที่สุด แสดงบนสุดและไม่ทำให้จอโหลดใหม่ซ้อน
   const [toast, setToast] = useState(null);
+  const [isToastClosing, setIsToastClosing] = useState(false);
+  const toastTimerRef = React.useRef(null);
+  const toastCloseTimerRef = React.useRef(null);
+
   const showToast = (message, type = 'success') => {
+    // ล้าง Timer เก่าออกถ้ามีการกดรัวๆ
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    if (toastCloseTimerRef.current) clearTimeout(toastCloseTimerRef.current);
+
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setIsToastClosing(false); // เริ่มแอนิเมชันขาเข้า
+
+    toastTimerRef.current = setTimeout(() => {
+      setIsToastClosing(true); // เริ่มแอนิเมชันขาออก
+      
+      toastCloseTimerRef.current = setTimeout(() => {
+        setToast(null); // ลบออกจาก DOM หลังแอนิเมชันเล่นจบ
+        setIsToastClosing(false);
+      }, 300); // หน่วงเวลาให้แอนิเมชัน slide-up เล่นจบก่อน
+    }, 3000);
   };
 
   const handleScroll = (e) => {
@@ -2854,7 +2871,7 @@ export default function App() {
           setQueueData(resQueue.data && resQueue.data.length > 0 ? resQueue.data.reverse() : []);
         }
 
-      } catch (error) { showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'error'); } 
+      } catch (error) { showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); } 
       finally { setIsDataFetched(true); setIsGlobalLoading(false); }
     };
     fetchInitialData();
@@ -2982,12 +2999,18 @@ export default function App() {
 
       {toast && (
         <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[9999] fade-in w-[90vw] sm:w-auto max-w-sm sm:max-w-md"
+          className="fixed left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[90vw] sm:max-w-md"
           style={{ top: 'max(1rem, env(safe-area-inset-top))', marginTop: '0.5rem' }}
         >
-          <div className={`flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl shadow-2xl backdrop-blur-xl border ${toast.type === 'success' ? 'bg-emerald-500/95 border-emerald-400' : 'bg-rose-500/95 border-rose-400'} text-white`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> : <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />}
-            <span className="font-medium kanit-text text-sm sm:text-base leading-tight break-words">{toast.message}</span>
+          <div className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full sm:rounded-2xl shadow-2xl backdrop-blur-xl border text-white ${
+              toast.type === 'success' ? 'bg-emerald-500/95 border-emerald-400 shadow-emerald-500/20' : 
+              toast.type === 'warning' ? 'bg-amber-500/95 border-amber-400 shadow-amber-500/20' : 
+              'bg-rose-500/95 border-rose-400 shadow-rose-500/20'
+          } ${isToastClosing ? 'toast-animate-out' : 'toast-animate-in'}`}>
+            {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
+             toast.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
+             <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />}
+            <span className="font-medium kanit-text text-xs sm:text-sm leading-tight break-words">{toast.message}</span>
           </div>
         </div>
       )}
@@ -3037,6 +3060,18 @@ export default function App() {
             from { opacity: 1; }
             to { opacity: 0; }
         }
+
+        /* --- Animation สำหรับ Toast (Slide Down & Fade) --- */
+        @keyframes toastSlideDown {
+            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes toastSlideUp {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to { opacity: 0; transform: translateY(-20px) scale(0.95); }
+        }
+        .toast-animate-in { animation: toastSlideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .toast-animate-out { animation: toastSlideUp 0.3s ease-in forwards; }
 
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeOutUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
