@@ -797,13 +797,10 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
   const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isFilterStuck, setIsFilterStuck] = useState(false);
   const filterRef = React.useRef(null);
   const sentinelRef = React.useRef(null); // เพิ่ม Sentinel Ref สำหรับจับพิกัด
 
   // --- New States for Sticky Header & Filter ---
-  const [isApptHeaderScrolled, setIsApptHeaderScrolled] = useState(false);
-  const [headerHeight, setHeaderHeight] = useState(0);
   const headerRef = React.useRef(null);
 
   // อัปเดต State ให้รองรับฟิลด์ใหม่ๆ
@@ -937,8 +934,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     const observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
             // ป้องกันการเซ็ตค่า Height เป็น 0 เมื่อ Component ถูกซ่อน (display: none)
-            if (entry.target.offsetHeight > 0) {
-                setHeaderHeight(entry.target.offsetHeight);
+            if (entry.target.offsetHeight > 0 && filterRef.current) {
+                // เซ็ตค่าพิกัดให้ filterRef ทันทีโดยไม่ต้องผ่าน State (ป้องกัน Re-render กระตุก)
+                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
             }
         }
     });
@@ -953,34 +951,38 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
     // --- เพิ่มการเช็คสถานะทันทีเมื่อโหลด Component ---
     setTimeout(() => {
-        if (mainElement && headerRef.current && headerRef.current.offsetHeight > 0) {
-            setIsApptHeaderScrolled(mainElement.scrollTop > 20);
-            if (sentinelRef.current) {
+        if (mainElement && headerRef.current) {
+            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+            else headerRef.current.classList.remove('is-scrolled');
+            
+            if (sentinelRef.current && filterRef.current) {
                 const sentinelRect = sentinelRef.current.getBoundingClientRect();
                 const headerRect = headerRef.current.getBoundingClientRect();
-                // เช็คว่าขอบบนของ Sentinel ชนกับ ขอบล่างของเฮดเดอร์หรือยัง
-                setIsFilterStuck(sentinelRect.top <= headerRect.bottom + 2);
+                if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
+                else filterRef.current.classList.remove('is-stuck');
             }
         }
     }, 50);
 
     const handleScroll = (e) => {
-      // ป้องกันไม่ให้คำนวณและอัปเดต State ถ้า Component ถูกซ่อนอยู่
+      // ป้องกันไม่ให้คำนวณและอัปเดต ถ้า Component ถูกซ่อนอยู่
       if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
 
       const { scrollTop, scrollHeight, clientHeight } = e.target;
       
-      setIsApptHeaderScrolled(scrollTop > 20);
+      // อัปเดต CSS Class ของ Header โดยตรง
+      if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+      else headerRef.current.classList.remove('is-scrolled');
 
-      if (sentinelRef.current && headerRef.current) {
+      if (sentinelRef.current && filterRef.current) {
          const sentinelRect = sentinelRef.current.getBoundingClientRect();
          const headerRect = headerRef.current.getBoundingClientRect();
 
          // ใช้ Sentinel Element (ที่ไม่ได้เป็น sticky) มาคำนวณ เพื่อป้องกันค่า top เพี้ยนตอนติด Header
          if (sentinelRect.top <= headerRect.bottom + 2) {
-             setIsFilterStuck(true);
+             filterRef.current.classList.add('is-stuck');
          } else {
-             setIsFilterStuck(false);
+             filterRef.current.classList.remove('is-stuck');
          }
       }
 
@@ -1324,17 +1326,16 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     <>
       <div className="fade-in pb-10">
         
-        {/* --- 1. Sticky Header ย่อขนาดได้ ปรับ z-index เป็น 30 --- */}
-        <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300">
-          {/* ปรับปรุงตรงนี้ให้เป็น Glassmorphism effect เมื่อ Scroll หน้าจอ */}
-          <div className={`w-full pointer-events-auto transition-all duration-500 ease-out border-b ${isApptHeaderScrolled ? 'bg-white/70 backdrop-blur-xl border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent border-transparent'}`}>
-            <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 transition-all duration-300 ${isApptHeaderScrolled ? 'pt-4 pb-2 sm:pb-3' : 'pt-4 md:pt-8 pb-4'}`}>
+        {/* --- 1. Sticky Header ย่อขนาดได้ ปรับใช้ 60FPS CSS Variables --- */}
+        <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
+          <div className="w-full pointer-events-auto sticky-header-bg">
+            <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
               <div>
-                <h1 className={`font-bold text-slate-800 tracking-tight transition-all duration-300 ${isApptHeaderScrolled ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'}`}>ระบบนัดหมาย</h1>
-                <p className={`text-slate-500 mt-1 transition-all duration-300 text-xs sm:text-base ${isApptHeaderScrolled ? 'opacity-0 h-0 overflow-hidden m-0' : 'opacity-100 h-auto'}`}>จัดการคิวนัดหมายของคนไข้และแพทย์</p>
+                <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title">ระบบนัดหมาย</h1>
+                <p className="text-slate-500 sticky-header-desc">จัดการคิวนัดหมายของคนไข้และแพทย์</p>
               </div>
-              <button onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} ${isApptHeaderScrolled ? 'p-2.5 sm:px-6 sm:py-3 text-sm' : 'p-3 sm:px-6 sm:py-3'}`}>
-                <Plus size={isApptHeaderScrolled ? 18 : 20} /> <span className="hidden sm:inline">เพิ่มนัดหมายใหม่</span>
+              <button onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn`}>
+                <Plus /> <span className="hidden sm:inline">เพิ่มนัดหมายใหม่</span>
               </button>
             </div>
           </div>
@@ -1353,9 +1354,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         <div ref={sentinelRef} className="w-full h-px opacity-0 pointer-events-none -mt-px"></div>
 
         {/* --- 3. Sticky Filter ซ้อนกันเมื่อชน Header ปรับ z-index เป็น 20 --- */}
-        <div ref={filterRef} className="sticky z-20 w-full pointer-events-none transition-all duration-300" style={{ top: headerHeight }}>
+        <div ref={filterRef} className="sticky z-20 w-full pointer-events-none">
           <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-            <div className={`absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 transition-all duration-300 ease-in-out pointer-events-auto origin-top ${isFilterStuck ? 'w-full mt-0 py-3 px-4 md:px-8 2xl:px-12 border-b shadow-sm rounded-b-[2rem] rounded-t-none' : 'w-[calc(100%-2rem)] md:w-[calc(100%-4rem)] 2xl:w-[calc(100%-6rem)] mt-2 p-4 rounded-[2rem] border shadow-sm'}`}>
+            <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm">
               <div className="relative w-full">
                 <input 
                   type="text" 
@@ -1373,12 +1374,6 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         {/* --- 4. ตาราง --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4">
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0 sm:p-0">
-            {isGlobalLoading ? (
-                <div className="flex flex-col items-center justify-center text-slate-400 gap-4 p-12 bg-white h-[30vh]">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-500"></div>
-                  <p className="font-medium text-slate-500">กำลังเตรียมข้อมูล...</p>
-                </div>
-            ) : (
                 <div className="px-2 sm:px-4 py-4">
                     {/* --- Desktop View (Table) --- */}
                     <div className="hidden lg:block overflow-x-auto">
@@ -1396,16 +1391,60 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                               </tr>
                             </thead>
                             <tbody>
-                              {memoizedApptTableRows}
+                              {isGlobalLoading ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                  <tr key={`skel-${i}`} className="border-b border-slate-50">
+                                    <td className="py-4"><div className="flex flex-col items-center gap-2"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"></div><div className="h-3 w-12 bg-slate-100 rounded animate-pulse"></div></div></td>
+                                    <td className="py-4"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4"><div className="h-8 w-24 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
+                                    <td className="py-4"><div className="flex justify-center gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                                  </tr>
+                                ))
+                              ) : memoizedApptTableRows}
                             </tbody>
                         </table>
                     </div>
 
                     {/* --- Mobile View (Cards) --- */}
                     <div className="lg:hidden space-y-4 mt-2">
-                        {memoizedApptMobileCards}
-                        {filteredData.length === 0 && (
-                            <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลการนัดหมาย</div>
+                        {isGlobalLoading ? (
+                            Array.from({ length: 3 }).map((_, i) => (
+                                <div key={`skel-mob-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                                    <div className="flex justify-between items-center mb-1.5">
+                                        <div className="h-5 w-16 bg-slate-200 rounded animate-pulse"></div>
+                                        <div className="h-5 w-16 bg-slate-200 rounded-md animate-pulse"></div>
+                                    </div>
+                                    <div className="mb-3">
+                                        <div className="h-6 w-40 bg-slate-200 rounded animate-pulse mb-2"></div>
+                                        <div className="h-6 w-24 bg-slate-200 rounded-lg animate-pulse"></div>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                            <div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                        <div className="flex items-start gap-2">
+                                            <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                            <div className="h-4 w-48 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
+                                        <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                        <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <>
+                                {memoizedApptMobileCards}
+                                {!isGlobalLoading && filteredData.length === 0 && (
+                                    <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลการนัดหมาย</div>
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -1418,7 +1457,6 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                        </div>
                     )}
                 </div>
-            )}
           </div>
         </div>
       </div>
@@ -1717,7 +1755,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
 const Dashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isDashScrolled, setIsDashScrolled] = useState(false);
+  const headerRef = React.useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -1730,12 +1768,18 @@ const Dashboard = () => {
     if (!mainElement) return;
 
     const handleScroll = (e) => {
-      setIsDashScrolled(e.target.scrollTop > 20);
+      if (headerRef.current) {
+          if (e.target.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+          else headerRef.current.classList.remove('is-scrolled');
+      }
     };
 
     // ตรวจสอบสถานะเริ่มต้นทันที
     setTimeout(() => {
-        if (mainElement) setIsDashScrolled(mainElement.scrollTop > 20);
+        if (mainElement && headerRef.current) {
+            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+            else headerRef.current.classList.remove('is-scrolled');
+        }
     }, 50);
 
     mainElement.addEventListener('scroll', handleScroll);
@@ -1749,16 +1793,16 @@ const Dashboard = () => {
   return (
     <div className="fade-in pb-10 w-full">
       
-      {/* Sticky Header ย่อขนาดได้แบบ Glassmorphism */}
-      <div className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300">
-        <div className={`w-full pointer-events-auto transition-all duration-500 ease-out border-b ${isDashScrolled ? 'bg-white/70 backdrop-blur-xl border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent border-transparent'}`}>
-          <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 transition-all duration-300 ${isDashScrolled ? 'pt-4 pb-2 sm:pb-3' : 'pt-4 md:pt-8 pb-4'}`}>
+      {/* Sticky Header ย่อขนาดได้แบบ Glassmorphism (ควบคุมผ่าน CSS ล้วน) */}
+      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
+        <div className="w-full pointer-events-auto sticky-header-bg">
+          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div>
-              <h1 className={`font-bold text-slate-800 tracking-tight kanit-text transition-all duration-300 ${isDashScrolled ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'}`}>ภาพรวมคลินิก</h1>
-              <p className={`text-slate-500 mt-1 kanit-text transition-all duration-300 text-xs sm:text-base ${isDashScrolled ? 'opacity-0 h-0 overflow-hidden m-0' : 'opacity-100 h-auto'}`}>ข้อมูลสรุปประจำวันของสาขานี้</p>
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title">ภาพรวมคลินิก</h1>
+              <p className="text-slate-500 kanit-text sticky-header-desc">ข้อมูลสรุปประจำวันของสาขานี้</p>
             </div>
-            <div className={`px-3 py-1.5 sm:px-4 sm:py-2 bg-sky-50 rounded-xl sm:rounded-2xl text-sky-600 font-medium flex items-center gap-1.5 sm:gap-2 font-data shrink-0 transition-all ${isDashScrolled ? 'text-xs' : 'text-sm sm:text-base'}`}>
-              <CalendarRange size={isDashScrolled ? 14 : 18} className="hidden sm:block" />
+            <div className="bg-sky-50 rounded-xl sm:rounded-2xl text-sky-600 font-medium flex items-center gap-1.5 sm:gap-2 font-data shrink-0 dash-date-badge">
+              <CalendarRange className="hidden sm:block" />
               <span className="hidden sm:inline">{`${d}/${m}/${y}`}</span>
               <span className="hidden sm:inline">เวลา</span>
               <span>{currentTime.toLocaleTimeString('th-TH')} น.</span>
@@ -1810,7 +1854,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   
   const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isRecordsScrolled, setIsRecordsScrolled] = useState(false);
+
+  const headerRef = React.useRef(null);
+  const filterRef = React.useRef(null);
 
   const initialFormState = {
     hn: '', prefix: '', firstName: '', lastName: '', nickname: '', dob: '', gender: '', idCard: '', nationality: 'ไทย', ethnicity: 'ไทย', religion: 'พุทธ', occupation: '',
@@ -1946,6 +1992,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   // --- 4. Effects & Infinity Scroll Logic ---
   useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+            if (entry.target.offsetHeight > 0 && filterRef.current) {
+                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
+            }
+        }
+    });
+
+    observer.observe(headerEl);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     // Fix: Use ID instead of element selector
     const mainElement = document.getElementById('main-scroll-container');
     if (!mainElement) return;
@@ -1953,24 +2015,37 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     const handleScroll = (e) => {
       const { scrollTop, scrollHeight, clientHeight } = e.target;
       
-      setIsRecordsScrolled(scrollTop > 20);
+      // ควบคุม Header และ Filter แบบ 60FPS ไปพร้อมกัน
+      if (headerRef.current) {
+          if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+          else headerRef.current.classList.remove('is-scrolled');
+      }
+
+      if (filterRef.current) {
+          if (scrollTop > 20) filterRef.current.classList.add('is-stuck');
+          else filterRef.current.classList.remove('is-stuck');
+      }
       
       // เช็คว่าเลื่อนลงมาเกือบถึงล่างสุดหรือยัง (เหลืออีก 100px)
       if (scrollTop + clientHeight >= scrollHeight - 100) {
-        // เช็คว่ายังมีข้อมูลเหลือให้แสดง และไม่ได้กำลังโหลดอยู่
         if (visibleCount < sortedPatients.length && !isLoadingMore) {
            setIsLoadingMore(true);
-           
-           // หน่วงเวลา 1 วินาทีให้ดูเหมือนกำลังโหลด
            setTimeout(() => {
-              setVisibleCount(prev => prev + 20); // โหลดเพิ่มทีละ 20 รายการ
+              setVisibleCount(prev => prev + 20);
               setIsLoadingMore(false);
            }, 1000);
         }
       }
     };
 
-    mainElement.addEventListener('scroll', handleScroll);
+    setTimeout(() => {
+        if (mainElement && mainElement.scrollTop > 20) {
+            if (headerRef.current) headerRef.current.classList.add('is-scrolled');
+            if (filterRef.current) filterRef.current.classList.add('is-stuck');
+        }
+    }, 50);
+
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
   }, [visibleCount, sortedPatients.length, isLoadingMore]);
 
@@ -2345,24 +2420,26 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   return (
     <>
       <div className="fade-in pb-10">
-        <div className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300">
-          <div className={`w-full pointer-events-auto transition-all duration-500 ease-out border-b ${isRecordsScrolled ? 'bg-white/70 backdrop-blur-xl border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent border-transparent'}`}>
-            {/* เปลี่ยน max-w-7xl เป็น w-full และเพิ่ม 2xl:px-12 ให้เท่ากับหน้านัดหมาย */}
-            <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 transition-all duration-300 ${isRecordsScrolled ? 'pt-4 pb-2 sm:pb-3' : 'pt-4 md:pt-8 pb-4'}`}>
+        
+        {/* --- 1. Sticky Header --- */}
+        <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
+          <div className="w-full pointer-events-auto sticky-header-bg">
+            <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
               <div>
-                <h1 className={`font-bold text-slate-800 tracking-tight kanit-text transition-all duration-300 ${isRecordsScrolled ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'}`}>ระบบเวชระเบียน</h1>
-                <p className={`text-slate-500 mt-1 kanit-text transition-all duration-300 text-xs sm:text-base ${isRecordsScrolled ? 'opacity-0 h-0 overflow-hidden m-0' : 'opacity-100 h-auto'}`}>จัดการข้อมูลคนไข้ ศูนย์รวมข้อมูลทุกสาขา</p>
+                <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title">ระบบเวชระเบียน</h1>
+                <p className="text-slate-500 kanit-text sticky-header-desc">จัดการข้อมูลคนไข้ ศูนย์รวมข้อมูลทุกสาขา</p>
               </div>
-              <button onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} kanit-text ${isRecordsScrolled ? 'p-2.5 sm:px-6 sm:py-3 text-sm' : 'p-3 sm:px-6 sm:py-3'}`}>
-                <Plus size={isRecordsScrolled ? 18 : 20} /> <span className="hidden sm:inline">เพิ่มประวัติใหม่</span>
+              <button onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} kanit-text sticky-header-btn`}>
+                <Plus /> <span className="hidden sm:inline">เพิ่มประวัติใหม่</span>
               </button>
             </div>
           </div>
-          
-          {/* เปลี่ยน max-w-7xl เป็น w-full */}
+        </div>
+
+        {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
+        <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
           <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-            {/* ปรับแก้โครงสร้างให้เหมือน Sticky Search ของหน้านัดหมาย เพื่อให้แสดงผลลอยและยืดได้ถูกต้อง */}
-            <div className={`absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 transition-all duration-300 ease-in-out pointer-events-auto origin-top ${isRecordsScrolled ? 'w-full mt-0 py-3 px-4 md:px-8 2xl:px-12 border-b shadow-sm rounded-b-[2rem] rounded-t-none' : 'w-[calc(100%-2rem)] md:w-[calc(100%-4rem)] 2xl:w-[calc(100%-6rem)] mt-2 p-4 rounded-[2rem] border shadow-sm'}`}>
+            <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm">
               <div className="relative w-full">
                 <input type="text" placeholder="ค้นหาชื่อ, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data" />
                 <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
@@ -2371,14 +2448,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
           </div>
         </div>
 
-        {/* แก้ไข: ลบ theme.card ออก และปรับ mt-4 ให้กล่องกว้างเท่ากับหน้านัดหมายเป๊ะๆ */}
+        {/* --- 3. ตาราง --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4">
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0 sm:p-0">
-            {isGlobalLoading ? (
-              <div className="flex flex-col items-center justify-center text-slate-400 gap-4 p-12 h-[30vh]">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-500"></div><p className="font-medium text-slate-500 kanit-text">กำลังเตรียมข้อมูล...</p>
-              </div>
-            ) : (
               <div className="px-2 sm:px-4 py-4">
                 
                 {/* --- Desktop View (Table) --- */}
@@ -2397,16 +2469,64 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                       </tr>
                     </thead>
                     <tbody>
-                      {memoizedPatientTableRows}
+                      {isGlobalLoading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                          <tr key={`skel-med-${i}`} className="border-b border-slate-50">
+                            <td className="py-4 pl-6"><div className="h-4 w-16 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-8 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-12 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                          </tr>
+                        ))
+                      ) : memoizedPatientTableRows}
                     </tbody>
                   </table>
                 </div>
 
                 {/* --- Mobile View (Cards) --- */}
                 <div className="lg:hidden space-y-4 mt-2">
-                    {memoizedPatientMobileCards}
-                    {sortedPatients.length === 0 && (
-                        <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลผู้ป่วย</div>
+                    {isGlobalLoading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <div key={`skel-med-mob-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <div className="h-5 w-16 bg-slate-200 rounded animate-pulse"></div>
+                                    <div className="h-5 w-16 bg-slate-200 rounded-md animate-pulse"></div>
+                                </div>
+                                <div className="mb-3">
+                                    <div className="h-6 w-40 bg-slate-200 rounded animate-pulse mb-2"></div>
+                                    <div className="h-6 w-24 bg-slate-200 rounded-lg animate-pulse"></div>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                        <div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                        <div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                        <div className="h-4 w-28 bg-slate-200 rounded animate-pulse"></div>
+                                    </div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
+                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <>
+                            {memoizedPatientMobileCards}
+                            {!isGlobalLoading && sortedPatients.length === 0 && (
+                                <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลผู้ป่วย</div>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -2419,7 +2539,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                    </div>
                 )}
               </div>
-            )}
           </div>
         </div>
       </div>
@@ -3372,6 +3491,42 @@ export default function App() {
           /* บอกเบราว์เซอร์ล่วงหน้าว่าจะมีการเปลี่ยน 2 ค่านี้ เพื่อให้ประมวลผลลื่นไหลขึ้น (Hardware Acceleration) */
           will-change: transform, opacity; 
         }
+
+        /* --- CSS-Based 60FPS Sticky Header Animations --- */
+        .sticky-header-bg { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-bottom: 1px solid transparent; background-color: transparent; }
+        .is-scrolled .sticky-header-bg { background-color: rgba(255, 255, 255, 0.7); backdrop-filter: blur(24px); border-color: rgba(255, 255, 255, 0.5); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04); }
+
+        .sticky-header-inner { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1rem; padding-bottom: 1rem; }
+        @media (min-width: 768px) { .sticky-header-inner { padding-top: 2rem; } }
+        .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.5rem; }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-bottom: 0.75rem; } }
+
+        .sticky-header-title { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1.5rem; line-height: 2rem; margin: 0; }
+        @media (min-width: 640px) { .sticky-header-title { font-size: 1.875rem; line-height: 2.25rem; } }
+        .is-scrolled .sticky-header-title { font-size: 1.25rem; line-height: 1.75rem; }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.5rem; line-height: 2rem; } }
+
+        .sticky-header-desc { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 1; max-height: 50px; margin-top: 0.25rem; overflow: hidden; }
+        .is-scrolled .sticky-header-desc { opacity: 0; max-height: 0; margin-top: 0; }
+
+        .sticky-header-btn { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; }
+        @media (min-width: 640px) { .sticky-header-btn { padding: 0.75rem 1.5rem; font-size: 1rem; } }
+        .is-scrolled .sticky-header-btn { padding: 0.625rem; font-size: 0.875rem; }
+        .sticky-header-btn svg { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: 20px; height: 20px; }
+        .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; }
+
+        .dash-date-badge { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.375rem 0.75rem; font-size: 0.875rem; }
+        @media (min-width: 640px) { .dash-date-badge { padding: 0.5rem 1rem; font-size: 1rem; } }
+        .dash-date-badge svg { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: 18px; height: 18px; }
+        .is-scrolled .dash-date-badge { font-size: 0.75rem; }
+        .is-scrolled .dash-date-badge svg { width: 14px; height: 14px; }
+
+        .sticky-filter-inner { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: calc(100% - 2rem); margin-top: 0.5rem; padding: 1rem; border-radius: 2rem; border-width: 1px; }
+        @media (min-width: 768px) { .sticky-filter-inner { width: calc(100% - 4rem); } }
+        @media (min-width: 1536px) { .sticky-filter-inner { width: calc(100% - 6rem); } }
+        .is-stuck .sticky-filter-inner { width: 100%; margin-top: 0; padding-top: 0.75rem; padding-bottom: 0.75rem; padding-left: 1rem; padding-right: 1rem; border-radius: 0 0 2rem 2rem; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+        @media (min-width: 768px) { .is-stuck .sticky-filter-inner { padding-left: 2rem; padding-right: 2rem; } }
+        @media (min-width: 1536px) { .is-stuck .sticky-filter-inner { padding-left: 3rem; padding-right: 3rem; } }
       `}} />
     </div>
   );
