@@ -1717,46 +1717,80 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
 const Dashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isDashScrolled, setIsDashScrolled] = useState(false);
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // ดักจับการ Scroll เฉพาะในหน้า Dashboard
+  useEffect(() => {
+    const mainElement = document.getElementById('main-scroll-container');
+    if (!mainElement) return;
+
+    const handleScroll = (e) => {
+      setIsDashScrolled(e.target.scrollTop > 20);
+    };
+
+    // ตรวจสอบสถานะเริ่มต้นทันที
+    setTimeout(() => {
+        if (mainElement) setIsDashScrolled(mainElement.scrollTop > 20);
+    }, 50);
+
+    mainElement.addEventListener('scroll', handleScroll);
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const d = String(currentTime.getDate()).padStart(2, '0');
   const m = String(currentTime.getMonth() + 1).padStart(2, '0');
   const y = currentTime.getFullYear() + 543;
+
   return (
-    <div className="space-y-6 fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight kanit-text">ภาพรวมคลินิก</h1>
-          <p className="text-slate-500 mt-1 kanit-text">ข้อมูลสรุปประจำวันของสาขานี้</p>
-        </div>
-        <div className="px-4 py-2 bg-sky-50 rounded-2xl text-sky-600 font-medium flex items-center gap-2 font-data">
-          <CalendarRange size={18} />{`${d}/${m}/${y}`} เวลา {currentTime.toLocaleTimeString('th-TH')} น.
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="คิววันนี้" value={GOOGLE_SCRIPT_URL ? "0" : "24"} icon={Users} color="sky" />
-        <StatCard title="รายได้ (บาท)" value={GOOGLE_SCRIPT_URL ? "0" : "45,200"} icon={CreditCard} color="emerald" />
-        <StatCard title="สินค้าใกล้หมด" value={GOOGLE_SCRIPT_URL ? "0" : "5"} icon={AlertCircle} color="rose" />
-        <StatCard title="สาขาที่เปิด" value={GOOGLE_SCRIPT_URL ? "0" : "2"} icon={MapPin} color="slate" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={`lg:col-span-2 ${theme.card}`}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">แนวโน้มคนไข้ {GOOGLE_SCRIPT_URL ? '' : '(จำลอง)'}</h3>
-          <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 kanit-text">
-            {GOOGLE_SCRIPT_URL ? 'ไม่มีข้อมูลสถิติ' : '[ กราฟแสดงแนวโน้มคนไข้ ]'}
+    <div className="fade-in pb-10 w-full">
+      
+      {/* Sticky Header ย่อขนาดได้แบบ Glassmorphism */}
+      <div className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300">
+        <div className={`w-full pointer-events-auto transition-all duration-500 ease-out border-b ${isDashScrolled ? 'bg-white/70 backdrop-blur-xl border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent border-transparent'}`}>
+          <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 transition-all duration-300 ${isDashScrolled ? 'pt-4 pb-2 sm:pb-3' : 'pt-4 md:pt-8 pb-4'}`}>
+            <div>
+              <h1 className={`font-bold text-slate-800 tracking-tight kanit-text transition-all duration-300 ${isDashScrolled ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'}`}>ภาพรวมคลินิก</h1>
+              <p className={`text-slate-500 mt-1 kanit-text transition-all duration-300 text-xs sm:text-base ${isDashScrolled ? 'opacity-0 h-0 overflow-hidden m-0' : 'opacity-100 h-auto'}`}>ข้อมูลสรุปประจำวันของสาขานี้</p>
+            </div>
+            <div className={`px-3 py-1.5 sm:px-4 sm:py-2 bg-sky-50 rounded-xl sm:rounded-2xl text-sky-600 font-medium flex items-center gap-1.5 sm:gap-2 font-data shrink-0 transition-all ${isDashScrolled ? 'text-xs' : 'text-sm sm:text-base'}`}>
+              <CalendarRange size={isDashScrolled ? 14 : 18} className="hidden sm:block" />
+              <span className="hidden sm:inline">{`${d}/${m}/${y}`}</span>
+              <span className="hidden sm:inline">เวลา</span>
+              <span>{currentTime.toLocaleTimeString('th-TH')} น.</span>
+            </div>
           </div>
         </div>
-        <div className={theme.card}>
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">คิวถัดไป</h3>
-          <div className="space-y-4">
-            {GOOGLE_SCRIPT_URL ? <div className="text-center py-8 text-slate-400 text-sm kanit-text">ไม่มีคิวถัดไป</div> : [1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold font-data">{i}</div>
-                <div><p className="font-semibold text-slate-700 kanit-text">คุณลูกค้า ท่านที่ {i}</p><p className="text-sm text-slate-500 flex items-center gap-1 font-data"><Clock size={14} /> 10:{i * 15} น. - <span className="kanit-text">ตรวจทั่วไป</span></p></div>
-              </div>
-            ))}
+      </div>
+
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard title="คิววันนี้" value={GOOGLE_SCRIPT_URL ? "0" : "24"} icon={Users} color="sky" />
+          <StatCard title="รายได้ (บาท)" value={GOOGLE_SCRIPT_URL ? "0" : "45,200"} icon={CreditCard} color="emerald" />
+          <StatCard title="สินค้าใกล้หมด" value={GOOGLE_SCRIPT_URL ? "0" : "5"} icon={AlertCircle} color="rose" />
+          <StatCard title="สาขาที่เปิด" value={GOOGLE_SCRIPT_URL ? "0" : "2"} icon={MapPin} color="slate" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className={`lg:col-span-2 ${theme.card}`}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">แนวโน้มคนไข้ {GOOGLE_SCRIPT_URL ? '' : '(จำลอง)'}</h3>
+            <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 kanit-text">
+              {GOOGLE_SCRIPT_URL ? 'ไม่มีข้อมูลสถิติ' : '[ กราฟแสดงแนวโน้มคนไข้ ]'}
+            </div>
+          </div>
+          <div className={theme.card}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">คิวถัดไป</h3>
+            <div className="space-y-4">
+              {GOOGLE_SCRIPT_URL ? <div className="text-center py-8 text-slate-400 text-sm kanit-text">ไม่มีคิวถัดไป</div> : [1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold font-data">{i}</div>
+                  <div><p className="font-semibold text-slate-700 kanit-text">คุณลูกค้า ท่านที่ {i}</p><p className="text-sm text-slate-500 flex items-center gap-1 font-data"><Clock size={14} /> 10:{i * 15} น. - <span className="kanit-text">ตรวจทั่วไป</span></p></div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -3175,7 +3209,7 @@ export default function App() {
           <div className="min-h-full">
             {/* Fix: Render all tabs with display:none to preserve scroll and states (fixes unmount memory leak & scroll jump) */}
             <div style={{ display: currentTab === 'dashboard' ? 'block' : 'none' }}>
-                <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><Dashboard /></div>
+                <Dashboard />
             </div>
             <div style={{ display: currentTab === 'records' ? 'block' : 'none' }}>
                 <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
