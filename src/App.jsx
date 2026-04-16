@@ -5,7 +5,7 @@ import {
   Package, BarChart3, Settings, Building2, Search, 
   Plus, X, CheckCircle2, AlertCircle, MapPin, Phone,
   Clock, Stethoscope, FileText, Pill, CreditCard,
-  Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ArrowUpDown, Loader2,
+  Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck
 } from 'lucide-react';
 
@@ -140,6 +140,47 @@ const PlaceholderPage = ({ title, desc, icon: Icon }) => (
     <div className="mt-8 px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-sm">เชื่อมต่อฐานข้อมูลส่วนนี้ผ่าน Google Apps Script ได้ในอนาคต</div>
   </div>
 );
+
+// --- คอมโพเนนต์ Custom Dropdown สมัยใหม่ที่ใช้แทน <select> ทั้งหมดในระบบ ---
+const CustomSelect = ({ value, onChange, options, placeholder, className, disabled, compact }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectedOption = options.find(o => (typeof o === 'object' ? String(o.value) : String(o)) === String(value));
+    const displayLabel = selectedOption ? (typeof selectedOption === 'object' ? selectedOption.label : selectedOption) : placeholder;
+
+    return (
+        <div className={`relative ${className || ''} ${disabled ? 'opacity-70 pointer-events-none' : ''}`}>
+            <div
+                tabIndex={disabled ? -1 : 0}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                onBlur={() => setTimeout(() => setIsOpen(false), 150)}
+                className={compact 
+                    ? `flex items-center justify-center gap-1 cursor-pointer outline-none bg-transparent hover:bg-slate-100 rounded-lg px-2 py-1 transition-colors font-data`
+                    : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
+                }
+            >
+                <span className={`truncate ${compact ? 'font-bold text-slate-700 text-sm' : ''}`}>{displayLabel || (compact ? '' : 'เลือก')}</span>
+                {!compact && <ChevronDown className={`w-5 h-5 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+            </div>
+            {isOpen && !disabled && (
+                <div className={`absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top ${compact ? 'min-w-[4rem] max-h-32 left-1/2 -translate-x-1/2' : 'w-full max-h-48'}`}>
+                    {options.map((opt, i) => {
+                        const val = typeof opt === 'object' ? opt.value : opt;
+                        const lbl = typeof opt === 'object' ? opt.label : opt;
+                        return (
+                            <div
+                                key={i}
+                                onMouseDown={(e) => { e.preventDefault(); onChange(val); setIsOpen(false); }}
+                                className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors ${compact ? 'text-center text-xs' : 'text-sm'} ${String(value) === String(val) ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                            >
+                                {lbl}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
 
 // --- ข้อมูลสำหรับ Calendar View ---
 const systemStatusTypes = [
@@ -848,14 +889,40 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       } catch(e) { return null; }
   };
 
+  // --- NEW LOGIC: นำข้อมูลคิวมาผสมกับข้อมูลคนไข้ล่าสุดจากฐานข้อมูล (Patients) ---
+  // เมื่อมีการแก้ชื่อหรือเบอร์โทรในระบบเวชระเบียน หน้านัดหมายจะแสดงข้อมูลที่อัปเดตตามทันที
+  const augmentedQueueData = useMemo(() => {
+    return queueData.map(appt => {
+      if (!appt.hn) return appt;
+      
+      // ไปดึงข้อมูลคนไข้ล่าสุดมาจาก patientsData โดยอิงจาก HN
+      const patientInfo = patientsData.find(p => getPatientId(p) === appt.hn);
+      
+      if (patientInfo) {
+          const latestName = getPatientFullName(patientInfo);
+          const latestPhones = [patientInfo.phone1, patientInfo.phone2].filter(Boolean);
+          
+          return {
+              ...appt,
+              // เสียบทับข้อมูลที่จะแสดงผล ให้เป็นข้อมูลล่าสุดจากฐานข้อมูลคนไข้
+              patientName: latestName,
+              name: latestName, // สำหรับให้ Calendar นำไปแสดง
+              phone: latestPhones.length > 0 ? latestPhones : appt.phone
+          };
+      }
+      return appt; // ถ้าไม่พบประวัติคนไข้ ก็ใช้ข้อมูลดิบจากคิวเหมือนเดิม
+    });
+  }, [queueData, patientsData]);
+
   const filteredData = useMemo(() => {
-    return queueData.filter(a => 
+    // เปลี่ยนจากใช้ queueData ตรงๆ เป็นใช้ข้อมูลที่ถูกอัปเดต (augmentedQueueData) แล้ว
+    return augmentedQueueData.filter(a => 
       (a.patientName && a.patientName.includes(search)) || 
       (a.hn && a.hn.includes(search)) || 
       (a.doctor && a.doctor.includes(search)) ||
       (a.reason && a.reason.includes(search))
     ).sort((a, b) => new Date(b.rawDeliveryStart || 0) - new Date(a.rawDeliveryStart || 0));
-  }, [queueData, search]);
+  }, [augmentedQueueData, search]);
 
   useEffect(() => {
     setVisibleCount(20);
@@ -1245,13 +1312,13 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const memoizedCalendarView = useMemo(() => {
       return (
          <CalendarView 
-            activities={queueData} 
+            activities={augmentedQueueData} 
             onEventClick={(ev) => handleOpenEdit(ev.originalData || ev, true)} 
             onDayClick={(date) => console.log('Day clicked:', date)} 
             dealStatuses={systemStatusTypes} 
          />
       );
-  }, [queueData]); // เรนเดอร์ปฏิทินใหม่เฉพาะตอนข้อมูลนัดหมายมีการเพิ่ม/ลบ/แก้ไข เท่านั้น!
+  }, [augmentedQueueData]); // อัปเดตปฏิทินเมื่อข้อมูลคิวหรือข้อมูลคนไข้มีการเปลี่ยนแปลง
 
   return (
     <>
@@ -1260,7 +1327,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         {/* --- 1. Sticky Header ย่อขนาดได้ ปรับ z-index เป็น 30 --- */}
         <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300">
           {/* ปรับปรุงตรงนี้ให้เป็น Glassmorphism effect เมื่อ Scroll หน้าจอ */}
-          <div className={`w-full pointer-events-auto transition-all duration-500 ease-out ${isApptHeaderScrolled ? 'bg-white/70 backdrop-blur-xl border-b border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent'}`}>
+          <div className={`w-full pointer-events-auto transition-all duration-500 ease-out border-b ${isApptHeaderScrolled ? 'bg-white/70 backdrop-blur-xl border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent border-transparent'}`}>
             <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 transition-all duration-300 ${isApptHeaderScrolled ? 'pt-4 pb-2 sm:pb-3' : 'pt-4 md:pt-8 pb-4'}`}>
               <div>
                 <h1 className={`font-bold text-slate-800 tracking-tight transition-all duration-300 ${isApptHeaderScrolled ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'}`}>ระบบนัดหมาย</h1>
@@ -1455,24 +1522,26 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     
                     <div>
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">ประเภทบริการ</label>
-                        <select className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm appearance-none cursor-pointer font-data" value={formData.serviceType} onChange={(e) => setFormData({...formData, serviceType: e.target.value})}>
-                            <option value="">เลือกประเภทบริการ</option>
-                            <option value="ตรวจโรคทั่วไป">ตรวจโรคทั่วไป</option>
-                            <option value="ทันตกรรม">ทันตกรรม</option>
-                            <option value="ความงาม/ผิวพรรณ">ความงาม/ผิวพรรณ</option>
-                            <option value="ศัลยกรรม">ศัลยกรรม</option>
-                            <option value="ตรวจสุขภาพ">ตรวจสุขภาพ</option>
-                            <option value="ติดตามอาการ">ติดตามอาการ</option>
-                        </select>
+                        <div className="relative">
+                            <CustomSelect 
+                                value={formData.serviceType} 
+                                onChange={(val) => setFormData({...formData, serviceType: val})} 
+                                options={[{value:'', label:'เลือกประเภทบริการ'}, 'ตรวจโรคทั่วไป', 'ทันตกรรม', 'ความงาม/ผิวพรรณ', 'ศัลยกรรม', 'ตรวจสุขภาพ', 'ติดตามอาการ']} 
+                                disabled={isViewMode} 
+                            />
+                        </div>
                     </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">สถานะนัดหมาย</label>
-                        <select className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-medium appearance-none cursor-pointer font-data" value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})}>
-                            <option value="pending">🟡 รอยืนยัน (Pending)</option>
-                            <option value="confirmed">🟢 ยืนยันแล้ว (Confirmed)</option>
-                            <option value="cancelled">🔴 ยกเลิก (Cancelled)</option>
-                        </select>
+                        <div className="relative">
+                            <CustomSelect 
+                                value={formData.status} 
+                                onChange={(val) => setFormData({...formData, status: val})} 
+                                options={[{value:'pending', label:'🟡 รอยืนยัน (Pending)'}, {value:'confirmed', label:'🟢 ยืนยันแล้ว (Confirmed)'}, {value:'cancelled', label:'🔴 ยกเลิก (Cancelled)'}]} 
+                                disabled={isViewMode} 
+                            />
+                        </div>
                     </div>
 
                     <div className="md:col-span-2">
@@ -1599,13 +1668,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
                     <Clock size={14} className="text-sky-500" />
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={apptTime.h} onChange={e => setApptTime({...apptTime, h: e.target.value})}>
-                        {Array.from({length:24}, (_,i)=>String(i).padStart(2,'0')).map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
+                    <CustomSelect compact value={apptTime.h} onChange={val => setApptTime({...apptTime, h: val})} options={Array.from({length:24}, (_,i)=>String(i).padStart(2,'0'))} />
                     <span className="text-slate-400 font-bold kanit-text">:</span>
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={apptTime.m} onChange={e => setApptTime({...apptTime, m: e.target.value})}>
-                        {Array.from({length:60}, (_,i)=>String(i).padStart(2,'0')).map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                    <CustomSelect compact value={apptTime.m} onChange={val => setApptTime({...apptTime, m: val})} options={Array.from({length:60}, (_,i)=>String(i).padStart(2,'0'))} />
                 </div>
                 
                 <div className="flex gap-1.5">
@@ -2247,7 +2312,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     <>
       <div className="fade-in pb-10">
         <div className="sticky top-0 z-30 w-full pointer-events-none transition-all duration-300">
-          <div className={`w-full pointer-events-auto transition-all duration-500 ease-out ${isRecordsScrolled ? 'bg-white/70 backdrop-blur-xl border-b border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent'}`}>
+          <div className={`w-full pointer-events-auto transition-all duration-500 ease-out border-b ${isRecordsScrolled ? 'bg-white/70 backdrop-blur-xl border-white/50 shadow-[0_8px_30px_rgba(0,0,0,0.04)]' : 'bg-transparent border-transparent'}`}>
             {/* เปลี่ยน max-w-7xl เป็น w-full และเพิ่ม 2xl:px-12 ให้เท่ากับหน้านัดหมาย */}
             <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 transition-all duration-300 ${isRecordsScrolled ? 'pt-4 pb-2 sm:pb-3' : 'pt-4 md:pt-8 pb-4'}`}>
               <div>
@@ -2356,7 +2421,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">HN <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} bg-slate-100 text-slate-500 cursor-not-allowed font-data`} value={formData.hn} disabled readOnly /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label><select required className={`${theme.input} appearance-none cursor-pointer font-data`} value={formData.prefix} onChange={(e) => setFormData({...formData, prefix: e.target.value})}><option value="">เลือก</option><option value="นาย">นาย</option><option value="นาง">นาง</option><option value="นางสาว">นางสาว</option><option value="ด.ช.">ด.ช.</option><option value="ด.ญ.">ด.ญ.</option><option value="พระ">พระ</option></select></div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label>
+                      <CustomSelect value={formData.prefix} onChange={(val) => setFormData({...formData, prefix: val})} options={[{value:'', label:'เลือก'}, 'นาย', 'นาง', 'นางสาว', 'ด.ช.', 'ด.ญ.', 'พระ']} disabled={isViewMode} />
+                    </div>
                     <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อ <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} /></div>
                     <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">นามสกุล <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} /></div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อเล่น</label><input type="text" className={`${theme.input} font-data`} value={formData.nickname} onChange={(e) => setFormData({...formData, nickname: e.target.value})} /></div>
@@ -2368,7 +2436,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                       </div>
                     </div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อายุ</label><input type="text" className={`${theme.input} bg-slate-100 text-slate-500 font-data`} value={calculatedAge} disabled readOnly /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เพศ <span className="text-rose-500">*</span></label><select required className={`${theme.input} appearance-none cursor-pointer font-data`} value={formData.gender} onChange={(e) => setFormData({...formData, gender: e.target.value})}><option value="">เลือก</option><option value="ชาย">ชาย</option><option value="หญิง">หญิง</option><option value="ไม่ระบุ">ไม่ระบุ</option></select></div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เพศ <span className="text-rose-500">*</span></label>
+                      <CustomSelect value={formData.gender} onChange={(val) => setFormData({...formData, gender: val})} options={[{value:'', label:'เลือก'}, 'ชาย', 'หญิง', 'ไม่ระบุ']} disabled={isViewMode} />
+                    </div>
                     <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมายเลขบัตรประชาชน/พาสปอร์ต</label><input type="text" className={`${theme.input} font-data`} value={formData.idCard} onChange={(e) => setFormData({...formData, idCard: e.target.value})} maxLength="13" /></div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">สัญชาติ</label><input type="text" className={`${theme.input} font-data`} value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} /></div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เชื้อชาติ</label><input type="text" className={`${theme.input} font-data`} value={formData.ethnicity} onChange={(e) => setFormData({...formData, ethnicity: e.target.value})} /></div>
@@ -2405,7 +2476,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
                   <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Stethoscope size={20} /> ข้อมูลสุขภาพเบื้องต้น</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่เลือด</label><select className={`${theme.input} appearance-none cursor-pointer font-data`} value={formData.bloodGroup} onChange={(e) => setFormData({...formData, bloodGroup: e.target.value})}><option value="">ไม่ทราบ</option><option value="A">A</option><option value="B">B</option><option value="O">O</option><option value="AB">AB</option></select></div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่เลือด</label>
+                      <CustomSelect value={formData.bloodGroup} onChange={(val) => setFormData({...formData, bloodGroup: val})} options={[{value:'', label:'ไม่ทราบ'}, 'A', 'B', 'O', 'AB']} disabled={isViewMode} />
+                    </div>
                     <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อาการสำคัญที่มาพบแพทย์ <span className="text-rose-500">*</span></label><textarea required rows="2" className={`${theme.input} resize-none font-data`} value={formData.chiefComplaint} onChange={(e) => setFormData({...formData, chiefComplaint: e.target.value})}></textarea></div>
                     <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ประวัติการแพ้อาหาร/ยา/สมุนไพร (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none font-data`} value={formData.allergies} onChange={(e) => setFormData({...formData, allergies: e.target.value})}></textarea></div>
                     <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">โรคประจำตัว (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none font-data`} value={formData.underlyingDisease} onChange={(e) => setFormData({...formData, underlyingDisease: e.target.value})}></textarea></div>
@@ -2460,24 +2534,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                             {newOpdRecord.tx.map((treatment, txIndex) => (
                               <div key={txIndex} className="flex gap-2 items-stretch w-full">
                                 <div className="relative flex-1">
-                                  <select className={`${theme.input} bg-white py-2 text-sm appearance-none cursor-pointer pr-10 font-data`} value={treatment} onChange={(e) => {
-                                      const updatedTx = [...newOpdRecord.tx];
-                                      updatedTx[txIndex] = e.target.value;
-                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx});
-                                  }}>
-                                    <option value="">เลือกการรักษา</option>
-                                    <option value="ซักประวัติ/ตรวจร่างกาย">ซักประวัติ/ตรวจร่างกาย</option>
-                                    <option value="จ่ายยา">จ่ายยา</option>
-                                    <option value="ฉีดยา">ฉีดยา</option>
-                                    <option value="ทำแผล">ทำแผล</option>
-                                    <option value="เจาะเลือด/ส่งตรวจแล็บ">เจาะเลือด/ส่งตรวจแล็บ</option>
-                                    <option value="เอกซเรย์">เอกซเรย์</option>
-                                    <option value="ส่งต่อผู้ป่วย (Refer)">ส่งต่อผู้ป่วย (Refer)</option>
-                                    <option value="ให้คำปรึกษา/แนะนำ">ให้คำปรึกษา/แนะนำ</option>
-                                  </select>
-                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                                  </div>
+                                  <CustomSelect 
+                                      value={treatment} 
+                                      onChange={(val) => {
+                                          const updatedTx = [...newOpdRecord.tx];
+                                          updatedTx[txIndex] = val;
+                                          setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                      }} 
+                                      options={[{value:'', label:'เลือกการรักษา'}, 'ซักประวัติ/ตรวจร่างกาย', 'จ่ายยา', 'ฉีดยา', 'ทำแผล', 'เจาะเลือด/ส่งตรวจแล็บ', 'เอกซเรย์', 'ส่งต่อผู้ป่วย (Refer)', 'ให้คำปรึกษา/แนะนำ']} 
+                                  />
                                 </div>
                                 {newOpdRecord.tx.length > 1 && (
                                   <button type="button" onClick={() => {
@@ -2736,13 +2801,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
                     <Clock size={14} className="text-sky-500" />
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={opdTime.h} onChange={e => setOpdTime({...opdTime, h: e.target.value})}>
-                        {Array.from({length:24}, (_,i)=>String(i).padStart(2,'0')).map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
+                    <CustomSelect compact value={opdTime.h} onChange={val => setOpdTime({...opdTime, h: val})} options={Array.from({length:24}, (_,i)=>String(i).padStart(2,'0'))} />
                     <span className="text-slate-400 font-bold kanit-text">:</span>
-                    <select className="bg-transparent text-sm font-bold text-slate-700 outline-none appearance-none cursor-pointer text-center w-8 font-data" value={opdTime.m} onChange={e => setOpdTime({...opdTime, m: e.target.value})}>
-                        {Array.from({length:60}, (_,i)=>String(i).padStart(2,'0')).map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                    <CustomSelect compact value={opdTime.m} onChange={val => setOpdTime({...opdTime, m: val})} options={Array.from({length:60}, (_,i)=>String(i).padStart(2,'0'))} />
                 </div>
                 
                 <div className="flex gap-1.5">
@@ -2791,6 +2852,96 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [currentBranch, setCurrentBranch] = useState('b1');
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // --- เพิ่ม State สำหรับ Draggable Expandable Sidebar ---
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sidebarExpanded') : null;
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
+
+  // เลิกใช้ State แต่เปลี่ยนมาใช้ Ref เพื่อควบคุม DOM โดยตรง (ป้องกันการ Re-render)
+  const sidebarRef = React.useRef(null);
+  const dragStartX = React.useRef(null);
+
+  const SIDEBAR_MIN_WIDTH = 84;
+  const SIDEBAR_MAX_WIDTH = 256;
+  const sidebarBaseWidth = isSidebarExpanded ? SIDEBAR_MAX_WIDTH : SIDEBAR_MIN_WIDTH;
+  const baseProgress = isSidebarExpanded ? 1 : 0;
+
+  // บันทึกสถานะลง LocalStorage เมื่อมีการเปลี่ยนแปลง
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('sidebarExpanded', JSON.stringify(isSidebarExpanded));
+    }
+  }, [isSidebarExpanded]);
+
+  // ดักจับ Event ขณะกำลังลากแบบ 60FPS (Bypass React State)
+  useEffect(() => {
+    if (!isDraggingSidebar) {
+      // คืนค่า Base เมื่อหยุดลาก (เพื่อให้ Transition ของ CSS ทำงานได้ต่อ)
+      if (sidebarRef.current) {
+        sidebarRef.current.style.setProperty('--sidebar-width', `${sidebarBaseWidth}px`);
+        sidebarRef.current.style.setProperty('--drag-progress', baseProgress);
+      }
+      return;
+    }
+
+    const handleMouseMove = (e) => {
+      if (dragStartX.current === null) return;
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const offset = clientX - dragStartX.current;
+      
+      let newWidth = sidebarBaseWidth + offset;
+      newWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, newWidth));
+      const progress = (newWidth - SIDEBAR_MIN_WIDTH) / (SIDEBAR_MAX_WIDTH - SIDEBAR_MIN_WIDTH);
+      
+      // *อัปเดต CSS Variables ตรงๆ โดยไม่แตะ React State* = ไม่กระตุก 60FPS
+      if (sidebarRef.current) {
+        sidebarRef.current.style.setProperty('--sidebar-width', `${newWidth}px`);
+        sidebarRef.current.style.setProperty('--drag-progress', progress);
+      }
+    };
+
+    const handleMouseUp = (e) => {
+      if (dragStartX.current === null) return;
+
+      const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX;
+      const offset = clientX - dragStartX.current;
+
+      dragStartX.current = null;
+      setIsDraggingSidebar(false); // เรียกใช้ React State แค่ครั้งเดียวตอนจบ
+
+      // Snap Logic
+      if (!isSidebarExpanded && offset > 50) {
+        setIsSidebarExpanded(true);
+      } else if (isSidebarExpanded && offset < -50) {
+        setIsSidebarExpanded(false);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove, { passive: true });
+    window.addEventListener('touchend', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [isDraggingSidebar, isSidebarExpanded, sidebarBaseWidth, baseProgress]);
+
+  // ฟังก์ชันเริ่มจับการลาก (ตรวจสอบพื้นที่ป้องกันการลากมั่ว)
+  const startSidebarDrag = (e) => {
+    if (e.target.closest('button') || e.target.closest('.no-drag-zone')) {
+      return;
+    }
+    const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+    dragStartX.current = clientX;
+    setIsDraggingSidebar(true);
+  };
 
   // --- เพิ่มระบบจำตำแหน่ง Scroll ของแต่ละหน้า ---
   const mainRef = React.useRef(null);
@@ -2900,19 +3051,101 @@ export default function App() {
       {/* แก้ไข: เพิ่ม flex-col md:flex-row เพื่อให้รองรับ Header แนวนอนบนมือถือ */}
       <div className="flex h-screen overflow-hidden w-full flex-col md:flex-row relative">
         
-        <aside className={`hidden md:flex flex-col w-64 ${theme.glassPanel} relative z-40 border-r border-slate-200/50 shrink-0`}>
-          <div className="p-6 flex items-center gap-3 border-b border-slate-100/50">
-            <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30"><Stethoscope size={24} /></div>
-            <div><h2 className="font-bold text-slate-800 leading-tight kanit-text">Clinic<span className="text-sky-500">Hub</span></h2><p className="text-xs text-slate-400 kanit-text">Management System</p></div>
+        <aside 
+          ref={sidebarRef}
+          style={{ 
+            '--sidebar-width': `${sidebarBaseWidth}px`,
+            '--drag-progress': baseProgress
+          }}
+          className={`hidden md:flex flex-col w-[var(--sidebar-width)] ${theme.glassPanel} relative z-40 border-r border-slate-200/50 shrink-0 select-none ${!isDraggingSidebar ? 'transition-[width] duration-300 ease-in-out' : ''}`}
+          onMouseDown={startSidebarDrag}
+          onTouchStart={startSidebarDrag}
+        >
+          {/* ส่วนหัว โลโก้ */}
+          <div className="p-6 flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0">
+            <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
+              <Stethoscope size={24} />
+            </div>
+            <div 
+              style={{ opacity: 'var(--drag-progress)', transform: `translateX(calc((1 - var(--drag-progress)) * -20px))` }}
+              className={`whitespace-nowrap min-w-[150px] ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+            >
+              <h2 className="font-bold text-slate-800 leading-tight kanit-text ml-3">Clinic<span className="text-sky-500">Hub</span></h2>
+              <p className="text-xs text-slate-400 kanit-text ml-3">Management System</p>
+            </div>
           </div>
-          <div className="px-4 py-4">
-            <select value={currentBranch} onChange={(e) => setCurrentBranch(e.target.value)} className="w-full bg-slate-50 border border-slate-100 text-sm rounded-xl px-3 py-2 text-slate-700 outline-none focus:ring-2 focus:ring-sky-500/20 appearance-none cursor-pointer kanit-text"><option value="all">ดูข้อมูลทุกสาขารวม</option>{GOOGLE_SCRIPT_URL ? null : mockBranches.map(b => (<option key={b.id} value={b.id}>{b.name}</option>))}</select>
+
+          {/* กล่องเลือกสาขา (เพิ่ม no-drag-zone เพื่อไม่ให้ขัดจังหวะตอนกดเลือก) */}
+          <div className="px-4 py-4 relative z-[60] min-h-[72px] flex items-center justify-center shrink-0 no-drag-zone">
+            <div 
+              className={`w-full absolute px-4 ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+              style={{ opacity: 'var(--drag-progress)' }}
+            >
+              <CustomSelect 
+                  value={currentBranch} 
+                  onChange={(val) => setCurrentBranch(val)} 
+                  options={[{value: 'all', label: 'ดูข้อมูลทุกสาขารวม'}, ...(GOOGLE_SCRIPT_URL ? [] : mockBranches.map(b => ({value: b.id, label: b.name})))]} 
+                  className="w-full bg-slate-50 border-slate-100 rounded-xl focus-within:bg-white"
+              />
+            </div>
+            {/* ไอคอนแสดงตอนเมนูถูกพับ */}
+            <div 
+              className={`absolute ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+              style={{ opacity: 'calc(1 - var(--drag-progress))' }}
+            >
+              <div title="เลือกสาขา" className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 border border-slate-100 hover:bg-sky-50 hover:text-sky-600 transition-colors cursor-pointer">
+                <Building2 size={20} />
+              </div>
+            </div>
           </div>
-          <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
-            {navItems.map((item) => (<button key={item.id} onClick={() => handleTabClick(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 kanit-text ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}><item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />{item.label}</button>))}
+
+          {/* รายการเมนูนำทาง */}
+          <nav className="flex-1 px-3 py-2 flex flex-col overflow-y-auto overflow-x-hidden relative gap-1 custom-scrollbar">
+            {navItems.map((item) => (
+              <button 
+                key={item.id} 
+                onClick={() => handleTabClick(item.id)} 
+                title={!isSidebarExpanded && !isDraggingSidebar ? item.label : undefined}
+                className={`flex items-center py-3 rounded-2xl transition-all duration-200 kanit-text overflow-hidden ${isSidebarExpanded || isDraggingSidebar ? 'w-full px-3' : 'w-[52px] justify-center mx-auto'} ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+              >
+                <div className="shrink-0 w-6 flex items-center justify-center">
+                  <item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />
+                </div>
+                <span 
+                  style={{ 
+                    opacity: 'var(--drag-progress)', 
+                    maxWidth: 'calc(var(--drag-progress) * 200px)', 
+                    marginLeft: 'calc(var(--drag-progress) * 12px)' 
+                  }}
+                  className={`whitespace-nowrap overflow-hidden flex items-center text-left ${!isDraggingSidebar ? 'transition-all duration-300' : ''}`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            ))}
           </nav>
-          <div className="p-4 border-t border-slate-100/50">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-50"><div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div><div className="text-left"><p className="text-xs font-semibold text-slate-700 kanit-text">Admin User</p><p className="text-[10px] text-slate-400 kanit-text">ออนไลน์</p></div></div>
+
+          {/* ส่วนโปรไฟล์ผู้ใช้ด้านล่าง */}
+          <div className="p-4 border-t border-slate-100/50 overflow-hidden min-h-[80px] flex items-center justify-center relative shrink-0">
+            <div 
+              className={`absolute w-full px-4 flex items-center gap-3 ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+              style={{ opacity: 'var(--drag-progress)' }}
+            >
+              <div className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div>
+              <div className="text-left whitespace-nowrap min-w-[100px]">
+                <p className="text-xs font-semibold text-slate-700 kanit-text">Admin User</p>
+                <p className="text-[10px] text-slate-400 kanit-text">ออนไลน์</p>
+              </div>
+            </div>
+            {/* ไอคอนแสดงตอนเมนูถูกพับ */}
+            <div 
+              className={`absolute ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
+              style={{ opacity: 'calc(1 - var(--drag-progress))' }}
+            >
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 ring-2 ring-white">
+                <User size={18} />
+              </div>
+            </div>
           </div>
         </aside>
 
