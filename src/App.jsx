@@ -2981,10 +2981,13 @@ export default function App() {
       </div>
 
       {toast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] fade-in">
-          <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl backdrop-blur-md border ${toast.type === 'success' ? 'bg-emerald-500/90 border-emerald-400' : 'bg-rose-500/90 border-rose-400'} text-white`}>
-            {toast.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
-            <span className="font-bold kanit-text">{toast.message}</span>
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 z-[9999] fade-in w-[90vw] sm:w-auto max-w-sm sm:max-w-md"
+          style={{ top: 'max(1rem, env(safe-area-inset-top))', marginTop: '0.5rem' }}
+        >
+          <div className={`flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl shadow-2xl backdrop-blur-xl border ${toast.type === 'success' ? 'bg-emerald-500/95 border-emerald-400' : 'bg-rose-500/95 border-rose-400'} text-white`}>
+            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> : <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />}
+            <span className="font-medium kanit-text text-sm sm:text-base leading-tight break-words">{toast.message}</span>
           </div>
         </div>
       )}
