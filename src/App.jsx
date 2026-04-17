@@ -3417,53 +3417,47 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             <div className="p-6 bg-slate-800 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden">
               {/* Animated Background Scan Line (Pure CSS) */}
               {!isScanning && (
-                <div className="absolute top-0 left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_15px_3px_rgba(99,102,241,0.5)] animate-[scanLine_2s_ease-in-out_infinite] z-0"></div>
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_15px_3px_rgba(99,102,241,0.5)] animate-[scanLine_2s_ease-in-out_infinite] z-20"></div>
               )}
 
-              {isScanning ? (
-                <div className="flex flex-col items-center gap-4 z-10">
-                  <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                  <p className="font-bold text-white kanit-text animate-pulse">กำลังดึงข้อมูลจากบัตร (OCR)...</p>
-                </div>
-              ) : (
-                <>
-                  {/* Target Frame */}
-                  <div className="w-full max-w-[320px] aspect-[1.58/1] border-2 border-slate-600 rounded-xl relative flex items-center justify-center bg-slate-900/50 backdrop-blur-sm z-10 shadow-2xl overflow-hidden">
-                    {/* Corners */}
-                    <div className="absolute top-[-2px] left-[-2px] w-8 h-8 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl z-20"></div>
-                    <div className="absolute top-[-2px] right-[-2px] w-8 h-8 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl z-20"></div>
-                    <div className="absolute bottom-[-2px] left-[-2px] w-8 h-8 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl z-20"></div>
-                    <div className="absolute bottom-[-2px] right-[-2px] w-8 h-8 border-b-4 border-r-4 border-indigo-500 rounded-br-xl z-20"></div>
-                    
-                    {/* แสดงภาพจากกล้องจริง */}
-                    <video autoPlay playsInline muted ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-0"></video>
-                    
-                    {!videoRef.current?.srcObject && <Camera size={48} className="text-slate-400 opacity-50 z-10" />}
-                    
-                    <div className="absolute bottom-3 right-4 w-12 h-16 border border-slate-600/50 rounded-md bg-slate-800/50 flex flex-col items-center justify-center gap-1 opacity-50 z-20">
-                        <div className="w-4 h-4 rounded-full bg-slate-600/50"></div>
-                        <div className="w-8 h-1 bg-slate-600/50 rounded-full"></div>
-                    </div>
+              {/* Target Frame - ให้แสดงผลตลอดเวลาเพื่อไม่ให้วิดีโอดับเมื่อกำลังสแกน */}
+              <div className="w-full max-w-[320px] aspect-[1.58/1] border-2 border-slate-600 rounded-xl relative flex items-center justify-center bg-slate-900/50 backdrop-blur-sm z-10 shadow-2xl overflow-hidden">
+                {/* Corners */}
+                <div className="absolute top-[-2px] left-[-2px] w-8 h-8 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl z-20"></div>
+                <div className="absolute top-[-2px] right-[-2px] w-8 h-8 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl z-20"></div>
+                <div className="absolute bottom-[-2px] left-[-2px] w-8 h-8 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl z-20"></div>
+                <div className="absolute bottom-[-2px] right-[-2px] w-8 h-8 border-b-4 border-r-4 border-indigo-500 rounded-br-xl z-20"></div>
+                
+                {/* แสดงภาพจากกล้องจริง */}
+                <video autoPlay playsInline muted ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-0"></video>
+                
+                {!videoRef.current?.srcObject && <Camera size={48} className="text-slate-400 opacity-50 z-10" />}
+                
+                {/* Scanner Overlay Content (แสดงเมื่อกำลังสแกนทับบนวิดีโอ) */}
+                {isScanning ? (
+                  <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
+                    <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                    <p className="font-bold text-white kanit-text text-sm animate-pulse">กำลังประมวลผล OCR...</p>
                   </div>
-                  <p className="text-sm text-slate-300 mt-5 kanit-text font-medium z-10 bg-slate-900/60 px-4 py-1.5 rounded-full">จัดวางบัตรประชาชนให้อยู่ในกรอบ</p>
-                </>
-              )}
+                ) : (
+                  <div className="absolute bottom-3 right-4 w-12 h-16 border border-slate-600/50 rounded-md bg-slate-800/50 flex flex-col items-center justify-center gap-1 opacity-50 z-20">
+                      <div className="w-4 h-4 rounded-full bg-slate-600/50"></div>
+                      <div className="w-8 h-1 bg-slate-600/50 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-slate-300 mt-5 kanit-text font-medium z-10 bg-slate-900/60 px-4 py-1.5 rounded-full">จัดวางบัตรประชาชนให้อยู่ในกรอบ</p>
             </div>
             
-            {/* Actions */}
-            <div className="p-4 flex gap-3 bg-white">
-              <button 
-                disabled={isScanning}
-                className="flex-[1.5] py-3.5 bg-slate-100 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 kanit-text hover:bg-slate-200 transition-colors disabled:opacity-50"
-              >
-                <Upload size={18}/> อัปโหลด
-              </button>
+            {/* Actions (เอาปุ่มอัปโหลดออกและให้ปุ่มเริ่มสแกนเต็มจอ) */}
+            <div className="p-4 bg-white">
               <button 
                 onClick={handleRealScan} 
                 disabled={isScanning}
-                className="flex-[2.5] py-3.5 bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 kanit-text hover:bg-indigo-600 shadow-md shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+                className="w-full py-3.5 bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 kanit-text hover:bg-indigo-600 shadow-md shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
               >
-                <ScanText size={18}/> เริ่มสแกน
+                {isScanning ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"></div> : <ScanText size={18}/>}
+                {isScanning ? 'กำลังสแกน...' : 'เริ่มสแกน'}
               </button>
             </div>
           </div>
