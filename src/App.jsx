@@ -1967,7 +1967,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const [showPrefixDropdown, setShowPrefixDropdown] = useState(false); // เพิ่ม State สำหรับควบคุม Dropdown คำนำหน้าแบบพิมพ์ได้
 
   // --- กรุณาใส่ API KEY ของ Google Cloud Vision ที่นี่ ---
-  const VISION_API_KEY = 'AIzaSyAlp6qqbUh0ti4fJ4ozGvqoIAOI0coRQBM'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
+  const VISION_API_KEY = 'AIzaSyBiKR-AWXy0WFxa4_PeFv1aiEWpb-rT8rs'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
 
   // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
   useEffect(() => {
@@ -2052,23 +2052,36 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   const parseIdCardText = (text) => {
     const lines = text.split('\n').map(line => line.trim());
-    let extractedData = { idCard: '', prefix: '', firstName: '', lastName: '', dob: '', address: '', moo: '', subDistrict: '', district: '', province: '' };
+    
+    // เตรียมตัวแปรให้ครบทุกช่องตามที่คุณต้องการ (เพิ่ม gender และ road)
+    let extractedData = { idCard: '', prefix: '', firstName: '', lastName: '', dob: '', gender: '', address: '', moo: '', road: '', subDistrict: '', district: '', province: '' };
 
     // 1. หาเลขบัตรประชาชน 13 หลัก
     const idMatch = text.replace(/\s/g, '').match(/\d{13}/);
     if (idMatch) extractedData.idCard = idMatch[0];
 
-    // 2. หาชื่อ-นามสกุลไทย
+    // 2. หาชื่อ-นามสกุลไทย และ วิเคราะห์เพศ
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        if (line.includes('ชื่อตัวและชื่อสกุล') || line.match(/^(นาย|นาง|นางสาว)/)) {
+        if (line.includes('ชื่อตัวและชื่อสกุล') || line.match(/^(นาย|นาง|นางสาว|น\.ส\.|ด\.ช\.|ด\.ญ\.)/)) {
             let nameLine = line.replace('ชื่อตัวและชื่อสกุล', '').trim();
             if (!nameLine && i + 1 < lines.length) nameLine = lines[i+1].trim();
             
-            const prefixMatch = nameLine.match(/^(นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)/);
+            const prefixMatch = nameLine.match(/^(นาย|นางสาว|นาง|น\.ส\.|ด\.ช\.|ด\.ญ\.)/);
             if (prefixMatch) {
-                extractedData.prefix = prefixMatch[1];
-                const nameParts = nameLine.substring(prefixMatch[1].length).trim().split(/\s+/);
+                let rawPrefix = prefixMatch[1];
+                // แปลงตัวย่อ น.ส. เป็นคำเต็ม
+                if (rawPrefix === 'น.ส.') rawPrefix = 'นางสาว';
+                extractedData.prefix = rawPrefix;
+
+                // กำหนดเพศอัตโนมัติจากคำนำหน้า
+                if (['นาย', 'ด.ช.'].includes(rawPrefix)) {
+                    extractedData.gender = 'ชาย';
+                } else if (['นาง', 'นางสาว', 'ด.ญ.'].includes(rawPrefix)) {
+                    extractedData.gender = 'หญิง';
+                }
+
+                const nameParts = nameLine.substring(prefixMatch[0].length).trim().split(/\s+/);
                 if (nameParts.length >= 1) extractedData.firstName = nameParts[0];
                 if (nameParts.length >= 2) extractedData.lastName = nameParts.slice(1).join(' ');
             }
@@ -2077,7 +2090,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     }
 
     // 3. หาวันเกิด
-    const dobMatch = text.match(/(?:เกิดวันที่|Date of Birth)\s*(\d{1,2})\s+([ก-๙a-zA-Z.]+)\s+(\d{4})/);
+    const dobMatch = text.match(/(?:เกิดวันที่|Date of Birth|เกิด)\s*(\d{1,2})\s+([ก-๙a-zA-Z.]+)\s+(\d{4})/);
     if (dobMatch) {
         const day = dobMatch[1].padStart(2, '0');
         const monthStr = dobMatch[2];
@@ -2094,31 +2107,52 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         extractedData.dob = `${day}/${month}/${year}`;
     }
 
-    // 4. หาที่อยู่ (ตัดคำเบื้องต้น)
-    const addressIndex = lines.findIndex(line => line.includes('ที่อยู่'));
+    // 4. หาที่อยู่แบบแม่นยำสูง (แยกส่วนด้วย Regex)
+    const addressIndex = lines.findIndex(line => line.includes('ที่อยู่') || line.includes('Address'));
     if (addressIndex !== -1) {
-        let addressText = lines[addressIndex].replace('ที่อยู่', '').trim();
-        if (!addressText && addressIndex + 1 < lines.length) {
-            addressText = lines[addressIndex + 1];
-            if (addressIndex + 2 < lines.length && !lines[addressIndex + 2].includes('ศาสนา')) {
-                addressText += ' ' + lines[addressIndex + 2];
+        // รวบรวมข้อความที่อยู่ทั้งหมดเข้าด้วยกันก่อน
+        let addressText = lines[addressIndex].replace(/ที่อยู่|Address/g, '').trim();
+        let lineOffset = 1;
+        while (addressIndex + lineOffset < lines.length) {
+            const nextLine = lines[addressIndex + lineOffset];
+            // หยุดเมื่อเจอฟิลด์อื่นที่ไม่ใช่ที่อยู่
+            if (nextLine.includes('ศาสนา') || nextLine.match(/\d{13}/) || nextLine.includes('วันออกบัตร') || nextLine.includes('Date of Issue')) {
+                break;
             }
+            addressText += ' ' + nextLine.trim();
+            lineOffset++;
         }
         
-        const addrParts = addressText.split(/\s+/);
-        let currentPart = 'address';
-        addrParts.forEach(part => {
-            if (part.startsWith('หมู่')) { extractedData.moo = part.replace(/หมู่(?:ที่)?/g, '').trim(); currentPart = 'moo'; }
-            else if (part.startsWith('ต.') || part.startsWith('แขวง')) { extractedData.subDistrict = part.replace(/^(ต\.|แขวง)/, '').trim(); currentPart = 'subDistrict'; }
-            else if (part.startsWith('อ.') || part.startsWith('เขต')) { extractedData.district = part.replace(/^(อ\.|เขต)/, '').trim(); currentPart = 'district'; }
-            else if (part.startsWith('จ.') || part.startsWith('จังหวัด')) { extractedData.province = part.replace(/^(จ\.|จังหวัด)/, '').trim(); currentPart = 'province'; }
-            else { if (currentPart === 'address') extractedData.address = (extractedData.address + ' ' + part).trim(); }
-        });
+        // ลบช่องว่างส่วนเกิน
+        addressText = addressText.replace(/\s+/g, ' ').trim();
+
+        // สกัดข้อมูลแต่ละส่วน
+        let provMatch = addressText.match(/(?:จังหวัด|จ\.)\s*([^\s]+)/);
+        if (provMatch) extractedData.province = provMatch[1];
+
+        let distMatch = addressText.match(/(?:อำเภอ|เขต|อ\.)\s*([^\s]+)/);
+        if (distMatch) extractedData.district = distMatch[1];
+
+        let subDistMatch = addressText.match(/(?:ตำบล|แขวง|ต\.)\s*([^\s]+)/);
+        if (subDistMatch) extractedData.subDistrict = subDistMatch[1];
+
+        // เพิ่มการหา "ถนน"
+        let roadMatch = addressText.match(/(?:ถนน|ถ\.)\s*([^\s]+)/);
+        if (roadMatch) extractedData.road = roadMatch[1];
+
+        let mooMatch = addressText.match(/หมู่(?:ที่)?\s*([^\s]+)/);
+        if (mooMatch) extractedData.moo = mooMatch[1];
+
+        // "บ้านเลขที่" คือส่วนแรกสุดก่อนที่จะถึงคำระบุโซน
+        let houseMatch = addressText.split(/\s+(หมู่|ซอย|ตรอก|ถนน|ตำบล|แขวง|อำเภอ|เขต|จังหวัด)/)[0];
+        if (houseMatch) {
+            extractedData.address = houseMatch.replace(/^ที่อยู่\s*/, '').trim();
+        }
     }
 
     setFormData(prev => ({ ...prev, ...extractedData }));
     setIsScannerOpen(false);
-    showToast('ดึงข้อมูลจากบัตรประชาชนสำเร็จ', 'success');
+    showToast('ดึงข้อมูลจากบัตรประชาชน (OCR) สำเร็จ', 'success');
   };
 
   const handleRealScan = async () => {
