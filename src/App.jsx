@@ -1965,7 +1965,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const videoRef = React.useRef(null);
 
   // --- กรุณาใส่ API KEY ของ Google Cloud Vision ที่นี่ ---
-  const VISION_API_KEY = 'AIzaSyBiv5ATmlKjf4yCvIXn32s8MpuA3rvAkUA'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
+  const VISION_API_KEY = ''; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
 
   // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
   useEffect(() => {
@@ -2195,6 +2195,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             lastName: data.lname || data.lastNameTH || '',
             dob: data.dob ? `${data.dob.substring(6,8)}/${data.dob.substring(4,6)}/${data.dob.substring(0,4)}` : '', // แปลง YYYYMMDD เป็น DD/MM/YYYY
             gender: data.gender === '1' || data.gender === 'Male' ? 'ชาย' : (data.gender === '2' || data.gender === 'Female' ? 'หญิง' : 'ไม่ระบุ'),
+            religion: data.religion || prev.religion, // <-- เพิ่มบรรทัดนี้เพื่ออัปเดตศาสนา
             address: data.address || data.houseNo || '',
             moo: data.moo || '',
             subDistrict: data.subDistrict || data.tumbol || '',
