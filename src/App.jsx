@@ -37,6 +37,32 @@ const mockPatients = [
   { id: 'HN003', name: 'มีชัย ทำดี', phone: '082-333-4444', lastVisit: '2023-10-27', branchId: 'b1' },
 ];
 
+const mockProducts = [
+  // บริการ/หัตถการ
+  { id: 'serv01', name: 'ฝังเข็ม', price: 600, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
+  { id: 'serv02', name: 'ครอบแก้ว', price: 500, type: 'บริการ/หัตถการ', stockManaged: false, icon: Package },
+  { id: 'serv03', name: 'นวดทุยหนา', price: 450, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
+  { id: 'serv04', name: 'กัวซา', price: 400, type: 'บริการ/หัตถการ', stockManaged: false, icon: Package },
+  { id: 'serv05', name: 'ปรึกษาแพทย์', price: 200, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
+  { id: 'serv07', name: 'ฝังเข็มไฟฟ้า', price: 800, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
+  { id: 'serv10', name: 'ฝังเข็มความงาม', price: 1200, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
+  // ยาและผลิตภัณฑ์
+  { id: 'prod01', name: 'ยาหม่องสมุนไพร', price: 80, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Pill },
+  { id: 'prod02', name: 'ชาบำรุง', price: 150, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Package },
+  { id: 'prod03', name: 'ยาจีนชุด A (7 วัน)', price: 700, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Pill },
+  { id: 'prod04', name: 'น้ำมันนวด', price: 120, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Package },
+  { id: 'prod08', name: 'ยาจีนชุด B (14 วัน)', price: 1300, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Pill },
+  { id: 'prod09', name: 'ลูกประคบ', price: 100, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Package },
+  // คอร์ส/แพ็คเกจ
+  { id: 'cour01', name: 'คอร์สฝังเข็ม 5 ครั้ง', price: 2750, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
+  { id: 'cour02', name: 'คอร์สครอบแก้ว 10 ครั้ง', price: 4500, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
+  { id: 'cour03', name: 'แพ็คเกจ Office Syndrome', price: 1500, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
+  { id: 'cour10', name: 'คอร์ส VIP', price: 10000, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
+  // โปรโมชั่น
+  { id: 'promo01', name: 'โปรฯ วันเกิด', price: 999, type: 'เมนูโปรโมชั่น', stockManaged: false, icon: Package },
+  { id: 'promo02', name: 'โปรฯ มาคู่', price: 1200, type: 'เมนูโปรโมชั่น', stockManaged: false, icon: Users },
+];
+
 // -------------------------------------------------------------------------
 // --- 1. ย้ายฟังก์ชันและ Component ย่อยออกมาไว้ด้านนอก เพื่อป้องกันการ Unmount ---
 // -------------------------------------------------------------------------
@@ -1778,7 +1804,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   );
 };
 
-const Dashboard = () => {
+// เพิ่ม Props รับข้อมูลคิวและข้อมูลคนไข้เข้ามาคำนวณ
+const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const headerRef = React.useRef(null);
 
@@ -1815,6 +1842,21 @@ const Dashboard = () => {
   const m = String(currentTime.getMonth() + 1).padStart(2, '0');
   const y = currentTime.getFullYear() + 543;
 
+  // --- Calculate Dashboard Stats ---
+  const todayStr = `${d}/${m}/${y}`;
+  const todaysQueue = queueData.filter(appt => {
+      if(!appt.datetime) return false;
+      return appt.datetime.split(' ')[0] === todayStr;
+  });
+  const pendingQueue = queueData.filter(appt => appt.status === 'pending' || appt.dealStatus === 'pending');
+  
+  // เรียงลำดับคิววันนี้ตามเวลา
+  const sortedTodaysQueue = [...todaysQueue].sort((a, b) => {
+      const timeA = a.datetime.split(' ')[1] || '00:00';
+      const timeB = b.datetime.split(' ')[1] || '00:00';
+      return timeA.localeCompare(timeB);
+  });
+
   return (
     <div className="fade-in pb-10 w-full">
       
@@ -1838,27 +1880,63 @@ const Dashboard = () => {
 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard title="คิววันนี้" value={GOOGLE_SCRIPT_URL ? "0" : "24"} icon={Users} color="sky" />
-          <StatCard title="รายได้ (บาท)" value={GOOGLE_SCRIPT_URL ? "0" : "45,200"} icon={CreditCard} color="emerald" />
-          <StatCard title="สินค้าใกล้หมด" value={GOOGLE_SCRIPT_URL ? "0" : "5"} icon={AlertCircle} color="rose" />
-          <StatCard title="สาขาที่เปิด" value={GOOGLE_SCRIPT_URL ? "0" : "2"} icon={MapPin} color="slate" />
+          <StatCard title="คนไข้ทั้งหมด" value={isGlobalLoading ? "-" : patientsData.length} icon={Users} color="sky" />
+          <StatCard title="นัดหมายวันนี้" value={isGlobalLoading ? "-" : todaysQueue.length} icon={CalendarRange} color="emerald" />
+          <StatCard title="รอยืนยัน" value={isGlobalLoading ? "-" : pendingQueue.length} icon={Clock} color="amber" />
+          <StatCard title="สาขาที่เปิด" value="1" icon={Building2} color="slate" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className={`lg:col-span-2 ${theme.card}`}>
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">แนวโน้มคนไข้ {GOOGLE_SCRIPT_URL ? '' : '(จำลอง)'}</h3>
-            <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 kanit-text">
-              {GOOGLE_SCRIPT_URL ? 'ไม่มีข้อมูลสถิติ' : '[ กราฟแสดงแนวโน้มคนไข้ ]'}
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text flex items-center gap-2"><BarChart3 className="w-5 h-5 text-sky-500" /> แนวโน้มการนัดหมาย (7 วันย้อนหลัง)</h3>
+            <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 kanit-text relative overflow-hidden">
+              {isGlobalLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : (
+                  <div className="flex items-end justify-center gap-2 sm:gap-4 h-full w-full p-6 pt-10">
+                      {[6,5,4,3,2,1,0].map(offset => {
+                          const date = new Date();
+                          date.setDate(date.getDate() - offset);
+                          const loopDateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear() + 543}`;
+                          const count = queueData.filter(q => q.datetime && q.datetime.split(' ')[0] === loopDateStr).length;
+                          // คำนวณความสูงขั้นต่ำ 10% ถ้ามีคิวจะขยับขึ้นตามสัดส่วน
+                          const height = count === 0 ? '10%' : `${Math.min(100, Math.max(15, count * 20))}%`;
+                          return (
+                              <div key={offset} className="flex flex-col items-center gap-2 flex-1 max-w-[48px] group">
+                                  <div className="w-full bg-sky-100/50 rounded-t-xl relative group-hover:bg-sky-200/80 transition-colors flex items-end justify-center" style={{ height }}>
+                                      <div className="w-full bg-sky-500 rounded-t-xl transition-all shadow-sm" style={{ height: '50%' }}></div>
+                                      <span className="absolute -top-6 text-xs font-bold text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity font-data bg-white px-2 py-0.5 rounded-md shadow-sm">{count}</span>
+                                  </div>
+                                  <span className={`text-[10px] sm:text-xs font-medium font-data ${offset === 0 ? 'text-sky-600 font-bold' : 'text-slate-500'}`}>{date.getDate()}/{date.getMonth()+1}</span>
+                              </div>
+                          );
+                      })}
+                  </div>
+              )}
             </div>
           </div>
           <div className={theme.card}>
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text">คิวถัดไป</h3>
-            <div className="space-y-4">
-              {GOOGLE_SCRIPT_URL ? <div className="text-center py-8 text-slate-400 text-sm kanit-text">ไม่มีคิวถัดไป</div> : [1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50 transition-colors">
-                  <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold font-data">{i}</div>
-                  <div><p className="font-semibold text-slate-700 kanit-text">คุณลูกค้า ท่านที่ {i}</p><p className="text-sm text-slate-500 flex items-center gap-1 font-data"><Clock size={14} /> 10:{i * 15} น. - <span className="kanit-text">ตรวจทั่วไป</span></p></div>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text flex items-center gap-2"><List className="w-5 h-5 text-sky-500" /> รายการคิววันนี้</h3>
+            <div className="space-y-3 max-h-[256px] overflow-y-auto custom-scrollbar pr-2">
+              {isGlobalLoading ? (
+                 <div className="text-center py-10 text-slate-400 text-sm kanit-text flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin mx-auto text-sky-500"/> กำลังโหลดข้อมูล...</div>
+              ) : sortedTodaysQueue.length === 0 ? (
+                 <div className="text-center py-10 text-slate-400 text-sm kanit-text bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center gap-2"><CalendarRange className="w-8 h-8 text-slate-300"/> ไม่มีนัดหมายในวันนี้</div>
+              ) : sortedTodaysQueue.map((appt, i) => {
+                 const time = appt.datetime.split(' ')[1] ? appt.datetime.split(' ')[1].replace('น.', '').trim() : '-';
+                 const statusType = appt.status || appt.dealStatus;
+                 return (
+                <div key={appt.id || i} className="flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors border border-slate-100/50 hover:border-sky-200 group cursor-pointer">
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex flex-col items-center justify-center font-bold font-data shrink-0 shadow-inner group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                    <span className="text-[9px] font-normal leading-none kanit-text">คิว</span>
+                    <span className="leading-none mt-0.5 text-sm">{i+1}</span>
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <p className="font-bold text-slate-700 kanit-text truncate text-sm leading-tight">{appt.patientName || appt.name}</p>
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 font-data mt-1 truncate"><Clock size={10} className="text-sky-400 shrink-0" /> {time} น. <span className="text-slate-300 mx-0.5 shrink-0">|</span> <span className="truncate kanit-text">{appt.reason || appt.category || '-'}</span></p>
+                  </div>
+                  <div className="shrink-0 pt-1 pl-1">
+                      {statusType === 'confirmed' ? <CheckCircle2 size={16} className="text-emerald-500" title="ยืนยันแล้ว"/> : statusType === 'cancelled' ? <AlertCircle size={16} className="text-rose-500" title="ยกเลิก"/> : <AlertCircle size={16} className="text-amber-500" title="รอยืนยัน"/>}
+                  </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         </div>
@@ -3375,7 +3453,7 @@ export default function App() {
           <div className="min-h-full">
             {/* Fix: Render all tabs with display:none to preserve scroll and states (fixes unmount memory leak & scroll jump) */}
             <div style={{ display: currentTab === 'dashboard' ? 'block' : 'none' }}>
-                <Dashboard />
+                <Dashboard queueData={queueData} patientsData={patientsData} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'records' ? 'block' : 'none' }}>
                 <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
