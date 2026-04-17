@@ -1967,7 +1967,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const [showPrefixDropdown, setShowPrefixDropdown] = useState(false); // เพิ่ม State สำหรับควบคุม Dropdown คำนำหน้าแบบพิมพ์ได้
 
   // --- กรุณาใส่ API KEY ของ Google Cloud Vision ที่นี่ ---
-  const VISION_API_KEY = 'AIzaSyBiv5ATmlKjf4yCvIXn32s8MpuA3rvAkUA'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
+  const VISION_API_KEY = 'AIzaSyBiKR-AWXy0WFxa4_PeFv1aiEWpb-rT8rs'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
 
   // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
   useEffect(() => {
