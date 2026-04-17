@@ -1964,8 +1964,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const [isScanning, setIsScanning] = useState(false);
   const videoRef = React.useRef(null);
 
+  const [showPrefixDropdown, setShowPrefixDropdown] = useState(false); // เพิ่ม State สำหรับควบคุม Dropdown คำนำหน้าแบบพิมพ์ได้
+
   // --- กรุณาใส่ API KEY ของ Google Cloud Vision ที่นี่ ---
-  const VISION_API_KEY = ''; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
+  const VISION_API_KEY = 'AIzaSyBiv5ATmlKjf4yCvIXn32s8MpuA3rvAkUA'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
 
   // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
   useEffect(() => {
@@ -2938,10 +2940,40 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">HN <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} bg-slate-100 text-slate-500 cursor-not-allowed font-data`} value={formData.hn} disabled readOnly /></div>
-                    <div>
+                    
+                    <div className="relative" style={{ zIndex: 30 }}>
                       <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label>
-                      <CustomSelect value={formData.prefix} onChange={(val) => setFormData({...formData, prefix: val})} options={[{value:'', label:'เลือก'}, 'นาย', 'นาง', 'นางสาว', 'ด.ช.', 'ด.ญ.', 'พระ']} disabled={isViewMode} />
+                      <div className="relative">
+                        <input 
+                          required 
+                          type="text" 
+                          className={`${theme.input} font-data pr-10`} 
+                          value={formData.prefix} 
+                          onChange={(e) => setFormData({...formData, prefix: e.target.value})} 
+                          disabled={isViewMode} 
+                          placeholder="พิมพ์หรือเลือก" 
+                          onFocus={() => setShowPrefixDropdown(true)} 
+                          onBlur={() => setTimeout(() => setShowPrefixDropdown(false), 200)} 
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                          <ChevronDown size={18} className={`transition-transform duration-200 ${showPrefixDropdown ? 'rotate-180' : ''}`} />
+                        </div>
+                        {showPrefixDropdown && !isViewMode && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                            {['นาย', 'นาง', 'นางสาว', 'ด.ช.', 'ด.ญ.', 'พระ', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ว่าที่ ร.ต.'].map(opt => (
+                              <div 
+                                key={opt} 
+                                onMouseDown={(e) => { e.preventDefault(); setFormData({...formData, prefix: opt}); setShowPrefixDropdown(false); }} 
+                                className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${formData.prefix === opt ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                              >
+                                {opt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
+
                     <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อ <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} /></div>
                     <div className="md:col-span-2 lg:col-span-1"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">นามสกุล <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} /></div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อเล่น</label><input type="text" className={`${theme.input} font-data`} value={formData.nickname} onChange={(e) => setFormData({...formData, nickname: e.target.value})} /></div>
