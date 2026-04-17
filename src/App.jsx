@@ -1967,7 +1967,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const [showPrefixDropdown, setShowPrefixDropdown] = useState(false); // เพิ่ม State สำหรับควบคุม Dropdown คำนำหน้าแบบพิมพ์ได้
 
   // --- กรุณาใส่ API KEY ของ Google Cloud Vision ที่นี่ ---
-  const VISION_API_KEY = 'AIzaSyBiKR-AWXy0WFxa4_PeFv1aiEWpb-rT8rs'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
+  const VISION_API_KEY = 'AIzaSyAlp6qqbUh0ti4fJ4ozGvqoIAOI0coRQBM'; // <--- นำ API Key ของคุณมาใส่ในเครื่องหมายคำพูดนี้
 
   // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
   useEffect(() => {
@@ -2107,7 +2107,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         extractedData.dob = `${day}/${month}/${year}`;
     }
 
-    // 4. หาที่อยู่แบบแม่นยำสูง (แยกส่วนด้วย Regex)
+    // 4. หาศาสนาและสัญชาติ (เพิ่มระบบสแกนข้อมูลส่วนนี้)
+    const religionMatch = text.match(/ศาสนา\s*([ก-๙]+)/);
+    if (religionMatch) {
+        extractedData.religion = religionMatch[1].trim();
+    }
+    
+    const nationalityMatch = text.match(/สัญชาติ\s*([ก-๙]+)/);
+    if (nationalityMatch) {
+        extractedData.nationality = nationalityMatch[1].trim();
+    }
+
+    // 5. หาที่อยู่แบบแม่นยำสูง (แยกส่วนด้วย Regex)
     const addressIndex = lines.findIndex(line => line.includes('ที่อยู่') || line.includes('Address'));
     if (addressIndex !== -1) {
         // รวบรวมข้อความที่อยู่ทั้งหมดเข้าด้วยกันก่อน
