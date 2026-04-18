@@ -149,6 +149,67 @@ const getPatientFullName = (p) => {
 
 const getPatientId = (p) => p ? (p.hn || p.id || '-') : '-';
 
+// --- เพิ่มฟังก์ชันหา string วันที่ล่าสุดสำหรับจัดเรียง (และแก้บั๊กในหน้านัดหมาย) ให้รองรับถึงระดับนาที ---
+const getPatientLastVisitStr = (p) => {
+    // ใช้ datetime จากประวัติการรักษาล่าสุด หรือถ้าไม่มีให้ใช้วันที่ลงทะเบียน (createdAt) หรือ lastVisit
+    const dt = p.opdRecords && p.opdRecords.length > 0 ? p.opdRecords[0].datetime : (p.createdAt || p.lastVisit || '');
+    if (!dt) return '000000000000';
+
+    // 1. จัดการกรณีเป็น ISO String (เช่น 2023-10-25T09:30:00.000Z)
+    if (dt.includes('T')) {
+        const dateObj = new Date(dt);
+        if (!isNaN(dateObj.getTime())) {
+            const y = dateObj.getFullYear() + 543; // แปลงเป็น พ.ศ. ให้เรียงร่วมกับ format ไทยได้
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            const h = String(dateObj.getHours()).padStart(2, '0');
+            const min = String(dateObj.getMinutes()).padStart(2, '0');
+            return `${y}${m}${d}${h}${min}`;
+        }
+    }
+
+    // 2. แยกส่วนวันที่และเวลาออกจากกัน (สมมติ format: DD/MM/YYYY HH:mm น.)
+    const parts = dt.split(' ');
+    const dateStr = parts[0] || '';
+    const timeStr = parts[1] ? parts[1].replace('น.', '').trim() : '00:00';
+
+    let year = '0000', month = '00', day = '00';
+    let hour = '00', minute = '00';
+
+    // แยกวันที่
+    if (dateStr.includes('/')) {
+        const dParts = dateStr.split('/');
+        if (dParts.length === 3) {
+            day = dParts[0].padStart(2, '0');
+            month = dParts[1].padStart(2, '0');
+            year = dParts[2];
+        }
+    } else if (dateStr.includes('-')) { // รองรับ YYYY-MM-DD
+        const dParts = dateStr.split('-');
+        if (dParts.length === 3) {
+            year = dParts[0];
+            // ชดเชยปี ค.ศ. เป็น พ.ศ. ชั่วคราวเพื่อให้เรียงลำดับได้ถูกต้อง
+            if (year.startsWith('20')) {
+                year = String(parseInt(year, 10) + 543);
+            }
+            month = dParts[1].padStart(2, '0');
+            day = dParts[2].padStart(2, '0');
+        }
+    } else {
+        return dt; // Fallback
+    }
+
+    // แยกเวลา
+    if (timeStr.includes(':')) {
+        const tParts = timeStr.split(':');
+        hour = (tParts[0] || '00').padStart(2, '0');
+        minute = (tParts[1] || '00').padStart(2, '0');
+    }
+
+    // รวมเป็น String สำหรับจัดเรียง: YYYYMMDDHHmm
+    return `${year}${month}${day}${hour}${minute}`;
+};
+
 const StatCard = ({ title, value, icon: Icon, color }) => {
   const colorStyles = { sky: 'text-sky-500 bg-sky-50', emerald: 'text-emerald-500 bg-emerald-50', rose: 'text-rose-500 bg-rose-50', slate: 'text-slate-500 bg-slate-50' };
   return (
@@ -3674,11 +3735,21 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
     setCheckoutSuccess(false);
   };
 
-  // สร้างตัวเลือกสำหรับ CustomSelect
-  const patientOptions = [
-    { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)' },
-    ...patientsData.map(p => ({ value: p.id || p.hn, label: `${p.hn || p.id} - ${getPatientFullName(p)}` }))
-  ];
+  // สร้างตัวเลือกสำหรับ CustomSelect โดยเรียงลำดับจากประวัติการรักษาล่าสุด (หรือลงทะเบียนล่าสุด) ก่อน
+  const patientOptions = useMemo(() => {
+    const sortedPatients = [...patientsData].sort((a, b) => {
+        const valA = getPatientLastVisitStr(a);
+        const valB = getPatientLastVisitStr(b);
+        if (valA < valB) return 1;  // ค่าน้อยกว่า (เก่ากว่า) ให้อยู่ข้างล่าง
+        if (valA > valB) return -1; // ค่ามากกว่า (ใหม่กว่า) ให้อยู่ข้างบน
+        return 0;
+    });
+    
+    return [
+      { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)' },
+      ...sortedPatients.map(p => ({ value: p.id || p.hn, label: `${p.hn || p.id} - ${getPatientFullName(p)}` }))
+    ];
+  }, [patientsData]);
 
   return (
     <div className="absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in">
