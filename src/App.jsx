@@ -1553,12 +1553,20 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                            />
                            {showPatientSuggest && formData.searchPatient && (
                               <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
-                                 {patientsData.filter(p => {
+                                 {[...patientsData].filter(p => {
                                     const fName = getPatientFullName(p).toLowerCase();
                                     const fId = getPatientId(p).toLowerCase();
                                     const s = formData.searchPatient.toLowerCase();
                                     return fName.includes(s) || fId.includes(s);
-                                 }).slice(0, 5).map((p, i) => (
+                                 })
+                                 .sort((a, b) => {
+                                     const valA = getPatientLastVisitStr(a);
+                                     const valB = getPatientLastVisitStr(b);
+                                     if (valA < valB) return 1;
+                                     if (valA > valB) return -1;
+                                     return 0;
+                                 })
+                                 .slice(0, 5).map((p, i) => (
                                     <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
                                        <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
                                        <span className="text-xs text-slate-500 font-data">{p.phone || p.phone1 ? `📞 ${p.phone || p.phone1}` : 'ไม่มีเบอร์โทรศัพท์'}</span>
@@ -3557,6 +3565,10 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
   const [discount, setDiscount] = useState(0);
   const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percent'
   
+  // --- เพิ่ม State สำหรับการคิดภาษี ---
+  const [taxMode, setTaxMode] = useState('none'); // 'include' (รวม VAT), 'exclude' (แยก VAT), 'none' (ไม่คิด VAT)
+  const [vatRate, setVatRate] = useState(7); // ค่าเริ่มต้น 7%
+  
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -3604,16 +3616,33 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
     setDiscount(0);
     setSelectedPatientId('');
     setPatientSearchTerm('');
+    setTaxMode('none');
+    setVatRate(7);
   };
 
-  // คำนวณยอดเงิน
+  // คำนวณยอดเงินและภาษีแบบละเอียด
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const discountAmount = discountType === 'percent' ? (subtotal * (discount / 100)) : Number(discount);
-  const grandTotal = Math.max(0, subtotal - discountAmount);
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
+
+  let vatAmount = 0;
+  let priceExcludingVat = afterDiscount;
+  let grandTotal = afterDiscount;
+
+  if (taxMode === 'exclude') {
+    // แยก VAT (บวกเพิ่มจากยอด)
+    vatAmount = afterDiscount * (vatRate / 100);
+    grandTotal = afterDiscount + vatAmount;
+  } else if (taxMode === 'include') {
+    // รวม VAT (ถอด VAT ออกจากยอด)
+    vatAmount = afterDiscount - (afterDiscount * 100 / (100 + vatRate));
+    priceExcludingVat = afterDiscount - vatAmount;
+    grandTotal = afterDiscount;
+  }
 
   // Format ค่าเงิน
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount);
+    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
   // จัดการการชำระเงิน
@@ -3842,41 +3871,96 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
           {/* Cart Summary & Checkout */}
           <div className="bg-white border-t border-slate-100 p-3 sm:p-4 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10">
             
-            {/* Discount Section */}
-            <div className="flex items-center justify-between mb-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
-               <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold text-slate-600 kanit-text pl-1">
-                 <Tag size={14} className="text-sky-500 sm:w-4 sm:h-4" /> ส่วนลด
-               </div>
-               <div className="flex items-center gap-1">
-                  <input 
-                    type="number" 
+            {/* Summary Lines - ปรับโครงสร้างใหม่ตามภาพตัวอย่าง */}
+            <div className="space-y-2.5 sm:space-y-3 mb-4 font-data text-xs sm:text-sm">
+
+              {/* รวมเป็นเงิน */}
+              <div className="flex justify-between items-center text-slate-700">
+                <span className="kanit-text font-medium">รวมเป็นเงิน</span>
+                <span className="font-bold">{formatCurrency(subtotal)}</span>
+              </div>
+
+              {/* ส่วนลดเพิ่มเติม */}
+              <div className="flex justify-between items-center">
+                <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                  ส่วนลดเพิ่มเติม
+                  {discountType === 'percent' && discount > 0 && <span className="text-rose-500 font-bold text-[10px] sm:text-xs">({discount}%)</span>}
+                </span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
                     min="0"
-                    value={discount || ''} 
+                    value={discount || ''}
                     onChange={(e) => setDiscount(Number(e.target.value))}
-                    className="w-16 sm:w-20 px-2 py-1.5 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data"
-                    placeholder="0"
+                    className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
+                    placeholder="0.00"
                   />
-                  <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[30px] sm:h-[34px]">
+                  <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
                     <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
                     <div className="w-px bg-slate-200"></div>
                     <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
                   </div>
-               </div>
-            </div>
-
-            {/* Summary Lines */}
-            <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4 font-data text-xs sm:text-sm">
-              <div className="flex justify-between text-slate-500">
-                <span className="kanit-text">รวมเป็นเงิน</span>
-                <span>{formatCurrency(subtotal)}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-500 font-medium">
-                  <span className="kanit-text">ส่วนลด</span>
-                  <span>- {formatCurrency(discountAmount)}</span>
                 </div>
-              )}
-              <div className="flex justify-between text-base sm:text-lg lg:text-xl font-black text-sky-600 pt-2 border-t border-slate-100 mt-2">
+              </div>
+
+              {/* ส่วนลดรวมทั้งหมด */}
+              <div className="flex justify-between items-center text-rose-500 font-medium">
+                <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
+                <span className="font-bold">- {formatCurrency(discountAmount)}</span>
+              </div>
+
+              <div className="h-px w-full bg-slate-100 my-1.5"></div>
+
+              {/* ยอดหลังหักส่วนลด */}
+              <div className="flex justify-between items-center text-slate-700 font-medium">
+                <span className="kanit-text">ยอดหลังหักส่วนลด</span>
+                <span className="font-bold">{formatCurrency(afterDiscount)}</span>
+              </div>
+
+              {/* การคิดภาษี (Radio Buttons) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
+                <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs kanit-text text-slate-600">
+                  <label className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
+                    <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="accent-sky-500 w-3 h-3 sm:w-3.5 sm:h-3.5" /> รวม VAT
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
+                    <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="accent-sky-500 w-3 h-3 sm:w-3.5 sm:h-3.5" /> แยก VAT
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
+                    <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="accent-sky-500 w-3 h-3 sm:w-3.5 sm:h-3.5" /> ไม่คิด VAT
+                  </label>
+                </div>
+              </div>
+
+              {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
+              <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
+                <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
+                <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
+              </div>
+
+              {/* ภาษีมูลค่าเพิ่ม + Input % */}
+              <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
+                <div className="flex items-center gap-2">
+                    <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
+                    <div className="flex items-center gap-1">
+                        <input
+                            type="number"
+                            value={vatRate}
+                            onChange={(e) => setVatRate(Number(e.target.value))}
+                            disabled={taxMode === 'none'}
+                            className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
+                        />
+                        <span className="text-xs sm:text-sm">%</span>
+                    </div>
+                </div>
+                <span className="font-bold">{formatCurrency(vatAmount)}</span>
+              </div>
+
+              <div className="h-px w-full bg-slate-100 my-1.5"></div>
+
+              {/* ยอดสุทธิ */}
+              <div className="flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 pt-1">
                 <span className="kanit-text">ยอดสุทธิ</span>
                 <span>{formatCurrency(grandTotal)}</span>
               </div>
