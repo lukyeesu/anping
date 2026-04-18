@@ -4124,7 +4124,26 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
 };
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState('dashboard');
+  // --- แก้ไข: จดจำหน้าปัจจุบันใน LocalStorage (รีเฟรชแล้วอยู่หน้าเดิม ยกเว้นตั้งค่า) ---
+  const [currentTab, setCurrentTab] = useState(() => {
+    // เช็คว่าทำงานบน Browser และมี localStorage ให้ใช้
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const savedTab = localStorage.getItem('clinic_currentTab');
+      if (savedTab) {
+        // ถ้าหน้าล่าสุดก่อนรีเฟรชคือ 'settings' ให้กลับไป 'dashboard'
+        return savedTab === 'settings' ? 'dashboard' : savedTab;
+      }
+    }
+    return 'dashboard'; // ค่าเริ่มต้น
+  });
+
+  // บันทึกหน้าปัจจุบันลง LocalStorage ทุกครั้งที่มีการเปลี่ยนหน้า
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('clinic_currentTab', currentTab);
+    }
+  }, [currentTab]);
+
   const [currentBranch, setCurrentBranch] = useState('b1');
   const [isScrolled, setIsScrolled] = useState(false);
 
