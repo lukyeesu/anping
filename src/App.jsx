@@ -181,7 +181,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 onBlur={() => setTimeout(() => setIsOpen(false), 150)}
                 className={compact 
-                    ? `flex items-center justify-center gap-1 cursor-pointer outline-none bg-transparent hover:bg-slate-100 rounded-lg px-2 py-1 transition-colors font-data`
+                    ? `flex items-center justify-center gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-lg px-2.5 py-1.5 transition-all font-data shadow-sm`
                     : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
                 }
             >
@@ -189,7 +189,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                 {!compact && <ChevronDown className={`w-5 h-5 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && (
-                <div className={`absolute z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top ${compact ? 'min-w-[4rem] max-h-32 left-1/2 -translate-x-1/2' : 'w-full max-h-48'}`}>
+                <div className={`absolute z-[100] bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${compact ? 'min-w-[4.5rem] max-h-40 left-1/2 -translate-x-1/2 bottom-full mb-2 origin-bottom zoom-in-95' : 'w-full max-h-48 mt-1 top-full origin-top zoom-in-95'}`}>
                     {options.map((opt, i) => {
                         const val = typeof opt === 'object' ? opt.value : opt;
                         const lbl = typeof opt === 'object' ? opt.label : opt;
@@ -197,7 +197,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                             <div
                                 key={i}
                                 onMouseDown={(e) => { e.preventDefault(); onChange(val); setIsOpen(false); }}
-                                className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors ${compact ? 'text-center text-xs' : 'text-sm'} ${String(value) === String(val) ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                className={`px-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors ${compact ? 'text-center text-sm py-2' : 'text-sm py-2.5'} ${String(value) === String(val) ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
                             >
                                 {lbl}
                             </div>
@@ -1705,78 +1705,96 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       )}
 
       {showApptCalendar && (
-        <div className="fixed inset-0 z-[110]">
-          <div className={`absolute inset-0 bg-slate-900/10 backdrop-blur-sm ${isApptCalClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeApptCalendar}></div>
-          <div className={`absolute z-[115] w-[300px] max-w-[85vw] max-h-[80dvh] overflow-y-auto custom-scrollbar bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-4 sm:p-5 origin-top-left ${isApptCalClosing ? 'modal-animate-out' : 'modal-animate-in'}`} style={{ top: apptCalendarPos.top + 8, left: Math.min(apptCalendarPos.left, window.innerWidth - 310) }}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isApptCalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeApptCalendar}></div>
+          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isApptCalClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            
             {apptCalView === 'days' && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() - 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setApptCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl hover:bg-slate-50 transition-colors text-sm kanit-text">{thaiMonths[apptCalDate.getMonth()]} {apptCalDate.getFullYear() + 543}</button>
-                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() + 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={18} /></button>
+              <div className="w-full calendar-view-anim">
+                <div className="flex justify-between items-center mb-4">
+                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() - 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setApptCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[apptCalDate.getMonth()]} {apptCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
                 </div>
-                <div className="grid grid-cols-7 gap-1 text-center mb-1">
-                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
+                <div className="grid grid-cols-7 gap-1 text-center mb-3">
+                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
                 </div>
-                <div className="grid grid-cols-7 gap-y-1 text-center">
-                  {Array.from({ length: new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-8 h-8"></div>)}
+                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
+                  {Array.from({ length: new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>)}
                   {Array.from({ length: new Date(apptCalDate.getFullYear(), apptCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
                     const isSelected = apptCalDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === apptCalDate.getMonth() && new Date().getFullYear() === apptCalDate.getFullYear();
                     return (
-                      <button key={day} type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), day))} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-bold transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
+                      <button key={day} type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear(), apptCalDate.getMonth(), day))} className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium font-data calendar-btn-anim ${isSelected ? 'cal-selected' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
                     )
                   })}
                 </div>
               </div>
             )}
+            
             {apptCalView === 'months' && (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center mb-2">
-                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear() - 1, apptCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setApptCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl text-sm font-data">{apptCalDate.getFullYear() + 543}</button>
-                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear() + 1, apptCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
+              <div className="w-full calendar-view-anim">
+                <div className="flex justify-between items-center mb-6">
+                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear() - 1, apptCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setApptCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl text-base sm:text-sm font-data">{apptCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setApptCalDate(new Date(apptCalDate.getFullYear() + 1, apptCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setApptCalDate(new Date(apptCalDate.getFullYear(), i, 1)); setApptCalView('days');}} className={`py-3 rounded-2xl text-xs font-bold transition-all kanit-text ${apptCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
+                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setApptCalDate(new Date(apptCalDate.getFullYear(), i, 1)); setApptCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium kanit-text calendar-btn-anim ${apptCalDate.getMonth() === i ? 'cal-selected' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
                 </div>
               </div>
             )}
+            
             {apptCalView === 'years' && (
-                <div className="space-y-3">
-                <div className="flex justify-between items-center mb-2 px-1">
-                  <button type="button" onClick={() => setApptYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <span className="font-bold text-slate-800 text-sm font-data">{apptYearPageStart} - {apptYearPageStart + 11}</span>
-                  <button type="button" onClick={() => setApptYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
+                <div className="w-full calendar-view-anim">
+                <div className="flex justify-between items-center mb-6 px-1">
+                  <button type="button" onClick={() => setApptYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{apptYearPageStart} - {apptYearPageStart + 11}</span>
+                  <button type="button" onClick={() => setApptYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {Array.from({length: 12}, (_, i) => apptYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setApptCalDate(new Date(y - 543, apptCalDate.getMonth(), 1)); setApptCalView('months');}} className={`py-3 rounded-2xl text-xs font-bold transition-all font-data ${(apptCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
+                  {Array.from({length: 12}, (_, i) => apptYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setApptCalDate(new Date(y - 543, apptCalDate.getMonth(), 1)); setApptCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium font-data calendar-btn-anim ${(apptCalDate.getFullYear() + 543) === y ? 'cal-selected' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
                 </div>
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
-                    <Clock size={14} className="text-sky-500" />
-                    <CustomSelect compact value={apptTime.h} onChange={val => setApptTime({...apptTime, h: val})} options={Array.from({length:24}, (_,i)=>String(i).padStart(2,'0'))} />
-                    <span className="text-slate-400 font-bold kanit-text">:</span>
-                    <CustomSelect compact value={apptTime.m} onChange={val => setApptTime({...apptTime, m: val})} options={Array.from({length:60}, (_,i)=>String(i).padStart(2,'0'))} />
+            {/* Time & Action Panel - ปรับเลย์เอาต์แนวนอนตามรูปภาพ (Mockup) */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-row items-center justify-between w-full gap-1 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50/50 px-2 py-1.5 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                    <Clock size={16} className="text-sky-500 shrink-0" />
+                    
+                    <CustomSelect 
+                        compact 
+                        value={apptTime.h} 
+                        onChange={v => setApptTime({...apptTime, h: v})} 
+                        options={Array.from({length:24}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
+                    
+                    <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
+                    
+                    <CustomSelect 
+                        compact 
+                        value={apptTime.m} 
+                        onChange={v => setApptTime({...apptTime, m: v})} 
+                        options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
                 </div>
                 
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 sm:gap-2 shrink-0">
                     <button type="button" onClick={() => {
                           const now = new Date();
                           setApptCalDate(now);
                           setApptTime({h: String(now.getHours()).padStart(2,'0'), m: String(now.getMinutes()).padStart(2,'0')});
                           setApptCalView('days');
-                    }} className="px-3 py-1.5 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors kanit-text">ปัจจุบัน</button>
+                    }} className="px-2.5 sm:px-3 py-2 text-[11px] sm:text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors kanit-text shadow-sm whitespace-nowrap">ปัจจุบัน</button>
                     <button type="button" onClick={() => {
                           const d = String(apptCalDate.getDate()).padStart(2, '0');
                           const m = String(apptCalDate.getMonth() + 1).padStart(2, '0');
                           const y = apptCalDate.getFullYear() + 543;
                           setFormData({...formData, datetime: `${d}/${m}/${y} ${apptTime.h}:${apptTime.m} น.`});
                           closeApptCalendar();
-                    }} className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md transition-colors kanit-text">ตกลง</button>
+                    }} className="px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md shadow-sky-500/20 transition-colors kanit-text whitespace-nowrap">ตกลง</button>
                 </div>
             </div>
           </div>
@@ -3309,58 +3327,60 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       )}
 
       {showCalendar && (
-        <div className="fixed inset-0 z-[110]">
-          <div className={`absolute inset-0 bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeMedCalendar}></div>
-          <div className={`absolute z-[115] w-[300px] max-w-[85vw] max-h-[80dvh] overflow-y-auto custom-scrollbar bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-4 sm:p-5 origin-top-left ${isCalendarClosing ? 'modal-animate-out' : 'modal-animate-in'}`} style={{ top: calendarPos.top + 8, left: Math.min(calendarPos.left, window.innerWidth - 310) }}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeMedCalendar}></div>
+          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             {calView === 'days' && (
               <>
-                <div className="flex justify-between items-center mb-4"><button type="button" onClick={handlePrevMonth} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button><button type="button" onClick={handleNextMonth} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
-                <div className="grid grid-cols-7 gap-1 text-center mb-3">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (<div key={d} className={`text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}</div>
-                <div className="grid grid-cols-7 gap-1 text-center">{blankDays.map(b => <div key={`blank-${b}`} className="w-8 h-8"></div>)}{monthDays.map(day => {
+                <div className="flex justify-between items-center mb-4"><button type="button" onClick={handlePrevMonth} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button><button type="button" onClick={handleNextMonth} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-3">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}</div>
+                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">{blankDays.map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>)}{monthDays.map(day => {
                   const isSelected = formData.dob === `${String(day).padStart(2, '0')}/${String(calDate.getMonth() + 1).padStart(2, '0')}/${calDate.getFullYear() + 543}`;
                   const isToday = new Date().getDate() === day && new Date().getMonth() === calDate.getMonth() && new Date().getFullYear() === calDate.getFullYear();
-                  return (<button key={day} type="button" onClick={() => handleSelectDate(day)} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-sm font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 transform scale-110' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>)
+                  return (<button key={day} type="button" onClick={() => handleSelectDate(day)} className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 transform scale-110' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>)
                 })}</div>
               </>
             )}
             {calView === 'months' && (
               <>
-                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors font-data">{calDate.getFullYear() + 543}</button><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
-                <div className="grid grid-cols-3 gap-2">{thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 rounded-2xl text-sm font-medium transition-all kanit-text ${calDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}</div>
+                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm font-data">{calDate.getFullYear() + 543}</button><button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
+                <div className="grid grid-cols-3 gap-2">{thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all kanit-text ${calDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}</div>
               </>
             )}
             {calView === 'years' && (
               <>
-                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><span className="font-bold text-slate-800 px-3 py-1.5 font-data">{yearPageStart} - {yearPageStart + 11}</span><button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
-                <div className="grid grid-cols-3 gap-2">{Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 rounded-2xl text-sm font-medium transition-all font-data ${(calDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}</div>
+                <div className="flex justify-between items-center mb-6"><button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{yearPageStart} - {yearPageStart + 11}</span><button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
+                <div className="grid grid-cols-3 gap-2">{Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all font-data ${(calDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}</div>
               </>
             )}
           </div>
         </div>
       )}
 
-      {/* --- ปฏิทินประวัติการรักษา (OPD Calendar) แสดงผลชั้นบนสุด ทะลุ Modal --- */}
+      {/* --- ปฏิทินประวัติการรักษา (OPD Calendar) --- */}
       {showOpdCalendar && (
-        <div className="fixed inset-0 z-[110]">
-          <div className={`absolute inset-0 bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeMedOpdCalendar}></div>
-          <div className={`absolute z-[115] w-[300px] max-w-[85vw] max-h-[80dvh] overflow-y-auto custom-scrollbar bg-white/95 backdrop-blur-xl rounded-[1.5rem] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-slate-100 p-4 sm:p-5 origin-top-left ${isOpdCalendarClosing ? 'modal-animate-out' : 'modal-animate-in'}`} style={{ top: opdCalendarPos.top + 8, left: Math.min(opdCalendarPos.left, window.innerWidth - 310) }}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeMedOpdCalendar}></div>
+          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white/95 backdrop-blur-xl sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isOpdCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             {opdCalView === 'days' && (
               <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() - 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl hover:bg-slate-50 transition-colors text-sm kanit-text">{thaiMonths[opdCalDate.getMonth()]} {opdCalDate.getFullYear() + 543}</button>
-                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() + 1, 1))} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={18} /></button>
+                <div className="flex justify-between items-center mb-2">
+                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() - 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[opdCalDate.getMonth()]} {opdCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
                 </div>
-                <div className="grid grid-cols-7 gap-1 text-center">
-                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[10px] font-bold uppercase tracking-wider kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-400'}`}>{d}</div>))}
+                <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-[10px] font-bold uppercase tracking-wider kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-400'}`}>{d}</div>))}
                 </div>
-                <div className="grid grid-cols-7 gap-y-1 text-center">
-                  {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-8 h-8"></div>)}
+                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
+                  {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 h-8"></div>)}
                   {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
                     const isSelected = opdCalDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === opdCalDate.getMonth() && new Date().getFullYear() === opdCalDate.getFullYear();
                     return (
-                      <button key={day} type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), day))} className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
+                      <button key={day} type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), day))} className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
                     )
                   })}
                 </div>
@@ -3368,52 +3388,65 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             )}
             {opdCalView === 'months' && (
               <div className="space-y-3">
-                <div className="flex justify-between items-center mb-2">
-                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() - 1, opdCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1 rounded-xl text-sm font-data">{opdCalDate.getFullYear() + 543}</button>
-                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() + 1, opdCalDate.getMonth(), 1))} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
+                <div className="flex justify-between items-center mb-4">
+                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() - 1, opdCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl text-base sm:text-sm font-data">{opdCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() + 1, opdCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setOpdCalDate(new Date(opdCalDate.getFullYear(), i, 1)); setOpdCalView('days');}} className={`py-3 rounded-2xl text-xs font-bold transition-all kanit-text ${opdCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
+                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setOpdCalDate(new Date(opdCalDate.getFullYear(), i, 1)); setOpdCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-bold transition-all kanit-text ${opdCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
                 </div>
               </div>
             )}
             {opdCalView === 'years' && (
                 <div className="space-y-3">
-                <div className="flex justify-between items-center mb-2 px-1">
-                  <button type="button" onClick={() => setOpdYearPageStart(y => y - 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={18} /></button>
-                  <span className="font-bold text-slate-800 text-sm font-data">{opdYearPageStart} - {opdYearPageStart + 11}</span>
-                  <button type="button" onClick={() => setOpdYearPageStart(y => y + 12)} className="p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={18} /></button>
+                <div className="flex justify-between items-center mb-4 px-1">
+                  <button type="button" onClick={() => setOpdYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <span className="font-bold text-slate-800 text-base sm:text-sm font-data">{opdYearPageStart} - {opdYearPageStart + 11}</span>
+                  <button type="button" onClick={() => setOpdYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {Array.from({length: 12}, (_, i) => opdYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setOpdCalDate(new Date(y - 543, opdCalDate.getMonth(), 1)); setOpdCalView('months');}} className={`py-3 rounded-2xl text-xs font-bold transition-all font-data ${(opdCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
+                  {Array.from({length: 12}, (_, i) => opdYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setOpdCalDate(new Date(y - 543, opdCalDate.getMonth(), 1)); setOpdCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-bold transition-all font-data ${(opdCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
                 </div>
               </div>
             )}
 
-            {/* Time & Action Panel */}
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200">
-                    <Clock size={14} className="text-sky-500" />
-                    <CustomSelect compact value={opdTime.h} onChange={val => setOpdTime({...opdTime, h: val})} options={Array.from({length:24}, (_,i)=>String(i).padStart(2,'0'))} />
-                    <span className="text-slate-400 font-bold kanit-text">:</span>
-                    <CustomSelect compact value={opdTime.m} onChange={val => setOpdTime({...opdTime, m: val})} options={Array.from({length:60}, (_,i)=>String(i).padStart(2,'0'))} />
+            {/* Time & Action Panel - ปรับเลย์เอาต์แนวนอนตามรูปภาพ (Mockup) */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-row items-center justify-between w-full gap-1 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50/50 px-2 py-1.5 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                    <Clock size={16} className="text-sky-500 shrink-0" />
+                    
+                    <CustomSelect 
+                        compact 
+                        value={opdTime.h} 
+                        onChange={v => setOpdTime({...opdTime, h: v})} 
+                        options={Array.from({length:24}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
+                    
+                    <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
+                    
+                    <CustomSelect 
+                        compact 
+                        value={opdTime.m} 
+                        onChange={v => setOpdTime({...opdTime, m: v})} 
+                        options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
                 </div>
                 
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 sm:gap-2 shrink-0">
                     <button type="button" onClick={() => {
                           const now = new Date();
                           setOpdCalDate(now);
                           setOpdTime({h: String(now.getHours()).padStart(2,'0'), m: String(now.getMinutes()).padStart(2,'0')});
                           setOpdCalView('days');
-                    }} className="px-3 py-1.5 text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors kanit-text">ปัจจุบัน</button>
+                    }} className="px-2.5 sm:px-3 py-2 text-[11px] sm:text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors kanit-text shadow-sm whitespace-nowrap">ปัจจุบัน</button>
                     <button type="button" onClick={() => {
                           const d = String(opdCalDate.getDate()).padStart(2, '0');
                           const m = String(opdCalDate.getMonth() + 1).padStart(2, '0');
                           const y = opdCalDate.getFullYear() + 543;
                           setNewOpdRecord({...newOpdRecord, datetime: `${d}/${m}/${y} ${opdTime.h}:${opdTime.m} น.`});
                           closeMedOpdCalendar();
-                    }} className="px-3 py-1.5 text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md transition-colors kanit-text">ตกลง</button>
+                    }} className="px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md shadow-sky-500/20 transition-colors kanit-text whitespace-nowrap">ตกลง</button>
                 </div>
             </div>
           </div>
@@ -4364,6 +4397,25 @@ export default function App() {
             animation: fadeOut 0.3s ease-out forwards !important;
         }
 
+        /* แอนิเมชันตอนสลับมุมมอง (วัน/เดือน/ปี) ภายในปฏิทิน */
+        .calendar-view-anim {
+            animation: scaleFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* แอนิเมชันปุ่มวันที่ (กดแล้วยุบ, เลือกแล้วเด้ง) */
+        .calendar-btn-anim {
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .calendar-btn-anim:active {
+            transform: scale(0.75) !important;
+        }
+        .cal-selected {
+            background-color: #0ea5e9 !important;
+            color: white !important;
+            transform: scale(1.15) !important;
+            box-shadow: 0 4px 14px -2px rgba(14, 165, 233, 0.4) !important;
+        }
+
         /* กำหนดจังหวะการเด้ง (ใหญ่ขึ้นไปที่ 1.05 แล้วหดลงมาที่ 0.98 ก่อนหยุดที่ 1.0) */
         @keyframes bounceIn { 
             0% { transform: scale(0.6); opacity: 0; } 
@@ -4381,6 +4433,11 @@ export default function App() {
         @keyframes fadeOut {
             from { opacity: 1; }
             to { opacity: 0; }
+        }
+
+        @keyframes scaleFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         /* --- Animation สำหรับ Toast (Slide Down & Fade) --- */
@@ -4412,6 +4469,37 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* --- Animation แบบ Bottom Sheet สำหรับมือถือ (One UI Style) --- */
+        @media (max-width: 639px) {
+          .mobile-bottom-sheet {
+            position: fixed !important;
+            top: auto !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            transform: none !important;
+            border-bottom-left-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+            border-top-left-radius: 2rem !important;
+            border-top-right-radius: 2rem !important;
+            animation: slideUpBottomSheet 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+            padding-bottom: calc(max(1.5rem, env(safe-area-inset-bottom))) !important;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.15) !important;
+          }
+          .mobile-bottom-sheet.closing {
+            animation: slideDownBottomSheet 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+          }
+        }
+        @keyframes slideUpBottomSheet {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes slideDownBottomSheet {
+          from { transform: translateY(0); }
+          to { transform: translateY(100%); }
+        }
 
         /* กำหนดจุดเริ่มต้นและจุดสิ้นสุดของการเคลื่อนไหว */
         @keyframes spaceRowEnter {
