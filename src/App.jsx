@@ -3874,16 +3874,27 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
                         className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
                         style={{ animationDelay: `${(index % 20) * 30}ms` }}
                       >
-                        <div className="w-8 h-8 sm:w-12 sm:h-12 bg-sky-50 text-sky-600 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
-                          <Icon size={20} className="w-4 h-4 sm:w-6 sm:h-6" />
+                        {/* ปรับให้ไอคอนเป็นกล่องสี่เหลี่ยมจัตุรัส 1:1 เต็มความกว้างและอยู่ตรงกลาง */}
+                        <div className="w-full aspect-square bg-sky-50 text-sky-500 rounded-lg sm:rounded-xl flex items-center justify-center mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
+                          <Icon className="w-12 h-12 sm:w-16 sm:h-16" strokeWidth={1.5} />
                         </div>
+                        
                         <div className="flex-1 flex flex-col justify-between w-full">
-                          <div className="mb-1 sm:mb-2">
-                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1 truncate">{product.type}</span>
-                            <h3 className="font-bold text-slate-800 text-[11px] sm:text-sm kanit-text line-clamp-2 leading-tight">{product.name}</h3>
+                          <div className="mb-2">
+                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 truncate">{product.type}</span>
+                            <h3 className="font-bold text-slate-800 text-xs sm:text-sm kanit-text line-clamp-2 leading-tight">{product.name}</h3>
                           </div>
-                          <div className="font-bold text-sky-600 text-xs sm:text-base font-data mt-auto">
-                            {formatCurrency(product.price)}
+                          
+                          {/* ปรับให้ราคาใหญ่ขึ้น และมีแสดงจำนวนคงเหลือถ้าเป็นสินค้า */}
+                          <div className="flex items-end justify-between mt-auto w-full">
+                            <div className="font-bold text-sky-600 text-sm sm:text-lg font-data leading-none">
+                              {formatCurrency(product.price)}
+                            </div>
+                            {product.stockManaged && (
+                              <div className="text-[10px] sm:text-xs text-slate-400 font-medium kanit-text mb-0.5 shrink-0 ml-1">
+                                เหลือ {product.stock !== undefined ? product.stock : 20}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </button>
@@ -4051,15 +4062,27 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
               {/* การคิดภาษี (Radio Buttons) */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
                 <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
-                <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs kanit-text text-slate-600">
-                  <label className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
-                    <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="accent-sky-500 w-3 h-3 sm:w-3.5 sm:h-3.5" /> รวม VAT
+                <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
+                    <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                      {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                    </div>
+                    <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
-                    <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="accent-sky-500 w-3 h-3 sm:w-3.5 sm:h-3.5" /> แยก VAT
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
+                    <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                      {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                    </div>
+                    <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer hover:text-sky-600 transition-colors">
-                    <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="accent-sky-500 w-3 h-3 sm:w-3.5 sm:h-3.5" /> ไม่คิด VAT
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
+                    <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                      {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                    </div>
+                    <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
                   </label>
                 </div>
               </div>
@@ -4774,7 +4797,7 @@ export default function App() {
         @keyframes fadeOutUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
         .fade-in-up { animation: fadeInUp 0.25s ease-out forwards; }
         .fade-out-up { animation: fadeOutUp 0.25s ease-out forwards; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
