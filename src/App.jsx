@@ -5,7 +5,7 @@ import {
   Package, BarChart3, Settings, Building2, Search, 
   Plus, X, CheckCircle2, AlertCircle, MapPin, Phone,
   Clock, Stethoscope, FileText, Pill, CreditCard,
-  Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, Loader2,
+  Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity
 } from 'lucide-react';
@@ -3749,12 +3749,33 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [discount, setDiscount] = useState(0);
-  const [discountType, setDiscountType] = useState('amount'); // 'amount' or 'percent'
   
-  // --- เพิ่ม State สำหรับการคิดภาษี ---
-  const [taxMode, setTaxMode] = useState('none'); // 'include' (รวม VAT), 'exclude' (แยก VAT), 'none' (ไม่คิด VAT)
-  const [vatRate, setVatRate] = useState(7); // ค่าเริ่มต้น 7%
+  // --- แก้ไข: ให้ดึงค่าเริ่มต้นจาก LocalStorage ---
+  const [discountType, setDiscountType] = useState(() => {
+    return (typeof localStorage !== 'undefined' && localStorage.getItem('pos_discountType')) || 'amount';
+  }); // 'amount' or 'percent'
   
+  // --- เพิ่ม State สำหรับการคิดภาษี (ดึงจาก LocalStorage) ---
+  const [taxMode, setTaxMode] = useState(() => {
+    return (typeof localStorage !== 'undefined' && localStorage.getItem('pos_taxMode')) || 'none';
+  }); // 'include' (รวม VAT), 'exclude' (แยก VAT), 'none' (ไม่คิด VAT)
+  
+  const [vatRate, setVatRate] = useState(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('pos_vatRate') : null;
+    return saved !== null ? Number(saved) : 7;
+  }); // ค่าเริ่มต้น 7%
+
+  // --- เพิ่ม: บันทึกการตั้งค่าลง LocalStorage ทันทีที่มีการเปลี่ยนค่า ---
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('pos_discountType', discountType);
+      localStorage.setItem('pos_taxMode', taxMode);
+      localStorage.setItem('pos_vatRate', vatRate.toString());
+    }
+  }, [discountType, taxMode, vatRate]);
+  
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false); // --- เพิ่ม State ควบคุมการย่อ/ขยายส่วนคิดเงิน ---
+
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [isCheckoutClosing, setIsCheckoutClosing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -3887,11 +3908,11 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
 
   const clearCart = () => {
     setCart([]);
-    setDiscount(0);
+    setDiscount(0); // ล้างเฉพาะมูลค่าส่วนลด
     setSelectedPatientId('');
     setPatientSearchTerm('');
-    setTaxMode('none');
-    setVatRate(7);
+    // นำการรีเซ็ต setTaxMode และ setVatRate ออก เพื่อให้จำค่าเดิมไว้ใช้กับบิลถัดไป
+    setIsSummaryExpanded(false); // พับส่วนคิดเงินเก็บลงเมื่อล้างตะกร้า
   };
 
   // คำนวณยอดเงินและภาษีแบบละเอียด
@@ -4334,134 +4355,165 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
           </div>
 
           {/* Cart Summary & Checkout */}
-          <div className="bg-white border-t border-slate-100 p-3 sm:p-4 shrink-0 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-10">
+          <div className="bg-white shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.04)] z-20 flex flex-col rounded-t-3xl sm:rounded-t-[2rem] relative border-t border-slate-100">
             
-            {/* Summary Lines - ปรับโครงสร้างใหม่ตามภาพตัวอย่าง */}
-            <div className="space-y-2.5 sm:space-y-3 mb-4 font-data text-xs sm:text-sm">
-
-              {/* รวมเป็นเงิน */}
-              <div className="flex justify-between items-center text-slate-700">
-                <span className="kanit-text font-medium">รวมเป็นเงิน</span>
-                <span className="font-bold">{formatCurrency(subtotal)}</span>
+            {/* Toggle Tab - ชิดขอบบน ไม่มีพื้นหลัง โฮเวอร์เป็นสีฟ้าขอบมน */}
+            <div 
+              className="w-full flex justify-center items-center py-2 sm:py-2.5 bg-transparent hover:bg-sky-50 text-slate-400 hover:text-sky-500 cursor-pointer transition-colors rounded-t-3xl sm:rounded-t-[2rem]"
+              onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+              title={isSummaryExpanded ? "ย่อรายละเอียด" : "ขยายเพื่อดูหรือตั้งค่าส่วนลด/ภาษี"}
+            >
+              <div className="flex items-center gap-1.5 kanit-text font-bold text-[11px] sm:text-xs tracking-wide">
+                {isSummaryExpanded ? <ChevronDown size={14} className="sm:w-4 sm:h-4 text-sky-500" /> : <ChevronUp size={14} className="sm:w-4 sm:h-4 text-sky-500" />}
+                <span>{isSummaryExpanded ? 'ย่อรายละเอียดส่วนลดและภาษี' : 'ตั้งค่าส่วนลดและภาษี'}</span>
+                {/* แจ้งเตือนกระพริบเมื่อมีการตั้งค่าไว้แต่ถูกพับอยู่ */}
+                {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
+                   <span className="flex h-2 w-2 relative ml-0.5">
+                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                     <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                   </span>
+                )}
               </div>
+            </div>
 
-              {/* ส่วนลดเพิ่มเติม */}
-              <div className="flex justify-between items-center">
-                <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
-                  ส่วนลดเพิ่มเติม
-                  {discountType === 'percent' && discount > 0 && <span className="text-rose-500 font-bold text-[10px] sm:text-xs">({discount}%)</span>}
-                </span>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min="0"
-                    value={discount || ''}
-                    onChange={(e) => setDiscount(Number(e.target.value))}
-                    className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
-                    placeholder="0.00"
-                  />
-                  <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
-                    <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
-                    <div className="w-px bg-slate-200"></div>
-                    <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
+            <div className="px-3 pb-3 sm:px-4 sm:pb-4 pt-1 sm:pt-2 flex flex-col">
+              
+              {/* Collapsible Summary Lines (ซ่อน/แสดงด้วย Grid Transition) */}
+              <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${isSummaryExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                <div className="overflow-hidden">
+                  <div className="space-y-2.5 sm:space-y-3 pb-3 font-data text-xs sm:text-sm">
+                    {/* รวมเป็นเงิน */}
+                    <div className="flex justify-between items-center text-slate-700">
+                      <span className="kanit-text font-medium">รวมเป็นเงิน</span>
+                      <span className="font-bold">{formatCurrency(subtotal)}</span>
+                    </div>
+
+                    {/* ส่วนลดเพิ่มเติม */}
+                    <div className="flex justify-between items-center">
+                      <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                        ส่วนลดเพิ่มเติม
+                        {discountType === 'percent' && discount > 0 && <span className="text-rose-500 font-bold text-[10px] sm:text-xs">({discount}%)</span>}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          value={discount || ''}
+                          onChange={(e) => setDiscount(Number(e.target.value))}
+                          className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
+                          placeholder="0.00"
+                        />
+                        <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
+                          <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
+                          <div className="w-px bg-slate-200"></div>
+                          <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ส่วนลดรวมทั้งหมด */}
+                    <div className="flex justify-between items-center text-rose-500 font-medium">
+                      <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
+                      <span className="font-bold">- {formatCurrency(discountAmount)}</span>
+                    </div>
+
+                    <div className="h-px w-full bg-slate-100 my-1.5"></div>
+
+                    {/* ยอดหลังหักส่วนลด */}
+                    <div className="flex justify-between items-center text-slate-700 font-medium">
+                      <span className="kanit-text">ยอดหลังหักส่วนลด</span>
+                      <span className="font-bold">{formatCurrency(afterDiscount)}</span>
+                    </div>
+
+                    {/* การคิดภาษี (Radio Buttons) */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                      <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
+                      <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                        <label className="flex items-center gap-1.5 cursor-pointer group">
+                          <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
+                          <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                            {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                          </div>
+                          <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer group">
+                          <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
+                          <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                            {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                          </div>
+                          <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer group">
+                          <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
+                          <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                            {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                          </div>
+                          <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
+                    <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
+                      <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
+                      <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
+                    </div>
+
+                    {/* ภาษีมูลค่าเพิ่ม + Input % */}
+                    <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
+                      <div className="flex items-center gap-2">
+                          <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
+                          <div className="flex items-center gap-1">
+                              <input
+                                  type="number"
+                                  value={vatRate}
+                                  onChange={(e) => setVatRate(Number(e.target.value))}
+                                  disabled={taxMode === 'none'}
+                                  className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
+                              />
+                              <span className="text-xs sm:text-sm">%</span>
+                          </div>
+                      </div>
+                      <span className="font-bold">{formatCurrency(vatAmount)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* ส่วนลดรวมทั้งหมด */}
-              <div className="flex justify-between items-center text-rose-500 font-medium">
-                <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
-                <span className="font-bold">- {formatCurrency(discountAmount)}</span>
-              </div>
-
-              <div className="h-px w-full bg-slate-100 my-1.5"></div>
-
-              {/* ยอดหลังหักส่วนลด */}
-              <div className="flex justify-between items-center text-slate-700 font-medium">
-                <span className="kanit-text">ยอดหลังหักส่วนลด</span>
-                <span className="font-bold">{formatCurrency(afterDiscount)}</span>
-              </div>
-
-              {/* การคิดภาษี (Radio Buttons) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
-                <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
-                <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
-                    <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                      {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                    </div>
-                    <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
-                    <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                      {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                    </div>
-                    <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer group">
-                    <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
-                    <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                      {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                    </div>
-                    <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
-                  </label>
+              {/* Always Visible: ยอดสุทธิ (เปลี่ยนเป็นส่วนแสดงผลเฉยๆ) */}
+              <div className={`flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 mb-3 select-none transition-all ${isSummaryExpanded ? 'pt-3 border-t border-slate-100' : ''}`}>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="kanit-text">ยอดสุทธิ</span>
+                  {/* Indicator แจ้งเตือนเมื่อถูกย่อและมีการตั้งค่าส่วนลด/ภาษี */}
+                  {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
+                     <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md kanit-text border border-amber-100 animate-in fade-in">
+                        มีส่วนลด/ภาษี
+                     </span>
+                  )}
                 </div>
+                <span className="font-data text-sky-600">{formatCurrency(grandTotal)}</span>
               </div>
 
-              {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
-              <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
-                <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
-                <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
+              {/* Checkout Actions */}
+              <div className="flex gap-2">
+                <button 
+                  onClick={clearCart} 
+                  disabled={cart.length === 0}
+                  className="px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 text-slate-500 font-semibold hover:bg-slate-50 hover:text-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="ล้างตะกร้า"
+                >
+                  <Trash2 size={18} className="sm:w-5 sm:h-5" />
+                </button>
+                <button 
+                  onClick={handleCheckout}
+                  disabled={cart.length === 0}
+                  className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-lg shadow-md transition-all active:scale-[0.98] kanit-text disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                    cart.length > 0 ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 shadow-none'
+                  }`}
+                >
+                  ชำระเงิน {cart.length > 0 ? formatCurrency(grandTotal) : ''}
+                </button>
               </div>
-
-              {/* ภาษีมูลค่าเพิ่ม + Input % */}
-              <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
-                <div className="flex items-center gap-2">
-                    <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
-                    <div className="flex items-center gap-1">
-                        <input
-                            type="number"
-                            value={vatRate}
-                            onChange={(e) => setVatRate(Number(e.target.value))}
-                            disabled={taxMode === 'none'}
-                            className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
-                        />
-                        <span className="text-xs sm:text-sm">%</span>
-                    </div>
-                </div>
-                <span className="font-bold">{formatCurrency(vatAmount)}</span>
-              </div>
-
-              <div className="h-px w-full bg-slate-100 my-1.5"></div>
-
-              {/* ยอดสุทธิ */}
-              <div className="flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 pt-1">
-                <span className="kanit-text">ยอดสุทธิ</span>
-                <span>{formatCurrency(grandTotal)}</span>
-              </div>
-            </div>
-
-            {/* Checkout Actions */}
-            <div className="flex gap-2">
-              <button 
-                onClick={clearCart} 
-                disabled={cart.length === 0}
-                className="px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 text-slate-500 font-semibold hover:bg-slate-50 hover:text-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="ล้างตะกร้า"
-              >
-                <Trash2 size={18} className="sm:w-5 sm:h-5" />
-              </button>
-              <button 
-                onClick={handleCheckout}
-                disabled={cart.length === 0}
-                className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-lg shadow-md transition-all active:scale-[0.98] kanit-text disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
-                  cart.length > 0 ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 shadow-none'
-                }`}
-              >
-                ชำระเงิน {cart.length > 0 ? formatCurrency(grandTotal) : ''}
-              </button>
             </div>
           </div>
           
