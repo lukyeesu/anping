@@ -3788,6 +3788,12 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(25);
   const [isHistoryLoadingMore, setIsHistoryLoadingMore] = useState(false);
 
+  // --- เพิ่ม State สำหรับดูและแก้ไขรายละเอียดบิล ---
+  const [selectedHistoryTxn, setSelectedHistoryTxn] = useState(null);
+  const [isEditingHistory, setIsEditingHistory] = useState(false);
+  const [historyEditForm, setHistoryEditForm] = useState(null);
+  const [isSavingHistory, setIsSavingHistory] = useState(false);
+
   // --- เพิ่ม State ควบคุมการเปิดปิดตะกร้าบนมือถือ ---
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
@@ -4022,7 +4028,46 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
       setIsHistoryModalOpen(false);
       setIsHistoryClosing(false);
       setVisibleHistoryCount(25); // รีเซ็ตจำนวนการแสดงผลกลับเป็นค่าเริ่มต้นเมื่อปิดหน้าต่าง
+      setSelectedHistoryTxn(null); // รีเซ็ตบิลที่เลือกดูอยู่
+      setIsEditingHistory(false);
     }, 300);
+  };
+
+  // --- ฟังก์ชันจัดการดูและแก้ไขบิลย้อนหลัง ---
+  const handleViewHistoryTxn = (txn) => {
+    setSelectedHistoryTxn(txn);
+    setHistoryEditForm(null);
+    setIsEditingHistory(false);
+  };
+
+  const handleBackToHistoryList = () => {
+    setSelectedHistoryTxn(null);
+    setIsEditingHistory(false);
+  };
+
+  const handleEditTxn = () => {
+    setHistoryEditForm({ ...selectedHistoryTxn });
+    setIsEditingHistory(true);
+  };
+
+  const handleSaveTxnEdit = async () => {
+    setIsSavingHistory(true);
+    try {
+        await callAppScript('SAVE_DATA', 'POS_Transactions', historyEditForm);
+        // อัปเดตข้อมูลในตารางหลัก
+        if (setPosHistoryData) {
+            setPosHistoryData(prev => prev.map(t => t.id === historyEditForm.id ? historyEditForm : t));
+        }
+        // อัปเดตข้อมูลในหน้าดูรายละเอียด
+        setSelectedHistoryTxn(historyEditForm);
+        setIsEditingHistory(false);
+        showToast('บันทึกการแก้ไขบิลสำเร็จ', 'success');
+    } catch (error) {
+        console.error(error);
+        showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'warning');
+    } finally {
+        setIsSavingHistory(false);
+    }
   };
 
   // --- ฟังก์ชันจัดการการเลื่อน (Scroll) เพื่อโหลดข้อมูลเพิ่ม (Infinite Scroll) ---
@@ -4574,151 +4619,324 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
       {isCheckoutModalOpen && (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isCheckoutClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col ${isCheckoutClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            {checkoutSuccess ? (
-              // Success View
-              <div className="p-8 flex flex-col items-center text-center">
-                <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-6 sweet-alert-pop">
-                  <CheckCircle2 size={40} />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">ชำระเงินสำเร็จ</h2>
-                <p className="text-slate-500 kanit-text mb-6">ยอดชำระ {formatCurrency(grandTotal)} เรียบร้อยแล้ว</p>
-                <div className="w-full flex gap-3">
-                   <button onClick={closeCheckoutAndReset} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold kanit-text transition-colors">พิมพ์ใบเสร็จ</button>
-                   <button onClick={closeCheckoutAndReset} className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-semibold kanit-text transition-colors shadow-md">ทำรายการใหม่</button>
-                </div>
-              </div>
-            ) : (
-              // Payment Selection View
-              <>
-                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-                  <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2"><CreditCard size={20} className="text-sky-500"/> รับชำระเงิน</h3>
-                  <button onClick={closeCheckoutAndReset} disabled={isProcessingPayment} className="text-slate-400 hover:bg-white p-1 rounded-full"><X size={20}/></button>
-                </div>
-                
-                <div className="p-6">
-                  <div className="text-center mb-6">
-                    <p className="text-sm font-medium text-slate-500 kanit-text mb-1">ยอดที่ต้องชำระ</p>
-                    <div className="text-4xl font-black text-sky-600 font-data">{formatCurrency(grandTotal)}</div>
-                  </div>
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+              <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                <Banknote size={20} className="text-sky-500"/> ชำระเงิน
+              </h3>
+              <button onClick={closeCheckoutAndReset} className="text-slate-400 hover:bg-white p-1 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-6">
+               <div className="text-center mb-6">
+                  <p className="text-sm text-slate-500 font-medium kanit-text mb-1">ยอดที่ต้องชำระ</p>
+                  <h2 className="text-4xl font-black text-sky-500 font-data tracking-tight">{formatCurrency(grandTotal)}</h2>
+               </div>
 
-                  <p className="text-sm font-bold text-slate-700 kanit-text mb-3">เลือกช่องทางชำระเงิน</p>
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <button onClick={() => setPaymentMethod('cash')} className={`py-4 rounded-xl border-2 flex flex-col items-center gap-2 kanit-text font-semibold transition-all ${paymentMethod === 'cash' ? 'border-sky-500 bg-sky-50 text-sky-600' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}>
-                      <Banknote size={24} /> เงินสด
-                    </button>
-                    <button onClick={() => setPaymentMethod('transfer')} className={`py-4 rounded-xl border-2 flex flex-col items-center gap-2 kanit-text font-semibold transition-all ${paymentMethod === 'transfer' ? 'border-sky-500 bg-sky-50 text-sky-600' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}>
-                      <QrCode size={24} /> โอนเงิน / QR
-                    </button>
-                    <button onClick={() => setPaymentMethod('credit')} className={`py-4 rounded-xl border-2 flex flex-col items-center gap-2 kanit-text font-semibold transition-all col-span-2 ${paymentMethod === 'credit' ? 'border-sky-500 bg-sky-50 text-sky-600' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}>
-                      <CreditCard size={24} /> บัตรเครดิต
-                    </button>
+               <div className="space-y-4">
+                  <label className="block text-sm font-bold text-slate-700 kanit-text">เลือกวิธีชำระเงิน</label>
+                  <div className="grid grid-cols-2 gap-3">
+                     <button onClick={() => setPaymentMethod('cash')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all kanit-text font-medium ${paymentMethod === 'cash' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                        <Banknote size={24} /> เงินสด
+                     </button>
+                     <button onClick={() => setPaymentMethod('transfer')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all kanit-text font-medium ${paymentMethod === 'transfer' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                        <QrCode size={24} /> โอนเงิน (QR)
+                     </button>
+                     <button onClick={() => setPaymentMethod('credit')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all kanit-text font-medium col-span-2 ${paymentMethod === 'credit' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                        <CreditCard size={24} /> บัตรเครดิต
+                     </button>
                   </div>
-                </div>
+               </div>
 
-                <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3 shrink-0">
-                  <button onClick={closeCheckoutAndReset} disabled={isProcessingPayment} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text disabled:opacity-50">ยกเลิก</button>
-                  <button onClick={confirmPayment} disabled={isProcessingPayment} className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 kanit-text flex justify-center items-center gap-2 disabled:opacity-50 transition-all">
-                    {isProcessingPayment ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"></div> : <CheckCircle2 size={20} />}
-                    {isProcessingPayment ? 'กำลังทำรายการ...' : 'ยืนยันรับเงิน'}
+               {checkoutSuccess ? (
+                  <div className="mt-8 flex flex-col items-center animate-in fade-in zoom-in slide-in-from-bottom-4">
+                      <div className="w-16 h-16 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-3">
+                          <CheckCircle2 size={32} />
+                      </div>
+                      <h4 className="font-bold text-slate-800 text-lg kanit-text">ทำรายการสำเร็จ</h4>
+                      <p className="text-slate-500 text-sm kanit-text">บันทึกข้อมูลการขายเรียบร้อยแล้ว</p>
+                      <button onClick={closeCheckoutAndReset} className="mt-4 w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors kanit-text">เสร็จสิ้น</button>
+                  </div>
+               ) : (
+                  <button 
+                     onClick={confirmPayment}
+                     disabled={isProcessingPayment}
+                     className="mt-8 w-full py-3.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 transition-all active:scale-95 flex justify-center items-center gap-2 kanit-text text-lg"
+                  >
+                     {isProcessingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : <Receipt size={20} />}
+                     {isProcessingPayment ? 'กำลังบันทึก...' : 'ยืนยันการรับเงิน'}
                   </button>
-                </div>
-              </>
-            )}
+               )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* History Modal (Placeholder) */}
+      {/* History Modal */}
       {isHistoryModalOpen && (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isHistoryClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isHistoryClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+          <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isHistoryClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0 z-10">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
                 <History size={20} className="text-sky-500"/> ประวัติการทำรายการ (POS)
               </h3>
-              <button onClick={closeHistoryModal} className="text-slate-400 hover:bg-white p-1 rounded-full transition-colors"><X size={20}/></button>
+              <button onClick={closeHistoryModal} className="text-slate-400 hover:text-slate-600 hover:bg-white p-1.5 sm:p-2 rounded-full transition-colors shadow-sm border border-transparent hover:border-slate-200"><X size={20} className="sm:w-5 sm:h-5"/></button>
             </div>
             
-            {/* เพิ่ม onScroll listener ที่ container นี้ */}
-            <div className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30" onScroll={handleHistoryScroll}>
+            <div className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30" onScroll={!selectedHistoryTxn ? handleHistoryScroll : undefined}>
                 {isGlobalLoading ? (
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
-                        {/* เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar แนวตั้งเด้งแวบเดียวตอนแอนิเมชันทำงาน */}
                         <div className="overflow-x-auto overflow-y-hidden">
                             <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text">
-                                        <th className="p-4 font-bold">วันที่/เวลา</th>
-                                        <th className="p-4 font-bold">เลขที่บิล</th>
-                                        <th className="p-4 font-bold">ลูกค้า</th>
-                                        <th className="p-4 font-bold text-right">ยอดรวม</th>
-                                        <th className="p-4 font-bold text-center">วิธีชำระ</th>
-                                        <th className="p-4 font-bold text-center">สถานะ</th>
+                                        <th className="p-4 font-bold">วันที่/เวลา</th><th className="p-4 font-bold">เลขที่บิล</th><th className="p-4 font-bold">ลูกค้า</th><th className="p-4 font-bold text-right">ยอดรวม</th><th className="p-4 font-bold text-center">วิธีชำระ</th><th className="p-4 font-bold text-center">สถานะ</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {/* แอนิเมชัน Skeleton Loading ขณะกำลังโหลดครั้งแรก */}
                                     {Array.from({ length: 5 }).map((_, idx) => (
-                                        <tr key={`skel-hist-${idx}`} className="border-b border-slate-50">
-                                            <td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
-                                            <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
-                                            <td className="p-4"><div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div></td>
-                                            <td className="p-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
-                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
-                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
-                                        </tr>
+                                        <tr key={`skel-hist-${idx}`} className="border-b border-slate-50"><td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td><td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td><td className="p-4"><div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div></td><td className="p-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td><td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td><td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td></tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
+                ) : selectedHistoryTxn ? (
+                    // --- View Details & Edit View ---
+                    <div className="bg-white sm:rounded-2xl sm:border border-slate-100 sm:shadow-sm overflow-hidden fade-in min-h-full flex flex-col">
+                         {/* Header ของหน้ารายละเอียด */}
+                         <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 sticky top-0 z-10">
+                            <div className="flex items-center gap-3">
+                                <button onClick={handleBackToHistoryList} className="p-1.5 sm:p-2 bg-white hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors shadow-sm border border-slate-200">
+                                    <ChevronLeft size={20} className="sm:w-5 sm:h-5" />
+                                </button>
+                                <div>
+                                    <h4 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight">รายละเอียดบิล</h4>
+                                    <p className="text-[10px] sm:text-xs text-sky-600 font-bold font-data mt-0.5">{selectedHistoryTxn.id}</p>
+                                </div>
+                            </div>
+                            <div>
+                                {!isEditingHistory ? (
+                                    <button onClick={handleEditTxn} className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all active:scale-95 shadow-sm text-[11px] sm:text-sm font-bold kanit-text">
+                                        <Pencil size={14} className="sm:w-[16px] sm:h-[16px]" /> แก้ไขข้อมูล
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => setIsEditingHistory(false)} disabled={isSavingHistory} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors text-[11px] sm:text-sm font-bold kanit-text disabled:opacity-50">
+                                            ยกเลิก
+                                        </button>
+                                        <button onClick={handleSaveTxnEdit} disabled={isSavingHistory} className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-sky-500 text-white hover:bg-sky-600 rounded-xl transition-all active:scale-95 shadow-md shadow-sky-500/20 text-[11px] sm:text-sm font-bold kanit-text disabled:opacity-50">
+                                            {isSavingHistory ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={14} className="sm:w-[16px] sm:h-[16px]" />} บันทึก
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                         </div>
+
+                         {/* Body ของหน้ารายละเอียด */}
+                         <div className="p-4 sm:p-6 flex-1 flex flex-col">
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div className={`p-4 rounded-xl border ${isEditingHistory ? 'bg-sky-50/30 border-sky-100' : 'bg-slate-50 border-slate-100'}`}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400"><User size={12}/></div>
+                                        <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">ข้อมูลลูกค้า & วันที่</p>
+                                    </div>
+                                    {isEditingHistory ? (
+                                        <div className="space-y-3 mt-1 relative z-20">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-500 mb-1 kanit-text">ชื่อลูกค้า</label>
+                                                <input type="text" className={`${theme.input} py-2 px-3 text-sm font-data`} value={historyEditForm.patientName} onChange={e => setHistoryEditForm({...historyEditForm, patientName: e.target.value})} placeholder="ลูกค้าทั่วไป (ไม่ระบุ)" />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="pl-1">
+                                            <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedHistoryTxn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
+                                            <p className="text-xs text-slate-500 font-data mt-1.5 flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/> {formatDateTime(selectedHistoryTxn.createdAt)}</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className={`p-4 rounded-xl border ${isEditingHistory ? 'bg-sky-50/30 border-sky-100' : 'bg-slate-50 border-slate-100'}`}>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400"><CreditCard size={12}/></div>
+                                        <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">สถานะ & การชำระเงิน</p>
+                                    </div>
+                                    {isEditingHistory ? (
+                                        <div className="grid grid-cols-2 gap-3 mt-1 relative z-10">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-500 mb-1 kanit-text">สถานะบิล</label>
+                                                <CustomSelect 
+                                                    compact
+                                                    value={historyEditForm.status} 
+                                                    onChange={val => setHistoryEditForm({...historyEditForm, status: val})}
+                                                    options={[{value:'completed', label:'🟢 สำเร็จ'}, {value:'cancelled', label:'🔴 ยกเลิก (Void)'}]}
+                                                    className="w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-500 mb-1 kanit-text">วิธีชำระเงิน</label>
+                                                <CustomSelect 
+                                                    compact
+                                                    value={historyEditForm.paymentMethod} 
+                                                    onChange={val => setHistoryEditForm({...historyEditForm, paymentMethod: val})}
+                                                    options={[{value:'cash', label:'💵 เงินสด'}, {value:'transfer', label:'📱 โอนเงิน'}, {value:'credit', label:'💳 บัตรเครดิต'}]}
+                                                    className="w-full"
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-2 pl-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-500 w-16">สถานะ:</span>
+                                                <span className={`px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold kanit-text ${selectedHistoryTxn.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : selectedHistoryTxn.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                    {selectedHistoryTxn.status === 'completed' ? 'สำเร็จ' : selectedHistoryTxn.status === 'cancelled' ? 'ยกเลิก (Void)' : selectedHistoryTxn.status}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-500 w-16">ช่องทาง:</span>
+                                                <span className="px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold bg-white border border-slate-200 text-slate-600 kanit-text flex items-center gap-1.5 shadow-sm">
+                                                    {selectedHistoryTxn.paymentMethod === 'cash' ? <><Banknote size={12}/> เงินสด</> : selectedHistoryTxn.paymentMethod === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : selectedHistoryTxn.paymentMethod === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : selectedHistoryTxn.paymentMethod}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Items List */}
+                            <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedHistoryTxn.items?.length || 0})</h5>
+                            <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 flex-1 min-h-[200px]">
+                                {/* Desktop Table */}
+                                <div className="hidden sm:block overflow-x-auto h-full">
+                                    <table className="w-full text-left border-collapse min-w-[500px]">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0">
+                                                <th className="p-3 w-12 text-center">#</th>
+                                                <th className="p-3">รายการสินค้า / บริการ</th>
+                                                <th className="p-3 text-center w-24">จำนวน</th>
+                                                <th className="p-3 text-right w-32">ราคา/หน่วย</th>
+                                                <th className="p-3 text-right w-32">รวม (บาท)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {(selectedHistoryTxn.items || []).map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
+                                                    <td className="p-3 text-center text-slate-400 text-xs">{idx + 1}</td>
+                                                    <td className="p-3 text-slate-700 font-bold kanit-text">{item.name}</td>
+                                                    <td className="p-3 text-center font-semibold">{item.quantity}</td>
+                                                    <td className="p-3 text-right text-slate-500">{formatCurrency(item.price)}</td>
+                                                    <td className="p-3 text-right font-bold text-sky-600">{formatCurrency(item.total)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {/* Mobile List */}
+                                <div className="sm:hidden flex flex-col divide-y divide-slate-50 overflow-y-auto max-h-[300px] custom-scrollbar bg-slate-50/30">
+                                    {(selectedHistoryTxn.items || []).map((item, idx) => (
+                                        <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <div className="font-bold text-slate-800 text-sm kanit-text leading-tight">{item.name}</div>
+                                                <div className="font-bold text-sky-600 text-sm font-data shrink-0">{formatCurrency(item.total)}</div>
+                                            </div>
+                                            <div className="flex justify-between items-center text-xs font-data text-slate-500 mt-1">
+                                                <div>จำนวน {item.quantity} รายการ</div>
+                                                <div>{formatCurrency(item.price)} / หน่วย</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Summary */}
+                            <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 shrink-0">
+                                <div className="w-full sm:w-auto">
+                                    <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedHistoryTxn.id}</div>
+                                </div>
+                                <div className="w-full sm:w-72 space-y-2 text-sm font-data">
+                                    <div className="flex justify-between text-slate-600"><span className="kanit-text">รวมเป็นเงิน</span><span className="font-semibold">{formatCurrency(selectedHistoryTxn.subtotal)}</span></div>
+                                    {selectedHistoryTxn.discountAmount > 0 && (
+                                        <div className="flex justify-between text-rose-500"><span className="kanit-text">ส่วนลด {selectedHistoryTxn.discountType === 'percent' ? `(${selectedHistoryTxn.discountValue}%)` : ''}</span><span className="font-semibold">- {formatCurrency(selectedHistoryTxn.discountAmount)}</span></div>
+                                    )}
+                                    {selectedHistoryTxn.vatAmount > 0 && (
+                                        <div className="flex justify-between text-slate-600"><span className="kanit-text">ภาษี ({selectedHistoryTxn.taxMode === 'include' ? 'รวม' : 'แยก'})</span><span className="font-semibold">{formatCurrency(selectedHistoryTxn.vatAmount)}</span></div>
+                                    )}
+                                    <div className="h-px bg-slate-200/60 my-2"></div>
+                                    <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedHistoryTxn.grandTotal)}</span></div>
+                                </div>
+                            </div>
+                         </div>
+                    </div>
                 ) : posHistoryData && posHistoryData.length > 0 ? (
+                    // --- Existing List View ---
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
-                        <div className="overflow-x-auto overflow-y-hidden">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto overflow-y-hidden">
                             <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text">
-                                        <th className="p-4 font-bold">วันที่/เวลา</th>
-                                        <th className="p-4 font-bold">เลขที่บิล</th>
-                                        <th className="p-4 font-bold">ลูกค้า</th>
-                                        <th className="p-4 font-bold text-right">ยอดรวม</th>
-                                        <th className="p-4 font-bold text-center">วิธีชำระ</th>
-                                        <th className="p-4 font-bold text-center">สถานะ</th>
+                                        <th className="p-4 font-bold">วันที่/เวลา</th><th className="p-4 font-bold">เลขที่บิล</th><th className="p-4 font-bold">ลูกค้า</th><th className="p-4 font-bold text-right">ยอดรวม</th><th className="p-4 font-bold text-center">วิธีชำระ</th><th className="p-4 font-bold text-center">สถานะ</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {/* ใช้ .slice เพื่อจำกัดจำนวนการแสดงผลแบบ Infinite Scroll */}
                                     {posHistoryData.slice(0, visibleHistoryCount).map((txn, idx) => (
-                                        <tr key={txn.id || idx} className="hover:bg-sky-50/30 transition-colors font-data text-sm space-row-animation" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
+                                        <tr key={txn.id || idx} onClick={() => handleViewHistoryTxn(txn)} className="hover:bg-sky-50/50 cursor-pointer transition-colors font-data text-sm space-row-animation group" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
                                             <td className="p-4 text-slate-600">{formatDateTime(txn.createdAt)}</td>
-                                            <td className="p-4 font-bold text-sky-600 kanit-text">{txn.id}</td>
-                                            <td className="p-4 text-slate-800 kanit-text">{txn.patientName || '-'}</td>
+                                            <td className="p-4 font-bold text-sky-600 kanit-text group-hover:text-sky-700">{txn.id}</td>
+                                            <td className="p-4 text-slate-800 kanit-text font-medium">{txn.patientName || '-'}</td>
                                             <td className="p-4 font-bold text-slate-800 text-right">{formatCurrency(txn.grandTotal)}</td>
                                             <td className="p-4 text-center">
-                                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md kanit-text">
-                                                    {txn.paymentMethod === 'cash' ? 'เงินสด' : txn.paymentMethod === 'transfer' ? 'โอนเงิน' : txn.paymentMethod === 'credit' ? 'บัตรเครดิต' : txn.paymentMethod}
+                                                <span className="text-[11px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg kanit-text font-semibold flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+                                                    {txn.paymentMethod === 'cash' ? <><Banknote size={12}/> เงินสด</> : txn.paymentMethod === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : txn.paymentMethod === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : txn.paymentMethod}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-center">
-                                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full kanit-text ${txn.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
-                                                    {txn.status === 'completed' ? 'สำเร็จ' : txn.status}
+                                                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full kanit-text ${txn.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : txn.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+                                                    {txn.status === 'completed' ? 'สำเร็จ' : txn.status === 'cancelled' ? 'ยกเลิก' : txn.status}
                                                 </span>
                                             </td>
                                         </tr>
                                     ))}
-                                    {/* เพิ่ม Skeleton Loading ตอนกำลังดึงข้อมูลเพิ่ม (Infinite Scroll) */}
                                     {isHistoryLoadingMore && Array.from({ length: 3 }).map((_, idx) => (
-                                        <tr key={`skel-hist-more-${idx}`} className="border-b border-slate-50">
-                                            <td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
-                                            <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
-                                            <td className="p-4"><div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div></td>
-                                            <td className="p-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
-                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
-                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
-                                        </tr>
+                                        <tr key={`skel-hist-more-${idx}`} className="border-b border-slate-50"><td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td><td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td><td className="p-4"><div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div></td><td className="p-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td><td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td><td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td></tr>
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                        {/* Mobile Card View */}
+                        <div className="md:hidden flex flex-col divide-y divide-slate-100 bg-slate-50/50">
+                            {posHistoryData.slice(0, visibleHistoryCount).map((txn, idx) => (
+                                <div key={txn.id || idx} onClick={() => handleViewHistoryTxn(txn)} className="p-4 bg-white hover:bg-sky-50/50 cursor-pointer transition-colors space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
+                                    <div className="flex justify-between items-start mb-2.5">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="font-bold text-sky-600 kanit-text text-sm bg-sky-50 px-2 py-0.5 rounded-md w-fit">{txn.id}</span>
+                                            <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data"><Clock size={12}/> {formatDateTime(txn.createdAt)}</div>
+                                        </div>
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 ${txn.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : txn.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+                                            {txn.status === 'completed' ? 'สำเร็จ' : txn.status === 'cancelled' ? 'ยกเลิก' : txn.status}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="text-xs font-semibold text-slate-400 kanit-text">ลูกค้า</div>
+                                            <div className="text-sm font-bold text-slate-700 kanit-text line-clamp-1">{txn.patientName || '-'}</div>
+                                        </div>
+                                        <div className="text-right flex flex-col gap-1 shrink-0">
+                                            <div className="text-[10px] text-slate-400 kanit-text font-semibold flex items-center justify-end gap-1.5">
+                                                {txn.paymentMethod === 'cash' ? <Banknote size={12}/> : txn.paymentMethod === 'transfer' ? <QrCode size={12}/> : <CreditCard size={12}/>}
+                                                {txn.paymentMethod === 'cash' ? 'เงินสด' : txn.paymentMethod === 'transfer' ? 'โอนเงิน' : txn.paymentMethod === 'credit' ? 'บัตรเครดิต' : txn.paymentMethod}
+                                            </div>
+                                            <div className="font-black text-sky-600 font-data text-lg leading-none">{formatCurrency(txn.grandTotal)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {isHistoryLoadingMore && Array.from({ length: 3 }).map((_, idx) => (
+                                <div key={`skel-mob-${idx}`} className="p-4 bg-white flex flex-col gap-3 border-b border-slate-100">
+                                    <div className="flex justify-between"><div className="h-5 w-24 bg-slate-200 rounded animate-pulse"></div><div className="h-5 w-16 bg-slate-200 rounded-md animate-pulse"></div></div>
+                                    <div className="flex justify-between items-end mt-2"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div><div className="h-6 w-20 bg-slate-200 rounded animate-pulse"></div></div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 ) : (
@@ -4732,9 +4950,12 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
                 )}
             </div>
             
-            <div className="p-4 border-t border-slate-100 bg-slate-50 text-right shrink-0">
-                <button onClick={closeHistoryModal} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-100 transition-colors shadow-sm">ปิดหน้าต่าง</button>
-            </div>
+            {/* ซ่อนปุ่มปิดด้านล่างเมื่ออยู่ในโหมดดูรายละเอียด เพราะมีปุ่ม Back ด้านบนแล้ว */}
+            {!selectedHistoryTxn && (
+                <div className="p-3 sm:p-4 border-t border-slate-100 bg-white text-right shrink-0 z-10">
+                    <button onClick={closeHistoryModal} className="w-full sm:w-auto px-6 py-3 sm:py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold kanit-text hover:bg-slate-200 transition-colors">ปิดหน้าต่าง</button>
+                </div>
+            )}
           </div>
         </div>
       )}
