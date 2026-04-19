@@ -4038,6 +4038,14 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
     setSelectedHistoryTxn(txn);
     setHistoryEditForm(null);
     setIsEditingHistory(false);
+    
+    // สั่งให้คอนเทนเนอร์เลื่อนกลับขึ้นไปบนสุดเสมอเมื่อเปิดดูรายละเอียดบิล
+    setTimeout(() => {
+      const scrollContainer = document.getElementById('pos-history-scroll-container');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = 0;
+      }
+    }, 50);
   };
 
   const handleBackToHistoryList = () => {
@@ -4684,7 +4692,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
               <button onClick={closeHistoryModal} className="text-slate-400 hover:text-slate-600 hover:bg-white p-1.5 sm:p-2 rounded-full transition-colors shadow-sm border border-transparent hover:border-slate-200"><X size={20} className="sm:w-5 sm:h-5"/></button>
             </div>
             
-            <div className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30" onScroll={!selectedHistoryTxn ? handleHistoryScroll : undefined}>
+            {/* เพิ่ม id="pos-history-scroll-container" เพื่อให้ฟังก์ชันหาเจอและสั่ง scroll กลับไปบนสุดได้ */}
+            <div id="pos-history-scroll-container" className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30" onScroll={!selectedHistoryTxn ? handleHistoryScroll : undefined}>
                 {isGlobalLoading ? (
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
                         <div className="overflow-x-auto overflow-y-hidden">
