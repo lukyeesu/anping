@@ -4168,7 +4168,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
 
   return (
     <>
-      <div className="absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in">
+      {/* แก้ไข: เพิ่ม z-[70] เมื่อเปิดตะกร้าบนมือถือ เพื่อยกเลเยอร์ให้ลอยข้าม Header และ Navbar */}
+      <div className={`absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in ${isMobileCartOpen ? 'z-[70]' : ''}`}>
         
         {/* Header ของ POS */}
         <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
@@ -4303,7 +4304,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
           </div>
 
           {/* Right Column: Cart Area (บน Desktop แสดงด้านขวา, บนมือถือแสดงเต็มจอเมื่อกดปุ่ม) */}
-          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[60] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
+          {/* แก้ไข: ปรับ z-index ให้สอดคล้องกับคอนเทนเนอร์หลัก */}
+          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
           
             {/* Mobile Cart Header (แสดงเฉพาะบนมือถือเมื่อเปิดตะกร้า) */}
             <div className="lg:hidden p-4 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
