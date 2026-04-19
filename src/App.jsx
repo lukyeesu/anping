@@ -7,7 +7,7 @@ import {
   Clock, Stethoscope, FileText, Pill, CreditCard,
   Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
-  ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History
+  ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -38,31 +38,12 @@ const mockPatients = [
   { id: 'HN003', name: 'มีชัย ทำดี', phone: '082-333-4444', lastVisit: '2023-10-27', branchId: 'b1' },
 ];
 
-const mockProducts = [
-  // บริการ/หัตถการ
-  { id: 'serv01', name: 'ฝังเข็ม', price: 600, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
-  { id: 'serv02', name: 'ครอบแก้ว', price: 500, type: 'บริการ/หัตถการ', stockManaged: false, icon: Package },
-  { id: 'serv03', name: 'นวดทุยหนา', price: 450, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
-  { id: 'serv04', name: 'กัวซา', price: 400, type: 'บริการ/หัตถการ', stockManaged: false, icon: Package },
-  { id: 'serv05', name: 'ปรึกษาแพทย์', price: 200, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
-  { id: 'serv07', name: 'ฝังเข็มไฟฟ้า', price: 800, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
-  { id: 'serv10', name: 'ฝังเข็มความงาม', price: 1200, type: 'บริการ/หัตถการ', stockManaged: false, icon: Stethoscope },
-  // ยาและผลิตภัณฑ์
-  { id: 'prod01', name: 'ยาหม่องสมุนไพร', price: 80, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Pill },
-  { id: 'prod02', name: 'ชาบำรุง', price: 150, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Package },
-  { id: 'prod03', name: 'ยาจีนชุด A (7 วัน)', price: 700, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Pill },
-  { id: 'prod04', name: 'น้ำมันนวด', price: 120, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Package },
-  { id: 'prod08', name: 'ยาจีนชุด B (14 วัน)', price: 1300, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Pill },
-  { id: 'prod09', name: 'ลูกประคบ', price: 100, type: 'ยาและผลิตภัณฑ์', stockManaged: true, icon: Package },
-  // คอร์ส/แพ็คเกจ
-  { id: 'cour01', name: 'คอร์สฝังเข็ม 5 ครั้ง', price: 2750, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
-  { id: 'cour02', name: 'คอร์สครอบแก้ว 10 ครั้ง', price: 4500, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
-  { id: 'cour03', name: 'แพ็คเกจ Office Syndrome', price: 1500, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
-  { id: 'cour10', name: 'คอร์ส VIP', price: 10000, type: 'คอร์ส/แพ็คเกจ', stockManaged: false, icon: Briefcase },
-  // โปรโมชั่น
-  { id: 'promo01', name: 'โปรฯ วันเกิด', price: 999, type: 'เมนูโปรโมชั่น', stockManaged: false, icon: Package },
-  { id: 'promo02', name: 'โปรฯ มาคู่', price: 1200, type: 'เมนูโปรโมชั่น', stockManaged: false, icon: Users },
-];
+// --- Map ไอคอนที่สามารถเลือกได้สำหรับระบบ POS ---
+const POS_ICONS = {
+  Stethoscope, Package, Pill, Briefcase, Users, Clock, CalendarDays, FileText, CreditCard, Tag, 
+  Heart: Activity, Syringe: Plus, Scissors: Plus, // ใช้ไอคอนที่มีอยู่ทดแทนหรือขยายเพิ่มได้
+  List, ShoppingCart, Truck
+};
 
 // -------------------------------------------------------------------------
 // --- 1. ย้ายฟังก์ชันและ Component ย่อยออกมาไว้ด้านนอก เพื่อป้องกันการ Unmount ---
@@ -2033,7 +2014,8 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
   );
 };
 
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppScript, showToast, isGlobalLoading }) => {
+// เพิ่ม prop posProducts เพื่อรับข้อมูลรายการจาก POS เข้ามาใช้งาน
+const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppScript, showToast, isGlobalLoading, posProducts = [] }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -2094,6 +2076,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const [isClosingOpdForm, setIsClosingOpdForm] = useState(false);
   const [newOpdRecord, setNewOpdRecord] = useState(initialOpdState);
   const [editingOpdIndex, setEditingOpdIndex] = useState(null);
+  const [openTxDropdownIndex, setOpenTxDropdownIndex] = useState(null); // เพิ่ม State สำหรับจัดการหน้าต่าง Dropdown ของแต่ละรายการรักษา
 
   const [showCalendar, setShowCalendar] = useState(false);
   const [calDate, setCalDate] = useState(new Date());
@@ -3321,22 +3304,56 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                           <div className="flex flex-col gap-2">
                             {newOpdRecord.tx.map((treatment, txIndex) => (
                               <div key={txIndex} className="flex gap-2 items-stretch w-full">
-                                <div className="relative flex-1">
-                                  <CustomSelect 
+                                {/* ใช้ z-index คำนวณตาม index เพื่อให้ dropdown ของรายการบน ทับรายการล่าง */}
+                                <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
+                                  <input 
+                                      type="text"
+                                      className={`${theme.input} bg-white py-2 text-sm font-data pr-10`}
                                       value={treatment} 
-                                      onChange={(val) => {
+                                      onChange={(e) => {
                                           const updatedTx = [...newOpdRecord.tx];
-                                          updatedTx[txIndex] = val;
+                                          updatedTx[txIndex] = e.target.value;
                                           setNewOpdRecord({...newOpdRecord, tx: updatedTx});
                                       }} 
-                                      options={[{value:'', label:'เลือกการรักษา'}, 'ซักประวัติ/ตรวจร่างกาย', 'จ่ายยา', 'ฉีดยา', 'ทำแผล', 'เจาะเลือด/ส่งตรวจแล็บ', 'เอกซเรย์', 'ส่งต่อผู้ป่วย (Refer)', 'ให้คำปรึกษา/แนะนำ']} 
+                                      onFocus={() => setOpenTxDropdownIndex(txIndex)}
+                                      onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
+                                      placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
                                   />
+                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                    <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                                  </div>
+                                  
+                                  {openTxDropdownIndex === txIndex && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                      {posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).length > 0 ? (
+                                          posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).map(p => (
+                                            <div
+                                              key={p.id}
+                                              onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                const updatedTx = [...newOpdRecord.tx];
+                                                updatedTx[txIndex] = p.name;
+                                                setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                                setOpenTxDropdownIndex(null);
+                                              }}
+                                              className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatment === p.name ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                            >
+                                              {p.name}
+                                            </div>
+                                          ))
+                                      ) : (
+                                          <div className="px-3 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
+                                              <Plus size={14} className="text-sky-500" /> พิมพ์เพื่อระบุการรักษาเพิ่มเติม...
+                                          </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                                 {newOpdRecord.tx.length > 1 && (
                                   <button type="button" onClick={() => {
                                       const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
                                       setNewOpdRecord({...newOpdRecord, tx: updatedTx});
-                                  }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center">
+                                  }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center shrink-0">
                                     <Trash2 size={16} />
                                   </button>
                                 )}
@@ -3724,7 +3741,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
 // --- ระบบ POS (Point of Sale) ---
 // แก้ไข: เพิ่ม callAppScript เข้ามารับค่า Props
-const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setPosHistoryData, showToast, callAppScript }) => {
+const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryData = [], setPosHistoryData, showToast, callAppScript, isGlobalLoading }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
@@ -3746,7 +3763,92 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isHistoryClosing, setIsHistoryClosing] = useState(false);
 
-  // ดึงรายการหมวดหมู่ที่มีทั้งหมดจาก Mock Data
+  // --- เพิ่ม State สำหรับ Infinite Scroll ของประวัติการขาย ---
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(25);
+  const [isHistoryLoadingMore, setIsHistoryLoadingMore] = useState(false);
+
+  // --- States สำหรับการจัดการสินค้า POS ---
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [isManageClosing, setIsManageClosing] = useState(false);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+  const [isProcessingProduct, setIsProcessingProduct] = useState(false);
+  const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package' };
+  const [productForm, setProductForm] = useState(initialProductForm);
+  const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
+
+  const closeAlert = () => { setSweetAlert(prev => ({...prev, isOpen: false})); };
+
+  // --- ฟังก์ชันเมื่อเลือกคนไข้ ให้ดึงประวัติล่าสุดมาใส่ตะกร้า ---
+  const handleSelectPatient = (patientId, patientLabel) => {
+    setSelectedPatientId(patientId);
+    setPatientSearchTerm(patientLabel);
+    setIsPatientDropdownOpen(false);
+
+    let newCartItems = []; // เริ่มต้นด้วยตะกร้าว่างเปล่าเสมอเพื่อล้างของเก่า
+
+    if (patientId) {
+      const patient = patientsData.find(p => (p.id || p.hn) === patientId);
+      // เช็คว่าคนไข้มีประวัติการรักษา (OPD) หรือไม่
+      if (patient && patient.opdRecords && patient.opdRecords.length > 0) {
+        const latestOpd = patient.opdRecords[0]; // ดึงประวัติใบล่าสุด (index 0)
+
+        // 1. นำการรักษา (Tx) มาเทียบกับ Catalog สินค้า POS
+        if (latestOpd.tx) {
+          const treatments = Array.isArray(latestOpd.tx) ? latestOpd.tx : [latestOpd.tx];
+          treatments.forEach(tName => {
+            if (!tName) return;
+            const matchedProduct = products.find(p => p.name === tName);
+            if (matchedProduct) {
+              const existing = newCartItems.find(item => item.product.id === matchedProduct.id);
+              if (existing) existing.quantity += 1;
+              else newCartItems.push({ product: matchedProduct, quantity: 1 });
+            } else {
+              // หากการรักษานั้นไม่ได้ถูกตั้งค่าไว้ใน POS ให้สร้างเป็นรายการชั่วคราวแจ้งเตือน
+              newCartItems.push({
+                product: {
+                  id: `TEMP_TX_${Date.now()}_${Math.random()}`,
+                  name: tName,
+                  price: 0,
+                  type: 'รายการจากแพทย์ (รอระบุราคา/รหัส)',
+                  icon: 'Stethoscope',
+                  isTemp: true
+                },
+                quantity: 1
+              });
+            }
+          });
+        }
+
+        // 2. นำหมายเหตุ (Note) มาใส่ตะกร้าด้วยในฐานะข้อความแจ้งเตือน (ราคา 0 บาท)
+        if (latestOpd.note) {
+          newCartItems.push({
+            product: {
+              id: `NOTE_${Date.now()}`,
+              name: `หมายเหตุแพทย์: ${latestOpd.note}`,
+              price: 0,
+              type: 'ข้อความแจ้งเตือน',
+              icon: 'FileText',
+              isNote: true
+            },
+            quantity: 1
+          });
+        }
+      }
+    }
+
+    // แทนที่ตะกร้าเดิมด้วยรายการใหม่ทั้งหมด (เคลียร์ของเก่า)
+    setCart(newCartItems);
+
+    if (patientId && newCartItems.length > 0) {
+      showToast('ล้างตะกร้าและดึงรายการล่าสุดมาใส่ให้แล้ว', 'success');
+    } else if (patientId) {
+      showToast('ล้างตะกร้า เริ่มบิลใหม่สำหรับคนไข้ที่เลือก', 'success');
+    } else {
+      showToast('ล้างตะกร้า เริ่มบิลสำหรับลูกค้าทั่วไป', 'success');
+    }
+  };
+
+  // ดึงรายการหมวดหมู่ที่มีทั้งหมดจากข้อมูล Products
   const categories = ['ทั้งหมด', ...new Set(products.map(p => p.type))];
 
   // กรองสินค้าตามคำค้นหาและหมวดหมู่
@@ -3893,7 +3995,88 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
     setTimeout(() => {
       setIsHistoryModalOpen(false);
       setIsHistoryClosing(false);
+      setVisibleHistoryCount(25); // รีเซ็ตจำนวนการแสดงผลกลับเป็นค่าเริ่มต้นเมื่อปิดหน้าต่าง
     }, 300);
+  };
+
+  // --- ฟังก์ชันจัดการการเลื่อน (Scroll) เพื่อโหลดข้อมูลเพิ่ม (Infinite Scroll) ---
+  const handleHistoryScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    // ตรวจสอบว่าเลื่อนลงมาเกือบสุดหรือยัง (เหลืออีก 50px)
+    if (scrollTop + clientHeight >= scrollHeight - 50) {
+      if (visibleHistoryCount < (posHistoryData?.length || 0) && !isHistoryLoadingMore) {
+        setIsHistoryLoadingMore(true);
+        setTimeout(() => {
+          setVisibleHistoryCount(prev => prev + 25);
+          setIsHistoryLoadingMore(false);
+        }, 800); // หน่วงเวลาเล็กน้อยให้เห็น Loading Skeleton
+      }
+    }
+  };
+
+  const closeManageModal = () => {
+    setIsManageClosing(true);
+    setTimeout(() => {
+      setIsManageModalOpen(false);
+      setIsManageClosing(false);
+    }, 300);
+  };
+
+  const handleOpenAddProduct = () => {
+      setProductForm({ ...initialProductForm });
+      setIsEditFormOpen(true);
+  };
+
+  const handleOpenEditProduct = (prod) => {
+      setProductForm({ ...prod });
+      setIsEditFormOpen(true);
+  };
+
+  const handleSaveProduct = async (e) => {
+      e.preventDefault();
+      setIsProcessingProduct(true);
+      
+      const payload = {
+          ...productForm,
+          id: productForm.id || `ITM${Date.now()}`,
+          price: Number(productForm.price)
+      };
+
+      try {
+          // บันทึกลงชีต setting_pos
+          await callAppScript('SAVE_DATA', 'setting_pos', payload);
+          
+          if (productForm.id) {
+              setProducts(products.map(p => p.id === productForm.id ? payload : p));
+              showToast('อัปเดตรายการสำเร็จ', 'success');
+          } else {
+              setProducts([payload, ...products]);
+              showToast('เพิ่มรายการใหม่สำเร็จ', 'success');
+          }
+          setIsEditFormOpen(false);
+      } catch (error) {
+          showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'warning');
+      }
+      setIsProcessingProduct(false);
+  };
+
+  const handleDeleteProduct = (prod) => {
+      setSweetAlert({
+          isOpen: true, type: 'warning', title: 'ยืนยันการลบรายการ?',
+          text: `คุณต้องการลบ "${prod.name}" ใช่หรือไม่?`,
+          onConfirm: async () => {
+              closeAlert();
+              setIsProcessingProduct(true);
+              try {
+                  await callAppScript('DELETE_DATA', 'setting_pos', { id: prod.id });
+                  setProducts(products.filter(p => p.id !== prod.id));
+                  showToast('ลบรายการสำเร็จ', 'danger');
+              } catch (error) {
+                  showToast('ลบไม่สำเร็จ กรุณาลองใหม่', 'warning');
+              }
+              setIsProcessingProduct(false);
+          }
+      });
   };
 
   // สร้างตัวเลือกสำหรับ CustomSelect โดยเรียงลำดับจากประวัติการรักษาล่าสุด (หรือลงทะเบียนล่าสุด) ก่อน
@@ -3923,12 +4106,20 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
               <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500" /> ระบบ POS <span className="text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">จุดรับชำระเงิน</span>
             </h1>
           </div>
-          <button
-            onClick={() => setIsHistoryModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium ml-auto sm:ml-0"
-          >
-            <History size={18} /> <span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span>
-          </button>
+          <div className="flex items-center gap-2 ml-auto sm:ml-0">
+            <button
+              onClick={() => setIsManageModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium"
+            >
+              <Settings size={18} /> <span className="hidden sm:inline">ตั้งค่ารายการ</span>
+            </button>
+            <button
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium"
+            >
+              <History size={18} /> <span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Content: 2 Columns แบบพอดีหน้าจอ */}
@@ -3970,11 +4161,27 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
 
             {/* Product Grid */}
             <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
-              {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 min-[500px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1600px]:grid-cols-6 min-[1920px]:grid-cols-7 gap-3 sm:gap-4 auto-rows-max">
-                  {/* แก้ไข: ใช้ Grid แบบระบุจำนวนคอลัมน์ตามขนาดหน้าจออย่างชัดเจน เพื่อป้องกันการ์ดยืดใหญ่เกินไป */}
+              {isGlobalLoading ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-4 auto-rows-max">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div key={`skel-pos-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-200 rounded-xl sm:rounded-2xl mb-3 sm:mb-4 animate-pulse shrink-0"></div>
+                      <div className="flex-1 flex flex-col justify-between w-full">
+                        <div className="mb-2">
+                          <div className="h-2.5 sm:h-3 w-16 bg-slate-200 rounded animate-pulse mb-1.5 sm:mb-2"></div>
+                          <div className="h-3.5 sm:h-4 w-3/4 bg-slate-200 rounded animate-pulse"></div>
+                        </div>
+                        <div className="flex items-end justify-between mt-auto w-full pt-2">
+                          <div className="h-4 sm:h-5 w-16 sm:w-20 bg-slate-200 rounded animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredProducts.length > 0 ? (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-4 auto-rows-max">
                   {filteredProducts.map((product, index) => {
-                    const Icon = product.icon || Package;
+                    const Icon = typeof product.icon === 'string' ? (POS_ICONS[product.icon] || Package) : (product.icon || Package);
                     return (
                       <button 
                         key={product.id}
@@ -4053,7 +4260,7 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
               {isPatientDropdownOpen && (
                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
                     <div 
-                      onMouseDown={(e) => { e.preventDefault(); setSelectedPatientId(''); setPatientSearchTerm(''); setIsPatientDropdownOpen(false); }}
+                      onMouseDown={(e) => { e.preventDefault(); handleSelectPatient('', ''); }}
                       className={`px-3 py-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50 font-data text-xs sm:text-sm ${!selectedPatientId ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-500'}`}
                     >
                        ลูกค้าทั่วไป (ไม่ระบุ)
@@ -4066,7 +4273,7 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
                     {patientOptions.filter(p => p.value !== '' && p.label.toLowerCase().includes(patientSearchTerm.toLowerCase())).map((opt) => (
                         <div
                             key={opt.value}
-                            onMouseDown={(e) => { e.preventDefault(); setSelectedPatientId(opt.value); setPatientSearchTerm(opt.label); setIsPatientDropdownOpen(false); }}
+                            onMouseDown={(e) => { e.preventDefault(); handleSelectPatient(opt.value, opt.label); }}
                             className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors text-xs sm:text-sm ${selectedPatientId === opt.value ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
                         >
                             {opt.label}
@@ -4081,32 +4288,42 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-slate-50/30">
             {cart.length > 0 ? (
               <div className="space-y-2">
-                {cart.map((item, idx) => (
-                  <div key={item.product.id} className={`bg-white p-2.5 sm:p-3 rounded-xl border border-slate-100 shadow-sm flex items-start gap-2.5 sm:gap-3 space-row-animation`} style={{ animationDelay: `${idx * 40}ms` }}>
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 shrink-0">
-                       {item.product.icon ? <item.product.icon size={16} className="sm:w-[18px] sm:h-[18px]" /> : <Package size={16} className="sm:w-[18px] sm:h-[18px]" />}
+                {cart.map((item, idx) => {
+                  const CartItemIcon = typeof item.product.icon === 'string' ? (POS_ICONS[item.product.icon] || Package) : (item.product.icon || Package);
+                  return (
+                  <div key={item.product.id} className={`bg-white p-2.5 sm:p-3 rounded-xl border ${item.product.isNote ? 'border-amber-200 bg-amber-50/50' : 'border-slate-100'} shadow-sm flex items-start gap-2.5 sm:gap-3 space-row-animation`} style={{ animationDelay: `${idx * 40}ms` }}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 ${item.product.isNote ? 'bg-amber-100 text-amber-500' : 'bg-slate-50 text-slate-400'}`}>
+                       <CartItemIcon size={16} className="sm:w-[18px] sm:h-[18px]" />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex justify-between items-start gap-2">
-                        <h4 className="font-bold text-slate-800 text-[11px] sm:text-sm kanit-text leading-tight line-clamp-2">{item.product.name}</h4>
+                        <h4 className={`font-bold text-[11px] sm:text-sm kanit-text leading-tight line-clamp-2 ${item.product.isNote ? 'text-amber-700' : 'text-slate-800'}`}>{item.product.name}</h4>
                         <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 -mr-1 -mt-1"><X size={14} className="sm:w-4 sm:h-4" /></button>
                       </div>
-                      <div className="text-sky-600 font-bold text-[10px] sm:text-xs font-data mt-1">{formatCurrency(item.product.price)}</div>
                       
-                      {/* Qty Controls */}
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">
-                        <div className="flex items-center gap-2 sm:gap-3 bg-slate-50 rounded-lg border border-slate-100 p-0.5">
-                          <button onClick={() => updateQuantity(item.product.id, -1)} className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center bg-white rounded-md text-slate-500 shadow-sm hover:text-sky-500 hover:bg-sky-50"><Minus size={12} className="sm:w-[14px] sm:h-[14px]"/></button>
-                          <span className="font-bold text-xs sm:text-sm text-slate-700 w-4 text-center font-data">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.product.id, 1)} className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center bg-white rounded-md text-slate-500 shadow-sm hover:text-sky-500 hover:bg-sky-50"><Plus size={12} className="sm:w-[14px] sm:h-[14px]"/></button>
+                      {item.product.isTemp ? (
+                        <div className="text-rose-500 font-medium text-[10px] sm:text-xs kanit-text mt-1">ยังไม่มีราคาในระบบ กรุณาตั้งค่า/เลือกรหัสใหม่</div>
+                      ) : !item.product.isNote ? (
+                        <div className="text-sky-600 font-bold text-[10px] sm:text-xs font-data mt-1">{formatCurrency(item.product.price)}</div>
+                      ) : null}
+                      
+                      {/* Qty Controls (ซ่อนเฉพาะรายการที่เป็นหมายเหตุ) */}
+                      {!item.product.isNote && (
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50/50">
+                          <div className="flex items-center gap-2 sm:gap-3 bg-slate-50 rounded-lg border border-slate-100 p-0.5">
+                            <button onClick={() => updateQuantity(item.product.id, -1)} className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center bg-white rounded-md text-slate-500 shadow-sm hover:text-sky-500 hover:bg-sky-50"><Minus size={12} className="sm:w-[14px] sm:h-[14px]"/></button>
+                            <span className="font-bold text-xs sm:text-sm text-slate-700 w-4 text-center font-data">{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.product.id, 1)} className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center bg-white rounded-md text-slate-500 shadow-sm hover:text-sky-500 hover:bg-sky-50"><Plus size={12} className="sm:w-[14px] sm:h-[14px]"/></button>
+                          </div>
+                          <div className="font-bold text-slate-800 text-xs sm:text-sm font-data">
+                            {formatCurrency(item.product.price * item.quantity)}
+                          </div>
                         </div>
-                        <div className="font-bold text-slate-800 text-xs sm:text-sm font-data">
-                          {formatCurrency(item.product.price * item.quantity)}
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-slate-400">
@@ -4321,10 +4538,12 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
               <button onClick={closeHistoryModal} className="text-slate-400 hover:bg-white p-1 rounded-full transition-colors"><X size={20}/></button>
             </div>
             
-            <div className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30">
-                {posHistoryData && posHistoryData.length > 0 ? (
+            {/* เพิ่ม onScroll listener ที่ container นี้ */}
+            <div className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30" onScroll={handleHistoryScroll}>
+                {isGlobalLoading ? (
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
-                        <div className="overflow-x-auto">
+                        {/* เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar แนวตั้งเด้งแวบเดียวตอนแอนิเมชันทำงาน */}
+                        <div className="overflow-x-auto overflow-y-hidden">
                             <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text">
@@ -4337,8 +4556,39 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {posHistoryData.map((txn, idx) => (
-                                        <tr key={txn.id || idx} className="hover:bg-sky-50/30 transition-colors font-data text-sm">
+                                    {/* แอนิเมชัน Skeleton Loading ขณะกำลังโหลดครั้งแรก */}
+                                    {Array.from({ length: 5 }).map((_, idx) => (
+                                        <tr key={`skel-hist-${idx}`} className="border-b border-slate-50">
+                                            <td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                                            <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                                            <td className="p-4"><div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div></td>
+                                            <td className="p-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
+                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : posHistoryData && posHistoryData.length > 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
+                        <div className="overflow-x-auto overflow-y-hidden">
+                            <table className="w-full text-left border-collapse min-w-[700px]">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text">
+                                        <th className="p-4 font-bold">วันที่/เวลา</th>
+                                        <th className="p-4 font-bold">เลขที่บิล</th>
+                                        <th className="p-4 font-bold">ลูกค้า</th>
+                                        <th className="p-4 font-bold text-right">ยอดรวม</th>
+                                        <th className="p-4 font-bold text-center">วิธีชำระ</th>
+                                        <th className="p-4 font-bold text-center">สถานะ</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {/* ใช้ .slice เพื่อจำกัดจำนวนการแสดงผลแบบ Infinite Scroll */}
+                                    {posHistoryData.slice(0, visibleHistoryCount).map((txn, idx) => (
+                                        <tr key={txn.id || idx} className="hover:bg-sky-50/30 transition-colors font-data text-sm space-row-animation" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
                                             <td className="p-4 text-slate-600">{formatDateTime(txn.createdAt)}</td>
                                             <td className="p-4 font-bold text-sky-600 kanit-text">{txn.id}</td>
                                             <td className="p-4 text-slate-800 kanit-text">{txn.patientName || '-'}</td>
@@ -4353,6 +4603,17 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
                                                     {txn.status === 'completed' ? 'สำเร็จ' : txn.status}
                                                 </span>
                                             </td>
+                                        </tr>
+                                    ))}
+                                    {/* เพิ่ม Skeleton Loading ตอนกำลังดึงข้อมูลเพิ่ม (Infinite Scroll) */}
+                                    {isHistoryLoadingMore && Array.from({ length: 3 }).map((_, idx) => (
+                                        <tr key={`skel-hist-more-${idx}`} className="border-b border-slate-50">
+                                            <td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
+                                            <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
+                                            <td className="p-4"><div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div></td>
+                                            <td className="p-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse ml-auto"></div></td>
+                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
+                                            <td className="p-4"><div className="h-6 w-16 bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -4373,6 +4634,137 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
             <div className="p-4 border-t border-slate-100 bg-slate-50 text-right shrink-0">
                 <button onClick={closeHistoryModal} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-100 transition-colors shadow-sm">ปิดหน้าต่าง</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Modal ตั้งค่ารายการสินค้า (POS Management) --- */}
+      {isManageModalOpen && (
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isManageClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isManageClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner">
+                      <Settings size={20} />
+                  </div>
+                  <div>
+                      <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">ตั้งค่ารายการ POS</h3>
+                      <p className="text-xs text-slate-500 kanit-text">เพิ่ม/ลด แก้ไขรายการสินค้าและบริการ (หมวดหมู่จะเพิ่มอัตโนมัติตามสินค้า)</p>
+                  </div>
+              </div>
+              <button onClick={closeManageModal} disabled={isProcessingProduct} className="text-slate-400 hover:bg-white p-1.5 rounded-full transition-colors shadow-sm border border-transparent hover:border-slate-200"><X size={20}/></button>
+            </div>
+            
+            <div className="flex-1 overflow-hidden flex flex-col">
+                {!isEditFormOpen ? (
+                    // ListView
+                    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/30">
+                        <div className="p-4 flex justify-between items-center bg-white border-b border-slate-100 shrink-0">
+                            <span className="font-bold text-slate-700 kanit-text">รายการทั้งหมด ({products.length})</span>
+                            <button onClick={handleOpenAddProduct} className="flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors shadow-md shadow-sky-500/20 kanit-text">
+                                <Plus size={16} /> เพิ่มรายการใหม่
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {products.map((prod) => {
+                                    const PIcon = typeof prod.icon === 'string' ? (POS_ICONS[prod.icon] || Package) : (prod.icon || Package);
+                                    return (
+                                        <div key={prod.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3 hover:border-sky-300 transition-colors">
+                                            <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center text-slate-500 shrink-0">
+                                                <PIcon size={24} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-bold text-slate-800 text-sm truncate kanit-text">{prod.name}</h4>
+                                                <p className="text-xs text-slate-500 truncate kanit-text">{prod.type}</p>
+                                                <div className="font-bold text-sky-600 text-sm mt-1 font-data">{formatCurrency(prod.price)}</div>
+                                            </div>
+                                            <div className="flex flex-col gap-1 shrink-0">
+                                                <button onClick={() => handleOpenEditProduct(prod)} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"><Pencil size={16} /></button>
+                                                <button onClick={() => handleDeleteProduct(prod)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    // Edit/Add Form View
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30">
+                        <form id="pos-product-form" onSubmit={handleSaveProduct} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm max-w-2xl mx-auto">
+                            <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
+                                <button type="button" onClick={() => setIsEditFormOpen(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-colors"><ChevronLeft size={20}/></button>
+                                <h4 className="font-bold text-slate-800 text-lg kanit-text">{productForm.id ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h4>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1 kanit-text">ชื่อรายการ <span className="text-rose-500">*</span></label>
+                                        <input required type="text" className={`${theme.input} font-data`} value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} placeholder="เช่น ฝังเข็ม, ยาหม่อง" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1 kanit-text">ราคา (บาท) <span className="text-rose-500">*</span></label>
+                                        <input required type="number" min="0" step="0.01" className={`${theme.input} font-data`} value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} placeholder="0.00" />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 ml-1 kanit-text">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                                    <input required type="text" list="category-options" className={`${theme.input} font-data`} value={productForm.type} onChange={e => setProductForm({...productForm, type: e.target.value})} placeholder="พิมพ์หมวดหมู่ใหม่ หรือเลือกจากรายการ" />
+                                    <datalist id="category-options">
+                                        {categories.filter(c => c !== 'ทั้งหมด').map((cat, idx) => <option key={idx} value={cat} />)}
+                                    </datalist>
+                                    <p className="text-[10px] text-slate-400 mt-1 ml-2 kanit-text">* หากพิมพ์หมวดหมู่ใหม่ ระบบจะสร้างแท็บด้านบนให้โดยอัตโนมัติ</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2 ml-1 kanit-text">เลือกไอคอน <span className="text-rose-500">*</span></label>
+                                    <div className="grid grid-cols-6 sm:grid-cols-8 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        {Object.keys(POS_ICONS).map(iconKey => {
+                                            const CurrentIcon = POS_ICONS[iconKey];
+                                            const isSelected = productForm.icon === iconKey;
+                                            return (
+                                                <button 
+                                                    key={iconKey} type="button" 
+                                                    onClick={() => setProductForm({...productForm, icon: iconKey})}
+                                                    className={`aspect-square flex items-center justify-center rounded-lg transition-all ${isSelected ? 'bg-sky-500 text-white shadow-md scale-110' : 'bg-white text-slate-500 hover:bg-sky-50 border border-slate-200'}`}
+                                                >
+                                                    <CurrentIcon size={20} />
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <input type="checkbox" id="stockManaged" className="w-5 h-5 accent-sky-500 rounded cursor-pointer" checked={productForm.stockManaged} onChange={e => setProductForm({...productForm, stockManaged: e.target.checked})} />
+                                    <label htmlFor="stockManaged" className="font-semibold text-slate-700 kanit-text cursor-pointer select-none">สินค้านี้ต้องตัดสต๊อกหรือไม่? (มีจำนวนคงเหลือ)</label>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex gap-3">
+                                <button type="button" onClick={() => setIsEditFormOpen(false)} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-50 transition-colors">ยกเลิก</button>
+                                <button type="submit" disabled={isProcessingProduct} className="flex-1 py-3 bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 kanit-text hover:bg-sky-600 transition-colors flex items-center justify-center gap-2">
+                                    {isProcessingProduct ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />} บันทึกข้อมูล
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert Component สำหรับ POS Settings */}
+      {sweetAlert.isOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm fade-in">
+          <div className="bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center modal-animate-in">
+            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
+            <div className="flex gap-3 w-full"><button onClick={closeAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
           </div>
         </div>
       )}
@@ -4517,6 +4909,7 @@ export default function App() {
   const [queueData, setQueueData] = useState([]);
   const [inventoryData, setInventoryData] = useState([]);
   const [posHistoryData, setPosHistoryData] = useState([]); // เพิ่ม State เก็บประวัติ POS
+  const [posProducts, setPosProducts] = useState([]); // เปลี่ยนจาก mockProducts เป็นอาร์เรย์ว่าง เพื่อรอดึงข้อมูลของจริง
   const [isDataFetched, setIsDataFetched] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
 
@@ -4578,6 +4971,12 @@ export default function App() {
         const resPos = await callAppScript('GET_DATA', 'POS_Transactions');
         if (resPos && resPos.status === 'success') {
           setPosHistoryData(resPos.data && resPos.data.length > 0 ? resPos.data.reverse() : []);
+        }
+
+        // ดึงรายการตั้งค่าสินค้าและบริการ POS
+        const resPosItems = await callAppScript('GET_DATA', 'setting_pos');
+        if (resPosItems && resPosItems.status === 'success' && resPosItems.data && resPosItems.data.length > 0) {
+          setPosProducts(resPosItems.data);
         }
 
       } catch (error) { showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); } 
@@ -4736,14 +5135,15 @@ export default function App() {
                 <Dashboard queueData={queueData} patientsData={patientsData} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'records' ? 'block' : 'none' }} className="w-full">
-                <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+                {/* ส่ง posProducts เข้าไปให้ MedicalRecords ใช้งาน */}
+                <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
             </div>
             <div style={{ display: currentTab === 'queue' ? 'block' : 'none' }} className="w-full">
                 <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
-                {/* แก้ไข: ส่ง Props callAppScript ลงไปให้ POSSystem ใช้งาน */}
-                <POSSystem products={mockProducts} patientsData={patientsData} posHistoryData={posHistoryData} setPosHistoryData={setPosHistoryData} showToast={showToast} callAppScript={callAppScript} />
+                {/* แก้ไข: ส่ง Props posProducts ลงไปให้ POSSystem ใช้งาน */}
+                <POSSystem products={posProducts} setProducts={setPosProducts} patientsData={patientsData} posHistoryData={posHistoryData} setPosHistoryData={setPosHistoryData} showToast={showToast} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} />
             </div>
             {currentTab === 'inventory' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="ระบบคลังสินค้า" desc="จัดการสต๊อกยาและเวชภัณฑ์ (เช็คข้ามสาขาได้)" icon={Package} /></div>}
             {currentTab === 'reports' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="รายงานระดับองค์กร" desc="ดูสถิติ รายได้ และประสิทธิภาพการทำงานของคลินิก" icon={BarChart3} /></div>}
