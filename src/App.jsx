@@ -2081,7 +2081,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   const initialFormState = {
     hn: '', prefix: '', firstName: '', lastName: '', nickname: '', dob: '', gender: '', idCard: '', nationality: 'ไทย', ethnicity: 'ไทย', religion: 'พุทธ', occupation: '',
-    address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '', phone1: '', phone2: '', emName: '', emRelation: '', emPhone: '', emAddress: '',
+    address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '', 
+    curAddress: '', curMoo: '', curRoad: '', curSubDistrict: '', curDistrict: '', curProvince: '', curZipcode: '', // เพิ่มที่อยู่ปัจจุบัน
+    phones: [''], emName: '', emRelation: '', emPhone: '', emAddress: '', // เปลี่ยน phone1, phone2 เป็น phones array
     bloodGroup: '', chiefComplaint: '', allergies: '', underlyingDisease: '', createdAt: '', opdRecords: []
   };
   
@@ -2121,6 +2123,29 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const closeMedCalendar = () => { setIsCalendarClosing(true); setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300); };
   const closeMedOpdCalendar = () => { setIsOpdCalendarClosing(true); setTimeout(() => { setShowOpdCalendar(false); setIsOpdCalendarClosing(false); }, 300); };
   const closeMedAlert = () => { setIsAlertClosing(true); setTimeout(() => { setSweetAlert(prev => ({...prev, isOpen: false})); setIsAlertClosing(false); }, 300); };
+
+  // --- ฟังก์ชันจัดการเบอร์โทรศัพท์แบบไดนามิก ---
+  const handlePatientPhoneChange = (index, value) => {
+    const newPhones = [...formData.phones];
+    newPhones[index] = value;
+    setFormData({ ...formData, phones: newPhones });
+  };
+  const addPatientPhone = () => setFormData({ ...formData, phones: [...formData.phones, ''] });
+  const removePatientPhone = (index) => setFormData({ ...formData, phones: formData.phones.filter((_, i) => i !== index) });
+
+  // --- ฟังก์ชันคัดลอกที่อยู่ ---
+  const copyAddressToCurrent = () => {
+    setFormData({
+      ...formData,
+      curAddress: formData.address,
+      curMoo: formData.moo,
+      curRoad: formData.road,
+      curSubDistrict: formData.subDistrict,
+      curDistrict: formData.district,
+      curProvince: formData.province,
+      curZipcode: formData.zipcode
+    });
+  };
 
   // --- ฟังก์ชันเชื่อมต่อ Google Cloud Vision API (OCR) ของจริง ---
   const captureImageToBase64 = () => {
@@ -2540,6 +2565,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
     // ใช้ฟังก์ชันอัจฉริยะวิเคราะห์ชื่อเผื่อข้อมูลในอดีตไม่มีการแยกช่องมาให้
     const parsed = parsePatientName(patient.name || '');
+
+    // รองรับข้อมูลเบอร์โทรศัพท์จากระบบเก่า (phone1, phone2, หรือ phone แบบ string)
+    let loadedPhones = [''];
+    if (patient.phones && Array.isArray(patient.phones) && patient.phones.length > 0) {
+      loadedPhones = patient.phones;
+    } else if (patient.phone1 || patient.phone2) {
+      loadedPhones = [patient.phone1, patient.phone2].filter(Boolean);
+    } else if (patient.phone) {
+      loadedPhones = Array.isArray(patient.phone) ? patient.phone : [patient.phone];
+    }
+    if (loadedPhones.length === 0) loadedPhones = [''];
     
     setFormData({ 
       ...initialFormState, ...patient, hn: patient.hn || patient.id,
@@ -2547,7 +2583,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       firstName: patient.firstName || parsed.firstName, 
       lastName: patient.lastName || parsed.lastName, 
       gender: patient.gender || parsed.gender,
-      phone1: patient.phone1 || patient.phone || '',
+      phones: loadedPhones,
       createdAt: patient.createdAt || new Date().toISOString(), opdRecords: patient.opdRecords || []
     });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(isView); setIsModalOpen(true);
@@ -2666,7 +2702,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     const combinedData = {
       ...updatedFormData,
       name: `${updatedFormData.prefix}${updatedFormData.firstName} ${updatedFormData.lastName}`.trim(),
-      phone: updatedFormData.phone1,
+      phone: updatedFormData.phones && updatedFormData.phones.length > 0 ? updatedFormData.phones[0] : '', // อัปเดตการดึง phone
       id: editingId || updatedFormData.hn
     };
 
@@ -2700,7 +2736,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         const combinedData = {
           ...updatedFormData,
           name: `${updatedFormData.prefix}${updatedFormData.firstName} ${updatedFormData.lastName}`.trim(),
-          phone: updatedFormData.phone1,
+          phone: updatedFormData.phones && updatedFormData.phones.length > 0 ? updatedFormData.phones[0] : '', // อัปเดตการดึง phone
           id: editingId || updatedFormData.hn
         };
 
@@ -2726,7 +2762,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     const combinedData = {
       ...formData,
       name: `${formData.prefix}${formData.firstName} ${formData.lastName}`.trim(),
-      phone: formData.phone1,
+      phone: formData.phones && formData.phones.length > 0 ? formData.phones[0] : '', // อัปเดตให้ดึงเบอร์หลักไปแสดงผลตาราง
+      phone1: formData.phones && formData.phones.length > 0 ? formData.phones[0] : '', // เผื่อระบบเก่าดึง phone1 ไปใช้
       hn: currentHn
     };
     delete combinedData.id;
@@ -3131,17 +3168,74 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
                   <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><MapPin size={20} /> ข้อมูลติดต่อ</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่)</label><input type="text" className={`${theme.input} font-data`} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่</label><input type="text" className={`${theme.input} font-data`} value={formData.moo} onChange={(e) => setFormData({...formData, moo: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.road} onChange={(e) => setFormData({...formData, road: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.subDistrict} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.zipcode} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ 1 <span className="text-rose-500">*</span></label><input required type="tel" className={`${theme.input} font-data`} value={formData.phone1} onChange={(e) => setFormData({...formData, phone1: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ 2</label><input type="tel" className={`${theme.input} font-data`} value={formData.phone2} onChange={(e) => setFormData({...formData, phone2: e.target.value})} /></div>
+                  
+                  {/* --- ส่วนที่ 1: ที่อยู่ตามบัตรประชาชน --- */}
+                  <div className="mb-6">
+                    <h5 className="font-semibold text-slate-700 mb-3 kanit-text">ที่อยู่ตามบัตรประชาชน</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                      <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน / อาคาร</label><input type="text" className={`${theme.input} font-data`} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.moo} onChange={(e) => setFormData({...formData, moo: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.road} onChange={(e) => setFormData({...formData, road: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.subDistrict} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.zipcode} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" disabled={isViewMode} /></div>
+                    </div>
                   </div>
+
+                  <div className="h-px w-full bg-slate-100 my-6"></div>
+
+                  {/* --- ส่วนที่ 2: ที่อยู่ปัจจุบัน --- */}
+                  <div className="mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                      <h5 className="font-semibold text-slate-700 kanit-text">ที่อยู่ปัจจุบัน <span className="text-slate-400 font-normal text-xs">(ที่สามารถติดต่อได้)</span></h5>
+                      {!isViewMode && (
+                        <button type="button" onClick={copyAddressToCurrent} className="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg kanit-text transition-colors font-medium flex items-center justify-center gap-1.5 w-full sm:w-auto">
+                          <MapPin size={14} /> ใช้ที่อยู่เดียวกับบัตรประชาชน
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                      <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน / อาคาร</label><input type="text" className={`${theme.input} font-data`} value={formData.curAddress} onChange={(e) => setFormData({...formData, curAddress: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.curMoo} onChange={(e) => setFormData({...formData, curMoo: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.curRoad} onChange={(e) => setFormData({...formData, curRoad: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.curSubDistrict} onChange={(e) => setFormData({...formData, curSubDistrict: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.curDistrict} onChange={(e) => setFormData({...formData, curDistrict: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.curProvince} onChange={(e) => setFormData({...formData, curProvince: e.target.value})} disabled={isViewMode} /></div>
+                      <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.curZipcode} onChange={(e) => setFormData({...formData, curZipcode: e.target.value})} maxLength="5" disabled={isViewMode} /></div>
+                    </div>
+                  </div>
+
+                  <div className="h-px w-full bg-slate-100 my-6"></div>
+
+                  {/* --- ส่วนที่ 3: เบอร์โทรศัพท์ (Dynamic) --- */}
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
+                    <div className="space-y-3 max-w-md">
+                        {formData.phones.map((phone, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                                <input 
+                                  required 
+                                  type="tel" 
+                                  className={`${theme.input} py-2.5 font-data`} 
+                                  value={phone} 
+                                  onChange={(e) => handlePatientPhoneChange(idx, e.target.value)} 
+                                  placeholder="08X-XXX-XXXX" 
+                                  disabled={isViewMode} 
+                                />
+                                {formData.phones.length > 1 && !isViewMode && (
+                                    <button type="button" onClick={() => removePatientPhone(idx)} className="p-2.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 border border-transparent hover:border-rose-100"><Trash2 size={20} /></button>
+                                )}
+                            </div>
+                        ))}
+                        {!isViewMode && (
+                            <button type="button" onClick={addPatientPhone} className="text-xs sm:text-sm font-medium text-sky-500 hover:text-sky-600 flex items-center justify-center gap-1.5 mt-2 bg-sky-50 hover:bg-sky-100 px-4 py-2 rounded-xl transition-colors kanit-text w-full sm:w-auto border border-sky-100">
+                                <Plus size={16} /> เพิ่มเบอร์โทรศัพท์ติดต่อ
+                            </button>
+                        )}
+                    </div>
+                  </div>
+
                 </div>
 
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -3864,30 +3958,29 @@ const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setP
             {/* Product Grid */}
             <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
               {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6 gap-2 sm:gap-4 auto-rows-max">
+                <div className="grid grid-cols-2 min-[500px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1600px]:grid-cols-6 min-[1920px]:grid-cols-7 gap-3 sm:gap-4 auto-rows-max">
+                  {/* แก้ไข: ใช้ Grid แบบระบุจำนวนคอลัมน์ตามขนาดหน้าจออย่างชัดเจน เพื่อป้องกันการ์ดยืดใหญ่เกินไป */}
                   {filteredProducts.map((product, index) => {
                     const Icon = product.icon || Package;
                     return (
                       <button 
                         key={product.id}
                         onClick={() => addToCart(product)}
-                        className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
+                        className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
                         style={{ animationDelay: `${(index % 20) * 30}ms` }}
                       >
-                        {/* ปรับให้ไอคอนเป็นกล่องสี่เหลี่ยมจัตุรัส 1:1 เต็มความกว้างและอยู่ตรงกลาง */}
-                        <div className="w-full aspect-square bg-sky-50 text-sky-500 rounded-lg sm:rounded-xl flex items-center justify-center mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
-                          <Icon className="w-12 h-12 sm:w-16 sm:h-16" strokeWidth={1.5} />
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-sky-50 text-sky-500 rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
+                          <Icon className="w-6 h-6 sm:w-7 sm:h-7" strokeWidth={2} />
                         </div>
                         
                         <div className="flex-1 flex flex-col justify-between w-full">
                           <div className="mb-2">
-                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 truncate">{product.type}</span>
-                            <h3 className="font-bold text-slate-800 text-xs sm:text-sm kanit-text line-clamp-2 leading-tight">{product.name}</h3>
+                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1 truncate">{product.type}</span>
+                            <h3 className="font-bold text-slate-800 text-sm sm:text-base kanit-text line-clamp-2 leading-tight">{product.name}</h3>
                           </div>
                           
-                          {/* ปรับให้ราคาใหญ่ขึ้น และมีแสดงจำนวนคงเหลือถ้าเป็นสินค้า */}
-                          <div className="flex items-end justify-between mt-auto w-full">
-                            <div className="font-bold text-sky-600 text-sm sm:text-lg font-data leading-none">
+                          <div className="flex items-end justify-between mt-auto w-full pt-2">
+                            <div className="font-bold text-sky-500 text-base sm:text-[1.1rem] font-data leading-none">
                               {formatCurrency(product.price)}
                             </div>
                             {product.stockManaged && (
