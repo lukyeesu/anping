@@ -3788,6 +3788,9 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(25);
   const [isHistoryLoadingMore, setIsHistoryLoadingMore] = useState(false);
 
+  // --- เพิ่ม State ควบคุมการเปิดปิดตะกร้าบนมือถือ ---
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+
   // --- States สำหรับการจัดการสินค้า POS ---
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isManageClosing, setIsManageClosing] = useState(false);
@@ -3913,6 +3916,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
     setPatientSearchTerm('');
     // นำการรีเซ็ต setTaxMode และ setVatRate ออก เพื่อให้จำค่าเดิมไว้ใช้กับบิลถัดไป
     setIsSummaryExpanded(false); // พับส่วนคิดเงินเก็บลงเมื่อล้างตะกร้า
+    setIsMobileCartOpen(false); // ปิดตะกร้าบนมือถือกลับไปหน้าเลือกสินค้า
   };
 
   // คำนวณยอดเงินและภาษีแบบละเอียด
@@ -3991,6 +3995,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
         
         setIsProcessingPayment(false);
         setCheckoutSuccess(true);
+        setIsMobileCartOpen(false); // ปิดหน้าตะกร้ามือถือเมื่อชำระเงินสำเร็จ
         showToast('ทำรายการชำระเงินและบันทึกข้อมูลสำเร็จ', 'success');
     } catch (error) {
         console.error("POS Transaction Error:", error);
@@ -4144,10 +4149,10 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
         </div>
 
         {/* Main Content: 2 Columns แบบพอดีหน้าจอ */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0">
+        <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0 relative">
           
-          {/* Left Column: Product Catalog */}
-          <div className="flex-[6] lg:flex-1 flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0">
+          {/* Left Column: Product Catalog (ซ่อนบนมือถือถ้าตะกร้าเปิดอยู่) */}
+          <div className={`flex-[6] lg:flex-1 flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 pb-24 lg:pb-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
             <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0 space-y-2 sm:space-y-3">
@@ -4244,12 +4249,20 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
             </div>
           </div>
 
-          {/* Right Column: Cart Area */}
-          <div className="flex-[4] lg:flex-none min-h-[260px] lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden shrink-0">
+          {/* Right Column: Cart Area (บน Desktop แสดงด้านขวา, บนมือถือแสดงเต็มจอเมื่อกดปุ่ม) */}
+          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[60] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
           
+            {/* Mobile Cart Header (แสดงเฉพาะบนมือถือเมื่อเปิดตะกร้า) */}
+            <div className="lg:hidden p-4 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
+               <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
+                 <ShoppingCart className="text-sky-500" /> ตะกร้าสินค้า
+               </h2>
+               <button onClick={() => setIsMobileCartOpen(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+
             {/* Cart Header & Patient Select */}
-            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
-              <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 mb-2 sm:mb-3 text-sm sm:text-base">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-white lg:bg-slate-50/50 shrink-0">
+              <h2 className="hidden lg:flex font-bold text-slate-800 kanit-text items-center gap-2 mb-2 sm:mb-3 text-sm sm:text-base">
                 <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> รายการบิล
             </h2>
             <div className="relative w-full">
@@ -4355,11 +4368,11 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
           </div>
 
           {/* Cart Summary & Checkout */}
-          <div className="bg-white shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.04)] z-20 flex flex-col rounded-t-3xl sm:rounded-t-[2rem] relative border-t border-slate-100">
+          <div className="bg-white shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.04)] z-20 flex flex-col lg:rounded-t-3xl xl:rounded-t-[2rem] relative border-t border-slate-100">
             
             {/* Toggle Tab - ชิดขอบบน ไม่มีพื้นหลัง โฮเวอร์เป็นสีฟ้าขอบมน */}
             <div 
-              className="w-full flex justify-center items-center py-2 sm:py-2.5 bg-transparent hover:bg-sky-50 text-slate-400 hover:text-sky-500 cursor-pointer transition-colors rounded-t-3xl sm:rounded-t-[2rem]"
+              className="w-full flex justify-center items-center py-2 sm:py-2.5 bg-transparent hover:bg-sky-50 text-slate-400 hover:text-sky-500 cursor-pointer transition-colors lg:rounded-t-3xl xl:rounded-t-[2rem]"
               onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
               title={isSummaryExpanded ? "ย่อรายละเอียด" : "ขยายเพื่อดูหรือตั้งค่าส่วนลด/ภาษี"}
             >
@@ -4518,6 +4531,34 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
           </div>
           
           </div> {/* End of Right Column */}
+
+          {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือตอนอยู่หน้าเลือกสินค้า) --- */}
+          {!isMobileCartOpen && (
+            <div className="lg:hidden fixed bottom-[76px] left-4 right-4 z-40 transition-transform duration-300">
+              <button
+                onClick={() => setIsMobileCartOpen(true)}
+                className={`w-full p-3 rounded-2xl shadow-lg flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cart.length > 0 ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <ShoppingCart size={20} />
+                  </div>
+                  <div className="text-left flex flex-col justify-center">
+                    <p className={`text-[10px] font-bold kanit-text leading-none mb-1 uppercase tracking-wider ${cart.length > 0 ? 'text-sky-100' : 'text-slate-400'}`}>
+                      ตะกร้าสินค้า ({cart.reduce((sum, item) => sum + item.quantity, 0)})
+                    </p>
+                    <p className={`font-bold font-data text-lg leading-none ${cart.length === 0 ? 'opacity-50' : ''}`}>
+                      {formatCurrency(grandTotal)}
+                    </p>
+                  </div>
+                </div>
+                <div className={`flex items-center gap-1 kanit-text font-bold text-sm ${cart.length > 0 ? 'bg-white/20 pl-3 pr-2 py-1.5 rounded-lg' : 'opacity-50'}`}>
+                  {cart.length > 0 ? 'ดูบิล' : 'เปิดตะกร้า'} <ChevronRight size={18} />
+                </div>
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
 
