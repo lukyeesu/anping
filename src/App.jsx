@@ -4152,7 +4152,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
         <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0 relative">
           
           {/* Left Column: Product Catalog (ซ่อนบนมือถือถ้าตะกร้าเปิดอยู่) */}
-          <div className={`flex-[6] lg:flex-1 flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 pb-24 lg:pb-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
+          {/* แก้ไข: ลบ pb-24 ออกจากกล่องนอก เพื่อไม่ให้เกิดบล็อกสีขาวทึบ */}
+          <div className={`flex-[6] lg:flex-1 flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
             <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0 space-y-2 sm:space-y-3">
@@ -4186,7 +4187,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
             </div>
 
             {/* Product Grid */}
-            <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
+            {/* แก้ไข: ย้าย pb-24 มาไว้ที่กล่องนี้แทน เพื่อให้เลื่อนรายการล่างสุดให้พ้นปุ่มลอยได้ */}
+            <div className="flex-1 p-3 sm:p-4 pb-24 lg:pb-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
               {isGlobalLoading ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-4 auto-rows-max">
                   {Array.from({ length: 12 }).map((_, i) => (
