@@ -2755,6 +2755,19 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   const handleSavePatient = async (e) => {
     e.preventDefault();
+
+    // --- เพิ่มการตรวจสอบเลขบัตรประชาชนซ้ำ ---
+    if (formData.idCard && formData.idCard.trim() !== '') {
+        const isDuplicate = patientsData.some(p => 
+            p.idCard === formData.idCard && (p.hn || p.id) !== editingId
+        );
+        if (isDuplicate) {
+            showToast('ไม่สามารถบันทึกได้ เนื่องจากเลขบัตรประชาชนนี้มีอยู่ในระบบแล้ว', 'warning');
+            return; // หยุดการทำงาน ไม่ให้บันทึกต่อ
+        }
+    }
+    // ------------------------------------
+
     setIsProcessing(true);
 
     // Fix: Generate HN at save time to avoid duplicate HN race condition
