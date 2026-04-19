@@ -4126,24 +4126,30 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
       <div className="absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in">
         
         {/* Header ของ POS */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2">
-              <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500" /> ระบบ POS <span className="text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">จุดรับชำระเงิน</span>
+        <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
+          <div className="flex flex-col items-start">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2 leading-none">
+              <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500 shrink-0" /> 
+              <span>ระบบ POS</span>
+              {/* แสดงผลแนวนอนบน Desktop */}
+              <span className="hidden sm:inline-flex text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">จุดรับชำระเงิน</span>
             </h1>
+            {/* แสดงผลบรรทัดล่างบน Mobile */}
+            <span className="sm:hidden text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md mt-1.5 ml-7">จุดรับชำระเงิน</span>
           </div>
-          <div className="flex items-center gap-2 ml-auto sm:ml-0">
+          
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setIsManageModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium"
+              className="flex items-center justify-center p-2 sm:px-3 sm:py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium"
             >
               <Settings size={18} /> <span className="hidden sm:inline">ตั้งค่ารายการ</span>
             </button>
             <button
               onClick={() => setIsHistoryModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
             >
-              <History size={18} /> <span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span>
+              <History size={16} className="sm:w-[18px] sm:h-[18px]" /> <span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span>
             </button>
           </div>
         </div>
