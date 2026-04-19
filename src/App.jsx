@@ -7,7 +7,7 @@ import {
   Clock, Stethoscope, FileText, Pill, CreditCard,
   Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
-  ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload
+  ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -3616,7 +3616,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 };
 
 // --- ระบบ POS (Point of Sale) ---
-const POSSystem = ({ products = [], patientsData = [], showToast }) => {
+// แก้ไข: เพิ่ม callAppScript เข้ามารับค่า Props
+const POSSystem = ({ products = [], patientsData = [], posHistoryData = [], setPosHistoryData, showToast, callAppScript }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
@@ -3631,9 +3632,12 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
   const [vatRate, setVatRate] = useState(7); // ค่าเริ่มต้น 7%
   
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [isCheckoutClosing, setIsCheckoutClosing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isHistoryClosing, setIsHistoryClosing] = useState(false);
 
   // ดึงรายการหมวดหมู่ที่มีทั้งหมดจาก Mock Data
   const categories = ['ทั้งหมด', ...new Set(products.map(p => p.type))];
@@ -3716,23 +3720,73 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
     setCheckoutSuccess(false);
   };
 
-  const confirmPayment = () => {
+  // แก้ไข: เปลี่ยนเป็นการทำงานแบบ Asynchronous และส่งข้อมูลไปบันทึกผ่าน API
+  const confirmPayment = async () => {
     setIsProcessingPayment(true);
-    // จำลองการประมวลผล
-    setTimeout(() => {
-      setIsProcessingPayment(false);
-      setCheckoutSuccess(true);
-      showToast('ทำรายการชำระเงินสำเร็จ', 'success');
-      // ไม่ clear ทันที เพื่อให้แสดงหน้าจอสำเร็จก่อน
-    }, 1500);
+    
+    // สร้าง Payload ข้อมูลบิลเพื่อส่งไปบันทึกในฐานข้อมูล
+    const receiptId = `REC${Date.now()}`; // สร้าง ID บิลแบบง่ายๆ
+    const transactionData = {
+        id: receiptId,
+        patientId: selectedPatientId,
+        patientName: patientSearchTerm || 'ลูกค้าทั่วไป (ไม่ระบุ)',
+        items: cart.map(item => ({
+            id: item.product.id,
+            name: item.product.name,
+            price: item.product.price,
+            quantity: item.quantity,
+            total: item.product.price * item.quantity
+        })),
+        subtotal: subtotal,
+        discountValue: discount,
+        discountType: discountType,
+        discountAmount: discountAmount,
+        taxMode: taxMode,
+        vatRate: vatRate,
+        vatAmount: vatAmount,
+        grandTotal: grandTotal,
+        paymentMethod: paymentMethod,
+        status: 'completed',
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        // ส่งข้อมูลไปบันทึกลงชีตชื่อ 'POS_Transactions' (เปลี่ยนชื่อได้ตามต้องการ)
+        await callAppScript('SAVE_DATA', 'POS_Transactions', transactionData);
+        
+        // อัปเดต State ประวัติการขายทันทีเพื่อให้แสดงใน Modal
+        if (setPosHistoryData) {
+            setPosHistoryData(prev => [transactionData, ...prev]);
+        }
+        
+        setIsProcessingPayment(false);
+        setCheckoutSuccess(true);
+        showToast('ทำรายการชำระเงินและบันทึกข้อมูลสำเร็จ', 'success');
+    } catch (error) {
+        console.error("POS Transaction Error:", error);
+        setIsProcessingPayment(false);
+        showToast('บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่', 'warning');
+    }
   };
 
   const closeCheckoutAndReset = () => {
-    setIsCheckoutModalOpen(false);
-    if (checkoutSuccess) {
-      clearCart();
-    }
-    setCheckoutSuccess(false);
+    setIsCheckoutClosing(true);
+    setTimeout(() => {
+      setIsCheckoutModalOpen(false);
+      if (checkoutSuccess) {
+        clearCart();
+      }
+      setCheckoutSuccess(false);
+      setIsCheckoutClosing(false);
+    }, 300);
+  };
+
+  const closeHistoryModal = () => {
+    setIsHistoryClosing(true);
+    setTimeout(() => {
+      setIsHistoryModalOpen(false);
+      setIsHistoryClosing(false);
+    }, 300);
   };
 
   // สร้างตัวเลือกสำหรับ CustomSelect โดยเรียงลำดับจากประวัติการรักษาล่าสุด (หรือลงทะเบียนล่าสุด) ก่อน
@@ -3752,100 +3806,106 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
   }, [patientsData]);
 
   return (
-    <div className="absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in">
-      
-      {/* Header ของ POS */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2">
-            <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500" /> ระบบ POS <span className="text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">จุดรับชำระเงิน</span>
-          </h1>
-        </div>
-      </div>
-
-      {/* Main Content: 2 Columns แบบพอดีหน้าจอ */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0">
+    <>
+      <div className="absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in">
         
-        {/* Left Column: Product Catalog */}
-        <div className="flex-[6] lg:flex-1 flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0">
-          
-          {/* Search & Filter Bar */}
-          <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0 space-y-2 sm:space-y-3">
-            <div className="relative">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-              <input 
-                type="text" 
-                placeholder="ค้นหารหัส, ชื่อสินค้า หรือบริการ..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors font-data shadow-sm"
-              />
-            </div>
-            
-            {/* Category Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold kanit-text transition-all ${
-                    activeCategory === cat 
-                    ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20' 
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+        {/* Header ของ POS */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2">
+              <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500" /> ระบบ POS <span className="text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">จุดรับชำระเงิน</span>
+            </h1>
           </div>
-
-          {/* Product Grid */}
-          <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
-            {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4 auto-rows-max">
-                {filteredProducts.map((product, index) => {
-                  const Icon = product.icon || Package;
-                  return (
-                    <button 
-                      key={product.id}
-                      onClick={() => addToCart(product)}
-                      className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
-                      style={{ animationDelay: `${(index % 20) * 30}ms` }}
-                    >
-                      <div className="w-8 h-8 sm:w-12 sm:h-12 bg-sky-50 text-sky-600 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
-                        <Icon size={20} className="w-4 h-4 sm:w-6 sm:h-6" />
-                      </div>
-                      <div className="flex-1 flex flex-col justify-between w-full">
-                        <div className="mb-1 sm:mb-2">
-                          <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1 truncate">{product.type}</span>
-                          <h3 className="font-bold text-slate-800 text-[11px] sm:text-sm kanit-text line-clamp-2 leading-tight">{product.name}</h3>
-                        </div>
-                        <div className="font-bold text-sky-600 text-xs sm:text-base font-data mt-auto">
-                          {formatCurrency(product.price)}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                <Search className="w-10 h-10 sm:w-12 sm:h-12 mb-3 opacity-20" />
-                <p className="kanit-text font-medium text-xs sm:text-sm">ไม่พบรายการที่ค้นหา</p>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setIsHistoryModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-sm font-medium ml-auto sm:ml-0"
+          >
+            <History size={18} /> <span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span>
+          </button>
         </div>
 
-        {/* Right Column: Cart Area */}
-        <div className="flex-[4] lg:flex-none min-h-[260px] lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden shrink-0">
+        {/* Main Content: 2 Columns แบบพอดีหน้าจอ */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0">
           
-          {/* Cart Header & Patient Select */}
-          <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
-            <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 mb-2 sm:mb-3 text-sm sm:text-base">
-              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> รายการบิล
-              {cart.length > 0 && <span className="bg-sky-500 text-white text-[10px] px-2 py-0.5 rounded-full font-data">{cart.reduce((a,b)=>a+b.quantity,0)}</span>}
+          {/* Left Column: Product Catalog */}
+          <div className="flex-[6] lg:flex-1 flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0">
+            
+            {/* Search & Filter Bar */}
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0 space-y-2 sm:space-y-3">
+              <div className="relative">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="text" 
+                  placeholder="ค้นหารหัส, ชื่อสินค้า หรือบริการ..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-4 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors font-data shadow-sm"
+                />
+              </div>
+              
+              {/* Category Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold kanit-text transition-all ${
+                      activeCategory === cat 
+                      ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20' 
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Product Grid */}
+            <div className="flex-1 p-3 sm:p-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
+              {filteredProducts.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4 auto-rows-max">
+                  {filteredProducts.map((product, index) => {
+                    const Icon = product.icon || Package;
+                    return (
+                      <button 
+                        key={product.id}
+                        onClick={() => addToCart(product)}
+                        className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
+                        style={{ animationDelay: `${(index % 20) * 30}ms` }}
+                      >
+                        <div className="w-8 h-8 sm:w-12 sm:h-12 bg-sky-50 text-sky-600 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
+                          <Icon size={20} className="w-4 h-4 sm:w-6 sm:h-6" />
+                        </div>
+                        <div className="flex-1 flex flex-col justify-between w-full">
+                          <div className="mb-1 sm:mb-2">
+                            <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1 truncate">{product.type}</span>
+                            <h3 className="font-bold text-slate-800 text-[11px] sm:text-sm kanit-text line-clamp-2 leading-tight">{product.name}</h3>
+                          </div>
+                          <div className="font-bold text-sky-600 text-xs sm:text-base font-data mt-auto">
+                            {formatCurrency(product.price)}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <Search className="w-10 h-10 sm:w-12 sm:h-12 mb-3 opacity-20" />
+                  <p className="kanit-text font-medium text-xs sm:text-sm">ไม่พบรายการที่ค้นหา</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Cart Area */}
+          <div className="flex-[4] lg:flex-none min-h-[260px] lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden shrink-0">
+          
+            {/* Cart Header & Patient Select */}
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+              <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 mb-2 sm:mb-3 text-sm sm:text-base">
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> รายการบิล
             </h2>
             <div className="relative w-full">
               <div className="flex items-center w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-sm">
@@ -4058,13 +4118,15 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
               </button>
             </div>
           </div>
+          
+          </div> {/* End of Right Column */}
         </div>
       </div>
 
       {/* Checkout Modal */}
       {isCheckoutModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
-          <div className="bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col modal-animate-in">
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isCheckoutClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col ${isCheckoutClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             {checkoutSuccess ? (
               // Success View
               <div className="p-8 flex flex-col items-center text-center">
@@ -4119,7 +4181,73 @@ const POSSystem = ({ products = [], patientsData = [], showToast }) => {
         </div>
       )}
 
-    </div>
+      {/* History Modal (Placeholder) */}
+      {isHistoryModalOpen && (
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isHistoryClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${isHistoryClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+              <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                <History size={20} className="text-sky-500"/> ประวัติการทำรายการ (POS)
+              </h3>
+              <button onClick={closeHistoryModal} className="text-slate-400 hover:bg-white p-1 rounded-full transition-colors"><X size={20}/></button>
+            </div>
+            
+            <div className="p-0 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                {posHistoryData && posHistoryData.length > 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse min-w-[700px]">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text">
+                                        <th className="p-4 font-bold">วันที่/เวลา</th>
+                                        <th className="p-4 font-bold">เลขที่บิล</th>
+                                        <th className="p-4 font-bold">ลูกค้า</th>
+                                        <th className="p-4 font-bold text-right">ยอดรวม</th>
+                                        <th className="p-4 font-bold text-center">วิธีชำระ</th>
+                                        <th className="p-4 font-bold text-center">สถานะ</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {posHistoryData.map((txn, idx) => (
+                                        <tr key={txn.id || idx} className="hover:bg-sky-50/30 transition-colors font-data text-sm">
+                                            <td className="p-4 text-slate-600">{formatDateTime(txn.createdAt)}</td>
+                                            <td className="p-4 font-bold text-sky-600 kanit-text">{txn.id}</td>
+                                            <td className="p-4 text-slate-800 kanit-text">{txn.patientName || '-'}</td>
+                                            <td className="p-4 font-bold text-slate-800 text-right">{formatCurrency(txn.grandTotal)}</td>
+                                            <td className="p-4 text-center">
+                                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md kanit-text">
+                                                    {txn.paymentMethod === 'cash' ? 'เงินสด' : txn.paymentMethod === 'transfer' ? 'โอนเงิน' : txn.paymentMethod === 'credit' ? 'บัตรเครดิต' : txn.paymentMethod}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full kanit-text ${txn.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+                                                    {txn.status === 'completed' ? 'สำเร็จ' : txn.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-400 min-h-[300px] p-6">
+                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                            <Receipt size={32} className="text-slate-300" />
+                        </div>
+                        <p className="kanit-text font-bold text-lg text-slate-500 mb-1">ยังไม่มีข้อมูลประวัติการขาย</p>
+                        <p className="text-sm kanit-text">รายการบิลที่ชำระเงินสำเร็จจะแสดงที่นี่</p>
+                    </div>
+                )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 text-right shrink-0">
+                <button onClick={closeHistoryModal} className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-100 transition-colors shadow-sm">ปิดหน้าต่าง</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -4259,6 +4387,7 @@ export default function App() {
   const [patientsData, setPatientsData] = useState(GOOGLE_SCRIPT_URL ? [] : mockPatients);
   const [queueData, setQueueData] = useState([]);
   const [inventoryData, setInventoryData] = useState([]);
+  const [posHistoryData, setPosHistoryData] = useState([]); // เพิ่ม State เก็บประวัติ POS
   const [isDataFetched, setIsDataFetched] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
 
@@ -4314,6 +4443,12 @@ export default function App() {
         const resQueue = await callAppScript('GET_DATA', 'Queue');
         if (resQueue && resQueue.status === 'success') {
           setQueueData(resQueue.data && resQueue.data.length > 0 ? resQueue.data.reverse() : []);
+        }
+
+        // เพิ่มคำสั่งดึงข้อมูลตารางประวัติการทำรายการ POS
+        const resPos = await callAppScript('GET_DATA', 'POS_Transactions');
+        if (resPos && resPos.status === 'success') {
+          setPosHistoryData(resPos.data && resPos.data.length > 0 ? resPos.data.reverse() : []);
         }
 
       } catch (error) { showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); } 
@@ -4478,7 +4613,8 @@ export default function App() {
                 <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
-                <POSSystem products={mockProducts} patientsData={patientsData} showToast={showToast} />
+                {/* แก้ไข: ส่ง Props callAppScript ลงไปให้ POSSystem ใช้งาน */}
+                <POSSystem products={mockProducts} patientsData={patientsData} posHistoryData={posHistoryData} setPosHistoryData={setPosHistoryData} showToast={showToast} callAppScript={callAppScript} />
             </div>
             {currentTab === 'inventory' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="ระบบคลังสินค้า" desc="จัดการสต๊อกยาและเวชภัณฑ์ (เช็คข้ามสาขาได้)" icon={Package} /></div>}
             {currentTab === 'reports' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="รายงานระดับองค์กร" desc="ดูสถิติ รายได้ และประสิทธิภาพการทำงานของคลินิก" icon={BarChart3} /></div>}
