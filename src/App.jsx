@@ -6293,43 +6293,51 @@ export default function App() {
       if (!GOOGLE_SCRIPT_URL || isDataFetched) return;
       setIsGlobalLoading(true);
       try {
-        const resPatients = await callAppScript('GET_DATA', 'Patients');
-        // แก้ไข: เอา .slice(0, 20) ออก เพื่อดึงข้อมูลทั้งหมดมาให้ Infinity Scroll ทำหน้าที่แบ่งหน้าเอง
-        if (resPatients && resPatients.status === 'success') { 
+        // ใช้ Promise.all เพื่อดึงข้อมูลทุกอย่างขนานกัน (Parallel Fetching) ช่วยลดเวลาโหลดเริ่มต้นได้อย่างมาก
+        const [
+          resPatients,
+          resQueue,
+          resPos,
+          resInventory,
+          resInvLogs,
+          resPosItems
+        ] = await Promise.all([
+          callAppScript('GET_DATA', 'Patients'),
+          callAppScript('GET_DATA', 'Queue'),
+          callAppScript('GET_DATA', 'POS_Transactions'),
+          callAppScript('GET_DATA', 'Inventory'),
+          callAppScript('GET_DATA', 'InventoryLogs'),
+          callAppScript('GET_DATA', 'setting_pos')
+        ]);
+
+        if (resPatients?.status === 'success') { 
           setPatientsData(resPatients.data && resPatients.data.length > 0 ? resPatients.data.reverse() : []); 
         }
         
-        // เพิ่มคำสั่งดึงข้อมูลตารางนัดหมาย (Queue)
-        const resQueue = await callAppScript('GET_DATA', 'Queue');
-        if (resQueue && resQueue.status === 'success') {
+        if (resQueue?.status === 'success') {
           setQueueData(resQueue.data && resQueue.data.length > 0 ? resQueue.data.reverse() : []);
         }
 
-        // เพิ่มคำสั่งดึงข้อมูลตารางประวัติการทำรายการ POS
-        const resPos = await callAppScript('GET_DATA', 'POS_Transactions');
-        if (resPos && resPos.status === 'success') {
+        if (resPos?.status === 'success') {
           setPosHistoryData(resPos.data && resPos.data.length > 0 ? resPos.data.reverse() : []);
         }
 
-        // ดึงข้อมูลคลังสินค้า (Inventory)
-        const resInventory = await callAppScript('GET_DATA', 'Inventory');
-        if (resInventory && resInventory.status === 'success') {
+        if (resInventory?.status === 'success') {
           setInventoryData(resInventory.data || []);
         }
 
-        // ดึงประวัติคลังสินค้า (InventoryLogs)
-        const resInvLogs = await callAppScript('GET_DATA', 'InventoryLogs');
-        if (resInvLogs && resInvLogs.status === 'success') {
+        if (resInvLogs?.status === 'success') {
           setInventoryLogsData(resInvLogs.data && resInvLogs.data.length > 0 ? resInvLogs.data.reverse() : []);
         }
 
-        // ดึงรายการตั้งค่าสินค้าและบริการ POS
-        const resPosItems = await callAppScript('GET_DATA', 'setting_pos');
-        if (resPosItems && resPosItems.status === 'success' && resPosItems.data && resPosItems.data.length > 0) {
+        if (resPosItems?.status === 'success' && resPosItems.data?.length > 0) {
           setPosProducts(resPosItems.data);
         }
 
-      } catch (error) { showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); } 
+      } catch (error) { 
+        console.error("Initial Fetch Error:", error);
+        showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); 
+      } 
       finally { setIsDataFetched(true); setIsGlobalLoading(false); }
     };
     fetchInitialData();
