@@ -886,7 +886,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     facebook: '',
     instagram: '',
     tiktok: '',
-    serviceType: ''
+    serviceType: '',
+    courses: []
   };
   const [formData, setFormData] = useState(initialApptState);
 
@@ -1581,6 +1582,31 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     
                     {/* ค้นหา HN หรือ ชื่อคนไข้ (เพิ่ม z-index ป้องกัน Dropdown โดนช่องอื่นทับ) */}
                     <div className="md:col-span-2 relative" style={{ zIndex: 20 }}>
+                        {/* แสดงคอร์สคงเหลือเมื่อเลือกคนไข้แล้ว (ในหน้านัดหมาย) */}
+                        {formData.hn && (
+                            <div className="mb-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col gap-2 shadow-sm animate-in fade-in slide-in-from-top-1">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                                        <span className="text-[11px] font-black text-indigo-700 kanit-text uppercase tracking-wider">คอร์ส/แพ็กเกจ คงเหลือ</span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-indigo-400 font-data">HN: {formData.hn}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {(() => {
+                                        const p = patientsData.find(patient => (patient.id || patient.hn) === formData.hn);
+                                        const courses = p?.courses?.filter(c => c.remainingSessions > 0) || [];
+                                        if (courses.length === 0) return <span className="text-[10px] text-slate-400 kanit-text italic py-1">ไม่มีคอร์สคงเหลือในประวัติ</span>;
+                                        return courses.map(c => (
+                                            <div key={c.id} className="px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl text-[10px] font-bold text-indigo-600 kanit-text shadow-sm flex items-center gap-1.5">
+                                                <Package size={12} className="text-indigo-400" />
+                                                {c.name} ({c.remainingSessions}/{c.totalSessions})
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                            </div>
+                        )}
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">ข้อมูลผู้ป่วย (ค้นหาด้วย HN หรือ ชื่อ) <span className="text-rose-500">*</span></label>
                         <div className="relative">
                            <input 
@@ -2066,7 +2092,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '', 
     curAddress: '', curMoo: '', curRoad: '', curSubDistrict: '', curDistrict: '', curProvince: '', curZipcode: '', // เพิ่มที่อยู่ปัจจุบัน
     phones: [''], emName: '', emRelation: '', emPhone: '', emAddress: '', // เปลี่ยน phone1, phone2 เป็น phones array
-    bloodGroup: '', chiefComplaint: '', allergies: '', underlyingDisease: '', createdAt: '', opdRecords: []
+    bloodGroup: '', chiefComplaint: '', allergies: '', underlyingDisease: '', createdAt: '', opdRecords: [],
+    courses: []
   };
   
   const [formData, setFormData] = useState(initialFormState);
@@ -3244,8 +3271,40 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                   </div>
                 </div>
 
-                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
-                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Stethoscope size={20} /> ข้อมูลสุขภาพเบื้องต้น</h4>
+                {/* --- ส่วนที่แสดงเฉพาะในโหมดดูข้อมูล (View Mode): คอร์สคงเหลือ --- */}
+                {isViewMode && (
+                  <div className="bg-white p-4 sm:p-6 rounded-2xl border border-indigo-100 shadow-sm relative z-10">
+                    <h4 className="text-lg font-bold text-indigo-600 border-b border-indigo-100 pb-3 mb-5 flex items-center gap-2 kanit-text">
+                      <Package size={20} /> คอร์ส/แพ็กเกจ คงเหลือ
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {formData.courses && formData.courses.filter(c => c.remainingSessions > 0).length > 0 ? (
+                        formData.courses.filter(c => c.remainingSessions > 0).map(course => (
+                          <div key={course.id} className="bg-indigo-50/30 p-4 rounded-2xl border border-indigo-100 flex flex-col gap-2 shadow-sm">
+                            <div className="flex justify-between items-start">
+                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-100/50 px-2 py-0.5 rounded-md">คงเหลือ {course.remainingSessions}/{course.totalSessions}</div>
+                              <div className="text-[10px] text-slate-400 font-data">{formatDate(course.purchasedAt)}</div>
+                            </div>
+                            <h5 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight line-clamp-2 min-h-[2.5rem]">{course.name}</h5>
+                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
+                              <div 
+                                className="bg-indigo-500 h-full transition-all duration-500" 
+                                style={{ width: `${(course.remainingSessions / course.totalSessions) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="md:col-span-3 py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                           <p className="text-slate-400 kanit-text text-sm italic">ยังไม่มีคอร์สคงเหลือในขณะนี้</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">                  <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Stethoscope size={20} /> ข้อมูลสุขภาพเบื้องต้น</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่เลือด</label>
@@ -3741,7 +3800,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
 // --- ระบบ POS (Point of Sale) ---
 // แก้ไข: เพิ่ม callAppScript เข้ามารับค่า Props
-const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryData = [], setPosHistoryData, showToast, callAppScript, isGlobalLoading }) => {
+const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsData, posHistoryData = [], setPosHistoryData, showToast, callAppScript, isGlobalLoading }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
@@ -3802,7 +3861,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
   const [isManageClosing, setIsManageClosing] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isProcessingProduct, setIsProcessingProduct] = useState(false);
-  const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package' };
+  const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1 };
   const [productForm, setProductForm] = useState(initialProductForm);
   const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
 
@@ -3994,6 +4053,51 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
         // ส่งข้อมูลไปบันทึกลงชีตชื่อ 'POS_Transactions' (เปลี่ยนชื่อได้ตามต้องการ)
         await callAppScript('SAVE_DATA', 'POS_Transactions', transactionData);
         
+        // --- เพิ่มระบบจัดการคอร์ส/แพ็กเกจ ---
+        if (selectedPatientId && patientsData.length > 0) {
+            const currentPatient = patientsData.find(p => (p.id || p.hn) === selectedPatientId);
+            if (currentPatient) {
+                let updatedCourses = currentPatient.courses ? [...currentPatient.courses] : [];
+                let hasChanges = false;
+
+                cart.forEach(item => {
+                    // 1. กรณีซื้อคอร์สใหม่ (สินค้าปกติที่มี flag isCourse และไม่ใช่การตัดยอด)
+                    if (item.product.isCourse && !item.product.isRedeem) {
+                        for (let i = 0; i < item.quantity; i++) {
+                            updatedCourses.push({
+                                id: `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                                productId: item.product.id,
+                                name: item.product.name,
+                                totalSessions: Number(item.product.courseSessions) || 1,
+                                remainingSessions: Number(item.product.courseSessions) || 1,
+                                purchasedAt: new Date().toISOString()
+                            });
+                        }
+                        hasChanges = true;
+                    }
+                    
+                    // 2. กรณีตัดคอร์ส (Redeem)
+                    if (item.product.isRedeem && item.product.courseId) {
+                        updatedCourses = updatedCourses.map(c => {
+                            if (c.id === item.product.courseId) {
+                                return { ...c, remainingSessions: Math.max(0, c.remainingSessions - item.quantity) };
+                            }
+                            return c;
+                        });
+                        hasChanges = true;
+                    }
+                });
+
+                if (hasChanges) {
+                    const updatedPatient = { ...currentPatient, courses: updatedCourses };
+                    await callAppScript('SAVE_DATA', 'Patients', updatedPatient);
+                    if (setPatientsData) {
+                        setPatientsData(prev => prev.map(p => (p.id || p.hn) === selectedPatientId ? updatedPatient : p));
+                    }
+                }
+            }
+        }
+
         // อัปเดต State ประวัติการขายทันทีเพื่อให้แสดงใน Modal
         if (setPosHistoryData) {
             setPosHistoryData(prev => [transactionData, ...prev]);
@@ -4107,7 +4211,12 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
   };
 
   const handleOpenEditProduct = (prod) => {
-      setProductForm({ ...prod });
+      setProductForm({ 
+        ...initialProductForm, 
+        ...prod, 
+        isCourse: !!prod.isCourse, 
+        courseSessions: prod.courseSessions || 1 
+      });
       setIsEditFormOpen(true);
   };
 
@@ -4118,7 +4227,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
       const payload = {
           ...productForm,
           id: productForm.id || `ITM${Date.now()}`,
-          price: Number(productForm.price)
+          price: Number(productForm.price),
+          courseSessions: Number(productForm.courseSessions) || 1
       };
 
       try {
@@ -4381,29 +4491,93 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
             </div>
           </div>
 
-          {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-slate-50/30">
+          {/* คอร์สคงเหลือของลูกค้า (แสดงเฉพาะเมื่อเลือกลูกค้า) */}
+          {selectedPatientId && (
+            <div className="px-3 sm:px-4 py-2 bg-indigo-50/30 border-b border-indigo-100 shrink-0 overflow-x-auto custom-scrollbar no-drag-zone">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                <span className="text-[10px] font-bold text-indigo-700 kanit-text uppercase tracking-wider">คอร์สคงเหลือ</span>
+              </div>
+              <div className="flex gap-2 pb-1">
+                {(() => {
+                  const patient = patientsData.find(p => (p.id || p.hn) === selectedPatientId);
+                  const activeCourses = patient?.courses?.filter(c => c.remainingSessions > 0) || [];
+
+                  if (activeCourses.length === 0) {
+                    return <div className="text-[10px] text-slate-400 kanit-text py-1 italic">ไม่มีคอร์สคงเหลือ</div>;
+                  }
+
+                  return activeCourses.map(course => (
+                    <button
+                      key={course.id}
+                      onClick={() => {
+                        // ตรวจสอบก่อนว่ามีการกดตัดคอร์สนี้ไปในตะกร้าหรือยัง
+                        const isAlreadyInCart = cart.some(item => item.product.courseId === course.id);
+                        if (isAlreadyInCart) {
+                          showToast('รายการนี้อยู่ในตะกร้าแล้ว', 'warning');
+                          return;
+                        }
+
+                        const courseProduct = products.find(p => p.id === course.productId) || {
+                          id: course.productId,
+                          name: course.name,
+                          price: 0,
+                          type: 'คอร์สเดิม',
+                          icon: 'Package'
+                        };
+
+                        // เพิ่มรายการตัดคอร์สเข้าตะกร้า
+                        const redeemItem = {
+                          product: { 
+                            ...courseProduct, 
+                            id: `REDEEM_${course.id}`, 
+                            price: 0, 
+                            isRedeem: true, 
+                            courseId: course.id,
+                            name: `ตัดรอบ: ${course.name} (${course.remainingSessions}/${course.totalSessions})`
+                          },
+                          quantity: 1
+                        };
+                        setCart(prev => [...prev, redeemItem]);
+                        showToast(`เพิ่มการตัดคอร์ส ${course.name} เข้าตะกร้า`, 'success');
+                      }}
+                      className="shrink-0 px-3 py-2 bg-white border border-indigo-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all shadow-sm active:scale-95 text-left group"
+                    >
+                      <div className="text-[10px] font-bold text-slate-400 kanit-text group-hover:text-indigo-500 transition-colors">คงเหลือ {course.remainingSessions}/{course.totalSessions}</div>
+                      <div className="text-xs font-bold text-slate-700 kanit-text truncate max-w-[120px]">{course.name}</div>
+                    </button>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Cart Items List */}          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-slate-50/30">
             {cart.length > 0 ? (
               <div className="space-y-2">
                 {cart.map((item, idx) => {
                   const CartItemIcon = typeof item.product.icon === 'string' ? (POS_ICONS[item.product.icon] || Package) : (item.product.icon || Package);
                   return (
-                  <div key={item.product.id} className={`bg-white p-2.5 sm:p-3 rounded-xl border ${item.product.isNote ? 'border-amber-200 bg-amber-50/50' : 'border-slate-100'} shadow-sm flex items-start gap-2.5 sm:gap-3 space-row-animation`} style={{ animationDelay: `${idx * 40}ms` }}>
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 ${item.product.isNote ? 'bg-amber-100 text-amber-500' : 'bg-slate-50 text-slate-400'}`}>
+                  <div key={item.product.id} className={`bg-white p-2.5 sm:p-3 rounded-xl border ${item.product.isNote ? 'border-amber-200 bg-amber-50/50' : item.product.isRedeem ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100'} shadow-sm flex items-start gap-2.5 sm:gap-3 space-row-animation`} style={{ animationDelay: `${idx * 40}ms` }}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 ${item.product.isNote ? 'bg-amber-100 text-amber-500' : item.product.isRedeem ? 'bg-indigo-100 text-indigo-500' : 'bg-slate-50 text-slate-400'}`}>
                        <CartItemIcon size={16} className="sm:w-[18px] sm:h-[18px]" />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex justify-between items-start gap-2">
-                        <h4 className={`font-bold text-[11px] sm:text-sm kanit-text leading-tight line-clamp-2 ${item.product.isNote ? 'text-amber-700' : 'text-slate-800'}`}>{item.product.name}</h4>
+                        <h4 className={`font-bold text-[11px] sm:text-sm kanit-text leading-tight line-clamp-2 ${item.product.isNote ? 'text-amber-700' : item.product.isRedeem ? 'text-indigo-700' : 'text-slate-800'}`}>
+                          {item.product.isRedeem && <span className="mr-1.5 px-1.5 py-0.5 bg-indigo-500 text-white text-[9px] rounded uppercase font-black tracking-tighter">ตัดคอร์ส</span>}
+                          {item.product.name}
+                        </h4>
                         <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 -mr-1 -mt-1"><X size={14} className="sm:w-4 sm:h-4" /></button>
                       </div>
-                      
-                      {item.product.isTemp ? (
-                        <div className="text-rose-500 font-medium text-[10px] sm:text-xs kanit-text mt-1">ยังไม่มีราคาในระบบ กรุณาตั้งค่า/เลือกรหัสใหม่</div>
-                      ) : !item.product.isNote ? (
-                        <div className="text-sky-600 font-bold text-[10px] sm:text-xs font-data mt-1">{formatCurrency(item.product.price)}</div>
-                      ) : null}
-                      
+
+                     {item.product.isTemp ? (
+                       <div className="text-rose-500 font-medium text-[10px] sm:text-xs kanit-text mt-1">ยังไม่มีราคาในระบบ กรุณาตั้งค่า/เลือกรหัสใหม่</div>
+                     ) : !item.product.isNote ? (
+                       <div className={`font-bold text-[10px] sm:text-xs font-data mt-1 ${item.product.isRedeem ? 'text-indigo-500' : 'text-sky-600'}`}>
+                         {item.product.isRedeem ? 'FREE (REDEEM)' : formatCurrency(item.product.price)}
+                       </div>
+                     ) : null}                      
                       {/* Qty Controls (ซ่อนเฉพาะรายการที่เป็นหมายเหตุ) */}
                       {!item.product.isNote && (
                         <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50/50">
@@ -5071,10 +5245,26 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], posHistoryDa
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <input type="checkbox" id="stockManaged" className="w-5 h-5 accent-sky-500 rounded cursor-pointer" checked={productForm.stockManaged} onChange={e => setProductForm({...productForm, stockManaged: e.target.checked})} />
-                                    <label htmlFor="stockManaged" className="font-semibold text-slate-700 kanit-text cursor-pointer select-none">สินค้านี้ต้องตัดสต๊อกหรือไม่? (มีจำนวนคงเหลือ)</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                        <input type="checkbox" id="stockManaged" className="w-5 h-5 accent-sky-500 rounded cursor-pointer" checked={productForm.stockManaged} onChange={e => setProductForm({...productForm, stockManaged: e.target.checked})} />
+                                        <label htmlFor="stockManaged" className="font-semibold text-slate-700 kanit-text cursor-pointer select-none text-sm">สินค้านี้ต้องตัดสต๊อก?</label>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                        <input type="checkbox" id="isCourse" className="w-5 h-5 accent-sky-500 rounded cursor-pointer" checked={productForm.isCourse} onChange={e => setProductForm({...productForm, isCourse: e.target.checked})} />
+                                        <label htmlFor="isCourse" className="font-semibold text-slate-700 kanit-text cursor-pointer select-none text-sm">ขายเป็นคอร์ส/แพ็กเกจ?</label>
+                                    </div>
                                 </div>
+
+                                {productForm.isCourse && (
+                                    <div className="p-4 bg-sky-50 rounded-xl border border-sky-100 animate-in fade-in slide-in-from-top-2">
+                                        <label className="block text-sm font-bold text-sky-700 mb-1.5 kanit-text">จำนวนครั้ง (Sessions) <span className="text-rose-500">*</span></label>
+                                        <div className="flex items-center gap-3">
+                                            <input required type="number" min="1" className={`${theme.input} font-data bg-white`} value={productForm.courseSessions} onChange={e => setProductForm({...productForm, courseSessions: e.target.value})} placeholder="ระบุจำนวนครั้ง" />
+                                            <span className="font-bold text-sky-600 kanit-text shrink-0">ครั้ง</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="mt-6 flex gap-3">
@@ -5476,7 +5666,7 @@ export default function App() {
             </div>
             <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
                 {/* แก้ไข: ส่ง Props posProducts ลงไปให้ POSSystem ใช้งาน */}
-                <POSSystem products={posProducts} setProducts={setPosProducts} patientsData={patientsData} posHistoryData={posHistoryData} setPosHistoryData={setPosHistoryData} showToast={showToast} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} />
+                <POSSystem products={posProducts} setProducts={setPosProducts} patientsData={patientsData} setPatientsData={setPatientsData} posHistoryData={posHistoryData} setPosHistoryData={setPosHistoryData} showToast={showToast} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} />
             </div>
             {currentTab === 'inventory' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="ระบบคลังสินค้า" desc="จัดการสต๊อกยาและเวชภัณฑ์ (เช็คข้ามสาขาได้)" icon={Package} /></div>}
             {currentTab === 'reports' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="รายงานระดับองค์กร" desc="ดูสถิติ รายได้ และประสิทธิภาพการทำงานของคลินิก" icon={BarChart3} /></div>}
