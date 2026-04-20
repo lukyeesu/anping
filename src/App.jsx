@@ -4324,12 +4324,11 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
           </div>
         </div>
 
-        {/* Main Content: 2 Columns แบบพอดีหน้าจอ */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0 relative">
+        {/* Main Content: 2 Columns แบบพอดีหน้าจอ (ปรับเป็น md เพื่อให้แท็บเล็ตแนวตั้งแสดงผลแบบ 2 ฝั่งได้) */}
+        <div className="flex-1 flex flex-col md:flex-row gap-3 md:gap-4 lg:gap-6 min-h-0 relative">
           
           {/* Left Column: Product Catalog (ซ่อนบนมือถือถ้าตะกร้าเปิดอยู่) */}
-          {/* แก้ไข: ลบ pb-24 ออกจากกล่องนอก เพื่อไม่ให้เกิดบล็อกสีขาวทึบ */}
-          <div className={`flex-[6] lg:flex-1 flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
+          <div className={`flex-[6] md:flex-1 flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden md:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
             <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50 shrink-0">
@@ -4427,11 +4426,11 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
             </div>
           </div>
 
-          {/* Right Column: Cart Area (บน Desktop แสดงด้านขวา, บนมือถือแสดงเต็มจอเมื่อกดปุ่ม) */}
-          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 md:absolute md:inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
+          {/* Right Column: Cart Area (บน Desktop และ Tablet แสดงด้านขวา, บนมือถือแสดงเต็มจอเมื่อกดปุ่ม) */}
+          <div className={`flex-[4] md:flex-none md:min-h-0 w-full md:w-[280px] lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden md:flex'}`}>
           
             {/* Mobile Cart Header (แสดงเฉพาะบนมือถือเมื่อเปิดตะกร้า) */}
-            <div className="lg:hidden p-4 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
+            <div className="md:hidden p-4 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
                <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
                  <ShoppingCart className="text-sky-500" /> ตะกร้าสินค้า
                </h2>
@@ -4439,8 +4438,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
             </div>
 
             {/* Cart Header & Patient Select */}
-            <div className="p-3 sm:p-4 border-b border-slate-100 bg-white lg:bg-slate-50/50 shrink-0">
-              <h2 className="hidden lg:flex font-bold text-slate-800 kanit-text items-center gap-2 mb-2 sm:mb-3 text-sm sm:text-base">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-white md:bg-slate-50/50 shrink-0">
+              <h2 className="hidden md:flex font-bold text-slate-800 kanit-text items-center gap-2 mb-2 sm:mb-3 text-sm sm:text-base">
                 <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> รายการบิล
             </h2>
             <div className="relative w-full">
@@ -4776,7 +4775,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
 
           {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือตอนอยู่หน้าเลือกสินค้า) --- */}
           {!isMobileCartOpen && (
-            <div className="lg:hidden fixed bottom-[76px] md:absolute md:bottom-6 left-4 right-4 z-40 transition-all duration-300">
+            <div className="md:hidden fixed bottom-[76px] left-4 right-4 z-40 transition-all duration-300">
               <button
                 onClick={() => setIsMobileCartOpen(true)}
                 className={`w-full p-3 rounded-2xl shadow-lg flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}
@@ -5533,8 +5532,8 @@ export default function App() {
       <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-sky-200/40 blur-[100px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-200/30 blur-[100px] pointer-events-none z-0"></div>
 
-      {/* แก้ไข: เพิ่ม flex-col md:flex-row เพื่อให้รองรับ Header แนวนอนบนมือถือ */}
-      <div className="flex h-screen overflow-hidden w-full flex-col md:flex-row relative">
+      {/* แก้ไข: ใช้ h-[100dvh] แทน h-screen เพื่อแก้ปัญหา Address bar บังจอบนมือถือ/แท็บเล็ต */}
+      <div className="flex h-[100dvh] overflow-hidden w-full flex-col md:flex-row relative">
         
         <aside 
           ref={sidebarRef}
