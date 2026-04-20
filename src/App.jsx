@@ -798,17 +798,24 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
     <div className="space-y-3 sm:space-y-4 duration-500 flex flex-col h-full w-full">
        {renderDayDetailsModal()}
 
-       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 sm:gap-4 mb-1 sm:mb-2">
-          {/* Title */}
-          <div className="w-full xl:w-auto">
-             <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500" /> ปฏิทินงาน
-             </h2>
+       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4 mb-2 sm:mb-4 bg-white/50 p-3 sm:p-4 rounded-[1.5rem] border border-slate-100/80 shadow-sm">
+          {/* Title & Current Date Display */}
+          <div className="flex items-center justify-between w-full lg:w-auto gap-3">
+             <div className="flex items-center gap-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center shadow-inner border border-sky-100/50">
+                   <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text leading-tight">ปฏิทินงาน</h2>
+             </div>
+             <div className="flex items-center gap-1.5 bg-sky-50/50 px-3 py-1.5 rounded-xl border border-sky-100/50 lg:bg-transparent lg:border-none lg:p-0">
+                <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></div>
+                <p className="text-xs sm:text-sm font-bold text-sky-600 font-data tracking-tight uppercase">{getTitle()}</p>
+             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full xl:w-auto xl:items-center">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
              {/* Mode Selector */}
-             <div className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-lg sm:rounded-xl w-full sm:w-auto border border-slate-200/60 shadow-sm shrink-0">
+             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-sm shrink-0">
                  {[
                      { id: 'month', label: 'เดือน', icon: CalendarIcon },
                      { id: 'week', label: 'สัปดาห์', icon: TableIcon },
@@ -818,29 +825,25 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                      <button
                         key={mode.id}
                         onClick={() => setViewMode(mode.id)}
-                        className={`px-1.5 sm:px-3 py-1.5 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all ${
+                        className={`px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                             viewMode === mode.id 
                             ? 'bg-white text-sky-600 shadow-sm ring-1 ring-slate-200/50' 
                             : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                         }`}
                      >
-                         <mode.icon className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5 shrink-0" />
-                         <span className="hidden min-[360px]:inline">{mode.label}</span>
+                         <mode.icon className="w-3.5 h-3.5 shrink-0" />
+                         <span className="hidden min-[400px]:inline">{mode.label}</span>
                      </button>
                  ))}
              </div>
 
-             {/* Date Controller */}
-             <div className="flex items-center justify-between bg-white p-1 rounded-lg sm:rounded-xl border border-slate-200 shadow-sm w-full sm:w-auto">
-                <button onClick={() => changePeriod(-1)} className="p-1.5 sm:p-2 hover:bg-sky-50 hover:text-sky-600 rounded-lg text-slate-400 transition-colors shrink-0"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5"/></button>
-                <span className="text-xs sm:text-sm font-bold text-slate-700 min-w-[120px] sm:min-w-[140px] text-center select-none truncate px-1 flex-1">
-                    {getTitle()}
-                </span>
-                <div className="flex items-center shrink-0">
-                    <button onClick={() => changePeriod(1)} className="p-1.5 sm:p-2 hover:bg-sky-50 hover:text-sky-600 rounded-lg text-slate-400 transition-colors"><ChevronRight className="w-4 h-4 sm:w-5 sm:h-5"/></button>
-                    <div className="w-px h-5 sm:h-6 bg-slate-100 mx-1 sm:mx-2"></div>
-                    <button onClick={() => setViewDate(new Date())} className="mr-0.5 sm:mr-1 px-3 sm:px-4 py-1 sm:py-1.5 bg-sky-50 text-sky-600 text-[10px] sm:text-xs font-bold rounded-md sm:rounded-lg hover:bg-sky-100 transition-colors whitespace-nowrap">วันนี้</button>
-                </div>
+             {/* Date Controller (Navigation) */}
+             <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm shrink-0 ml-auto lg:ml-0">
+                <button onClick={() => changePeriod(-1)} className="p-1.5 sm:p-2 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors" title="ก่อนหน้า"><ChevronLeft size={18}/></button>
+                <div className="w-px h-4 bg-slate-100 mx-0.5"></div>
+                <button onClick={() => setViewDate(new Date())} className="px-3 sm:px-4 py-1.5 text-sky-600 text-[10px] sm:text-xs font-bold hover:bg-sky-50 rounded-lg transition-colors whitespace-nowrap">วันนี้</button>
+                <div className="w-px h-4 bg-slate-100 mx-0.5"></div>
+                <button onClick={() => changePeriod(1)} className="p-1.5 sm:p-2 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors" title="ถัดไป"><ChevronRight size={18}/></button>
              </div>
           </div>
        </div>
