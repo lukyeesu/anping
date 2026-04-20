@@ -645,9 +645,9 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                 <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-slate-50/30">
                     {events.length > 0 ? (
                         <>
-                            {/* Desktop Table View */}
                             <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                                <div className="overflow-x-auto">
+                                {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
+                                <div className="overflow-x-auto overflow-y-hidden">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
                                             <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide">
@@ -1449,7 +1449,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0 sm:p-0">
                 <div className="px-2 sm:px-4 py-4">
                     {/* --- Desktop View (Table) --- */}
-                    <div className="hidden lg:block overflow-x-auto">
+                    {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
+                    <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
                         <table className="w-full text-left border-collapse min-w-[900px]">
                             <thead>
                               <tr className="text-slate-500 border-b border-slate-100 text-sm">
@@ -2972,7 +2973,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
               <div className="px-2 sm:px-4 py-4">
                 
                 {/* --- Desktop View (Table) --- */}
-                <div className="hidden lg:block overflow-x-auto">
+                {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
+                <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
                   <table className="w-full text-left border-collapse min-w-[1100px]">
                     <thead>
                       <tr className="text-slate-500 border-b border-slate-100 text-sm">
@@ -3446,7 +3448,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                   {formData.opdRecords && formData.opdRecords.length > 0 ? (
                     <div className="border border-slate-100 rounded-xl bg-white overflow-hidden">
                       {/* --- Desktop View (Table) --- */}
-                      <div className="hidden lg:block overflow-x-auto">
+                      {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
+                      <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
                         <table className="w-full text-left border-collapse min-w-[800px] text-sm">
                           <thead>
                             <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 kanit-text">
