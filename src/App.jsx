@@ -5335,10 +5335,22 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
   const [search, setSearch] = useState('');
   const [activeBranch, setActiveBranch] = useState('ทั้งหมด');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalClosing, setIsModalClosing] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [isAdjustClosing, setIsAdjustClosing] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [adjustItem, setAdjustItem] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // --- Closing logic with animation ---
+  const closeModal = () => {
+    setIsModalClosing(true);
+    setTimeout(() => { setIsModalOpen(false); setIsModalClosing(false); }, 300);
+  };
+  const closeAdjustModal = () => {
+    setIsAdjustClosing(true);
+    setTimeout(() => { setIsAdjustModalOpen(false); setIsAdjustClosing(false); }, 300);
+  };
 
   // --- Calendar states for Expire Date ---
   const [showCalendar, setShowCalendar] = useState(false);
@@ -5653,9 +5665,10 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
       </div>
 
       {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col transform modal-animate-in overflow-hidden border border-slate-100">
+      {isModalOpen && createPortal(
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeModal}></div>
+          <div className={`bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner shrink-0">
@@ -5666,7 +5679,7 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
                   <p className="text-xs text-slate-500 kanit-text">จัดการข้อมูลพื้นฐานและจำนวนขั้นต่ำ</p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
             </div>
             
             <form onSubmit={handleSaveItem} className="p-6 space-y-4">
@@ -5736,14 +5749,15 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
               </div>
 
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-50 transition-colors">ยกเลิก</button>
+                <button type="button" onClick={closeModal} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-50 transition-colors">ยกเลิก</button>
                 <button type="submit" disabled={isProcessing} className="flex-1 py-3 bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 kanit-text hover:bg-sky-600 transition-colors flex items-center justify-center gap-2">
                   {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 size={18} />} ยืนยัน
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* --- Custom Calendar Portal for Inventory --- */}
@@ -5809,9 +5823,10 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
       )}
 
       {/* Adjustment Modal */}
-      {isAdjustModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col transform modal-animate-in overflow-hidden border border-slate-100">
+      {isAdjustModalOpen && createPortal(
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isAdjustClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeAdjustModal}></div>
+          <div className={`bg-white rounded-3xl w-full max-w-sm shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isAdjustClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-sky-50/50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-sky-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
@@ -5822,7 +5837,7 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
                   <p className="text-xs text-slate-500 kanit-text truncate max-w-[180px]">{adjustItem?.product.name}</p>
                 </div>
               </div>
-              <button onClick={() => setIsAdjustModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+              <button onClick={closeAdjustModal} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
             </div>
             
             <form onSubmit={handleSaveAdjustment} className="p-6 space-y-4">
@@ -5875,7 +5890,8 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
