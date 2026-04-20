@@ -4292,11 +4292,31 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
 
   return (
     <>
+      <style>{`
+        @media (max-height: 500px) and (orientation: landscape) {
+          .pos-header { margin-bottom: 0.5rem !important; }
+          .pos-header h1 { font-size: 1.1rem !important; }
+          .pos-header button { padding: 0.25rem 0.5rem !important; font-size: 0.75rem !important; }
+          .pos-search-bar { padding: 0.5rem !important; }
+          .pos-search-bar .relative { margin-bottom: 0.5rem !important; }
+          .pos-search-bar input { padding-top: 0.4rem !important; padding-bottom: 0.4rem !important; }
+          .pos-product-grid { padding: 0.5rem !important; }
+          .pos-product-card { padding: 0.75rem !important; }
+          .pos-product-card .w-12 { width: 2rem !important; height: 2rem !important; margin-bottom: 0.5rem !important; }
+          .pos-product-card .w-14 { width: 2rem !important; height: 2rem !important; margin-bottom: 0.5rem !important; }
+          .pos-product-card h3 { font-size: 0.85rem !important; }
+          .pos-cart-header { padding: 0.5rem !important; }
+          .pos-cart-items { padding: 0.5rem !important; }
+          .pos-summary-toggle { py: 0.25rem !important; }
+          .pos-summary-content { padding: 0.5rem !important; }
+          .pos-checkout-btn { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+        }
+      `}</style>
       {/* แก้ไข: เพิ่ม z-[70] เมื่อเปิดตะกร้าบนมือถือ เพื่อยกเลเยอร์ให้ลอยข้าม Header และ Navbar */}
       <div className={`absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in ${isMobileCartOpen ? 'z-[70]' : ''}`}>
         
         {/* Header ของ POS */}
-        <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
+        <div className="pos-header flex flex-row justify-between items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
           <div className="flex flex-col items-start">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2 leading-none">
               <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500 shrink-0" /> 
@@ -4331,7 +4351,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
           <div className={`flex-[6] md:flex-1 flex flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden md:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
-            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50 shrink-0">
+            <div className="pos-search-bar p-3 sm:p-4 border-b border-slate-100 bg-slate-50 shrink-0">
               <div className="relative mb-3">
                 <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                 <input 
@@ -4363,7 +4383,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
 
             {/* Product Grid */}
             {/* แก้ไข: ย้าย pb-24 มาไว้ที่กล่องนี้แทน เพื่อให้เลื่อนรายการล่างสุดให้พ้นปุ่มลอยได้ */}
-            <div className="flex-1 p-3 sm:p-4 pb-24 lg:pb-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
+            <div className="pos-product-grid flex-1 p-3 sm:p-4 pb-24 lg:pb-4 overflow-y-auto custom-scrollbar bg-slate-50/30">
               {isGlobalLoading ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 sm:gap-4 auto-rows-max">
                   {Array.from({ length: 12 }).map((_, i) => (
@@ -4389,7 +4409,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
                       <button 
                         key={product.id}
                         onClick={() => addToCart(product)}
-                        className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
+                        className="pos-product-card bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 hover:border-sky-300 hover:shadow-md hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
                         style={{ animationDelay: `${(index % 20) * 30}ms` }}
                       >
                         <div className="w-12 h-12 sm:w-14 sm:h-14 bg-sky-50 text-sky-500 rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
