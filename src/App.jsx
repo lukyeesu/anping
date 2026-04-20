@@ -3862,6 +3862,17 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
   // --- เพิ่ม State ควบคุมการเปิดปิดตะกร้าบนมือถือ ---
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
+  // แก้ไข: เพิ่ม Effect สำหรับรีเซ็ตสถานะตะกร้ามือถือเมื่อขยายหน้าจอ (Resize Bug Fix)
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768 && isMobileCartOpen) {
+        setIsMobileCartOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMobileCartOpen]);
+
   // --- States สำหรับการจัดการสินค้า POS ---
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isManageClosing, setIsManageClosing] = useState(false);
