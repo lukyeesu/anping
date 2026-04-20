@@ -5340,6 +5340,48 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
   const [adjustItem, setAdjustItem] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // --- Calendar states for Expire Date ---
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calDate, setCalDate] = useState(new Date());
+  const [calView, setCalView] = useState('days'); // 'days', 'months', 'years'
+  const [yearPageStart, setYearPageStart] = useState(0);
+  const [isCalendarClosing, setIsCalendarClosing] = useState(false);
+  const expireDateWrapperRef = React.useRef(null);
+
+  const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+
+  const closeCalendar = () => {
+    setIsCalendarClosing(true);
+    setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300);
+  };
+
+  const handleOpenCalendar = () => {
+    if (formData.expireDate && formData.expireDate.includes('/')) {
+        const parts = formData.expireDate.split('/');
+        const y = parseInt(parts[2], 10) - 543;
+        if (!isNaN(y)) setCalDate(new Date(y, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)));
+    } else {
+        setCalDate(new Date());
+    }
+    setCalView('days');
+    setShowCalendar(true);
+  };
+
+  const handleDaySelect = (day) => {
+    const d = String(day).padStart(2, '0');
+    const m = String(calDate.getMonth() + 1).padStart(2, '0');
+    const y = calDate.getFullYear() + 543;
+    setFormData({ ...formData, expireDate: `${d}/${m}/${y}` });
+    closeCalendar();
+  };
+
+  const handlePrevMonth = () => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() - 1, 1));
+  const handleNextMonth = () => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() + 1, 1));
+
+  useEffect(() => {
+    if (calView === 'years') setYearPageStart(Math.floor((calDate.getFullYear() + 543) / 12) * 12);
+  }, [calView, calDate]);
+
   // Form states
   const initialForm = { id: '', productId: '', branchId: 'b1', quantity: 0, minStock: 5, expireDate: '', lotNo: '' };
   const [formData, setFormData] = useState(initialForm);
@@ -5676,13 +5718,20 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
                     onChange={e => setFormData({...formData, minStock: e.target.value})}
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1 kanit-text uppercase">วันหมดอายุ (ถ้ามี)</label>
-                  <input 
-                    type="date" className={theme.input}
-                    value={formData.expireDate}
-                    onChange={e => setFormData({...formData, expireDate: e.target.value})}
-                  />
+                  <div ref={expireDateWrapperRef} className="relative group">
+                    <input 
+                      type="text" className={`${theme.input} pr-12 font-data`} 
+                      value={formData.expireDate} 
+                      onChange={e => setFormData({...formData, expireDate: e.target.value})}
+                      placeholder="วว/ดด/ปปปป"
+                      maxLength="10"
+                    />
+                    <button type="button" onClick={handleOpenCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors">
+                      <CalendarIcon size={20} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -5695,6 +5744,68 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
             </form>
           </div>
         </div>
+      )}
+
+      {/* --- Custom Calendar Portal for Inventory --- */}
+      {showCalendar && createPortal(
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeCalendar}></div>
+          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            
+            {calView === 'days' && (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <button type="button" onClick={handlePrevMonth} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={handleNextMonth} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-3">
+                  {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
+                </div>
+                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
+                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 h-8"></div>)}
+                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                    const isSelected = formData.expireDate === `${String(day).padStart(2, '0')}/${String(calDate.getMonth() + 1).padStart(2, '0')}/${calDate.getFullYear() + 543}`;
+                    const isToday = new Date().getDate() === day && new Date().getMonth() === calDate.getMonth() && new Date().getFullYear() === calDate.getFullYear();
+                    return (<button key={day} type="button" onClick={() => handleDaySelect(day)} className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data ${isSelected ? 'bg-sky-500 text-white shadow-md shadow-sky-500/40 transform scale-110' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>)
+                  })}
+                </div>
+              </>
+            )}
+
+            {calView === 'months' && (
+              <>
+                <div className="flex justify-between items-center mb-6">
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm font-data">{calDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'].map((m, i) => (
+                    <button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all kanit-text ${calDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {calView === 'years' && (
+              <>
+                <div className="flex justify-between items-center mb-6">
+                  <button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                  <span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{yearPageStart} - {yearPageStart + 11}</span>
+                  <button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (
+                    <button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all font-data ${(calDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Adjustment Modal */}
