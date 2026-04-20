@@ -4332,8 +4332,8 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
           <div className={`flex-[6] lg:flex-1 flex-col bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
-            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 shrink-0 space-y-2 sm:space-y-3">
-              <div className="relative">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50 shrink-0">
+              <div className="relative mb-3">
                 <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                 <input 
                   type="text" 
@@ -4345,12 +4345,12 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
               </div>
               
               {/* Category Pills */}
-              <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+              <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2 pt-1 -mx-1 px-1">
                 {categories.map(cat => (
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold kanit-text transition-all ${
+                    className={`whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold kanit-text transition-all shrink-0 ${
                       activeCategory === cat 
                       ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20' 
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -4428,8 +4428,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
           </div>
 
           {/* Right Column: Cart Area (บน Desktop แสดงด้านขวา, บนมือถือแสดงเต็มจอเมื่อกดปุ่ม) */}
-          {/* แก้ไข: ปรับ z-index ให้สอดคล้องกับคอนเทนเนอร์หลัก */}
-          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
+          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 md:absolute md:inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
           
             {/* Mobile Cart Header (แสดงเฉพาะบนมือถือเมื่อเปิดตะกร้า) */}
             <div className="lg:hidden p-4 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
@@ -4777,7 +4776,7 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
 
           {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือตอนอยู่หน้าเลือกสินค้า) --- */}
           {!isMobileCartOpen && (
-            <div className="lg:hidden fixed bottom-[76px] left-4 right-4 z-40 transition-transform duration-300">
+            <div className="lg:hidden fixed bottom-[76px] md:absolute md:bottom-6 left-4 right-4 z-40 transition-all duration-300">
               <button
                 onClick={() => setIsMobileCartOpen(true)}
                 className={`w-full p-3 rounded-2xl shadow-lg flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}
