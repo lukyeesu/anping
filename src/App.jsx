@@ -3805,8 +3805,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 };
 
 // --- ระบบ POS (Point of Sale) ---
-// แก้ไข: เพิ่ม callAppScript เข้ามารับค่า Props
-const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsData, posHistoryData = [], setPosHistoryData, showToast, callAppScript, isGlobalLoading }) => {
+// แก้ไข: เพิ่ม Props สำหรับคลังสินค้าเพื่อตัดสต็อกอัตโนมัติ
+const POSSystem = ({ 
+    products = [], setProducts, 
+    patientsData = [], setPatientsData, 
+    posHistoryData = [], setPosHistoryData, 
+    inventoryData = [], setInventoryData,
+    setInventoryLogsData,
+    showToast, callAppScript, isGlobalLoading 
+}) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
@@ -4070,6 +4077,43 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
         // ส่งข้อมูลไปบันทึกลงชีตชื่อ 'POS_Transactions' (เปลี่ยนชื่อได้ตามต้องการ)
         await callAppScript('SAVE_DATA', 'POS_Transactions', transactionData);
         
+        // --- ระบบตัดสต็อกอัตโนมัติ (Automatic Stock Deduction) ---
+        cart.forEach(async item => {
+            if (item.product.stockManaged) {
+                // ค้นหาข้อมูลสต็อกที่ตรงกับสินค้าและสาขานี้ (สมมติ b1 เป็นสาขาหลัก)
+                const stockItem = inventoryData.find(inv => inv.productId === item.product.id && inv.branchId === 'b1');
+                if (stockItem) {
+                    const newQty = Math.max(0, stockItem.quantity - item.quantity);
+                    const updatedStock = { ...stockItem, quantity: newQty };
+                    
+                    // บันทึกการอัปเดตสต็อก
+                    await callAppScript('SAVE_DATA', 'Inventory', updatedStock);
+                    
+                    // สร้าง Log การตัดสต็อก
+                    const logPayload = {
+                        id: `LOG${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        productId: item.product.id,
+                        branchId: 'b1',
+                        type: 'SALE',
+                        amount: item.quantity,
+                        balance: newQty,
+                        reason: `ขายสินค้า (บิล: ${receiptId})`,
+                        note: `ลูกค้า: ${patientSearchTerm || 'ทั่วไป'}`,
+                        timestamp: new Date().toISOString()
+                    };
+                    await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
+
+                    // อัปเดต State สต็อกและ Log ทันที
+                    if (setInventoryData) {
+                        setInventoryData(prev => prev.map(s => s.id === stockItem.id ? updatedStock : s));
+                    }
+                    if (setInventoryLogsData) {
+                        setInventoryLogsData(prev => [logPayload, ...prev]);
+                    }
+                }
+            }
+        });
+
         // --- เพิ่มระบบจัดการคอร์ส/แพ็กเกจ ---
         if (selectedPatientId && patientsData.length > 0) {
             const currentPatient = patientsData.find(p => (p.id || p.hn) === selectedPatientId);
@@ -5331,13 +5375,24 @@ const POSSystem = ({ products = [], setProducts, patientsData = [], setPatientsD
 };
 
 // --- ระบบคลังสินค้า (Inventory Manager) ---
-const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = [], showToast, callAppScript, isGlobalLoading }) => {
+const InventoryManager = ({ 
+    inventoryData = [], setInventoryData, 
+    inventoryLogsData = [], setInventoryLogsData,
+    posProducts = [], showToast, callAppScript, isGlobalLoading 
+}) => {
   const [search, setSearch] = useState('');
-  const [activeBranch, setActiveBranch] = useState('ทั้งหมด');
+  const [activeBranch, setActiveBranch] = useState('b1'); // เริ่มต้นที่ b1
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isAdjustClosing, setIsAdjustClosing] = useState(false);
+
+  // Log Modal States
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isLogClosing, setIsLogClosing] = useState(false);
+  const [selectedProductLogs, setSelectedProductLogs] = useState([]);
+  const [logProductInfo, setLogProductInfo] = useState(null);
+
   const [editingItem, setEditingItem] = useState(null);
   const [adjustItem, setAdjustItem] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -5350,6 +5405,10 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
   const closeAdjustModal = () => {
     setIsAdjustClosing(true);
     setTimeout(() => { setIsAdjustModalOpen(false); setIsAdjustClosing(false); }, 300);
+  };
+  const closeLogModal = () => {
+    setIsLogClosing(true);
+    setTimeout(() => { setIsLogModalOpen(false); setIsLogClosing(false); }, 300);
   };
 
   // --- Calendar states for Expire Date ---
@@ -5400,27 +5459,38 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
   const [adjustData, setAdjustData] = useState({ type: 'add', amount: 1, reason: '' });
 
   const branches = [
-    { id: 'ทั้งหมด', name: 'ทุกสาขา' },
     { id: 'b1', name: 'สาขาหลัก' },
     { id: 'b2', name: 'สาขาเชียงใหม่' },
   ];
 
-  // ค้นหาสินค้าจาก POS มาประกบข้อมูลสต็อก
+  // แก้ไข: ดึงสินค้าจาก POS ที่ตั้งค่าเป็น stockManaged มาแสดงทั้งหมดอัตโนมัติ
   const joinedData = useMemo(() => {
-    return inventoryData.map(inv => {
-      const product = posProducts.find(p => p.id === inv.productId) || { name: 'สินค้าไม่พบในระบบ', type: 'ไม่ระบุ', icon: 'Package' };
-      return { ...inv, product };
+    // กรองสินค้าที่ต้องจัดการสต็อก
+    const manageableProducts = posProducts.filter(p => p.stockManaged);
+    
+    return manageableProducts.map(product => {
+      // ค้นหายอดคงเหลือในสต็อกตามสินค้าและสาขาที่เลือก
+      const inv = inventoryData.find(i => i.productId === product.id && i.branchId === activeBranch);
+      return { 
+        id: inv?.id || `AUTO_${product.id}_${activeBranch}`,
+        productId: product.id,
+        branchId: activeBranch,
+        quantity: inv?.quantity || 0,
+        minStock: inv?.minStock || 5,
+        expireDate: inv?.expireDate || '',
+        lotNo: inv?.lotNo || '',
+        product: product
+      };
     });
-  }, [inventoryData, posProducts]);
+  }, [inventoryData, posProducts, activeBranch]);
 
   const filteredData = useMemo(() => {
     return joinedData.filter(item => {
       const matchSearch = item.product.name.toLowerCase().includes(search.toLowerCase()) || 
                           (item.productId && item.productId.toLowerCase().includes(search.toLowerCase()));
-      const matchBranch = activeBranch === 'ทั้งหมด' || item.branchId === activeBranch;
-      return matchSearch && matchBranch;
+      return matchSearch;
     });
-  }, [joinedData, search, activeBranch]);
+  }, [joinedData, search]);
 
   // สถิติสต็อก
   const stats = useMemo(() => {
@@ -5432,14 +5502,14 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setFormData({ ...initialForm });
+    setFormData({ ...initialForm, branchId: activeBranch });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item) => {
     setEditingItem(item);
     setFormData({
-      id: item.id,
+      id: item.id.startsWith('AUTO_') ? '' : item.id,
       productId: item.productId,
       branchId: item.branchId,
       quantity: item.quantity,
@@ -5456,27 +5526,52 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
     setIsAdjustModalOpen(true);
   };
 
+  // ฟังก์ชันเปิดดูประวัติ (Log)
+  const handleOpenLogs = (item) => {
+    const logs = inventoryLogsData.filter(l => l.productId === item.productId && l.branchId === item.branchId);
+    setSelectedProductLogs(logs);
+    setLogProductInfo(item.product);
+    setIsLogModalOpen(true);
+  };
+
   const handleSaveItem = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
     try {
+      const isNew = !formData.id;
+      const finalId = formData.id || `STK${Date.now()}`;
       const payload = {
         ...formData,
-        id: formData.id || `STK${Date.now()}`,
+        id: finalId,
         quantity: Number(formData.quantity),
         minStock: Number(formData.minStock)
       };
       
       await callAppScript('SAVE_DATA', 'Inventory', payload);
       
-      if (editingItem) {
-        setInventoryData(prev => prev.map(i => i.id === payload.id ? payload : i));
-      } else {
-        setInventoryData(prev => [payload, ...prev]);
-      }
+      // สร้าง Log สำหรับการตั้งค่า/แก้ไขเริ่มต้น
+      const logPayload = {
+          id: `LOG${Date.now()}`,
+          productId: payload.productId,
+          branchId: payload.branchId,
+          type: 'MANUAL',
+          amount: payload.quantity,
+          balance: payload.quantity,
+          reason: isNew ? 'ตั้งค่าเริ่มต้น' : 'แก้ไขข้อมูลพื้นฐาน',
+          timestamp: new Date().toISOString()
+      };
+      await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
+
+      setInventoryData(prev => {
+          const exists = prev.some(i => i.id === finalId);
+          if (exists) return prev.map(i => i.id === finalId ? payload : i);
+          return [payload, ...prev];
+      });
+
+      setInventoryLogsData(prev => [logPayload, ...prev]);
       
-      showToast('บันทึกข้อมูลคลังสินค้าสำเร็จ', 'success');
-      setIsModalOpen(false);
+      showToast('บันทึกข้อมูลสำเร็จ', 'success');
+      closeModal();
     } catch (err) {
       showToast('ไม่สามารถบันทึกข้อมูลได้', 'warning');
     } finally {
@@ -5489,17 +5584,45 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
     setIsProcessing(true);
     try {
       const amount = Number(adjustData.amount);
-      const newQty = adjustData.type === 'add' ? adjustItem.quantity + amount : Math.max(0, adjustItem.quantity - amount);
+      const isAdd = adjustData.type === 'add';
+      const newQty = isAdd ? adjustItem.quantity + amount : Math.max(0, adjustItem.quantity - amount);
       
-      const payload = { ...adjustItem, quantity: newQty };
-      // ลบข้อมูลที่ joined มาออกก่อนบันทึก
-      delete payload.product;
+      // หากยังไม่มีข้อมูลสต็อกในฐานข้อมูล (กรณี AUTO row) ให้สร้าง Payload ใหม่
+      const finalId = adjustItem.id.startsWith('AUTO_') ? `STK${Date.now()}` : adjustItem.id;
+      const payload = { 
+          id: finalId,
+          productId: adjustItem.productId,
+          branchId: adjustItem.branchId,
+          quantity: newQty,
+          minStock: adjustItem.minStock,
+          expireDate: adjustItem.expireDate,
+          lotNo: adjustItem.lotNo
+      };
 
       await callAppScript('SAVE_DATA', 'Inventory', payload);
-      setInventoryData(prev => prev.map(i => i.id === payload.id ? payload : i));
+      
+      // สร้าง Log
+      const logPayload = {
+          id: `LOG${Date.now()}`,
+          productId: adjustItem.productId,
+          branchId: adjustItem.branchId,
+          type: isAdd ? 'IN' : 'OUT',
+          amount: amount,
+          balance: newQty,
+          reason: adjustData.reason || (isAdd ? 'รับเข้า (ปกติ)' : 'จ่ายออก/ปรับปรุง'),
+          timestamp: new Date().toISOString()
+      };
+      await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
+
+      setInventoryData(prev => {
+          const exists = prev.some(i => i.id === finalId);
+          if (exists) return prev.map(i => i.id === finalId ? payload : i);
+          return [payload, ...prev];
+      });
+      setInventoryLogsData(prev => [logPayload, ...prev]);
       
       showToast(`ปรับปรุงสต็อกสำเร็จ (ยอดใหม่: ${newQty})`, 'success');
-      setIsAdjustModalOpen(false);
+      closeAdjustModal();
     } catch (err) {
       showToast('ไม่สามารถปรับปรุงสต็อกได้', 'warning');
     } finally {
@@ -5592,7 +5715,7 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
                   const isOut = item.quantity <= 0;
                   
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => handleOpenLogs(item)}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isOut ? 'bg-rose-50 text-rose-500' : isLow ? 'bg-amber-50 text-amber-500' : 'bg-sky-50 text-sky-500'}`}>
@@ -5631,16 +5754,23 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity no-drag-zone">
                           <button 
-                            onClick={() => handleOpenAdjust(item)}
+                            onClick={(e) => { e.stopPropagation(); handleOpenLogs(item); }}
+                            className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="ดูประวัติ"
+                          >
+                            <History size={16} />
+                          </button>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleOpenAdjust(item); }}
                             className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
                             title="ปรับสต็อก"
                           >
                             <ArrowUpDown size={16} />
                           </button>
                           <button 
-                            onClick={() => handleOpenEdit(item)}
+                            onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }}
                             className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
                             title="แก้ไข"
                           >
@@ -5893,6 +6023,88 @@ const InventoryManager = ({ inventoryData = [], setInventoryData, posProducts = 
         </div>,
         document.body
       )}
+
+      {/* Log Modal */}
+      {isLogModalOpen && createPortal(
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isLogClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeLogModal}></div>
+          <div className={`bg-white rounded-3xl w-full max-w-2xl max-h-[85dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isLogClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shadow-inner shrink-0">
+                  <History size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">ประวัติการเคลื่อนไหวสต็อก</h3>
+                  <p className="text-xs text-slate-500 kanit-text truncate max-w-[250px]">{logProductInfo?.name}</p>
+                </div>
+              </div>
+              <button onClick={closeLogModal} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30">
+              {selectedProductLogs.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedProductLogs.map((log, idx) => (
+                    <div key={log.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:border-indigo-200 transition-all">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                            log.type === 'SALE' ? 'bg-amber-50 text-amber-500' :
+                            log.type === 'IN' ? 'bg-emerald-50 text-emerald-500' :
+                            log.type === 'OUT' ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-500'
+                        }`}>
+                            {log.type === 'SALE' ? <Calculator size={18} /> :
+                             log.type === 'IN' ? <Plus size={18} /> :
+                             log.type === 'OUT' ? <Minus size={18} /> : <Settings size={18} />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                             <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                log.type === 'SALE' ? 'bg-amber-100 text-amber-600' :
+                                log.type === 'IN' ? 'bg-emerald-100 text-emerald-600' :
+                                log.type === 'OUT' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'
+                             }`}>
+                                {log.type === 'SALE' ? 'ขายสินค้า' :
+                                 log.type === 'IN' ? 'รับเข้า' :
+                                 log.type === 'OUT' ? 'จ่ายออก' : 'ปรับปรุง'}
+                             </span>
+                             <span className="text-[10px] text-slate-400 font-data">{formatDateTime(log.timestamp)}</span>
+                          </div>
+                          <p className="text-sm font-bold text-slate-700 kanit-text mt-1">{log.reason}</p>
+                          {log.note && <p className="text-[11px] text-slate-400 kanit-text italic mt-0.5">{log.note}</p>}
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-50">
+                        <div className="flex items-center gap-1.5">
+                            <span className={`text-sm font-black ${
+                                log.type === 'IN' ? 'text-emerald-500' : 
+                                log.type === 'MANUAL' ? 'text-sky-500' : 'text-rose-500'
+                            }`}>
+                                {log.type === 'IN' || (log.type === 'MANUAL' && log.amount > 0) ? '+' : '-'}{log.amount}
+                            </span>
+                            <span className="text-[10px] text-slate-400 kanit-text font-medium">รายการ</span>
+                        </div>
+                        <div className="text-[11px] font-bold text-slate-400 kanit-text">คงเหลือ: <span className="text-slate-600 font-data">{log.balance}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                  <History size={48} className="opacity-10 mb-3" />
+                  <p className="kanit-text text-sm italic">ยังไม่มีประวัติความเคลื่อนไหว</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0 flex justify-end">
+                <button onClick={closeLogModal} className="px-6 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-100 transition-colors shadow-sm">ปิดหน้าต่าง</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
@@ -6033,6 +6245,7 @@ export default function App() {
   const [patientsData, setPatientsData] = useState(GOOGLE_SCRIPT_URL ? [] : mockPatients);
   const [queueData, setQueueData] = useState([]);
   const [inventoryData, setInventoryData] = useState([]);
+  const [inventoryLogsData, setInventoryLogsData] = useState([]); // เพิ่ม State เก็บประวัติคลังสินค้า
   const [posHistoryData, setPosHistoryData] = useState([]); // เพิ่ม State เก็บประวัติ POS
   const [posProducts, setPosProducts] = useState([]); // เปลี่ยนจาก mockProducts เป็นอาร์เรย์ว่าง เพื่อรอดึงข้อมูลของจริง
   const [isDataFetched, setIsDataFetched] = useState(false);
@@ -6102,6 +6315,12 @@ export default function App() {
         const resInventory = await callAppScript('GET_DATA', 'Inventory');
         if (resInventory && resInventory.status === 'success') {
           setInventoryData(resInventory.data || []);
+        }
+
+        // ดึงประวัติคลังสินค้า (InventoryLogs)
+        const resInvLogs = await callAppScript('GET_DATA', 'InventoryLogs');
+        if (resInvLogs && resInvLogs.status === 'success') {
+          setInventoryLogsData(resInvLogs.data && resInvLogs.data.length > 0 ? resInvLogs.data.reverse() : []);
         }
 
         // ดึงรายการตั้งค่าสินค้าและบริการ POS
@@ -6273,13 +6492,28 @@ export default function App() {
                 <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
-                {/* แก้ไข: ส่ง Props posProducts ลงไปให้ POSSystem ใช้งาน */}
-                <POSSystem products={posProducts} setProducts={setPosProducts} patientsData={patientsData} setPatientsData={setPatientsData} posHistoryData={posHistoryData} setPosHistoryData={setPosHistoryData} showToast={showToast} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} />
+                {/* แก้ไข: ส่ง Props posProducts และข้อมูลสต็อกลงไปให้ POSSystem ใช้งาน */}
+                <POSSystem 
+                    products={posProducts} 
+                    setProducts={setPosProducts} 
+                    patientsData={patientsData} 
+                    setPatientsData={setPatientsData} 
+                    posHistoryData={posHistoryData} 
+                    setPosHistoryData={setPosHistoryData} 
+                    inventoryData={inventoryData}
+                    setInventoryData={setInventoryData}
+                    setInventoryLogsData={setInventoryLogsData}
+                    showToast={showToast} 
+                    callAppScript={callAppScript} 
+                    isGlobalLoading={isGlobalLoading} 
+                />
             </div>
             <div style={{ display: currentTab === 'inventory' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
                 <InventoryManager 
                     inventoryData={inventoryData} 
                     setInventoryData={setInventoryData} 
+                    inventoryLogsData={inventoryLogsData}
+                    setInventoryLogsData={setInventoryLogsData}
                     posProducts={posProducts} 
                     showToast={showToast} 
                     callAppScript={callAppScript} 
