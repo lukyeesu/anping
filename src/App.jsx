@@ -5002,7 +5002,7 @@ const POSSystem = ({
                   ))}
                 </div>
               ) : filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-5 auto-rows-max">
+                <div className="grid grid-cols-2 min-[450px]:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 sm:gap-5 auto-rows-max">
                   {filteredProducts.map((product, index) => {
                     const Icon = typeof product.icon === 'string' ? (POS_ICONS[product.icon] || Package) : (product.icon || Package);
                     return (
@@ -5902,7 +5902,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
         
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30">
           {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {filteredProducts.map((prod) => {
                 const PIcon = typeof prod.icon === 'string' ? (POS_ICONS[prod.icon] || Package) : (prod.icon || Package);
                 return (
@@ -6471,10 +6471,48 @@ const InventoryManager = ({
 
   // สถิติสต็อก
   const stats = useMemo(() => {
-    const total = filteredData.length;
-    const low = filteredData.filter(i => i.quantity <= i.minStock && i.quantity > 0).length;
-    const out = filteredData.filter(i => i.quantity <= 0).length;
-    return { total, low, out };
+    const today = new Date();
+    let total = 0, low = 0, out = 0, expired = 0, nearExpiry = 0;
+
+    filteredData.forEach(item => {
+      total++;
+      if (item.quantity <= 0) {
+        out++;
+      } else {
+        if (item.quantity <= item.minStock) low++;
+
+        // เช็ควันหมดอายุ
+        const checkExpiration = (stockItem) => {
+          if (!stockItem.expireDate || !stockItem.expireDate.includes('/') || stockItem.quantity <= 0) return { isExpired: false, isNear: false };
+          const parts = stockItem.expireDate.split('/');
+          if (parts.length !== 3) return { isExpired: false, isNear: false };
+          const expDate = new Date(parseInt(parts[2], 10) - 543, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+          const monthsDiff = (expDate.getFullYear() - today.getFullYear()) * 12 + (expDate.getMonth() - today.getMonth());
+          
+          if (expDate < today) return { isExpired: true, isNear: false };
+          if (monthsDiff <= 3) return { isExpired: false, isNear: true };
+          return { isExpired: false, isNear: false };
+        };
+
+        if (item.isGrouped) {
+          let prodHasExpired = false;
+          let prodHasNear = false;
+          item.stocks.forEach(s => {
+            const { isExpired, isNear } = checkExpiration(s);
+            if (isExpired) prodHasExpired = true;
+            if (isNear) prodHasNear = true;
+          });
+          if (prodHasExpired) expired++;
+          if (prodHasNear) nearExpiry++;
+        } else {
+          const { isExpired, isNear } = checkExpiration(item);
+          if (isExpired) expired++;
+          if (isNear) nearExpiry++;
+        }
+      }
+    });
+
+    return { total, low, out, expired, nearExpiry };
   }, [filteredData]);
 
   const handleOpenAdd = () => {
@@ -6710,18 +6748,26 @@ const InventoryManager = ({
       </div>
 
       {/* Stats Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0"><Package size={28} /></div>
-          <div><p className="text-xs font-black text-slate-400 kanit-text uppercase tracking-wider">รายการทั้งหมด</p><p className="text-2xl font-bold text-slate-800 font-data">{stats.total} <span className="text-sm text-slate-400 font-normal">รายการ</span></p></div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-5 mb-8">
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 sm:gap-5">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0"><Package size={24} className="sm:w-7 sm:h-7" /></div>
+          <div><p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider">รายการทั้งหมด</p><p className="text-lg sm:text-2xl font-bold text-slate-800 font-data">{stats.total}</p></div>
         </div>
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shrink-0"><AlertTriangle size={28} /></div>
-          <div><p className="text-xs font-black text-slate-400 kanit-text uppercase tracking-wider">สต็อกใกล้หมด</p><p className="text-2xl font-bold text-amber-600 font-data">{stats.low} <span className="text-sm text-slate-400 font-normal">รายการ</span></p></div>
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 sm:gap-5">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shrink-0"><AlertTriangle size={24} className="sm:w-7 sm:h-7" /></div>
+          <div><p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider">สต็อกใกล้หมด</p><p className="text-lg sm:text-2xl font-bold text-amber-600 font-data">{stats.low}</p></div>
         </div>
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-5">
-          <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0"><X size={28} /></div>
-          <div><p className="text-xs font-black text-slate-400 kanit-text uppercase tracking-wider">สินค้าหมด</p><p className="text-2xl font-bold text-rose-600 font-data">{stats.out} <span className="text-sm text-slate-400 font-normal">รายการ</span></p></div>
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 sm:gap-5">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0"><X size={24} className="sm:w-7 sm:h-7" /></div>
+          <div><p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider">สินค้าหมด</p><p className="text-lg sm:text-2xl font-bold text-rose-600 font-data">{stats.out}</p></div>
+        </div>
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 sm:gap-5">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shrink-0"><AlertOctagon size={24} className="sm:w-7 sm:h-7" /></div>
+          <div><p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider">หมดอายุ</p><p className="text-lg sm:text-2xl font-bold text-rose-700 font-data">{stats.expired}</p></div>
+        </div>
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 sm:gap-5 col-span-2 lg:col-span-1">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0"><Clock size={24} className="sm:w-7 sm:h-7" /></div>
+          <div><p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใกล้หมดอายุ</p><p className="text-lg sm:text-2xl font-bold text-amber-700 font-data">{stats.nearExpiry}</p></div>
         </div>
       </div>
 
