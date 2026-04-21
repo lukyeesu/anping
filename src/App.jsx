@@ -49,6 +49,7 @@ const POS_ICONS = {
 // --- 1. ย้ายฟังก์ชันและ Component ย่อยออกมาไว้ด้านนอก เพื่อป้องกันการ Unmount ---
 // -------------------------------------------------------------------------
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyu6OHkP7SYE9iDmA2XW5ErVAx0w8n99Kj_ZOocZgi-LcIEMsbfYqtRmbkCOhW1r1aoow/exec"; 
+const VISION_API_KEY = "AIzaSyAlp6qqbUh0ti4fJ4ozGvqoIAOI0coRQBM"; // ใส่ Google Vision API Key ของคุณที่นี่เพื่อใช้งานระบบสแกนบัตร OCR
 
 // --- ฟังก์ชันและ Component เสริมที่ขาดหายไป ---
 const formatDate = (dateString) => {
@@ -126,6 +127,31 @@ const getPatientFullName = (p) => {
        return `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`.trim();
    }
    return p.name || '-';
+};
+
+const generateNextHN = (patients) => {
+  if (!patients || patients.length === 0) return 'HN0001';
+  let maxNum = 0;
+  patients.forEach(p => {
+     const numMatch = (p.hn || p.id || '').match(/\d+/);
+     if (numMatch && parseInt(numMatch[0], 10) > maxNum) maxNum = parseInt(numMatch[0], 10);
+  });
+  return `HN${String(maxNum + 1).padStart(4, '0')}`;
+};
+
+const getAgeString = (dobStr) => {
+  if (!dobStr || dobStr.length < 10) return '-';
+  const parts = dobStr.split('/');
+  if (parts.length === 3) {
+    const dobDate = new Date(parseInt(parts[2], 10) - 543, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+    if (isNaN(dobDate.getTime())) return '-';
+    const now = new Date();
+    let years = now.getFullYear() - dobDate.getFullYear();
+    let months = now.getMonth() - dobDate.getMonth();
+    if (months < 0 || (months === 0 && now.getDate() < dobDate.getDate())) { years--; months += 12; }
+    return `${years} ปี ${months} เดือน`;
+  }
+  return '-';
 };
 
 const getPatientId = (p) => p ? (p.hn || p.id || '-') : '-';
@@ -307,7 +333,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                 {(isOpen || !compact) && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && (
-                <div className={`absolute z-[100] bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'min-w-full w-max max-w-[90vw] left-0 origin-top zoom-in-95' : 'w-full max-h-48 origin-top zoom-in-95'}`}>
+                <div className={`absolute z-[100] bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'min-w-full w-max max-w-[90vw] max-h-48 left-0 origin-top zoom-in-95' : 'w-full max-h-48 origin-top zoom-in-95'}`}>
                     {options.length > 0 ? options.map((opt, i) => {
                         const val = typeof opt === 'object' ? opt.value : opt;
                         const lbl = typeof opt === 'object' ? opt.label : opt;
@@ -975,7 +1001,26 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const apptDatetimeWrapperRef = React.useRef(null);
 
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-  const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const convertThaiToISO = (thaiDateTimeStr) => {
+      if (!thaiDateTimeStr) return null;
+      try {
+          const parts = thaiDateTimeStr.split(' ');
+          const dateParts = parts[0].split('/');
+          if (dateParts.length !== 3) return null;
+          const d = parseInt(dateParts[0], 10);
+          const m = parseInt(dateParts[1], 10) - 1;
+          const y = parseInt(dateParts[2], 10) - 543;
+          let h = 0, min = 0;
+          if (parts[1]) {
+              const timeParts = parts[1].replace('น.', '').trim().split(':');
+              if (timeParts.length >= 2) {
+                  h = parseInt(timeParts[0], 10);
+                  min = parseInt(timeParts[1], 10);
+              }
+          }
+          return new Date(y, m, d, h, min).toISOString();
+      } catch(e) { return null; }
+  };
 
   useEffect(() => {
     if (apptCalView === 'years') setApptYearPageStart(Math.floor((apptCalDate.getFullYear() + 543) / 12) * 12);
@@ -1858,6 +1903,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     
                     <CustomSelect 
                         compact 
+                        dropUp
                         value={apptTime.h} 
                         onChange={v => setApptTime({...apptTime, h: v})} 
                         options={Array.from({length:24}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
@@ -1867,6 +1913,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     
                     <CustomSelect 
                         compact 
+                        dropUp
                         value={apptTime.m} 
                         onChange={v => setApptTime({...apptTime, m: v})} 
                         options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
@@ -2833,7 +2880,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   const handleRealScan = async () => {
     if (!VISION_API_KEY) {
-        showToast('กรุณาตั้งค่า VISION_API_KEY ในโค้ดก่อนใช้งาน (หาได้ที่บรรทัดประมาณ 695)', 'warning');
+        showToast('กรุณาตั้งค่า VISION_API_KEY ที่ส่วนบนของไฟล์ App.jsx ก่อนใช้งานระบบสแกน OCR', 'warning');
         return;
     }
 
@@ -2934,16 +2981,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
   // --- 2. Helper Functions ---
-  const generateNextHN = (patients) => {
-    if (!patients || patients.length === 0) return 'HN0001';
-    let maxNum = 0;
-    patients.forEach(p => {
-       const numMatch = (p.hn || p.id || '').match(/\d+/);
-       if (numMatch && parseInt(numMatch[0], 10) > maxNum) maxNum = parseInt(numMatch[0], 10);
-    });
-    return `HN${String(maxNum + 1).padStart(4, '0')}`;
-  };
-
   const handleDobChange = (e) => {
     // Fix: Prevent cursor jump on delete
     if (e.nativeEvent && e.nativeEvent.inputType && e.nativeEvent.inputType.includes('delete')) {
@@ -2955,21 +2992,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     if (value.length > 4) value = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(4)}`;
     else if (value.length > 2) value = `${value.slice(0, 2)}/${value.slice(2)}`;
     setFormData({ ...formData, dob: value });
-  };
-
-  const getAgeString = (dobStr) => {
-    if (!dobStr || dobStr.length < 10) return '-';
-    const parts = dobStr.split('/');
-    if (parts.length === 3) {
-      const dobDate = new Date(parseInt(parts[2], 10) - 543, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-      if (isNaN(dobDate.getTime())) return '-';
-      const now = new Date();
-      let years = now.getFullYear() - dobDate.getFullYear();
-      let months = now.getMonth() - dobDate.getMonth();
-      if (months < 0 || (months === 0 && now.getDate() < dobDate.getDate())) { years--; months += 12; }
-      return `${years} ปี ${months} เดือน`;
-    }
-    return '-';
   };
 
   const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });

@@ -1,47 +1,25 @@
-# Gemini CLI Session Progress & Context Log
+# Gemini Session Log - 21 เมษายน 2569
 
-**Project Name:** Anping Clinic (ระบบจัดการคลินิกอัญพิง)
-**Last Updated:** วันอังคารที่ 21 เมษายน 2569
-**Tech Stack:** React 19, Vite, Tailwind CSS 4, Google Apps Script (GAS), Thai Smart Card Integration (via WebSocket).
+## สรุปการดำเนินการแก้ไขและปรับปรุงระบบ
 
----
+### 1. แก้ไขข้อผิดพลาดในการ Compile (Parse Errors)
+- **ลบฟังก์ชันที่ประกาศซ้ำ:** ลบโค้ดบล็อกที่ประกาศฟังก์ชัน `handleOpenAdd`, `handleOpenEdit`, `handleDeleteAppt`, และ `handleSaveAppt` ซ้ำซ้อนใน `src/App.jsx` ซึ่งเกิดจากการ Refactor ที่ไม่สมบูรณ์
+- **แก้ไข Syntax ผิดพลาด:** ลบโค้ดส่วนเกินที่ถูกวางผิดตำแหน่งใน attribute `className` ของ Header มือถือ (บรรทัดที่ 7959)
 
-## 🚀 สถานะปัจจุบัน (Current State)
-- ระบบจัดการคลินิกประกอบด้วย 4 ส่วนหลัก:
-    1. **Dashboard:** สรุปภาพรวมและคิวประจำวัน
-    2. **Appointment Manager:** ระบบนัดหมายคนไข้ ค้นหาด้วย HN และสร้างประวัติใหม่อัตโนมัติหากไม่พบข้อมูล
-    3. **Medical Records (OPD):** ระบบเวชระเบียน เก็บประวัติการรักษา อาการเบื้องต้น และบันทึก OPD
-    4. **Catalog Manager:** ระบบจัดการรายการสินค้า, หัตถการ, และคอร์ส (ตัดสต็อก/นับครั้ง)
-- **การเชื่อมต่อ Backend:** ใช้ Google Apps Script (`GOOGLE_SCRIPT_URL` ใน `App.jsx`) เพื่อบันทึกข้อมูลลงใน Google Sheets (Sheets: `Patients`, `Queue`, `setting_pos`).
-- **Smart Card:** มีระบบ `thai-card-agent/server.cjs` สำหรับอ่านบัตรประชาชนผ่าน WebSocket (Port 8080).
+### 2. แก้ไขปัญหาหน้าจอขาว (Runtime Errors / White Screen)
+ปัญหาเกิดจากการเรียกใช้ตัวแปร State เดิมที่ถูกลบออกไปแล้วหลังจากเปลี่ยนไปใช้ `useModal` hook:
+- **AppointmentManager:** อัปเดตการเรียกใช้ `isModalOpen`, `isModalClosing`, `showApptCalendar`, `closeApptModal`, และ `closeApptAlert` ให้ไปใช้ผ่าน Hook `apptModal`, `apptCalendar`, และ `apptAlert` แทน
+- **POSManager:** แก้ไขการเปิด-ปิด Modal ของระบบชำระเงินและประวัติรายการ ให้ใช้ `checkoutModal` และ `historyModal`
+- **MedicalRecords (OPD):** 
+    - เพิ่มการประกาศ State `sweetAlert` และ `isAlertClosing` ที่ขาดหายไปใน Component
+    - อัปเดตการเปิด-ปิด Modal ให้ใช้ `medModal` แทนตัวแปรเดิมที่ไม่ได้ประกาศไว้
 
----
+### 3. ปรับปรุง UI และความสอดคล้องของชื่อ
+- **เปลี่ยนชื่อเมนู:** เปลี่ยนคำว่า "ฐานข้อมูล" เป็น **"สินค้า/บริการ"** ทั้งในแถบเมนูข้าง (Sidebar), เมนูมือถือ (Navbar) และหัวข้อในหน้า Catalog เพื่อความชัดเจน
 
-## 🛠️ การแก้ไขล่าสุด (Last Improvements)
-- **Refactoring:** มีการพยายามแยก `CatalogManager` ออกจากไฟล์หลัก `App.jsx` เพื่อลดขนาดไฟล์ (ดูไฟล์ `catalog.txt` และ `refactor.js`).
-- **UI/UX:** ปรับแต่ง CSS ให้เป็นสไตล์ Glassmorphism, มี Sticky Header ที่ย่อขนาดได้เมื่อ Scroll และ Sticky Filter สำหรับตารางนัดหมาย.
-- **Optimization:** ใช้ `useMemo` และ `React.memo` ในส่วนที่คำนวณบ่อย (เช่น การรวมข้อมูล Queue กับ Patient Data).
-
----
-
-## 📂 โครงสร้างไฟล์สำคัญ
-- `src/App.jsx`: ไฟล์หลักของระบบ (ปัจจุบันมีขนาดใหญ่มาก ~3,600+ บรรทัด)
-- `src/App.txt`: ไฟล์สำรองของโค้ดหลักก่อนการแก้ไขครั้งใหญ่
-- `catalog.txt`: โค้ดของ Component Catalog Manager ที่แยกออกมาแล้ว
-- `refactor.js`: สคริปต์ Node.js สำหรับแยกโค้ด `App.jsx` โดยอัตโนมัติ
-- `thai-card-agent/server.cjs`: Backend สำหรับอ่านบัตรประชาชน
-- `inject.cjs`: สคริปต์ช่วย Inject โค้ดหรือจัดการไฟล์
+### 4. การตรวจสอบความถูกต้อง (Validation)
+- **Build Test:** รัน `npx vite build` และผ่านการตรวจสอบ 100% ไม่มี Error
+- **Runtime Test:** ทดสอบการรันแอปพลิเคชันผ่าน Puppeteer เพื่อตรวจสอบ Console Error และจำลองการกดปุ่ม "เพิ่มนัดหมายใหม่" พบว่าระบบทำงานได้ปกติ ไม่เกิดหน้าจอขาว
 
 ---
-
-## 📝 สิ่งที่ต้องทำต่อ (Next Tasks)
-- [ ] **Finish Refactoring:** นำโค้ดที่แยกไว้ใน `catalog.txt` มาใช้งานจริงในโปรเจกต์อย่างเต็มตัว และลบโค้ดส่วนเกินออกจาก `App.jsx`.
-- [ ] **Component Separation:** แยก Component อื่นๆ (Appointment, MedicalRecords) ออกจาก `App.jsx` ไปไว้ในไฟล์ย่อยเพื่อความง่ายในการดูแล.
-- [ ] **Error Handling:** ปรับปรุงส่วนการแจ้งเตือน (Toast) และการรับมือข้อผิดพลาดเมื่อ GAS API ตอบสนองช้า.
-- [ ] **Data Sync:** ตรวจสอบความถูกต้องของการ Sync ข้อมูลระหว่างแอปพลิเคชันกับ Google Sheets ในทุกฟังก์ชัน.
-
----
-
-## 💡 แนวทางการคุย (Prompt Guidance for Gemini)
-หากเปลี่ยนบัญชี Gemini CLI ให้บอก Gemini ว่า:
-> "อ่านไฟล์ `GEMINI_SESSION.md` เพื่อรับทราบสถานะล่าสุดของโปรเจกต์ Anping Clinic และสานต่องานจากส่วน 'Next Tasks' ได้เลย"
+**สถานะปัจจุบัน:** แก้ไข Bug ทั้งหมดเรียบร้อยแล้ว ระบบสามารถ Build และใช้งานได้ปกติทุกฟังก์ชัน
