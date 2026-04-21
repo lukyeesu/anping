@@ -6783,7 +6783,7 @@ const InventoryManager = ({
                       const monthsDiff = (expDate.getFullYear() - today.getFullYear()) * 12 + (expDate.getMonth() - today.getMonth());
                       
                       if (expDate < today) expiryStatus = 'danger';
-                      else if (monthsDiff <= 6) expiryStatus = 'warning';
+                      else if (monthsDiff <= 3) expiryStatus = 'warning';
                   }
 
                   return (
