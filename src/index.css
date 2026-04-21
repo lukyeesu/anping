@@ -3,5 +3,47 @@
 @layer base {
   body {
     @apply bg-slate-50 text-slate-900;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* ปรับขนาดฟอนต์พื้นฐานให้ใหญ่ขึ้นเล็กน้อยทั่วทั้งระบบ */
+  .kanit-text {
+    font-family: 'Kanit', sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  .font-data {
+    font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+    letter-spacing: -0.02em;
+  }
+
+  /* ปรับขนาดตัวอักษรเล็กให้ยังอ่านออก */
+  .text-\[9px\] { font-size: 11px !important; }
+  .text-\[10px\] { font-size: 12px !important; }
+  .text-\[11px\] { font-size: 13px !important; }
+  .text-xs { font-size: 14px !important; }
+  .text-sm { font-size: 15px !important; }
+  .text-base { font-size: 16px !important; }
+  .text-lg { font-size: 18px !important; }
+  .text-xl { font-size: 20px !important; }
+
+  /* เพิ่มระยะห่างระหว่างบรรทัดและช่องว่าง */
+  input, select, textarea {
+    @apply text-base;
+  }
+
+  button {
+    @apply transition-all duration-200 active:scale-95;
+  }
+
+  /* แก้ไขปัญหาระยะห่างเบียดกัน */
+  .space-y-1 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.375rem * var(--tw-space-y-reverse)); }
+  .space-y-2 > :not([hidden]) ~ :not([hidden]) { --tw-space-y-reverse: 0; margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))); margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)); }
+  .gap-2 { gap: 0.75rem !important; }
+  .gap-3 { gap: 1rem !important; }
+  .p-2 { padding: 0.75rem !important; }
+  .p-3 { padding: 1rem !important; }
 }
