@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -5786,6 +5786,56 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   const [productForm, setProductForm] = useState(initialProductForm);
   const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
 
+  const headerRef = React.useRef(null);
+  const filterRef = React.useRef(null);
+
+  // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+            // ป้องกันการเซ็ตค่า Height เป็น 0 เมื่อ Component ถูกซ่อน (display: none)
+            if (entry.target.offsetHeight > 0 && filterRef.current) {
+                // เซ็ตค่าพิกัดให้ filterRef ทันทีโดยไม่ต้องผ่าน State (ป้องกัน Re-render กระตุก)
+                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
+            }
+        }
+    });
+
+    observer.observe(headerEl);
+    return () => observer.disconnect();
+  }, []);
+
+  // --- ระบบ Sticky เลียนแบบเวชระเบียน ---
+  useEffect(() => {
+    const mainElement = document.getElementById('main-scroll-container');
+    if (!mainElement) return;
+
+    const handleScroll = (e) => {
+      const { scrollTop } = e.target;
+      if (headerRef.current) {
+        if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+        else headerRef.current.classList.remove('is-scrolled');
+      }
+      if (filterRef.current) {
+        if (scrollTop > 20) filterRef.current.classList.add('is-stuck');
+        else filterRef.current.classList.remove('is-stuck');
+      }
+    };
+
+    setTimeout(() => {
+        if (mainElement && mainElement.scrollTop > 20) {
+            if (headerRef.current) headerRef.current.classList.add('is-scrolled');
+            if (filterRef.current) filterRef.current.classList.add('is-stuck');
+        }
+    }, 50);
+
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const closeAlert = () => setSweetAlert(prev => ({...prev, isOpen: false}));
 
   const closeEditForm = () => {
@@ -5866,79 +5916,90 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   }, [products]);
 
   return (
-    <div className="flex flex-col h-full fade-in pb-20 md:pb-0 px-4 sm:px-6 md:px-8 pt-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 shrink-0">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-800 kanit-text tracking-tight flex items-center gap-2">
-            <Tag className="text-sky-500" /> สินค้า/บริการ (Catalog)
-          </h2>
-          <p className="text-sm text-slate-500 kanit-text mt-1">จัดการสินค้า, บริการ, คอร์ส และแพ็กเกจ ทั้งหมดในคลินิก</p>
-        </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          {!isEditFormOpen && (
-            <button onClick={handleOpenAddProduct} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-sky-500 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-sky-600 transition-all shadow-md shadow-sky-500/20 active:scale-95 kanit-text">
-              <Plus size={18} /> เพิ่มรายการใหม่
-            </button>
-          )}
+    <div className="fade-in pb-10 relative">
+      
+      {/* --- 1. Sticky Header --- */}
+      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
+        <div className="w-full pointer-events-auto sticky-header-bg">
+          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
+            <div>
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2">
+                <Tag className="text-sky-500" /> สินค้า/บริการ
+              </h1>
+              <p className="text-slate-500 kanit-text sticky-header-desc">จัดการสินค้า, บริการ, คอร์ส และแพ็กเกจ ทั้งหมดในคลินิก</p>
+            </div>
+            <div className="flex gap-2">
+              {!isEditFormOpen && (
+                <button onClick={handleOpenAddProduct} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-sky-500 text-white hover:bg-sky-600 kanit-text sticky-header-btn">
+                  <Plus size={18} /> <span className="hidden sm:inline">เพิ่มรายการใหม่</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/40 mb-6">
-        <div className="p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row gap-4 justify-between items-center shrink-0 z-10">
-          <div className="relative w-full sm:max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="ค้นหาชื่อ หรือหมวดหมู่..." 
-              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data shadow-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="text-sm font-bold text-slate-500 kanit-text whitespace-nowrap bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm">
-            ทั้งหมด {filteredProducts.length} รายการ
+      {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
+      <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
+        <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
+          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="relative w-full sm:max-w-md">
+              <input 
+                type="text" 
+                placeholder="ค้นหาชื่อ หรือหมวดหมู่..." 
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+            </div>
+            <div className="text-sm font-bold text-slate-500 kanit-text whitespace-nowrap bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm pointer-events-auto">
+              ทั้งหมด {filteredProducts.length} รายการ
+            </div>
           </div>
         </div>
-        
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30">
-          {filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-              {filteredProducts.map((prod) => {
-                const PIcon = typeof prod.icon === 'string' ? (POS_ICONS[prod.icon] || Package) : (prod.icon || Package);
-                return (
-                  <div key={prod.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 hover:border-sky-300 hover:shadow-md transition-all group">
-                    <div className="flex items-start justify-between">
-                      <div className="w-14 h-14 bg-sky-50/50 text-sky-500 rounded-xl flex items-center justify-center shrink-0 border border-sky-100">
-                        <PIcon size={28} />
-                      </div>
-                      <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleOpenEditProduct(prod)} className="p-2 bg-slate-50 text-slate-500 hover:text-sky-600 hover:bg-sky-100 rounded-lg transition-colors"><Pencil size={16} /></button>
-                        <button onClick={() => handleDeleteProduct(prod)} className="p-2 bg-slate-50 text-slate-500 hover:text-rose-600 hover:bg-rose-100 rounded-lg transition-colors"><Trash2 size={16} /></button>
-                      </div>
+      </div>
+
+      {/* --- 3. ตาราง/เนื้อหา --- */}
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-12">
+        {filteredProducts.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {filteredProducts.map((prod) => {
+              const PIcon = typeof prod.icon === 'string' ? (POS_ICONS[prod.icon] || Package) : (prod.icon || Package);
+              return (
+                <div key={prod.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4 hover:border-sky-300 hover:shadow-xl hover:shadow-sky-500/5 transition-all group relative overflow-hidden">
+                  <div className="flex items-start justify-between relative z-10">
+                    <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0 border border-sky-100 shadow-inner">
+                      <PIcon size={28} />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold kanit-text truncate uppercase border border-slate-200">{prod.type}</span>
-                          {prod.stockManaged && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-md text-[10px] font-bold kanit-text uppercase border border-indigo-100">ตัดสต็อก</span>}
-                          {prod.isCourse && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions})</span>}
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight">{prod.name}</h4>
-                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
-                          <span className="text-xl font-black text-sky-600 font-data">฿{Number(prod.price).toLocaleString()}</span>
-                      </div>
+                    <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                      <button onClick={() => handleOpenEditProduct(prod)} className="p-2.5 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all border border-slate-100 shadow-sm"><Pencil size={16} /></button>
+                      <button onClick={() => handleDeleteProduct(prod)} className="p-2.5 bg-white text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-100 shadow-sm"><Trash2 size={16} /></button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
-              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-2"><Search size={32} className="text-slate-300" /></div>
-              <p className="kanit-text font-medium text-lg">ไม่พบรายการที่ค้นหา</p>
-              <p className="text-sm font-data">"{search}"</p>
-            </div>
-          )}
-        </div>
+                  <div className="min-w-0 relative z-10">
+                    <div className="flex flex-wrap gap-1.5 mb-2.5">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black kanit-text truncate uppercase border border-slate-200/50">{prod.type}</span>
+                        {prod.stockManaged && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก</span>}
+                        {prod.isCourse && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions})</span>}
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
+                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
+                        <span className="text-xl font-black text-sky-600 font-data">฿{Number(prod.price).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-slate-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700"></div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-white rounded-[3rem] p-16 border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 gap-4 shadow-sm">
+            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-2 shadow-inner"><Search size={40} className="text-slate-200" /></div>
+            <p className="kanit-text font-bold text-xl text-slate-400">ไม่พบรายการที่ค้นหา</p>
+            {search && <button onClick={() => setSearch('')} className="text-sky-500 font-bold kanit-text hover:underline text-sm">ล้างการค้นหา "{search}"</button>}
+          </div>
+        )}
       </div>
 
       {isEditFormOpen && createPortal(
@@ -7928,7 +7989,7 @@ export default function App() {
             <div style={{ display: currentTab === 'queue' ? 'block' : 'none' }} className="w-full">
                 <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
-                        <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full h-full bg-[#f8fafc]">
+                        <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full">
                 <CatalogManager products={posProducts} setProducts={setPosProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
 <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
