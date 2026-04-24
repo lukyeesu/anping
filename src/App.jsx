@@ -8,7 +8,7 @@ import {
   Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
-  TrendingUp, TrendingDown, Download, Filter
+  TrendingUp, TrendingDown, Download, Filter, Printer
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -131,13 +131,23 @@ const getPatientFullName = (p) => {
 };
 
 const generateNextHN = (patients) => {
-  if (!patients || patients.length === 0) return 'HN0001';
+  const currentYearTH = new Date().getFullYear() + 543;
+  const yearSuffix = String(currentYearTH).slice(-2);
+  
+  if (!patients || patients.length === 0) return `HN${yearSuffix}-0001`;
+  
   let maxNum = 0;
   patients.forEach(p => {
-     const numMatch = (p.hn || p.id || '').match(/\d+/);
-     if (numMatch && parseInt(numMatch[0], 10) > maxNum) maxNum = parseInt(numMatch[0], 10);
+     const hnString = p.hn || p.id || '';
+     // ดึงตัวเลขชุดสุดท้ายที่อยู่ท้ายสุดของ HN (รองรับทั้งแบบเก่า HN0001 และแบบใหม่ HN69-0001)
+     const numMatch = hnString.match(/(\d+)$/);
+     if (numMatch) {
+         const num = parseInt(numMatch[1], 10);
+         if (num > maxNum) maxNum = num;
+     }
   });
-  return `HN${String(maxNum + 1).padStart(4, '0')}`;
+  
+  return `HN${yearSuffix}-${String(maxNum + 1).padStart(4, '0')}`;
 };
 
 const getAgeString = (dobStr) => {
@@ -2997,6 +3007,168 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
   const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
 
+  // เพิ่มฟังก์ชันพิมพ์เวชระเบียนเพื่อให้สามารถเรียกใช้งานได้ทั้งบน Desktop และ Mobile
+  const handlePrintRecord = (patient) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+    }
+
+    // ใช้วันที่ลงทะเบียนแทนวันที่ล่าสุด
+    let regDateStr = '-';
+    if (patient.createdAt) {
+        const cd = new Date(patient.createdAt);
+        if (!isNaN(cd.getTime())) {
+            const cdDay = String(cd.getDate()).padStart(2, '0');
+            const cdMonth = String(cd.getMonth() + 1).padStart(2, '0');
+            const cdYear = cd.getFullYear() + 543;
+            regDateStr = `${cdDay}/${cdMonth}/${cdYear}`;
+        }
+    } else {
+        // สำรองหากไม่มี createdAt
+        const today = new Date();
+        const d = String(today.getDate()).padStart(2, '0');
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        const y = today.getFullYear() + 543;
+        regDateStr = `${d}/${m}/${y}`;
+    }
+
+    const ageStr = patient.dob ? getAgeString(patient.dob) : '';
+    const phone = Array.isArray(patient.phones) ? patient.phones[0] : (patient.phone || patient.phone1 || '');
+    
+    // ตัดคำว่า HN ออก เหลือแต่ตัวเลข
+    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบเวชระเบียน - ${patient.hn}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Sarabun', sans-serif; font-size: 14px; color: #000; margin: 0; padding: 0; }
+            @page { size: A5 landscape; margin: 10mm; }
+            .container { width: 100%; box-sizing: border-box; }
+            
+            /* ลด margin-bottom เพื่อไม่ให้ล้นหน้ากระดาษ A5 */
+            .header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+            .clinic-info { line-height: 1.5; font-size: 12px; }
+            .clinic-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+            .doc-info { text-align: right; line-height: 1.5; font-size: 14px; }
+            .doc-info-row { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 8px; }
+            .title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 12px; }
+            
+            /* หัวใจสำคัญ: ใช้ align-items: baseline เพื่อให้ฐานของตัวอักษรข้อความและข้อมูลอยู่เส้นเดียวกันเป๊ะ */
+            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
+            
+            /* ถอด padding ที่ดันตัวหนังสือออก ให้ไหลตาม Baseline ธรรมชาติ */
+            .label { white-space: nowrap; margin-right: 5px; }
+            
+            /* เส้นประให้อยู่ใต้ข้อมูลพอดีเป๊ะ */
+            .value { 
+              flex-grow: 1; 
+              border: none;
+              border-bottom: 1px solid transparent;
+              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+              text-align: center; 
+              padding-bottom: 2px; /* ให้เส้นประห่างจากฐานตัวอักษรลงมา 2px */
+              min-width: 40px; 
+              margin-right: 10px; 
+            }
+            .value:last-child { margin-right: 0; }
+            .w-auto { flex-grow: 0; }
+            
+            /* บังคับพิมพ์สี และกำหนดให้เส้นประเป็นสีดำสนิทตอนพิมพ์ */
+            @media print {
+               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+               .value {
+                 border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
+               }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="clinic-info">
+                    <div class="clinic-name">อันผิงคลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร.062-826-1696</div>
+                </div>
+                <div class="doc-info">
+                    <div class="doc-info-row">
+                        <span style="width: 45px; text-align: right; margin-right: 5px; font-size: 16px;">HN</span>
+                        <span class="value w-auto" style="width: 140px; margin-right: 0; font-size: 16px; text-align: left; padding-left: 8px;">${hnNumberOnly}</span>
+                    </div>
+                    <div class="doc-info-row">
+                        <span style="width: 45px; text-align: right; margin-right: 5px;">วันที่</span>
+                        <span class="value w-auto" style="width: 140px; margin-right: 0; text-align: left; padding-left: 8px;">${regDateStr}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="title">ใบเวชระเบียน</div>
+            <div class="row">
+                <span class="label">ชื่อ</span><span class="value">${patient.prefix ? patient.prefix + ' ' : ''}${patient.firstName || ''}</span>
+                <span class="label">นามสกุล</span><span class="value">${patient.lastName || ''}</span>
+                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 100px;">${patient.nickname || ''}</span>
+                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 120px;">${patient.dob || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">อายุ</span><span class="value w-auto" style="width: 140px;">${ageStr}</span>
+                <span class="label">หมายเลขบัตรประชาชน</span><span class="value">${patient.idCard || ''}</span>
+                <span class="label">ที่อยู่บ้านเลขที่</span><span class="value w-auto" style="width: 100px;">${patient.address || ''}</span>
+                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 50px;">${patient.moo || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ถนน</span><span class="value">${patient.road || ''}</span>
+                <span class="label">ตำบล</span><span class="value">${patient.subDistrict || ''}</span>
+                <span class="label">อำเภอ</span><span class="value">${patient.district || ''}</span>
+                <span class="label">จังหวัด</span><span class="value">${patient.province || ''}</span>
+                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 80px;">${patient.zipcode || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">เบอร์โทรศัพท์</span><span class="value">${phone}</span>
+                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 120px;">${patient.nationality || ''}</span>
+                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 120px;">${patient.ethnicity || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ศาสนา</span><span class="value w-auto" style="width: 150px;">${patient.religion || ''}</span>
+                <span class="label">อาชีพ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.occupation || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ชื่อผู้ติดต่อได้กรณีฉุกเฉิน</span><span class="value">${patient.emName || ''}</span>
+                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 180px;">${patient.emRelation || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ที่อยู่ที่ติดต่อได้</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.emAddress || ''}</span>
+                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${patient.emPhone || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">อาการที่จะตรวจ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.chiefComplaint || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 100px;">${patient.bloodGroup || ''}</span>
+                <span class="label">การแพ้ยา</span><span class="value">${patient.allergies || ''}</span>
+                <span class="label">โรคประจำตัว</span><span class="value">${patient.underlyingDisease || ''}</span>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    printWindow.onload = function() {
+        setTimeout(() => {
+            printWindow.print();
+        }, 500);
+    };
+  };
+
   // --- 3. Derived State (Memos & Filtering) ---
   const calculatedAge = useMemo(() => getAgeString(formData.dob), [formData.dob]);
   const blankDays = Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i);
@@ -3374,6 +3546,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
         <td className="py-4 text-right pr-6">
           <div className="flex justify-end gap-2 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
             <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไขข้อมูล"><Pencil size={18} /></button>
             <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
           </div>
@@ -3446,13 +3619,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                     </div>
                 </div>
 
-                {/* แถวที่ 4: ปุ่มจัดการ (ย้ายมาไว้ด้านล่าง สัดส่วน 1:1) */}
-                <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-sm kanit-text">
-                        <Trash2 size={16} /> ลบ
+                {/* แถวที่ 4: ปุ่มจัดการ (แก้ไขเป็น grid-cols-3 และเพิ่มปุ่มพิมพ์) */}
+                <div className="mt-3 grid grid-cols-3 gap-2 pt-3 border-t border-slate-100">
+                    <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                        <Printer size={16} /> พิมพ์
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-sm kanit-text">
                         <Pencil size={16} /> แก้ไข
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                        <Trash2 size={16} /> ลบ
                     </button>
                 </div>
             </div>
@@ -9230,4 +9406,3 @@ export default function App() {
     </div>
   );
 }
-
