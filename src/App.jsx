@@ -312,8 +312,7 @@ const PlaceholderPage = ({ title, desc, icon: Icon }) => (
     <div className="mt-8 px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-sm">เชื่อมต่อฐานข้อมูลส่วนนี้ผ่าน Google Apps Script ได้ในอนาคต</div>
   </div>
 );
-
-// --- คอมโพเนนต์ Custom Dropdown สมัยใหม่ที่ใช้แทน <select> ทั้งหมดในระบบ ---
+// --- คอมโพเนนต์ Custom Dropdown สมัยใหม่ที่ใช้แทน <select> ---
 const CustomSelect = ({ value, onChange, options, placeholder, className, disabled, compact, fullWidth, dropUp }) => {
     const [isOpen, setIsOpen] = useState(false);
     const selectedOption = options.find(o => (typeof o === 'object' ? String(o.value) : String(o)) === String(value));
@@ -330,8 +329,9 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                     : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
                 }
             >
-                <span className={`truncate ${compact ? 'font-bold text-slate-700 text-sm' : ''}`}>{displayLabel || (compact ? '' : 'เลือก')}</span>
-                {(isOpen || !compact) && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+                <span className={`truncate ${compact ? 'font-bold text-slate-700 text-sm' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
+                {/* แก้ไข: ลบเงื่อนไข isOpen ออก เพื่อไม่ให้แสดงไอคอน ^ ในโหมด compact ป้องกันปุ่มขยับ */}
+                {!compact && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && (
                 <div className={`absolute z-[100] bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'min-w-full w-max max-w-[90vw] max-h-48 left-0 origin-top zoom-in-95' : 'w-full max-h-48 origin-top zoom-in-95'}`}>
@@ -7612,6 +7612,50 @@ const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHisto
   const [calDate, setCalDate] = useState(new Date());
   const [calView, setCalView] = useState('days');
   const [yearPageStart, setYearPageStart] = useState(0);
+  
+  // --- เพิ่ม State และ Ref สำหรับปฏิทินแบบกำหนดเอง (เพิ่มวินาทีเข้าไปด้วย) ---
+  const [calTime, setCalTime] = useState({ h: '09', m: '00', s: '00' });
+  const dateWrapperRef = useRef(null);
+
+  const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+  // ฟังก์ชันเปิดและตั้งค่าให้ปฏิทินแสดงผลตรงกับวันที่ที่กรอกไว้
+  const handleOpenCalendar = () => {
+    const dtStr = formData.date;
+    const now = new Date();
+    let d = now.getDate(), m = now.getMonth(), y = now.getFullYear();
+    let h = String(now.getHours()).padStart(2, '0'), min = String(now.getMinutes()).padStart(2, '0'), sec = String(now.getSeconds()).padStart(2, '0');
+    
+    if (dtStr) {
+      const parts = dtStr.split(' ');
+      if (parts.length >= 2) {
+          const dateParts = parts[0].split('/');
+          if(dateParts.length === 3) {
+              d = parseInt(dateParts[0], 10);
+              m = parseInt(dateParts[1], 10) - 1;
+              y = parseInt(dateParts[2], 10) - 543;
+          }
+          const timeParts = parts[1].replace('น.', '').trim().split(':');
+          if(timeParts.length >= 2) {
+              h = timeParts[0];
+              min = timeParts[1];
+              if(timeParts.length >= 3) sec = timeParts[2];
+          }
+      }
+    }
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) setCalDate(new Date(y, m, d));
+    else setCalDate(now);
+    
+    setCalTime({ h, m: min, s: sec });
+    setCalView('days');
+    calendarModal.open();
+  };
+
+  useEffect(() => {
+    if (calView === 'years') setYearPageStart(Math.floor((calDate.getFullYear() + 543) / 12) * 12);
+  }, [calView, calDate]);
+  // ----------------------------------------------
 
   const [formData, setFormData] = useState({
     id: '',
@@ -7632,10 +7676,11 @@ const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHisto
       const y = now.getFullYear() + 543;
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
       
       setFormData({
         id: '',
-        date: `${d}/${m}/${y} ${hh}:${mm} น.`,
+        date: `${d}/${m}/${y} ${hh}:${mm}:${ss} น.`,
         type: 'income',
         category: '',
         amount: '',
@@ -7748,9 +7793,28 @@ const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHisto
   };
 
   const handleEditTransaction = (tx) => {
+      // แปลง ISO Date กลับเป็น format ไทย เพื่อให้ปฏิทินแบบกำหนดเองอ่านค่าได้ถูกต้อง
+      let editDateStr = '';
+      if (tx.date && tx.date.includes('/')) {
+          editDateStr = tx.date;
+      } else if (tx.date) {
+          const dObj = new Date(tx.date);
+          if (!isNaN(dObj.getTime())) {
+              const d = String(dObj.getDate()).padStart(2, '0');
+              const m = String(dObj.getMonth() + 1).padStart(2, '0');
+              const y = dObj.getFullYear() + 543;
+              const hh = String(dObj.getHours()).padStart(2, '0');
+              const mm = String(dObj.getMinutes()).padStart(2, '0');
+              const ss = String(dObj.getSeconds()).padStart(2, '0');
+              editDateStr = `${d}/${m}/${y} ${hh}:${mm}:${ss} น.`;
+          } else {
+              editDateStr = tx.date;
+          }
+      }
+
       setFormData({
          id: tx.id,
-         date: tx.date.split('T')[0],
+         date: editDateStr,
          type: tx.type,
          category: tx.category,
          amount: tx.amount,
@@ -7794,9 +7858,39 @@ const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHisto
 
     setIsProcessing(true);
     const isEdit = !!formData.id;
+
+    // --- แปลงวันที่แบบไทยกลับเป็น ISO ก่อนบันทึก ---
+    const convertThaiToISO = (thaiDateTimeStr) => {
+        if (!thaiDateTimeStr) return new Date().toISOString();
+        if (thaiDateTimeStr.includes('T')) return thaiDateTimeStr;
+        try {
+            const parts = thaiDateTimeStr.split(' ');
+            const dateParts = parts[0].split('/');
+            if (dateParts.length !== 3) return new Date().toISOString();
+            const d = parseInt(dateParts[0], 10);
+            const m = parseInt(dateParts[1], 10) - 1;
+            let y = parseInt(dateParts[2], 10);
+            if (y > 2500) y -= 543;
+            let h = 0, min = 0, sec = 0;
+            if (parts[1]) {
+                const timeParts = parts[1].replace('น.', '').trim().split(':');
+                if (timeParts.length >= 2) {
+                    h = parseInt(timeParts[0], 10);
+                    min = parseInt(timeParts[1], 10);
+                    if (timeParts.length >= 3) sec = parseInt(timeParts[2], 10);
+                }
+            }
+            const localDate = new Date(y, m, d, h, min, sec);
+            return localDate.toISOString();
+        } catch(e) { return new Date().toISOString(); }
+    };
+    
+    const isoDate = convertThaiToISO(formData.date);
+    // --------------------------------------------------
+
     const newTx = {
       id: isEdit ? formData.id : `MAN-${Date.now()}`,
-      date: formData.date,
+      date: isoDate, // บันทึกเป็น ISO เสมอเพื่อให้ระบบเรียงลำดับทำงานได้
       type: formData.type,
       amount: parseFloat(formData.amount),
       method: formData.method,
@@ -8227,7 +8321,11 @@ const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHisto
 
                     <div>
                        <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">วันที่ทำรายการ <span className="text-rose-500">*</span></label>
-                       <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={theme.input + " font-data"} />
+                       {/* แก้ไข: เปลี่ยน placeholder เป็นมี :ss เข้ามาด้วย */}
+                       <div ref={dateWrapperRef} className="relative group">
+                          <input required type="text" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={theme.input + " font-data pr-12"} placeholder="DD/MM/YYYY HH:mm:ss น." />
+                          <button type="button" onClick={handleOpenCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>
+                       </div>
                     </div>
 
                     <div>
@@ -8281,6 +8379,122 @@ const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHisto
               </div>,
               document.body
               )}
+
+      {/* --- Custom Calendar Portal (ใช้ร่วมกับการกำหนดวันที่ทำรายการ) --- */}
+      {calendarModal.isOpen && createPortal(
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${calendarModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={calendarModal.close}></div>
+          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            
+            {calView === 'days' && (
+              <div className="w-full calendar-view-anim">
+                <div className="flex justify-between items-center mb-4">
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() - 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-3">
+                  {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
+                </div>
+                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
+                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>)}
+                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                    const isSelected = calDate.getDate() === day;
+                    const isToday = new Date().getDate() === day && new Date().getMonth() === calDate.getMonth() && new Date().getFullYear() === calDate.getFullYear();
+                    return (
+                      <button key={day} type="button" onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth(), day))} className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium font-data calendar-btn-anim ${isSelected ? 'cal-selected' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {calView === 'months' && (
+              <div className="w-full calendar-view-anim">
+                <div className="flex justify-between items-center mb-6">
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl text-base sm:text-sm font-data">{calDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium kanit-text calendar-btn-anim ${calDate.getMonth() === i ? 'cal-selected' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
+                </div>
+              </div>
+            )}
+            
+            {calView === 'years' && (
+                <div className="w-full calendar-view-anim">
+                <div className="flex justify-between items-center mb-6 px-1">
+                  <button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{yearPageStart} - {yearPageStart + 11}</span>
+                  <button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium font-data calendar-btn-anim ${(calDate.getFullYear() + 543) === y ? 'cal-selected' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
+                </div>
+              </div>
+            )}
+
+            {/* --- แก้ไข: เปลี่ยน Layout ตรงนี้เป็นแนวตั้ง (flex-col) สำหรับหน้า Finance --- */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-3 w-full">
+                
+                {/* แถวที่ 1: กล่องเลือกเวลา (กว้างเต็ม) */}
+                <div className="flex items-center justify-center gap-1.5 bg-slate-50/50 px-3 py-2 rounded-xl border border-slate-200 shadow-sm w-full">
+                    <Clock size={16} className="text-sky-500 shrink-0 mr-1" />
+                    
+                    <CustomSelect 
+                        compact dropUp
+                        value={calTime.h} 
+                        onChange={v => setCalTime({...calTime, h: v})} 
+                        options={Array.from({length:24}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
+                    
+                    <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
+                    
+                    <CustomSelect 
+                        compact dropUp
+                        value={calTime.m} 
+                        onChange={v => setCalTime({...calTime, m: v})} 
+                        options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
+                    
+                    <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
+                    
+                    <CustomSelect 
+                        compact dropUp
+                        value={calTime.s} 
+                        onChange={v => setCalTime({...calTime, s: v})} 
+                        options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
+                    />
+                </div>
+                
+                {/* แถวที่ 2: ปุ่มกด ปัจจุบัน/ตกลง (จัดสัดส่วนใหม่ให้กดง่าย) */}
+                <div className="flex gap-2 w-full">
+                    <button type="button" onClick={() => {
+                          const now = new Date();
+                          setCalDate(now);
+                          setCalTime({h: String(now.getHours()).padStart(2,'0'), m: String(now.getMinutes()).padStart(2,'0'), s: String(now.getSeconds()).padStart(2,'0')});
+                          setCalView('days');
+                    }} className="flex-1 px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors kanit-text shadow-sm whitespace-nowrap">
+                        ปัจจุบัน
+                    </button>
+                    
+                    <button type="button" onClick={() => {
+                          const d = String(calDate.getDate()).padStart(2, '0');
+                          const m = String(calDate.getMonth() + 1).padStart(2, '0');
+                          const y = calDate.getFullYear() + 543;
+                          setFormData({...formData, date: `${d}/${m}/${y} ${calTime.h}:${calTime.m}:${calTime.s} น.`});
+                          calendarModal.close();
+                    }} className="flex-[2] px-4 py-2.5 text-xs font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md shadow-sky-500/20 transition-colors kanit-text whitespace-nowrap">
+                        ตกลง
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Alert Modal */}
       {sweetAlert.isOpen && createPortal(
@@ -8978,35 +9192,35 @@ export default function App() {
         }
 
         /* --- CSS-Based 60FPS Sticky Header Animations --- */
-        .sticky-header-bg { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-bottom: 1px solid transparent; background-color: transparent; }
-        .is-scrolled .sticky-header-bg { background-color: rgba(255, 255, 255, 0.7); backdrop-filter: blur(24px); border-color: rgba(255, 255, 255, 0.5); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04); }
+        .sticky-header-bg { transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease; border-bottom: 1px solid transparent; background-color: transparent; will-change: background-color, backdrop-filter; }
+        .is-scrolled .sticky-header-bg { background-color: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-color: rgba(226, 232, 240, 0.8); box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); }
 
-        .sticky-header-inner { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1rem; padding-bottom: 1rem; }
+        .sticky-header-inner { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1rem; padding-bottom: 1rem; will-change: padding; }
         @media (min-width: 768px) { .sticky-header-inner { padding-top: 2rem; } }
         .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.5rem; }
         @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-bottom: 0.75rem; } }
 
-        .sticky-header-title { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1.5rem; line-height: 2rem; margin: 0; }
+        .sticky-header-title { transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), line-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1.5rem; line-height: 2rem; margin: 0; will-change: font-size, line-height; }
         @media (min-width: 640px) { .sticky-header-title { font-size: 1.875rem; line-height: 2.25rem; } }
         .is-scrolled .sticky-header-title { font-size: 1.25rem; line-height: 1.75rem; }
         @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.5rem; line-height: 2rem; } }
 
-        .sticky-header-desc { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 1; max-height: 50px; margin-top: 0.25rem; overflow: hidden; }
+        .sticky-header-desc { transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease; opacity: 1; max-height: 50px; margin-top: 0.25rem; overflow: hidden; will-change: opacity, max-height, margin-top; }
         .is-scrolled .sticky-header-desc { opacity: 0; max-height: 0; margin-top: 0; }
 
-        .sticky-header-btn { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; }
+        .sticky-header-btn { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; will-change: padding, font-size; }
         @media (min-width: 640px) { .sticky-header-btn { padding: 0.75rem 1.5rem; font-size: 1rem; } }
         .is-scrolled .sticky-header-btn { padding: 0.625rem; font-size: 0.875rem; }
-        .sticky-header-btn svg { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: 20px; height: 20px; }
+        .sticky-header-btn svg { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 20px; height: 20px; will-change: width, height; }
         .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; }
 
-        .dash-date-badge { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.375rem 0.75rem; font-size: 0.875rem; }
+        .dash-date-badge { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.375rem 0.75rem; font-size: 0.875rem; will-change: padding, font-size; }
         @media (min-width: 640px) { .dash-date-badge { padding: 0.5rem 1rem; font-size: 1rem; } }
-        .dash-date-badge svg { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: 18px; height: 18px; }
+        .dash-date-badge svg { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 18px; height: 18px; will-change: width, height; }
         .is-scrolled .dash-date-badge { font-size: 0.75rem; }
         .is-scrolled .dash-date-badge svg { width: 14px; height: 14px; }
 
-        .sticky-filter-inner { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width: calc(100% - 2rem); margin-top: 0.5rem; padding: 1rem; border-radius: 2rem; border-width: 1px; }
+        .sticky-filter-inner { transition: width 0.3s ease, margin 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, border-color 0.3s ease; width: calc(100% - 2rem); margin-top: 0.5rem; padding: 1rem; border-radius: 2rem; border-width: 1px; will-change: width, margin, padding, border-radius; }
         @media (min-width: 768px) { .sticky-filter-inner { width: calc(100% - 4rem); } }
         @media (min-width: 1536px) { .sticky-filter-inner { width: calc(100% - 6rem); } }
         .is-stuck .sticky-filter-inner { width: 100%; margin-top: 0; padding-top: 0.75rem; padding-bottom: 0.75rem; padding-left: 1rem; padding-right: 1rem; border-radius: 0 0 2rem 2rem; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }
@@ -9016,3 +9230,4 @@ export default function App() {
     </div>
   );
 }
+
