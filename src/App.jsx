@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -7,7 +7,8 @@ import {
   Clock, Stethoscope, FileText, Pill, CreditCard, ShieldCheck, AlertOctagon,
   Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
-  ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity
+  ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
+  TrendingUp, TrendingDown, Download, Filter
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -7592,6 +7593,714 @@ const InventoryManager = ({
   );
 };
 
+const FinancePage = ({ currentBranch, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], isGlobalLoading, callAppScript, showToast, setPosHistoryData }) => {
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('all'); 
+  const [filterBranch, setFilterBranch] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const headerRef = useRef(null);
+
+  // Detail Modal States
+  const [selectedTxn, setSelectedTxn] = useState(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  const sweetAlert = useModal();
+  const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
+
+  const calendarModal = useModal();
+  const [calDate, setCalDate] = useState(new Date());
+  const [calView, setCalView] = useState('days');
+  const [yearPageStart, setYearPageStart] = useState(0);
+
+  const [formData, setFormData] = useState({
+    id: '',
+    date: '', // Will be set on open
+    type: 'income',
+    category: '',
+    amount: '',
+    method: 'cash',
+    reference: '',
+    note: '',
+    branchId: currentBranch || 'all'
+  });
+
+  const handleOpenAdd = () => {
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const y = now.getFullYear() + 543;
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      
+      setFormData({
+        id: '',
+        date: `${d}/${m}/${y} ${hh}:${mm} น.`,
+        type: 'income',
+        category: '',
+        amount: '',
+        method: 'cash',
+        reference: '',
+        note: '',
+        branchId: currentBranch || 'all'
+      });
+      setIsModalOpen(true);
+  };
+
+  const allTransactions = useMemo(() => {
+    const posTx = posHistoryData.map(tx => ({
+      id: tx.id || tx.receiptNo || Math.random().toString(),
+      date: tx.datetime || tx.timestamp || tx.createdAt || new Date().toISOString(),
+      type: 'income',
+      amount: parseFloat(tx.total || tx.netTotal || tx.grandTotal || tx.amount || 0),
+      method: tx.paymentMethod || 'cash',
+      category: 'รายได้จาก/ขาย POS',
+      note: tx.patientId && tx.patientName && tx.patientId !== '' ? `${tx.patientId.startsWith('HN') ? '' : 'HN'}${tx.patientId} ${tx.patientName}` : tx.patientName ? `${tx.patientName}` : 'ทั่วไป (ไม่ระบุ)',
+      status: tx.status || 'completed',
+      isAuto: true,
+      branchId: tx.branchId || 'all',
+      rawTx: tx
+    }));
+
+    return [...posTx, ...financeData].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [posHistoryData, financeData]);
+
+  const filteredTransactions = useMemo(() => {
+    return allTransactions.filter(tx => {
+      const matchSearch = tx.note.includes(search) || tx.category.includes(search) || tx.id.includes(search);
+      let matchType = true;
+      if (filterType === 'income') matchType = tx.type === 'income';
+      else if (filterType === 'expense') matchType = tx.type === 'expense';
+      else if (filterType === 'pos') matchType = tx.isAuto === true;
+      else if (filterType === 'manual') matchType = !tx.isAuto;
+
+      const matchBranch = filterBranch === 'all' || tx.branchId === filterBranch || tx.branchId === 'all';
+
+      return matchSearch && matchType && matchBranch;
+    });
+  }, [allTransactions, search, filterType, filterBranch]);
+
+  const stats = useMemo(() => {
+    let totalIncome = 0;
+    let totalExpense = 0;
+    filteredTransactions.forEach(tx => {
+      if (tx.type === 'income') totalIncome += tx.amount;
+      if (tx.type === 'expense') totalExpense += tx.amount;
+    });
+    return {
+      balance: totalIncome - totalExpense,
+      income: totalIncome,
+      expense: totalExpense,
+      transactionsCount: filteredTransactions.length
+    };
+  }, [filteredTransactions]);
+
+  useEffect(() => {
+    const mainElement = document.getElementById('main-scroll-container');
+    if (!mainElement) return;
+
+    const handleScroll = (e) => {
+      if (headerRef.current) {
+          if (e.target.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+          else headerRef.current.classList.remove('is-scrolled');
+      }
+    };
+
+    setTimeout(() => {
+        if (mainElement && headerRef.current) {
+            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+            else headerRef.current.classList.remove('is-scrolled');
+        }
+    }, 50);
+
+    mainElement.addEventListener('scroll', handleScroll);
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Set default branch when opening modal
+  useEffect(() => {
+     if(isModalOpen) {
+         setFormData(prev => ({ ...prev, branchId: currentBranch || 'all' }));
+     }
+  }, [isModalOpen, currentBranch]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(amount);
+  };
+
+  const formatDate = (dateStr) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear() + 543;
+      return `${day}/${month}/${year}`;
+    } catch { return dateStr; }
+  };
+
+  const formatTime = (dateStr) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('th-TH');
+    } catch { return ''; }
+  };
+
+  const handleEditTransaction = (tx) => {
+      setFormData({
+         id: tx.id,
+         date: tx.date.split('T')[0],
+         type: tx.type,
+         category: tx.category,
+         amount: tx.amount,
+         method: tx.method,
+         reference: tx.reference || '',
+         note: tx.note || '',
+         branchId: tx.branchId || currentBranch || 'all'
+      });
+      setIsModalOpen(true);
+  };
+
+  const handleDeleteTransaction = async (tx) => {
+      setAlertConfig({
+        type: 'warning',
+        title: 'ยืนยันการลบรายการ?',
+        text: `คุณต้องการลบรายการ "${tx.category}" จำนวน ${formatCurrency(tx.amount)} ใช่หรือไม่?`,
+        onConfirm: async () => {
+            sweetAlert.close();
+            setIsProcessing(true);
+            try {
+                const sheetName = tx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
+                await callAppScript('DELETE_DATA', sheetName, { id: tx.id });
+                setFinanceData(prev => prev.filter(item => item.id !== tx.id));
+                showToast('ลบรายการสำเร็จ', 'danger');
+            } catch (err) {
+                showToast('เกิดข้อผิดพลาดในการลบรายการ', 'danger');
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+      });
+      sweetAlert.open();
+  };
+
+  const handleSaveTransaction = async (e) => {
+    e.preventDefault();
+    if (!formData.amount || !formData.category) {
+      showToast('กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
+      return;
+    }
+
+    setIsProcessing(true);
+    const isEdit = !!formData.id;
+    const newTx = {
+      id: isEdit ? formData.id : `MAN-${Date.now()}`,
+      date: formData.date,
+      type: formData.type,
+      amount: parseFloat(formData.amount),
+      method: formData.method,
+      category: formData.category,
+      note: formData.note,
+      status: 'completed',
+      isAuto: false,
+      branchId: formData.branchId
+    };
+
+    try {
+      const sheetName = newTx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
+      await callAppScript('SAVE_DATA', sheetName, newTx);
+      
+      if (isEdit) {
+         setFinanceData(prev => prev.map(item => item.id === newTx.id ? newTx : item));
+      } else {
+         setFinanceData(prev => [newTx, ...prev]);
+      }
+
+      showToast(isEdit ? 'แก้ไขรายการสำเร็จ' : 'บันทึกรายการสำเร็จ', 'success');
+      setIsModalOpen(false);
+      setFormData({
+        id: '',
+        date: new Date().toISOString().split('T')[0],
+        type: 'income',
+        category: '',
+        amount: '',
+        method: 'cash',
+        reference: '',
+        note: '',
+        branchId: currentBranch || 'all'
+      });
+    } catch (err) {
+      showToast('เกิดข้อผิดพลาดในการบันทึก', 'danger');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const openDetailModal = (tx) => {
+      setSelectedTxn(tx);
+      setIsDetailModalOpen(true);
+  };
+
+  const closeDetailModal = () => {
+      setIsDetailModalOpen(false);
+      setSelectedTxn(null);
+  };
+
+  return (
+    <div className="fade-in pb-10 w-full">
+      {/* Header */}
+      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
+        <div className="w-full pointer-events-auto sticky-header-bg">
+          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
+            <div>
+              <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title kanit-text">ระบบการเงิน (Finance)</h1>
+              <p className="text-slate-500 sticky-header-desc kanit-text">ภาพรวมรายรับรายจ่าย และระบบเชื่อมโยงอัตโนมัติ</p>
+            </div>
+            <button type="button" onClick={() => setIsModalOpen(true)} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn px-4 py-2 sm:px-6 sm:py-3`}>
+              <Plus size={20} /> <span className="hidden sm:inline kanit-text">เพิ่มรายการ</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4">
+        
+        {/* Stats Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:border-sky-200 transition-colors">
+            <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0 z-10">
+              <Banknote size={28} />
+            </div>
+            <div className="z-10">
+              <p className="text-sm font-medium text-slate-500 kanit-text">ยอดคงเหลือตามตัวกรอง</p>
+              {isGlobalLoading ? <Skeleton width="120px" height="32px" className="mt-1" /> : <h3 className="text-2xl font-bold text-slate-800 font-data tracking-tight">{formatCurrency(stats.balance)}</h3>}
+            </div>
+            <div className="absolute right-[-20px] top-[-20px] text-sky-50 opacity-50 group-hover:scale-110 transition-transform duration-500"><Banknote size={120} /></div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:border-emerald-200 transition-colors">
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0 z-10">
+              <TrendingUp size={28} />
+            </div>
+            <div className="z-10">
+              <p className="text-sm font-medium text-slate-500 kanit-text">รายรับรวมตามตัวกรอง</p>
+              {isGlobalLoading ? <Skeleton width="120px" height="32px" className="mt-1" /> : <h3 className="text-2xl font-bold text-emerald-600 font-data tracking-tight">{formatCurrency(stats.income)}</h3>}
+            </div>
+             <div className="absolute right-[-20px] top-[-20px] text-emerald-50 opacity-50 group-hover:scale-110 transition-transform duration-500"><TrendingUp size={120} /></div>
+          </div>
+          
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:border-rose-200 transition-colors">
+            <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0 z-10">
+              <TrendingDown size={28} />
+            </div>
+            <div className="z-10">
+              <p className="text-sm font-medium text-slate-500 kanit-text">รายจ่ายรวมตามตัวกรอง</p>
+              {isGlobalLoading ? <Skeleton width="120px" height="32px" className="mt-1" /> : <h3 className="text-2xl font-bold text-rose-600 font-data tracking-tight">{formatCurrency(stats.expense)}</h3>}
+            </div>
+             <div className="absolute right-[-20px] top-[-20px] text-rose-50 opacity-50 group-hover:scale-110 transition-transform duration-500"><TrendingDown size={120} /></div>
+          </div>
+        </div>
+
+        {/* Filter and Search */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-6 bg-white p-3 rounded-2xl shadow-sm border border-slate-100/50">
+          <div className="relative flex-1">
+            <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" 
+              placeholder="ค้นหารายการ, หมวดหมู่, หรือ Note..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all font-data"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
+             <select 
+               value={filterType} 
+               onChange={(e) => setFilterType(e.target.value)} 
+               className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
+             >
+               <option value="all">ทั้งหมด</option>
+               <option value="income">รายรับ</option>
+               <option value="expense">รายจ่าย</option>
+               <option value="pos">POS</option>
+               <option value="manual">Manual</option>
+             </select>
+             
+             <select 
+               value={filterBranch} 
+               onChange={(e) => setFilterBranch(e.target.value)} 
+               className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
+             >
+               <option value="all">ทุกสาขา</option>
+               {branchesData && branchesData.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+               ))}
+             </select>
+          </div>
+        </div>
+
+        {/* Transactions Table */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[900px]">
+              <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
+                  <th className="p-4 font-medium text-center w-[120px] kanit-text">วันที่/เวลา</th>
+                  <th className="p-4 font-medium kanit-text w-[120px]">เลขที่บิล</th>
+                  <th className="p-4 font-medium kanit-text">รายละเอียด</th>
+                  <th className="p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th>
+                  <th className="p-4 font-medium text-center kanit-text w-[120px]">ช่องทาง</th>
+                  <th className="p-4 font-medium text-right w-[150px] kanit-text">จำนวนเงิน</th>
+                  <th className="p-4 font-medium text-center w-[100px] kanit-text">สถานะ</th>
+                  <th className="p-4 font-medium text-center w-[100px] kanit-text">ดำเนินการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {isGlobalLoading ? (
+                   Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={`skel-${i}`}>
+                      <td className="p-4"><Skeleton width="80px" height="16px" className="mx-auto mb-1" /><Skeleton width="60px" height="12px" className="mx-auto" /></td>
+                      <td className="p-4"><Skeleton width="80px" height="16px" /></td>
+                      <td className="p-4"><Skeleton width="150px" height="16px" /></td>
+                      <td className="p-4"><div className="flex gap-2"><Skeleton width="24px" height="24px" rounded="rounded-lg"/><Skeleton width="100px" height="16px"/></div></td>
+                      <td className="p-4"><Skeleton width="60px" height="24px" rounded="rounded-full" className="mx-auto" /></td>
+                      <td className="p-4 text-right"><Skeleton width="80px" height="20px" className="ml-auto" /></td>
+                      <td className="p-4"><Skeleton width="60px" height="24px" rounded="rounded-full" className="mx-auto" /></td>
+                      <td className="p-4"><div className="flex gap-2 justify-center"><Skeleton width="24px" height="24px" rounded="rounded-lg"/><Skeleton width="24px" height="24px" rounded="rounded-lg"/></div></td>
+                    </tr>
+                  ))
+                ) : filteredTransactions.length > 0 ? (
+                  filteredTransactions.map((tx, i) => (
+                    <tr key={i} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
+                      <td className="p-4 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
+                          <span className="text-xs font-data text-slate-500 mt-0.5">{formatTime(tx.date)} น.</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
+                      </td>
+                      <td className="p-4">
+                        <span className="text-sm text-slate-700 font-data line-clamp-2 leading-tight" title={tx.note}>{tx.note}</span>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'}`}>
+                            {tx.type === 'income' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>
+                            {tx.isAuto && <span className="text-[10px] font-bold text-sky-500 bg-sky-50 px-1.5 py-0.5 rounded-md w-fit mt-1 kanit-text border border-sky-100">ดึงข้อมูลจาก ระบบ POS</span>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-center">
+                         <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+                           {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
+                         </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                           <CheckCircle2 size={12} /> {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                         <div className="flex items-center justify-center gap-1">
+                             <button onClick={() => handleEditTransaction(tx)} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
+                                <Pencil size={16}/>
+                             </button>
+                             <button onClick={() => handleDeleteTransaction(tx)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
+                                <Trash2 size={16}/>
+                             </button>
+                         </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="p-10 text-center text-slate-400">
+                      <Receipt size={48} className="mx-auto mb-4 opacity-20" />
+                      <p className="kanit-text font-medium text-lg">ไม่มีรายการในระบบ</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Detail Modal */}
+      {isDetailModalOpen && selectedTxn && createPortal(
+        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
+           <div className="bg-white rounded-[1.5rem] w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden modal-animate-in">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 sticky top-0 z-10">
+                 <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${selectedTxn.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                       {selectedTxn.isAuto ? <History size={20} className="text-sky-500" /> : <Receipt size={20} />}
+                    </div>
+                    <div>
+                       <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">{selectedTxn.isAuto ? 'ประวัติการทำรายการ (POS)' : 'รายละเอียดรายการ'}</h3>
+                       <p className="text-xs text-slate-500 kanit-text mt-0.5">{selectedTxn.id}</p>
+                    </div>
+                 </div>
+                 <button onClick={closeDetailModal} className="p-2 text-slate-400 hover:bg-white hover:shadow-sm rounded-full transition-all"><X size={20} /></button>
+              </div>
+
+              {selectedTxn.isAuto ? (
+                 <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-white">
+                      {/* Info Grid for POS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                          <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400"><User size={12}/></div>
+                                  <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">ข้อมูลลูกค้า & วันที่</p>
+                              </div>
+                              <div className="pl-1">
+                                  <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedTxn.rawTx.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
+                                  <p className="text-xs text-slate-500 font-data mt-1.5 flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/> {formatDate(selectedTxn.date)} {formatTime(selectedTxn.date)} น.</p>
+                              </div>
+                          </div>
+                          <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400"><CreditCard size={12}/></div>
+                                  <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">สถานะ & การชำระเงิน</p>
+                              </div>
+                              <div className="flex flex-col gap-2 pl-1">
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs text-slate-500 w-16">สถานะ:</span>
+                                      <span className={`px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold kanit-text ${selectedTxn.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : selectedTxn.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                          {selectedTxn.status === 'completed' ? 'สำเร็จ' : selectedTxn.status === 'cancelled' ? 'ยกเลิก (Void)' : selectedTxn.status}
+                                      </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs text-slate-500 w-16">ช่องทาง:</span>
+                                      <span className="px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold bg-white border border-slate-200 text-slate-600 kanit-text flex items-center gap-1.5 shadow-sm">
+                                          {selectedTxn.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : selectedTxn.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : selectedTxn.method === 'credit' || selectedTxn.method === 'credit_card' ? <><CreditCard size={12}/> บัตรเครดิต</> : selectedTxn.method}
+                                      </span>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
+                      {/* Items List */}
+                      <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedTxn.rawTx.items?.length || 0})</h5>
+                      <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 flex-1 min-h-[200px]">
+                          {/* Desktop Table */}
+                          <div className="hidden sm:block overflow-x-auto h-full">
+                              <table className="w-full text-left border-collapse min-w-[500px]">
+                                  <thead>
+                                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0">
+                                          <th className="p-3 w-12 text-center">#</th>
+                                          <th className="p-3">รายการสินค้า / บริการ</th>
+                                          <th className="p-3 text-center w-24">จำนวน</th>
+                                          <th className="p-3 text-right w-32">ราคา/หน่วย</th>
+                                          <th className="p-3 text-right w-32">รวม (บาท)</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-50">
+                                      {(selectedTxn.rawTx.items || []).map((item, idx) => (
+                                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
+                                              <td className="p-3 text-center text-slate-400 text-xs">{idx + 1}</td>
+                                              <td className="p-3 text-slate-700 font-bold kanit-text">{item.name}</td>
+                                              <td className="p-3 text-center font-semibold">{item.quantity}</td>
+                                              <td className="p-3 text-right text-slate-500">{formatCurrency(item.price)}</td>
+                                              <td className="p-3 text-right font-bold text-sky-600">{formatCurrency(item.total)}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                          {/* Mobile List */}
+                          <div className="sm:hidden flex flex-col divide-y divide-slate-50 overflow-y-auto max-h-[300px] custom-scrollbar bg-slate-50/30">
+                              {(selectedTxn.rawTx.items || []).map((item, idx) => (
+                                  <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
+                                      <div className="flex justify-between items-start gap-2">
+                                          <div className="font-bold text-slate-800 text-sm kanit-text leading-tight">{item.name}</div>
+                                          <div className="font-bold text-sky-600 text-sm font-data shrink-0">{formatCurrency(item.total)}</div>
+                                      </div>
+                                      <div className="flex justify-between items-center text-xs font-data text-slate-500 mt-1">
+                                          <div>จำนวน {item.quantity} รายการ</div>
+                                          <div>{formatCurrency(item.price)} / หน่วย</div>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+
+                      {/* Summary */}
+                      <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 shrink-0">
+                          <div className="w-full sm:w-auto">
+                              <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedTxn.id}</div>
+                          </div>
+                          <div className="w-full sm:w-72 space-y-2 text-sm font-data">
+                              <div className="flex justify-between text-slate-600"><span className="kanit-text">รวมเป็นเงิน</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx.subtotal)}</span></div>
+                              {selectedTxn.rawTx.discountAmount > 0 && (
+                                  <div className="flex justify-between text-rose-500"><span className="kanit-text">ส่วนลด {selectedTxn.rawTx.discountType === 'percent' ? `(${selectedTxn.rawTx.discountValue}%)` : ''}</span><span className="font-semibold">- {formatCurrency(selectedTxn.rawTx.discountAmount)}</span></div>
+                              )}
+                              {selectedTxn.rawTx.vatAmount > 0 && (
+                                  <div className="flex justify-between text-slate-600"><span className="kanit-text">ภาษี ({selectedTxn.rawTx.taxMode === 'include' ? 'รวม' : 'แยก'})</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx.vatAmount)}</span></div>
+                              )}
+                              <div className="h-px bg-slate-200/60 my-2"></div>
+                              <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedTxn.rawTx.grandTotal)}</span></div>
+                          </div>
+                      </div>
+                 </div>
+              ) : (
+                <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30 flex flex-col">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      <div className="p-4 rounded-xl border bg-white border-slate-100 shadow-sm">
+                          <div className="flex flex-col gap-2">
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider kanit-text">วันที่และเวลา</span>
+                              <span className="text-sm font-bold text-slate-800 font-data flex items-center gap-1.5"><Clock size={14} className="text-sky-500"/> {formatDate(selectedTxn.date)} {formatTime(selectedTxn.date)} น.</span>
+                          </div>
+                      </div>
+                      <div className="p-4 rounded-xl border bg-white border-slate-100 shadow-sm">
+                          <div className="flex flex-col gap-2">
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider kanit-text">สาขา</span>
+                              <span className="text-sm font-bold text-slate-800 kanit-text">
+                                  {selectedTxn.branchId === 'all' ? 'ทุกสาขา (ส่วนกลาง)' : branchesData.find(b => b.id === selectedTxn.branchId)?.name || selectedTxn.branchId}
+                              </span>
+                          </div>
+                      </div>
+                      <div className="md:col-span-2 p-4 rounded-xl border bg-white border-slate-100 shadow-sm">
+                          <div className="flex flex-col gap-2">
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider kanit-text">รายละเอียด / หมายเหตุ</span>
+                              <span className="text-sm font-medium text-slate-800 kanit-text">{selectedTxn.note || '-'}</span>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="mt-auto bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 flex flex-col items-end">
+                      <div className="w-full sm:w-72 space-y-2 text-sm font-data">
+                          <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดรวมสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedTxn.amount)}</span></div>
+                      </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
+                 <button type="button" onClick={closeDetailModal} className="px-6 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors kanit-text shadow-sm">ปิดหน้าต่าง</button>
+              </div>
+           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Add Manual Transaction Modal */}
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
+           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden modal-animate-in">
+              <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                 <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-inner">
+                       <Banknote size={20} />
+                    </div>
+                    <div>
+                       <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">เพิ่มรายการ</h3>
+                       <p className="text-xs text-slate-500 kanit-text mt-0.5">บันทึกรายรับหรือรายจ่ายแบบกำหนดเอง</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:bg-white hover:shadow-sm rounded-full transition-all"><X size={20} /></button>
+              </div>
+
+              <div className="p-5 sm:p-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                 <form id="finance-form" onSubmit={handleSaveTransaction} className="space-y-4">
+                    
+                    <div className="grid grid-cols-2 gap-3 mb-2">
+                       <div onClick={() => setFormData({...formData, type: 'income'})} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'income' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.type === 'income' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-100 text-slate-400'}`}><TrendingUp size={20} /></div>
+                          <span className={`font-bold kanit-text ${formData.type === 'income' ? 'text-emerald-700' : 'text-slate-500'}`}>รายรับ</span>
+                       </div>
+                       <div onClick={() => setFormData({...formData, type: 'expense'})} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'expense' ? 'border-rose-500 bg-rose-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.type === 'expense' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' : 'bg-slate-100 text-slate-400'}`}><TrendingDown size={20} /></div>
+                          <span className={`font-bold kanit-text ${formData.type === 'expense' ? 'text-rose-700' : 'text-slate-500'}`}>รายจ่าย</span>
+                       </div>
+                    </div>
+
+                    <div>
+                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">วันที่ทำรายการ <span className="text-rose-500">*</span></label>
+                       <input required type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={theme.input + " font-data"} />
+                    </div>
+
+                    <div>
+                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">สาขา <span className="text-rose-500">*</span></label>
+                       <select value={formData.branchId} onChange={e => setFormData({...formData, branchId: e.target.value})} className={theme.input + " font-data appearance-none cursor-pointer"}>
+                          <option value="all">ทุกสาขา (ส่วนกลาง)</option>
+                          {branchesData && branchesData.map(b => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                       </select>
+                    </div>
+
+                    <div>
+                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                       <input required type="text" placeholder="เช่น ค่าเช่า, ค่าน้ำไฟ, รายได้พิเศษ" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={theme.input + " font-data"} />
+                    </div>
+
+                    <div>
+                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">จำนวนเงิน (บาท) <span className="text-rose-500">*</span></label>
+                       <div className="relative">
+                          <input required type="number" min="0" step="0.01" placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={theme.input + " font-data pr-12 text-lg font-bold"} />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold kanit-text">฿</span>
+                       </div>
+                    </div>
+
+                    <div>
+                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">ช่องทางการชำระ <span className="text-rose-500">*</span></label>
+                       <select value={formData.method} onChange={e => setFormData({...formData, method: e.target.value})} className={theme.input + " font-data appearance-none cursor-pointer"}>
+                          <option value="cash">เงินสด</option>
+                          <option value="transfer">โอนเงินเข้าบัญชี</option>
+                          <option value="credit_card">บัตรเครดิต</option>
+                          <option value="other">อื่นๆ</option>
+                       </select>
+                    </div>
+
+                    <div>
+                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">บันทึกเพิ่มเติม</label>
+                       <textarea rows="2" placeholder="รายละเอียดเพิ่มเติม..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={theme.input + " font-data resize-none"}></textarea>
+                    </div>
+
+                 </form>
+              </div>
+
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ยกเลิก</button>
+                 <button type="submit" form="finance-form" disabled={isProcessing} className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2">
+                    {isProcessing ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={18} />} บันทึกรายการ
+                 </button>
+              </div>
+              </div>
+              </div>,
+              document.body
+              )}
+
+      {/* Alert Modal */}
+      {sweetAlert.isOpen && createPortal(
+        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${sweetAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${sweetAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3>
+            <p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
+            <div className="flex gap-3 w-full">
+              <button onClick={sweetAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button>
+              <button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+              </div>
+              );
+              };
+
 export default function App() {
   // --- แก้ไข: จดจำหน้าปัจจุบันใน LocalStorage (รีเฟรชแล้วอยู่หน้าเดิม ยกเว้นตั้งค่า) ---
   const [currentTab, setCurrentTab] = useState(() => {
@@ -7731,6 +8440,7 @@ export default function App() {
   const [inventoryData, setInventoryData] = useState([]);
   const [inventoryLogsData, setInventoryLogsData] = useState([]); // เพิ่ม State เก็บประวัติคลังสินค้า
   const [posHistoryData, setPosHistoryData] = useState([]); // เพิ่ม State เก็บประวัติ POS
+  const [financeData, setFinanceData] = useState([]); // เพิ่ม State เก็บประวัติการเงิน
   const [posProducts, setPosProducts] = useState([]); // เปลี่ยนจาก mockProducts เป็นอาร์เรย์ว่าง เพื่อรอดึงข้อมูลของจริง
   const [isDataFetched, setIsDataFetched] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
@@ -7785,7 +8495,9 @@ export default function App() {
           resInventory,
           resInvLogs,
           resPosItems,
-          resBranches
+          resBranches,
+          resFinanceRevenue,
+          resFinanceExpenses
         ] = await Promise.all([
           callAppScript('GET_DATA', 'Patients'),
           callAppScript('GET_DATA', 'Queue'),
@@ -7793,7 +8505,9 @@ export default function App() {
           callAppScript('GET_DATA', 'Inventory'),
           callAppScript('GET_DATA', 'InventoryLogs'),
           callAppScript('GET_DATA', 'setting_pos'),
-          callAppScript('GET_DATA', 'Branches')
+          callAppScript('GET_DATA', 'Branches'),
+          callAppScript('GET_DATA', 'Finance_Revenue'),
+          callAppScript('GET_DATA', 'Finance_Expenses')
         ]);
 
         if (resPatients?.status === 'success') { 
@@ -7824,6 +8538,15 @@ export default function App() {
           setPosProducts(resPosItems.data);
         }
 
+        const combinedFinanceData = [];
+        if (resFinanceRevenue?.status === 'success' && resFinanceRevenue.data) {
+           combinedFinanceData.push(...resFinanceRevenue.data);
+        }
+        if (resFinanceExpenses?.status === 'success' && resFinanceExpenses.data) {
+           combinedFinanceData.push(...resFinanceExpenses.data);
+        }
+        setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
+
       } catch (error) { 
         console.error("Initial Fetch Error:", error);
         showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); 
@@ -7841,6 +8564,7 @@ export default function App() {
     { id: 'catalog', label: 'สินค้า/บริการ', icon: Tag },
     { id: 'inventory', label: 'คลังสินค้า', icon: Package },
     { id: 'reports', label: 'รายงาน', icon: BarChart3 },
+    { id: 'finance', label: 'การเงิน', icon: Banknote },
     { id: 'branches', label: 'จัดการสาขา', icon: Building2 },
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
   ];
@@ -8010,6 +8734,9 @@ export default function App() {
                     callAppScript={callAppScript} 
                     isGlobalLoading={isGlobalLoading} 
                 />
+            </div>
+            <div style={{ display: currentTab === 'finance' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
+                <FinancePage currentBranch={currentBranch} financeData={financeData} setFinanceData={setFinanceData} posHistoryData={posHistoryData} branchesData={branchesData} isGlobalLoading={isGlobalLoading} callAppScript={callAppScript} showToast={showToast} setPosHistoryData={setPosHistoryData} />
             </div>
             <div style={{ display: currentTab === 'inventory' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
                 <InventoryManager 
