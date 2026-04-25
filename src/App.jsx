@@ -3963,11 +3963,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                         </div>
                     </div>
                     )}
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
-                        <div className="min-w-0 flex-1 truncate">
-                            <span className="font-medium text-slate-500">รับบริการล่าสุด:</span>
-                            <span className="font-bold text-sky-600 ml-1.5 font-data">{lastVisitStr}</span>
+                    <div className="flex items-center justify-between text-xs pr-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
+                            <div className="truncate">
+                                <span className="font-medium text-slate-500">รับบริการล่าสุด:</span>
+                                <span className="font-bold text-sky-600 ml-1.5 font-data">{lastVisitStr}</span>
+                            </div>
+                        </div>
+                        <div className="shrink-0 text-right ml-2 border-l border-slate-200 pl-2">
+                            <span className="font-medium text-slate-500 text-[10px]">การรักษา:</span>
+                            <span className="font-bold text-slate-600 ml-1 font-data">{patient.opdRecords ? patient.opdRecords.length : 0}</span>
+                            <span className="text-slate-400 text-[10px] ml-0.5">ครั้ง</span>
                         </div>
                     </div>
                 </div>
