@@ -3560,9 +3560,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
             body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
-            html, body { height: 98vh; margin: 0; box-sizing: border-box; }
+            html, body { width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
             @page { size: A5 landscape; margin: 10mm; }
-            .container { width: 100%; height: 98%; box-sizing: border-box; display: flex; flex-direction: column; padding-bottom: 5px; }
+            .container { width: 100%; height: 128mm; max-height: 128mm; box-sizing: border-box; display: flex; flex-direction: column; padding-bottom: 2px; overflow: hidden; page-break-after: avoid; page-break-inside: avoid; }
 
             .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
             .clinic-info { line-height: 1.4; font-size: 12px; }
@@ -3610,7 +3610,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
             .footer { display: flex; justify-content: flex-end; align-items: flex-end; padding-top: 10px; border-top: 1px dotted #ccc; }
             .signature { text-align: center; font-size: 12px; width: 100%; margin-top: 30px; margin-bottom: 0px; padding-bottom: 2px; }
-            .body-diagram { width: 100%; height: auto; max-height: 210px; object-fit: contain; }            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */            @media print {
+            .body-diagram { width: 100%; height: auto; max-height: 240px; object-fit: contain; }            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */            @media print {
                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
                .value, .val-box {
                  border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
