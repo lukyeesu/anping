@@ -3899,7 +3899,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         <td className="py-4 text-center text-slate-500">{patient.opdRecords ? patient.opdRecords.length : 0}</td>
         <td className="py-4 text-right pr-6">
           <div className="flex justify-end gap-2 transition-opacity">
-            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-sky-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
             <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไขข้อมูล"><Pencil size={18} /></button>
             <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
           </div>
