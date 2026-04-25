@@ -2133,6 +2133,184 @@ const PatientModal = React.memo(({
     closeMedCalendar, isOpdCalendarClosing, closeMedOpdCalendar, sweetAlert, 
     isAlertClosing, closeMedAlert, editingOpdIndex, yearPageStart, setYearPageStart, CheckCircle2, Loader2, ScanText, X, FileText, Pencil, Plus, Users, CreditCard, Clock, MapPin, Package, Stethoscope, Phone, Trash2, CalendarIcon, User, UserPlus, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle
 }) => {
+
+  // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
+  const handlePrintOpdRecord = (record, index) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups');
+        return;
+    }
+
+    // คำนวณครั้งที่เข้ารับการรักษา (สมมติว่ารายการล่าสุดอยู่บนสุด)
+    const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
+    const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
+    
+    // ตัดคำว่า HN ออกเพื่อความสวยงามตามแบบฟอร์ม
+    const hnNumberOnly = (formData.hn || '').replace(/^HN/i, '');
+    const fullName = `${formData.prefix ? formData.prefix + ' ' : ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+    
+    // ดึงที่อยู่ปัจจุบัน ถ้าไม่มีให้ใช้ตามบัตร ปชช.
+    const addressStr = `${formData.curAddress || formData.address || ''} ${formData.curMoo || formData.moo ? 'ม.'+(formData.curMoo || formData.moo) : ''} ${formData.curRoad || formData.road ? 'ถ.'+(formData.curRoad || formData.road) : ''} ${formData.curSubDistrict || formData.subDistrict || ''} ${formData.curDistrict || formData.district || ''} ${formData.curProvince || formData.province || ''} ${formData.curZipcode || formData.zipcode || ''}`.trim();
+    const phoneStr = formData.phones && formData.phones.length > 0 ? formData.phones[0] : '';
+
+    // จัดการช่อง Checkbox ตามแบบฟอร์ม (ใช้การค้นหาคำในรายการการรักษา tx)
+    const tcmItemsRow1 = ['ฝังเข็ม', 'ครอบแก้ว', 'อบโคม', 'รมยา', 'กัวซา'];
+    const tcmItemsRow2 = ['มังกรไฟ', 'ทุนหนา', 'ยาจีน', 'แมะ', 'ฝังเข็มกระตุ้นไฟฟ้า'];
+    
+    const renderCheckbox = (name) => {
+        const isChecked = Array.isArray(record.tx) ? record.tx.some(t => t && t.includes(name)) : (record.tx && record.tx.includes(name));
+        const checkMark = isChecked ? '&#10003;' : '&nbsp;&nbsp;&nbsp;'; 
+        if(name === 'ฝังเข็มกระตุ้นไฟฟ้า') {
+             return `<div class="checkbox-item" style="align-items: flex-start;"><span class="box" style="margin-top: 2px;">${checkMark}</span> <div>ฝังเข็ม<br/>กระตุ้นไฟฟ้า</div></div>`;
+        }
+        return `<div class="checkbox-item"><span class="box">${checkMark}</span> ${name}</div>`;
+    };
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบ OPD - ${formData.hn}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
+            @page { size: A5 landscape; margin: 10mm; }
+            .container { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; }
+            
+            .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+            .clinic-info { line-height: 1.4; font-size: 12px; }
+            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+            
+            .doc-info { text-align: left; }
+            .doc-info-row { display: flex; align-items: baseline; margin-bottom: 6px; font-weight: bold; }
+            
+            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
+            .label { white-space: nowrap; margin-right: 5px; font-weight: bold; }
+            
+            /* เทคนิคเส้นประแบบ Gradient ตามที่ผู้ใช้งานต้องการ */
+            .value { 
+              flex-grow: 1; 
+              border: none;
+              border-bottom: 1px solid transparent;
+              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+              text-align: center; 
+              padding-bottom: 1px; 
+              min-width: 20px; 
+              margin-right: 10px; 
+            }
+            .value.left { text-align: left; padding-left: 5px; }
+            .value:last-child { margin-right: 0; }
+            .w-auto { flex-grow: 0; }
+            
+            .vitals { display: flex; align-items: baseline; margin-bottom: 12px; font-weight: bold; }
+            .vitals .val-box { 
+                border: none; border-bottom: 1px solid transparent;
+                border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+                min-width: 40px; text-align: center; margin: 0 4px; padding-bottom: 1px; font-weight: normal; display: inline-block;
+            }
+            
+            .cc-section { margin-bottom: 10px; flex-grow: 1; }
+            .cc-title { font-weight: bold; margin-bottom: 4px; }
+            .cc-content { min-height: 40px; padding-left: 10px; }
+            
+            .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding-top: 10px; border-top: 1px dotted #ccc; }
+            .checkbox-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px 15px; font-size: 12px; flex-grow: 1; }
+            .checkbox-item { display: flex; align-items: center; gap: 6px; }
+            .box { display: inline-block; width: 12px; height: 12px; border: 1px solid #000; text-align: center; line-height: 10px; font-size: 10px; font-weight: bold; flex-shrink: 0; }
+            
+            .signature { text-align: center; font-size: 12px; width: 180px; margin-left: 20px; }
+            
+            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */
+            @media print {
+               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+               .value, .val-box {
+                 border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
+               }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="clinic-info">
+                    <div class="clinic-name">ฟู่ ซิน ไถ คลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร. 062-826-1696</div>
+                </div>
+                <div class="doc-info" style="width: 300px;">
+                    <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
+                        <span style="margin-right: 15px;">HN</span>
+                        <span>${hnNumberOnly}</span>
+                    </div>
+                    <div class="doc-info-row" style="font-size: 14px;">
+                        <span>วันที่:</span>
+                        <span class="value w-auto" style="width: 100px;">${dateStr}</span>
+                        <span style="margin-left: 10px;">ครั้งที่:</span>
+                        <span class="value w-auto" style="width: 40px;">${visitNumber}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${fullName}</span>
+                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${formData.nickname || '-'}</span>
+                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${formData.gender || '-'}</span>
+            </div>
+            
+            <div class="row">
+                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${formData.idCard || '-'}</span>
+                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${calculatedAge}</span>
+                <span class="label">โทร:</span><span class="value">${phoneStr}</span>
+            </div>
+            
+            <div class="row">
+                <span class="label">ที่อยู่:</span><span class="value left">${addressStr}</span>
+            </div>
+            
+            <div class="row">
+                <span class="label">โรคประจำตัว:</span><span class="value left">${formData.underlyingDisease || 'ไม่มี'}</span>
+                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${formData.allergies || 'ไม่มี'}</span>
+            </div>
+            
+            <div class="vitals">
+                T: <span class="val-box">${record.temp || ''}</span> °C &nbsp;&nbsp;&nbsp;
+                P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
+                BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
+                น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
+                ส่วนสูง: <span class="val-box">${record.height || ''}</span> cm
+            </div>
+            
+            <div class="cc-section">
+                <div class="cc-title">อาการสำคัญ:</div>
+                <div class="cc-content">${(record.cc || '').replace(/\\n/g, '<br/>')}</div>
+            </div>
+            
+            <div class="footer">
+                <div class="checkbox-grid">
+                    ${tcmItemsRow1.map(renderCheckbox).join('')}
+                    ${tcmItemsRow2.map(renderCheckbox).join('')}
+                </div>
+                <div class="signature">
+                    <div class="value" style="width: 100%; margin: 0 auto 5px auto;"></div>
+                    (พจ. พงษ์สิทธิ์ แซ่อึ้ง)
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -2564,7 +2742,10 @@ const PatientModal = React.memo(({
                                       <span className="font-medium text-sky-600 font-data flex items-center gap-1"><User size={12}/> {record.doctor || '-'}</span>
                                   </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-2 pt-1">
+                              <div className="grid grid-cols-3 gap-2 pt-1">
+                                  <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
+                                      <Printer size={14} /> พิมพ์
+                                  </button>
                                   <button type="button" onClick={() => handleDeleteOpdRecord(index)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
                                       <Trash2 size={14} /> ลบ
                                   </button>
@@ -3162,11 +3343,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     printWindow.document.write(html);
     printWindow.document.close();
     
-    printWindow.onload = function() {
-        setTimeout(() => {
-            printWindow.print();
-        }, 500);
-    };
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
   };
 
   // --- 3. Derived State (Memos & Filtering) ---
@@ -3350,6 +3529,179 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
     setShowOpdCalendar(true);
   };
 
+  // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
+  const handlePrintOpdRecord = (record, index) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+    }
+
+    // คำนวณครั้งที่เข้ารับการรักษา (สมมติว่ารายการล่าสุดอยู่บนสุด)
+    const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
+    const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
+
+    // ตัดคำว่า HN ออกเพื่อความสวยงามตามแบบฟอร์ม
+    const hnNumberOnly = (formData.hn || '').replace(/^HN/i, '');
+    const fullName = `${formData.prefix ? formData.prefix + ' ' : ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim();
+
+    // ดึงที่อยู่ปัจจุบัน ถ้าไม่มีให้ใช้ตามบัตร ปชช.
+    const addressStr = `${formData.curAddress || formData.address || ''} ${formData.curMoo || formData.moo ? 'ม.'+(formData.curMoo || formData.moo) : ''} ${formData.curRoad || formData.road ? 'ถ.'+(formData.curRoad || formData.road) : ''} ${formData.curSubDistrict || formData.subDistrict || ''} ${formData.curDistrict || formData.district || ''} ${formData.curProvince || formData.province || ''} ${formData.curZipcode || formData.zipcode || ''}`.trim();
+    const phoneStr = formData.phones && formData.phones.length > 0 ? formData.phones[0] : '';
+
+    const txText = Array.isArray(record.tx) ? record.tx.filter(t => t).join(', ') : (record.tx || '-');
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบ OPD - ${formData.hn}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
+            html, body { height: 98vh; margin: 0; box-sizing: border-box; }
+            @page { size: A5 landscape; margin: 10mm; }
+            .container { width: 100%; height: 98%; box-sizing: border-box; display: flex; flex-direction: column; padding-bottom: 5px; }
+
+            .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+            .clinic-info { line-height: 1.4; font-size: 12px; }
+            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+
+            .doc-info { text-align: right; }
+            .doc-info-row { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 6px; font-weight: bold; }
+
+            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
+            .label { white-space: nowrap; margin-right: 5px; font-weight: bold; }
+
+            /* เทคนิคเส้นประแบบ Gradient ตามที่ผู้ใช้งานต้องการ */
+            .value {
+              flex-grow: 1;
+              border: none;
+              border-bottom: 1px solid transparent;
+              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+              text-align: center;
+              padding-bottom: 1px;
+              min-width: 20px;
+              margin-right: 10px;
+            }
+            .value.left { text-align: left; padding-left: 5px; }
+            .value:last-child { margin-right: 0; }
+            .w-auto { flex-grow: 0; }
+
+            .vitals { display: flex; align-items: baseline; margin-bottom: 12px; font-weight: bold; }
+            .vitals .val-box {
+                border: none; border-bottom: 1px solid transparent;
+                border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+                min-width: 40px; text-align: center; margin: 0 4px; padding-bottom: 1px; font-weight: normal; display: inline-block;
+            }
+
+            .main-content { display: flex; flex-direction: row; gap: 20px; flex-grow: 1; margin-bottom: 10px; }
+            .left-column { flex-grow: 1; display: flex; flex-direction: column; }
+            .right-column { width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-top: -35px; }
+
+            .cc-section { flex: 1; display: flex; flex-direction: column; margin-bottom: 0px; }
+            .cc-title { font-weight: bold; margin-bottom: 4px; }
+            .cc-content { flex: 1; min-height: 30px; padding-left: 10px; }
+
+            .tx-section { flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0px; }
+            .tx-title { font-weight: bold; margin-bottom: 4px; }
+            .tx-content { flex: 1; min-height: 40px; padding-left: 10px; }
+
+            .footer { display: flex; justify-content: flex-end; align-items: flex-end; padding-top: 10px; border-top: 1px dotted #ccc; }
+            .signature { text-align: center; font-size: 12px; width: 100%; margin-top: 30px; margin-bottom: 0px; padding-bottom: 2px; }
+            .body-diagram { width: 100%; height: auto; max-height: 210px; object-fit: contain; }            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */            @media print {
+               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+               .value, .val-box {
+                 border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
+               }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="clinic-info">
+                    <div class="clinic-name">ฟู่ ซิน ไถ คลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร. 062-826-1696</div>
+                </div>
+                <div class="doc-info" style="width: 300px;">
+                    <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
+                        <span style="margin-right: 15px;">HN</span>
+                        <span>${hnNumberOnly}</span>
+                    </div>
+                    <div class="doc-info-row" style="font-size: 14px;">
+                        <span>วันที่:</span>
+                        <span class="value w-auto" style="width: 100px; text-align: center;">${dateStr}</span>
+                        <span style="margin-left: 10px;">ครั้งที่:</span>
+                        <span class="value w-auto" style="width: 40px; text-align: center;">${visitNumber}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${fullName}</span>
+                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${formData.nickname || '-'}</span>
+                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${formData.gender || '-'}</span>
+            </div>
+
+            <div class="row">
+                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${formData.idCard || '-'}</span>
+                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${calculatedAge}</span>
+                <span class="label">โทร:</span><span class="value">${phoneStr}</span>
+            </div>
+
+            <div class="row">
+                <span class="label">ที่อยู่:</span><span class="value left">${addressStr}</span>
+            </div>
+
+            <div class="row">
+                <span class="label">โรคประจำตัว:</span><span class="value left">${formData.underlyingDisease || 'ไม่มี'}</span>
+                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${formData.allergies || 'ไม่มี'}</span>
+            </div>
+
+            <div class="vitals">
+                T: <span class="val-box">${record.temp || ''}</span> °C &nbsp;&nbsp;&nbsp;
+                P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
+                BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
+                น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
+                ส่วนสูง: <span class="val-box">${record.height || ''}</span> cm
+            </div>
+
+            <div class="main-content">
+                <div class="left-column">
+                    <div class="cc-section">
+                        <div class="cc-title">อาการสำคัญ:</div>
+                        <div class="cc-content">${(record.cc || '').replace(/\n/g, '<br/>')}</div>
+                    </div>
+                    
+                    <div class="tx-section">
+                        <div class="tx-title">การรักษาที่ให้:</div>
+                        <div class="tx-content">${txText}</div>
+                    </div>
+                </div>
+                <div class="right-column">
+                    <img src="${window.location.origin}/Body Diagram.svg" class="body-diagram" alt="Body Diagram" />
+                    <div class="signature">
+                        <div class="value" style="width: 100%; margin: 0 auto 5px auto;"></div>
+                        (พจ. พงษ์สิทธิ์ แซ่อึ้ง)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
+  };
   const handleOpenOpdForm = (index = null, record = null) => {
     if (index !== null && record) { 
       setEditingOpdIndex(index); 
@@ -3544,6 +3896,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         <td className="py-4 text-slate-500">{patient.gender || '-'}</td><td className="py-4 text-slate-500">{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
         <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
         <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
+        <td className="py-4 text-center text-slate-500">{patient.opdRecords ? patient.opdRecords.length : 0}</td>
         <td className="py-4 text-right pr-6">
           <div className="flex justify-end gap-2 transition-opacity">
             <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
@@ -3685,6 +4038,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                        <th className="pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th>
                         <th className="pt-6 pb-4 font-medium text-right pr-6 kanit-text">จัดการ</th>
                       </tr>
                     </thead>
@@ -3699,6 +4053,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                             <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
                             <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                         ))
@@ -3712,6 +4067,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                             <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
                             <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                       ))}
@@ -3790,7 +4146,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                     {isViewMode ? <FileText className="w-5 h-5 sm:w-6 sm:h-6" /> : (editingId ? <Pencil className="w-5 h-5 sm:w-6 sm:h-6" /> : <Plus className="w-5 h-5 sm:w-6 sm:h-6" />)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm sm:text-xl font-bold text-slate-800 kanit-text truncate leading-tight">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName}` : 'เพิ่มเวชระเบียนใหม่'}</h3>
+                  <h3 className="text-base sm:text-2xl font-bold text-slate-800 kanit-text truncate leading-tight">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName} (การรักษา ${formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง)` : 'เพิ่มเวชระเบียนใหม่'}</h3>
                   <p className="text-[10px] sm:text-sm text-slate-500 kanit-text truncate leading-tight mt-0.5">{isViewMode ? `อายุ ${calculatedAge} | ข้อมูลผู้ป่วยสำหรับเรียกดู` : (editingId ? `อายุ ${calculatedAge} | แก้ไขข้อมูลเวชระเบียน` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}</p>
                 </div>
               </div>
@@ -4181,6 +4537,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                                 <td className="p-3 text-slate-700 whitespace-nowrap">{record.doctor || '-'}</td>
                                 <td className="p-3 text-right">
                                   <div className="flex justify-end gap-1">
+                                    <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="text-slate-400 hover:text-indigo-600 p-1.5 bg-white hover:bg-indigo-50 border border-slate-100 rounded-lg shadow-sm transition-colors" title="พิมพ์ใบ OPD">
+                                      <Printer size={16} />
+                                    </button>
                                     <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="text-slate-400 hover:text-sky-600 p-1.5 bg-white hover:bg-sky-50 border border-slate-100 rounded-lg shadow-sm transition-colors" title="แก้ไข">
                                       <Pencil size={16} />
                                     </button>
@@ -4242,13 +4601,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                                           <span className="font-medium text-sky-600 font-data flex items-center gap-1"><User size={12}/> {record.doctor || '-'}</span>
                                       </div>
                                   </div>
-
-                                  {/* ปุ่มจัดการ (ย้ายมาไว้ด้านล่าง สัดส่วน 1:1) */}
-                                  <div className="grid grid-cols-2 gap-2 pt-1">
-                                      <button type="button" onClick={() => handleDeleteOpdRecord(index)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
+                                  <div className="grid grid-cols-3 gap-2 pt-1">
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintOpdRecord(record, index); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
+                                          <Printer size={14} /> พิมพ์
+                                      </button>
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteOpdRecord(index); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
                                           <Trash2 size={14} /> ลบ
                                       </button>
-                                      <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-white border border-slate-100 hover:bg-sky-50 hover:border-sky-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenOpdForm(index, record); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-white border border-slate-100 hover:bg-sky-50 hover:border-sky-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
                                           <Pencil size={14} /> แก้ไข
                                       </button>
                                   </div>
@@ -6119,18 +6479,21 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
       <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
         <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="relative w-full sm:max-w-md">
+          {/* แก้ไข flex-col เป็น flex-row แถวเดียว และปรับ gap */}
+          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4">
+            {/* ใส่ flex-1 และ min-w-0 เพื่อให้ช่องค้นหายืดขยายจนสุด */}
+            <div className="relative flex-1 min-w-0 w-full">
               <input 
                 type="text" 
                 placeholder="ค้นหาชื่อ หรือหมวดหมู่..." 
-                className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data"
+                className="w-full pl-10 pr-3 sm:pl-11 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
             </div>
-            <div className="text-sm font-bold text-slate-500 kanit-text whitespace-nowrap bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm pointer-events-auto">
+            {/* ใส่ shrink-0 ป้องกันไม่ให้ปุ่มโดนบีบจนข้อความตกบรรทัด */}
+            <div className="text-xs sm:text-sm font-bold text-slate-500 kanit-text whitespace-nowrap bg-white px-3 py-2.5 sm:px-4 sm:py-2.5 rounded-xl border border-slate-200 shadow-sm pointer-events-auto shrink-0">
               ทั้งหมด {filteredProducts.length} รายการ
             </div>
           </div>
