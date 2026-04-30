@@ -4881,7 +4881,8 @@ const POSSystem = ({
     setInventoryLogsData,
     currentBranch,
     branchesData = [],
-    showToast, callAppScript, isGlobalLoading 
+    showToast, callAppScript, isGlobalLoading,
+    showMobileBars 
 }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -5946,7 +5947,7 @@ const POSSystem = ({
 
           {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือตอนอยู่หน้าเลือกสินค้า) --- */}
           {!isMobileCartOpen && (
-            <div className="md:hidden fixed bottom-[76px] left-4 right-4 z-40 transition-all duration-300">
+            <div className={`md:hidden fixed left-4 right-4 z-40 transition-all duration-300 ease-in-out ${showMobileBars ? 'bottom-[76px]' : 'bottom-6'}`}>
               <button 
                 onClick={() => setIsMobileCartOpen(true)}
                 className={`w-full p-4 rounded-2xl shadow-xl flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}
@@ -10391,6 +10392,10 @@ export default function App() {
   const sidebarBaseWidth = isSidebarExpanded ? SIDEBAR_MAX_WIDTH : SIDEBAR_MIN_WIDTH;
   const baseProgress = isSidebarExpanded ? 1 : 0;
 
+  // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ ---
+  const [showMobileBars, setShowMobileBars] = useState(true);
+  const lastScrollY = React.useRef(0);
+
   // บันทึกสถานะลง LocalStorage เมื่อมีการเปลี่ยนแปลง (เฉพาะ PC)
   useEffect(() => {
     if (typeof localStorage !== 'undefined' && !isMobile) {
@@ -10477,6 +10482,37 @@ export default function App() {
   // --- เพิ่มระบบจำตำแหน่ง Scroll ของแต่ละหน้า ---
   const mainRef = React.useRef(null);
   const scrollPositions = React.useRef({});
+
+  // --- Global Scroll Listener for Mobile Auto-Hide Bars ---
+  useEffect(() => {
+    const mainElement = mainRef.current;
+    if (!mainElement) return;
+
+    const handleGlobalScroll = (e) => {
+      if (!isMobile) return; // ทำงานเฉพาะโหมดมือถือเท่านั้น
+      const currentScrollY = e.target.scrollTop;
+
+      // ถ้าเลื่อนกลับไปบนสุด ให้แสดงแถบเครื่องมือเสมอ
+      if (currentScrollY <= 20) {
+        setShowMobileBars(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // ใช้ Threshold เพื่อป้องกันการทำงานจุกจิกเกินไปเวลาขยับนิ้วเล็กน้อย
+      if (Math.abs(currentScrollY - lastScrollY.current) < 15) return;
+
+      if (currentScrollY > lastScrollY.current) {
+        setShowMobileBars(false); // เลื่อนลง -> ซ่อนแถบ
+      } else {
+        setShowMobileBars(true); // เลื่อนขึ้น -> แสดงแถบ
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    mainElement.addEventListener('scroll', handleGlobalScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleGlobalScroll);
+  }, [isMobile]);
 
   const handleTabClick = (tabId) => {
     if (hasDragged.current) return;
@@ -10797,8 +10833,11 @@ export default function App() {
           </div>
         </aside>
 
+        {/* --- Mobile Top Header Spacer --- */}
+        <div className="md:hidden shrink-0 w-full h-[61px]" />
+        
         {/* --- Mobile Top Header --- */}
-        <header className="md:hidden flex items-center justify-between px-5 py-3 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 z-40 shrink-0 shadow-sm relative">
+        <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
           <div className="flex items-center gap-2.5">
             <button onClick={() => setIsSidebarExpanded(true)} className="w-10 h-10 flex items-center justify-center text-slate-500 active:scale-90 transition-transform">
               <div className="w-8 h-8 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-sky-500/30">
@@ -10837,7 +10876,7 @@ export default function App() {
                         <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full">
                 <CatalogManager products={posProducts} setProducts={setPosProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
-<div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
+            <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
                {/* แก้ไข: ส่ง Props posProducts และข้อมูลสต็อกลงไปให้ POSSystem ใช้งาน */}
                 <POSSystem 
                     products={posProducts} 
@@ -10853,7 +10892,8 @@ export default function App() {
                     branchesData={branchesData}
                     showToast={showToast} 
                     callAppScript={callAppScript} 
-                    isGlobalLoading={isGlobalLoading} 
+                    isGlobalLoading={isGlobalLoading}
+                    showMobileBars={showMobileBars}
                 />
             </div>
             <div style={{ display: currentTab === 'finance' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
@@ -10898,7 +10938,7 @@ export default function App() {
           </div>
 
           {/* ปรับแก้ Navbar มือถือ: Liquid Tab Bar Animation (Sliding Bubble) เพิ่มขอบมนด้านบน */}
-          <div className="md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-[calc(max(0.5rem,env(safe-area-inset-bottom)))] pt-2 px-2 z-[45]">
+          <div className={`md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-[calc(max(0.5rem,env(safe-area-inset-bottom)))] pt-2 px-2 z-[45] transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : 'translate-y-[120%]'}`}>
             <div className="relative flex w-full max-w-sm mx-auto h-14">
                 {/* กล่องใส่ก้อน Bubble สีสันที่เลื่อนไปมา ปรับเวลาเป็น 500ms และใช้ ease-in-out เพื่อความนุ่มนวลสูงสุด (ไม่เด้งและไม่กระชาก) */}
                 <div 
