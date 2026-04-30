@@ -10416,9 +10416,9 @@ export default function App() {
       }
     }
 
-    const handleMouseMove = (e) => {
+    const handleMove = (e) => {
       if (dragStartX.current === null) return;
-      const clientX = e.clientX;
+      const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
       const offset = clientX - dragStartX.current;
       
       // ถ้าลากเกิน 5px ให้ถือว่าตั้งใจลาก และเข้าสู่โหมดลาก
@@ -10441,10 +10441,10 @@ export default function App() {
       }
     };
 
-    const handleMouseUp = (e) => {
+    const handleEnd = (e) => {
       if (dragStartX.current === null) return;
 
-      const clientX = e.clientX;
+      const clientX = e.type.includes('touch') ? e.changedTouches[0].clientX : e.clientX;
       const offset = clientX - dragStartX.current;
 
       dragStartX.current = null;
@@ -10462,12 +10462,16 @@ export default function App() {
       }
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove, { passive: true });
+    window.addEventListener('touchend', handleEnd);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
     };
   }, [isDraggingSidebar, isSidebarExpanded, sidebarBaseWidth, baseProgress, isMobile]);
 
@@ -10476,7 +10480,7 @@ export default function App() {
     if (isMobile) return;
     if (e.target.closest('.no-drag-zone')) return;
     hasDragged.current = false;
-    dragStartX.current = e.clientX;
+    dragStartX.current = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
   };
 
   // --- เพิ่มระบบจำตำแหน่ง Scroll ของแต่ละหน้า ---
@@ -10742,6 +10746,7 @@ export default function App() {
         <aside 
           ref={sidebarRef}
           onMouseDown={startSidebarDrag}
+          onTouchStart={startSidebarDrag}
           style={{ 
             '--sidebar-width': `${sidebarBaseWidth}px`,
             '--drag-progress': baseProgress,
