@@ -5809,7 +5809,13 @@ const POSSystem = ({
                     <div className="flex justify-between items-center">
                       <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
                         ส่วนลดเพิ่มเติม
-                        {discountType === 'percent' && discount > 0 && <span className="text-rose-500 font-bold text-[10px] sm:text-xs">({discount}%)</span>}
+                        {discount > 0 && (
+                           <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
+                              {discountType === 'percent' 
+                                 ? `(${formatCurrency(discountAmount)} ฿)` 
+                                 : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
+                           </span>
+                        )}
                       </span>
                       <div className="flex items-center gap-1">
                         <input
@@ -8216,11 +8222,13 @@ const FinancePage = ({
   const [filterType, setFilterType] = useState('all'); 
   const [filterBranch, setFilterBranch] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalClosing, setIsModalClosing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const headerRef = useRef(null);
 
   // POS Edit States
   const [isPosEditModalOpen, setIsPosEditModalOpen] = useState(false);
+  const [isPosEditClosing, setIsPosEditClosing] = useState(false);
   const [posEditForm, setPosEditForm] = useState(null);
   const [isSavingPos, setIsSavingPos] = useState(false);
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
@@ -8229,6 +8237,7 @@ const FinancePage = ({
   // Detail Modal States
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isDetailClosing, setIsDetailClosing] = useState(false);
 
   const sweetAlert = useModal();
   const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
@@ -8287,12 +8296,58 @@ const FinancePage = ({
     date: '', // Will be set on open
     type: 'income',
     category: '',
-    amount: '',
+    amount: 0,
+    items: [{ name: '', quantity: 1, price: '', total: 0 }],
     method: 'cash',
     reference: '',
     note: '',
-    branchId: currentBranch || 'all'
+    branchId: currentBranch || 'all',
+    patientId: '',
+    patientName: '',
+    discount: 0,
+    discountType: 'amount',
+    taxMode: 'none',
+    vatRate: 7
   });
+
+  const handleAddItem = () => {
+      setFormData(prev => ({
+          ...prev,
+          items: [...(prev.items || []), { name: '', quantity: 1, price: '', total: 0 }]
+      }));
+  };
+
+  const handleRemoveItem = (index) => {
+      setFormData(prev => {
+          const newItems = (prev.items || []).filter((_, i) => i !== index);
+          const newAmount = newItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+          return { ...prev, items: newItems, amount: newAmount };
+      });
+  };
+
+  const handleItemChange = (index, field, value) => {
+      setFormData(prev => {
+          const newItems = [...(prev.items || [])];
+          if (!newItems[index]) return prev;
+          newItems[index] = { ...newItems[index], [field]: value };
+          if (field === 'quantity' || field === 'price') {
+              const qty = Number(newItems[index].quantity) || 0;
+              const price = Number(newItems[index].price) || 0;
+              newItems[index].total = qty * price;
+          }
+          if (field === 'name') {
+              // Try to find product and autofill price if not set
+              const matchedProduct = posProducts.find(p => p.name === value);
+              if (matchedProduct && (!newItems[index].price || newItems[index].price === 0)) {
+                  newItems[index].price = matchedProduct.price;
+                  const qty = Number(newItems[index].quantity) || 1;
+                  newItems[index].total = qty * matchedProduct.price;
+              }
+          }
+          const newAmount = newItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+          return { ...prev, items: newItems, amount: newAmount };
+      });
+  };
 
   const handleOpenAdd = () => {
       const now = new Date();
@@ -8302,19 +8357,53 @@ const FinancePage = ({
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
       const ss = String(now.getSeconds()).padStart(2, '0');
-      
+
       setFormData({
         id: '',
         date: `${d}/${m}/${y} ${hh}:${mm}:${ss}`,
         type: 'income',
         category: '',
-        amount: '',
+        amount: 0,
+        items: [{ name: '', quantity: 1, price: '', total: 0 }],
         method: 'cash',
         reference: '',
         note: '',
-        branchId: currentBranch || 'all'
+        branchId: currentBranch || 'all',
+        patientId: '',
+        patientName: '',
+        discount: 0,
+        discountType: 'amount',
+        taxMode: 'none',
+        vatRate: 7
       });
+      setPatientSearchQuery('');
       setIsModalOpen(true);
+  };
+
+  // --- Closing Helpers ---
+  const closeManualModal = () => {
+    setIsModalClosing(true);
+    setTimeout(() => {
+      setIsModalOpen(false);
+      setIsModalClosing(false);
+    }, 300);
+  };
+
+  const closePosEditModal = () => {
+    setIsPosEditClosing(true);
+    setTimeout(() => {
+      setIsPosEditModalOpen(false);
+      setIsPosEditClosing(false);
+    }, 300);
+  };
+
+  const closeDetailModal = () => {
+      setIsDetailClosing(true);
+      setTimeout(() => {
+          setIsDetailModalOpen(false);
+          setSelectedTxn(null);
+          setIsDetailClosing(false);
+      }, 300);
   };
 
   // --- POS Editing Helper Functions ---
@@ -8341,7 +8430,7 @@ const FinancePage = ({
         // อัปเดต posHistoryData ใน State (เพื่อให้หน้าจอเปลี่ยนตามทันที)
         setPosHistoryData(prev => prev.map(p => p.id === updatedTx.id ? updatedTx : p));
         showToast('แก้ไขรายการ POS สำเร็จ', 'success');
-        setIsPosEditModalOpen(false);
+        closePosEditModal();
       } else {
         throw new Error(res.message);
       }
@@ -8416,17 +8505,27 @@ const FinancePage = ({
   };
 
   const filteredPatients = useMemo(() => {
-    if (patientSearchQuery.length < 2) return [];
-    const q = patientSearchQuery.toLowerCase();
-    return patientsData.filter(p => 
-      (p.hn && p.hn.toLowerCase().includes(q)) ||
-      (p.id && p.id.toLowerCase().includes(q)) ||
-      (p.firstName && p.firstName.toLowerCase().includes(q)) ||
-      (p.lastName && p.lastName.toLowerCase().includes(q)) ||
-      (p.phone && p.phone.includes(q))
-    ).slice(0, 10);
-  }, [patientsData, patientSearchQuery]);
+    let result = patientsData;
+    if (patientSearchQuery) {
+        const q = patientSearchQuery.toLowerCase();
+        result = patientsData.filter(p =>
+          (p.hn && p.hn.toLowerCase().includes(q)) ||
+          (p.id && p.id.toLowerCase().includes(q)) ||
+          (p.firstName && p.firstName.toLowerCase().includes(q)) ||
+          (p.lastName && p.lastName.toLowerCase().includes(q)) ||
+          (p.phone && p.phone.includes(q))
+        );
+    }
 
+    // Sort by recent visit descending and take top 15
+    return result.sort((a, b) => {
+        const valA = getPatientLastVisitStr(a);
+        const valB = getPatientLastVisitStr(b);
+        if (valA < valB) return 1;
+        if (valA > valB) return -1;
+        return 0;
+    }).slice(0, 15);
+  }, [patientsData, patientSearchQuery]);
   const allTransactions = useMemo(() => {
     const posTx = posHistoryData.map(tx => ({
       id: tx.id || tx.receiptNo || Math.random().toString(),
@@ -8544,8 +8643,8 @@ const FinancePage = ({
 
   const handleEditTransaction = (tx) => {
       if (tx.isAuto) {
-        // ค้นหาต้นฉบับจาก posHistoryData โดยใช้ tx.id
-        const originalTx = posHistoryData.find(p => p.id === tx.id);
+        // ค้นหาต้นฉบับจาก posHistoryData โดยใช้ tx.id หรือ receiptNo
+        const originalTx = posHistoryData.find(p => p.id === tx.id || p.receiptNo === tx.id);
         if (originalTx) {
           setPosEditForm({
             ...originalTx,
@@ -8584,10 +8683,17 @@ const FinancePage = ({
          type: tx.type,
          category: tx.category,
          amount: tx.amount,
+         items: tx.items && tx.items.length > 0 ? tx.items : [{ name: tx.category || 'รายการเดิม', quantity: 1, price: tx.amount || 0, total: tx.amount || 0 }],
          method: tx.method,
          reference: tx.reference || '',
          note: tx.note || '',
-         branchId: tx.branchId || currentBranch || 'all'
+         branchId: tx.branchId || currentBranch || 'all',
+         patientId: tx.patientId || '',
+         patientName: tx.patientName || '',
+         discount: tx.discountValue || 0,
+         discountType: tx.discountType || 'amount',
+         taxMode: tx.taxMode || 'none',
+         vatRate: tx.vatRate || 7
       });
       setIsModalOpen(true);
   };
@@ -8622,8 +8728,8 @@ const FinancePage = ({
 
   const handleSaveTransaction = async (e) => {
     e.preventDefault();
-    if (!formData.amount || !formData.category) {
-      showToast('กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
+    if (!formData.category || !formData.items || formData.items.length === 0 || formData.items.some(i => !i.name || i.price === '')) {
+      showToast('กรุณากรอกข้อมูลและรายการให้ครบถ้วน', 'warning');
       return;
     }
 
@@ -8659,23 +8765,48 @@ const FinancePage = ({
     const isoDate = convertThaiToISO(formData.date);
     // --------------------------------------------------
 
+    const financeSubtotal = formData.items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const financeDiscountAmount = formData.discountType === 'percent' ? (financeSubtotal * ((Number(formData.discount) || 0) / 100)) : (Number(formData.discount) || 0);
+    const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
+
+    let financeVatAmount = 0;
+    let financeGrandTotal = financeAfterDiscount;
+
+    if (formData.taxMode === 'exclude') {
+        financeVatAmount = financeAfterDiscount * ((Number(formData.vatRate) || 7) / 100);
+        financeGrandTotal = financeAfterDiscount + financeVatAmount;
+    } else if (formData.taxMode === 'include') {
+        financeVatAmount = financeAfterDiscount - (financeAfterDiscount * 100 / (100 + (Number(formData.vatRate) || 7)));
+        financeGrandTotal = financeAfterDiscount;
+    }
+
     const newTx = {
       id: isEdit ? formData.id : `${formData.type === 'income' ? 'INC' : 'EXP'}-${Date.now()}`,
       date: isoDate, // บันทึกเป็น ISO เสมอเพื่อให้ระบบเรียงลำดับทำงานได้
       type: formData.type,
-      amount: parseFloat(formData.amount),
+      amount: financeGrandTotal,
+      subtotal: financeSubtotal,
+      discountValue: Number(formData.discount) || 0,
+      discountType: formData.discountType,
+      discountAmount: financeDiscountAmount,
+      taxMode: formData.taxMode,
+      vatRate: Number(formData.vatRate) || 7,
+      vatAmount: financeVatAmount,
       method: formData.method,
       category: formData.category,
       note: formData.note,
       status: 'completed',
       isAuto: false,
-      branchId: formData.branchId
+      branchId: formData.branchId,
+      items: formData.items,
+      patientId: formData.patientId,
+      patientName: formData.patientName
     };
 
     try {
       const sheetName = newTx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
       await callAppScript('SAVE_DATA', sheetName, newTx);
-      
+
       if (isEdit) {
          setFinanceData(prev => prev.map(item => item.id === newTx.id ? newTx : item));
       } else {
@@ -8683,20 +8814,27 @@ const FinancePage = ({
       }
 
       showToast(isEdit ? 'แก้ไขรายการสำเร็จ' : 'บันทึกรายการสำเร็จ', 'success');
-      setIsModalOpen(false);
+      closeManualModal();
       setFormData({
         id: '',
         date: new Date().toISOString().split('T')[0],
         type: 'income',
         category: '',
-        amount: '',
+        amount: 0,
+        items: [{ name: '', quantity: 1, price: '', total: 0 }],
         method: 'cash',
         reference: '',
         note: '',
-        branchId: currentBranch || 'all'
+        branchId: currentBranch || 'all',
+        patientId: '',
+        patientName: '',
+        discount: 0,
+        discountType: 'amount',
+        taxMode: 'none',
+        vatRate: 7
       });
-    } catch (err) {
-      showToast('เกิดข้อผิดพลาดในการบันทึก', 'danger');
+      setPatientSearchQuery('');
+    } catch (err) {      showToast('เกิดข้อผิดพลาดในการบันทึก', 'danger');
     } finally {
       setIsProcessing(false);
     }
@@ -8705,11 +8843,6 @@ const FinancePage = ({
   const openDetailModal = (tx) => {
       setSelectedTxn(tx);
       setIsDetailModalOpen(true);
-  };
-
-  const closeDetailModal = () => {
-      setIsDetailModalOpen(false);
-      setSelectedTxn(null);
   };
 
   return (
@@ -8871,7 +9004,16 @@ const FinancePage = ({
                         <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
                       </td>
                       <td className="p-4">
-                        <span className="text-sm text-slate-700 font-data line-clamp-2 leading-tight" title={tx.note}>{tx.note}</span>
+                        <div className="flex flex-col gap-1">
+                          {tx.patientName && (
+                            <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
+                              {tx.patientName}
+                            </span>
+                          )}
+                          <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note || '-'}>
+                            {tx.note || '-'}
+                          </span>
+                        </div>
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col items-start justify-center">
@@ -8922,19 +9064,21 @@ const FinancePage = ({
 
       {/* Detail Modal */}
       {isDetailModalOpen && selectedTxn && createPortal(
-        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
-           <div className="bg-white rounded-[1.5rem] w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden modal-animate-in">
-              <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 sticky top-0 z-10">
+        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm ${isDetailClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+           <div className={`bg-white rounded-[1.5rem] w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden ${isDetailClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+              <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 sticky top-0 z-10 shrink-0">
                  <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${selectedTxn.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
                        {selectedTxn.isAuto ? <History size={20} className="text-sky-500" /> : <Receipt size={20} />}
                     </div>
                     <div>
-                       <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">{selectedTxn.isAuto ? 'ประวัติการทำรายการ (POS)' : 'รายละเอียดรายการ'}</h3>
-                       <p className="text-xs text-slate-500 kanit-text mt-0.5">{selectedTxn.id}</p>
+                       <h4 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight">{selectedTxn.isAuto ? 'ประวัติการทำรายการ (POS)' : 'รายละเอียดรายการ'}</h4>
+                       <p className="text-[10px] sm:text-xs text-sky-600 font-bold font-data mt-0.5">{selectedTxn.id}</p>
                     </div>
                  </div>
-                 <button onClick={closeDetailModal} className="p-2 text-slate-400 hover:bg-white hover:shadow-sm rounded-full transition-all"><X size={20} /></button>
+                 <button type="button" onClick={closeDetailModal} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                    <X size={20} />
+                 </button>
               </div>
 
               {selectedTxn.isAuto ? (
@@ -9032,45 +9176,136 @@ const FinancePage = ({
                                   <div className="flex justify-between text-slate-600"><span className="kanit-text">ภาษี ({selectedTxn.rawTx.taxMode === 'include' ? 'รวม' : 'แยก'})</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx.vatAmount)}</span></div>
                               )}
                               <div className="h-px bg-slate-200/60 my-2"></div>
-                              <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedTxn.rawTx.grandTotal)}</span></div>
+                              <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedTxn.rawTx?.grandTotal || selectedTxn.amount)}</span></div>
                           </div>
                       </div>
                  </div>
               ) : (
-                <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30 flex flex-col">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <div className="p-4 rounded-xl border bg-white border-slate-100 shadow-sm">
-                          <div className="flex flex-col gap-2">
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider kanit-text">วันที่และเวลา</span>
-                              <span className="text-sm font-bold text-slate-800 font-data flex items-center gap-1.5"><Clock size={14} className="text-sky-500"/> {formatDate(selectedTxn.date)} {formatTime(selectedTxn.date)} น.</span>
+                 <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-white">
+                      {/* Info Grid for Manual */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                          <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400"><User size={12}/></div>
+                                  <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">ข้อมูลลูกค้า & วันที่</p>
+                              </div>
+                              <div className="pl-1">
+                                  <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedTxn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
+                                  <p className="text-xs text-slate-500 font-data mt-1.5 flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/> {formatDate(selectedTxn.date)} {formatTime(selectedTxn.date)} น.</p>
+                              </div>
+                          </div>
+                          <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
+                              <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400"><CreditCard size={12}/></div>
+                                  <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">สถานะ & การชำระเงิน</p>
+                              </div>
+                              <div className="flex flex-col gap-2 pl-1">
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs text-slate-500 w-16">สถานะ:</span>
+                                      <span className={`px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold kanit-text ${selectedTxn.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : selectedTxn.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                          {selectedTxn.status === 'completed' ? 'สำเร็จ' : selectedTxn.status === 'cancelled' ? 'ยกเลิก (Void)' : selectedTxn.status}
+                                      </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs text-slate-500 w-16">ช่องทาง:</span>
+                                      <span className="px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold bg-white border border-slate-200 text-slate-600 kanit-text flex items-center gap-1.5 shadow-sm">
+                                          {selectedTxn.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : selectedTxn.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : selectedTxn.method === 'credit_card' || selectedTxn.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : <><Package size={12}/> อื่นๆ</>}
+                                      </span>
+                                  </div>
+                              </div>
                           </div>
                       </div>
-                      <div className="p-4 rounded-xl border bg-white border-slate-100 shadow-sm">
-                          <div className="flex flex-col gap-2">
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider kanit-text">สาขา</span>
-                              <span className="text-sm font-bold text-slate-800 kanit-text">
-                                  {selectedTxn.branchId === 'all' ? 'ทุกสาขา (ส่วนกลาง)' : branchesData.find(b => b.id === selectedTxn.branchId)?.name || selectedTxn.branchId}
-                              </span>
-                          </div>
-                      </div>
-                      <div className="md:col-span-2 p-4 rounded-xl border bg-white border-slate-100 shadow-sm">
-                          <div className="flex flex-col gap-2">
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider kanit-text">รายละเอียด / หมายเหตุ</span>
-                              <span className="text-sm font-medium text-slate-800 kanit-text">{selectedTxn.note || '-'}</span>
-                          </div>
-                      </div>
-                  </div>
 
-                  <div className="mt-auto bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 flex flex-col items-end">
-                      <div className="w-full sm:w-72 space-y-2 text-sm font-data">
-                          <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดรวมสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedTxn.amount)}</span></div>
+                      {/* Items List */}
+                      <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedTxn.items?.length || 1})</h5>
+                      <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 flex-1 min-h-[200px]">
+                          {/* Desktop Table */}
+                          <div className="hidden sm:block overflow-x-auto h-full">
+                              <table className="w-full text-left border-collapse min-w-[500px]">
+                                  <thead>
+                                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0">
+                                          <th className="p-3 w-12 text-center">#</th>
+                                          <th className="p-3">รายการสินค้า / บริการ</th>
+                                          <th className="p-3 text-center w-24">จำนวน</th>
+                                          <th className="p-3 text-right w-32">ราคา/หน่วย</th>
+                                          <th className="p-3 text-right w-32">รวม (บาท)</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-50">
+                                      {(selectedTxn.items && selectedTxn.items.length > 0 ? selectedTxn.items : [{name: selectedTxn.category || 'รายการเดิม', quantity: 1, price: selectedTxn.amount, total: selectedTxn.amount}]).map((item, idx) => (
+                                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
+                                              <td className="p-3 text-center text-slate-400 text-xs">{idx + 1}</td>
+                                              <td className="p-3 text-slate-700 font-bold kanit-text">{item.name}</td>
+                                              <td className="p-3 text-center font-semibold">{item.quantity}</td>
+                                              <td className="p-3 text-right text-slate-500">{formatCurrency(item.price)}</td>
+                                              <td className="p-3 text-right font-bold text-sky-600">{formatCurrency(item.total)}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                          {/* Mobile List */}
+                          <div className="sm:hidden flex flex-col divide-y divide-slate-50 overflow-y-auto max-h-[300px] custom-scrollbar bg-slate-50/30">
+                              {(selectedTxn.items && selectedTxn.items.length > 0 ? selectedTxn.items : [{name: selectedTxn.category || 'รายการเดิม', quantity: 1, price: selectedTxn.amount, total: selectedTxn.amount}]).map((item, idx) => (
+                                  <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
+                                      <div className="flex justify-between items-start gap-2">
+                                          <div className="font-bold text-slate-800 text-sm kanit-text leading-tight">{item.name}</div>
+                                          <div className="font-bold text-sky-600 text-sm font-data shrink-0">{formatCurrency(item.total)}</div>
+                                      </div>
+                                      <div className="flex justify-between items-center text-xs font-data text-slate-500 mt-1">
+                                          <div>จำนวน {item.quantity} รายการ</div>
+                                          <div>{formatCurrency(item.price)} / หน่วย</div>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
                       </div>
-                  </div>
-                </div>
+
+                      {/* Note / Details for Manual */}
+                      {selectedTxn.note && (
+                          <div className="mb-6">
+                              <h5 className="font-bold text-slate-700 kanit-text mb-2 flex items-center gap-2"><FileText size={16} className="text-slate-400" /> รายละเอียด / หมายเหตุ</h5>
+                              <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 text-sm font-medium text-slate-600 kanit-text whitespace-pre-wrap">
+                                  {selectedTxn.note}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* Summary */}
+                      <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 shrink-0">
+                          <div className="w-full sm:w-auto">
+                              <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedTxn.id}</div>
+                              <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><MapPin size={12}/> สาขา: {selectedTxn.branchId === 'all' ? 'ทุกสาขา (ส่วนกลาง)' : branchesData.find(b => b.id === selectedTxn.branchId)?.name || selectedTxn.branchId}</div>
+                          </div>
+                          <div className="w-full sm:w-72 space-y-2 text-sm font-data">
+                              <div className="flex justify-between text-slate-600"><span className="kanit-text">รวมเป็นเงิน</span><span className="font-semibold">{formatCurrency(selectedTxn.subtotal || selectedTxn.amount)}</span></div>
+                              {selectedTxn.discountAmount > 0 && (
+                                  <div className="flex justify-between text-rose-500"><span className="kanit-text">ส่วนลด {selectedTxn.discountType === 'percent' ? `(${selectedTxn.discountValue}%)` : ''}</span><span className="font-semibold">- {formatCurrency(selectedTxn.discountAmount)}</span></div>
+                              )}
+                              {selectedTxn.vatAmount > 0 && (
+                                  <div className="flex justify-between text-slate-600"><span className="kanit-text">ภาษี ({selectedTxn.taxMode === 'include' ? 'รวม' : 'แยก'})</span><span className="font-semibold">{formatCurrency(selectedTxn.vatAmount)}</span></div>
+                              )}
+                              <div className="h-px bg-slate-200/60 my-2"></div>
+                              <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text">
+                                  <span className="text-base sm:text-lg">ยอดสุทธิ</span>
+                                  <span className="font-data tracking-tight">{formatCurrency(selectedTxn.grandTotal || selectedTxn.amount)}</span>
+                              </div>
+                          </div>
+                      </div>
+                 </div>
               )}
-
-              <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
-                 <button type="button" onClick={closeDetailModal} className="px-6 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors kanit-text shadow-sm">ปิดหน้าต่าง</button>
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+                 <button type="button" onClick={closeDetailModal} className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ปิดหน้าต่าง</button>
+                 <button type="button" onClick={(e) => { 
+                     e.preventDefault();
+                     e.stopPropagation();
+                     const txToEdit = selectedTxn; // ล็อกข้อมูลบิลนี้เอาไว้ก่อน
+                     closeDetailModal(); // สั่งปิดหน้าต่างนี้
+                     // หน่วงเวลา 350ms ให้หน้าต่างเก่าปิดสนิท แล้วค่อยเปิดฟอร์มแก้ไข
+                     setTimeout(() => handleEditTransaction(txToEdit), 350); 
+                 }} className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2">
+                    <Pencil size={18} /> แก้ไขข้อมูล
+                 </button>
               </div>
            </div>
         </div>,
@@ -9079,30 +9314,33 @@ const FinancePage = ({
 
       {/* Add Manual Transaction Modal */}
       {isModalOpen && createPortal(
-        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
-           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden modal-animate-in">
-              <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+         <div className={`fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+            <div className={`bg-white rounded-[2rem] w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+              <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-inner">
-                       <Banknote size={20} />
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm ${formData.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                       {formData.type === 'income' ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
                     </div>
                     <div>
-                       <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">เพิ่มรายการ</h3>
-                       <p className="text-xs text-slate-500 kanit-text mt-0.5">บันทึกรายรับหรือรายจ่ายแบบกำหนดเอง</p>
+                       <h3 className="text-xl font-black text-slate-800 kanit-text">{formData.id ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h3>
+                       <p className="text-xs text-slate-500 font-data uppercase tracking-wider">Manual Transaction</p>
                     </div>
                  </div>
-                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:bg-white hover:shadow-sm rounded-full transition-all"><X size={20} /></button>
+                 <button type="button" onClick={closeManualModal} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                    <X size={20} />
+                 </button>
               </div>
 
-              <div className="p-5 sm:p-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
+              <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
                  <form id="finance-form" onSubmit={handleSaveTransaction} className="space-y-4">
-                    
+
+                    {/* ข้อมูลพื้นฐาน */}
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                       <div onClick={() => setFormData({...formData, type: 'income'})} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'income' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                       <div onClick={() => setFormData({...formData, type: 'income'})} className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'income' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.type === 'income' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-100 text-slate-400'}`}><TrendingUp size={20} /></div>
                           <span className={`font-bold kanit-text ${formData.type === 'income' ? 'text-emerald-700' : 'text-slate-500'}`}>รายรับ</span>
                        </div>
-                       <div onClick={() => setFormData({...formData, type: 'expense'})} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'expense' ? 'border-rose-500 bg-rose-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                       <div onClick={() => setFormData({...formData, type: 'expense'})} className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'expense' ? 'border-rose-500 bg-rose-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.type === 'expense' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' : 'bg-slate-100 text-slate-400'}`}><TrendingDown size={20} /></div>
                           <span className={`font-bold kanit-text ${formData.type === 'expense' ? 'text-rose-700' : 'text-slate-500'}`}>รายจ่าย</span>
                        </div>
@@ -9110,77 +9348,341 @@ const FinancePage = ({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                        <div>
-                          <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">เลขที่รายการ</label>
-                          <input type="text" value={formData.id || `${formData.type === 'income' ? 'INC' : 'EXP'}-รอการบันทึก`} disabled className={theme.input + " bg-slate-100 text-slate-500 font-data cursor-not-allowed"} />
+                          <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">เลขที่รายการ</label>
+                          <input type="text" value={formData.id || `${formData.type === 'income' ? 'INC' : 'EXP'}-รอการบันทึก`} disabled className="w-full px-4 py-3 rounded-2xl bg-slate-100 border border-slate-100 text-slate-500 text-sm font-data cursor-not-allowed transition-all" />
                        </div>
                        <div>
-                          <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">วันที่ทำรายการ <span className="text-rose-500">*</span></label>
+                          <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">วันที่ทำรายการ <span className="text-rose-500">*</span></label>
                           <div ref={dateWrapperRef} className="relative group">
-                             <input required type="text" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={theme.input + " font-data pr-12"} placeholder="DD/MM/YYYY HH:mm:ss" />
-                             <button type="button" onClick={handleOpenCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>
+                             <input required type="text" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full px-4 py-3 pr-12 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all" placeholder="DD/MM/YYYY HH:mm:ss" />
+                             <button type="button" onClick={handleOpenCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-white hover:shadow-sm rounded-xl transition-all"><CalendarIcon size={20} /></button>
                           </div>
                        </div>
                     </div>
 
-                    <div>
-                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">สาขา <span className="text-rose-500">*</span></label>
-                       <select value={formData.branchId} onChange={e => setFormData({...formData, branchId: e.target.value})} className={theme.input + " font-data appearance-none cursor-pointer"}>
-                          <option value="all">ทุกสาขา (ส่วนกลาง)</option>
-                          {branchesData && branchesData.map(b => (
-                              <option key={b.id} value={b.id}>{b.name}</option>
+                    <div className="space-y-4">
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">สาขา <span className="text-rose-500">*</span></label>
+                             <CustomSelect
+                                 value={formData.branchId}
+                                 onChange={(val) => setFormData({...formData, branchId: val})}
+                                 options={[{value: 'all', label: 'ทุกสาขา (ส่วนกลาง)'}, ...(branchesData || []).map(b => ({value: b.id, label: b.name}))]}
+                                 className="w-full"
+                             />
+                          </div>
+                          <div>
+                             <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                             <input required type="text" placeholder="เช่น ค่าเช่า, ค่าน้ำไฟ" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all" />
+                          </div>
+                       </div>
+
+                       <div>
+                          <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ค้นหาลูกค้า/คนไข้ (HN, ชื่อ, เบอร์โทร)</label>
+                          <div className="relative group">
+                             <input
+                                type="text"
+                                value={patientSearchQuery}
+                                onChange={(e) => searchPatients(e.target.value)}
+                                onFocus={() => setShowPatientResults(true)}                                onBlur={() => setTimeout(() => setShowPatientResults(false), 200)}
+                                placeholder="พิมพ์เพื่อค้นหาลูกค้า..."
+                                className="w-full px-4 py-3 pl-11 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all"
+                             />
+                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-sky-500 transition-colors" size={18} />
+
+                             {showPatientResults && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
+                                   <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                                      {filteredPatients.map(p => (
+                                         <button
+                                            key={p.id}
+                                            type="button"
+                                            onMouseDown={(e) => {
+                                               e.preventDefault(); // Prevent onBlur from firing before click
+                                               const hnStr = p.hn || p.id;
+                                               const nameStr = `${p.firstName} ${p.lastName}`.trim();
+                                               const combinedName = `${hnStr} - ${nameStr}`;
+                                               setFormData({...formData, patientId: hnStr, patientName: combinedName});
+                                               setPatientSearchQuery(combinedName);
+                                               setShowPatientResults(false);
+                                            }}
+                                            className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                                         >
+                                            <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
+                                               {p.hn || 'NEW'}
+                                            </div>
+                                            <div className="flex-1 overflow-hidden">
+                                               <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.firstName} {p.lastName}</p>
+                                               <p className="text-[11px] text-slate-500 font-data">{p.phone || 'ไม่มีเบอร์โทร'}</p>
+                                            </div>
+                                            <ChevronRight className="text-slate-300" size={16} />
+                                         </button>
+                                      ))}
+                                   </div>
+                                </div>
+                             )}
+                          </div>
+                          {formData.patientId && (
+                             <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-[11px] font-bold w-fit shadow-sm animate-in fade-in zoom-in-95">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="font-data">HN: {formData.patientId} | {formData.patientName}</span>
+                                <button type="button" onClick={() => { setFormData({...formData, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} className="ml-2 text-emerald-400 hover:text-rose-500 transition-colors"><X size={14} /></button>
+                             </div>
+                          )}
+                       </div>
+                    </div>                    {/* รายการสินค้า/บริการ */}
+                    <div className="bg-slate-50/50 p-4 sm:p-5 rounded-3xl border border-slate-100 flex flex-col mt-4">
+                       <div className="flex items-center justify-between mb-3">
+                          <label className="block text-[11px] font-black text-slate-400 kanit-text uppercase tracking-widest">รายการสินค้าและบริการ <span className="text-rose-500">*</span></label>
+                          <button
+                             type="button"
+                             onClick={handleAddItem}
+                             className="text-xs font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 kanit-text shadow-sm hover:shadow active:scale-95"
+                          >
+                             <Plus size={14} /> เพิ่มรายการ
+                          </button>
+                       </div>
+
+                       <div className="space-y-3">
+                          {(formData.items || []).map((item, idx) => (
+                             <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group">
+                                <div className="flex-1 w-full relative">
+                                   <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest">รายละเอียด</label>
+                                   <input
+                                      type="text"
+                                      required
+                                      value={item.name}
+                                      onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                                      placeholder="ค้นหา หรือพิมพ์เอง"
+                                      className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data peer"
+                                   />
+                                   {/* Custom Dropdown */}
+                                   <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden hidden peer-focus:block hover:block modal-animate-in">
+                                      <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                         {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).map(p => (
+                                            <button
+                                               key={p.id}
+                                               type="button"
+                                               onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  handleItemChange(idx, 'name', p.name);
+                                                  handleItemChange(idx, 'price', p.price);
+                                               }}
+                                               className="w-full p-3 flex items-center justify-between hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                                            >
+                                               <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2">{p.name}</div>
+                                               <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
+                                            </button>
+                                         ))}
+                                         {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).length === 0 && (
+                                             <div className="p-4 text-center text-sm text-slate-400 kanit-text">
+                                                 สามารถพิมพ์ชื่อรายการเองได้เลย
+                                             </div>
+                                         )}
+                                      </div>
+                                   </div>
+                                </div>
+                                <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">                                   <div className="w-20">
+                                      <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
+                                      <input
+                                         type="number"
+                                         min="1"
+                                         required
+                                         value={item.quantity}
+                                         onChange={(e) => handleItemChange(idx, 'quantity', parseInt(e.target.value) || 0)}
+                                         className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-center"
+                                      />
+                                   </div>
+                                   <div className="w-24 text-right">
+                                      <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">ราคา</label>
+                                      <input
+                                         type="number"
+                                         min="0"
+                                         step="0.01"
+                                         required
+                                         value={item.price}
+                                         onChange={(e) => handleItemChange(idx, 'price', parseFloat(e.target.value) || 0)}
+                                         className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-right"
+                                      />
+                                   </div>
+                                </div>
+                                <div className="hidden sm:block min-w-[80px] text-right">
+                                   <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
+                                   <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)}฿</div>
+                                </div>
+                                {(formData.items || []).length > 1 && (
+                                   <button
+                                      type="button"
+                                      onClick={() => handleRemoveItem(idx)}
+                                      className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 sm:static sm:mt-5 opacity-0 group-hover:opacity-100 sm:opacity-100"
+                                   >
+                                      <Trash2 size={18} />
+                                   </button>
+                                )}
+                             </div>
                           ))}
-                       </select>
-                    </div>
+                       </div>
 
-                    <div>
-                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">หมวดหมู่ <span className="text-rose-500">*</span></label>
-                       <input required type="text" placeholder="เช่น ค่าเช่า, ค่าน้ำไฟ, รายได้พิเศษ" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={theme.input + " font-data"} />
-                    </div>
+                       </div>
 
-                    <div>
-                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">จำนวนเงิน (บาท) <span className="text-rose-500">*</span></label>
-                       <div className="relative">
-                          <input required type="number" min="0" step="0.01" placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={theme.input + " font-data pr-12 text-lg font-bold"} />
-                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold kanit-text">฿</span>
+                       {/* Section Bottom: Payment, Note, Summary */}
+                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4 items-stretch">
+                          {/* Left Column: Payment & Note */}
+                          <div className="flex flex-col space-y-4">
+                             <div>
+                                <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ช่องทางการชำระ <span className="text-rose-500">*</span></label>
+                                <CustomSelect
+                                    value={formData.method}
+                                    onChange={(val) => setFormData({...formData, method: val})}
+                                    options={[
+                                        {value: 'cash', label: '💵 เงินสด'},
+                                        {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
+                                        {value: 'credit_card', label: '💳 บัตรเครดิต'},
+                                        {value: 'other', label: '📦 อื่นๆ'}
+                                    ]}
+                                    className="w-full"
+                                />
+                             </div>
+                             <div className="flex flex-col flex-1">
+                                <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมายเหตุเพิ่มเติม</label>
+                                <textarea placeholder="ใส่บันทึกเพิ่มเติมได้ที่นี่..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className="w-full min-h-[100px] h-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data resize-none transition-all flex-1"></textarea>
+                             </div>
+                          </div>
+
+                          {/* Right Column: Summary */}
+                          <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full">
+                             {(() => {
+                                const financeSubtotal = (formData.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                                const financeDiscountAmount = formData.discountType === 'percent' ? (financeSubtotal * ((Number(formData.discount) || 0) / 100)) : (Number(formData.discount) || 0);
+                                const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
+                                let financeVatAmount = 0;
+                                let financeGrandTotal = financeAfterDiscount;
+                                if (formData.taxMode === 'exclude') {
+                                    financeVatAmount = financeAfterDiscount * ((Number(formData.vatRate) || 7) / 100);
+                                    financeGrandTotal = financeAfterDiscount + financeVatAmount;
+                                } else if (formData.taxMode === 'include') {
+                                    financeVatAmount = financeAfterDiscount - (financeAfterDiscount * 100 / (100 + (Number(formData.vatRate) || 7)));
+                                    financeGrandTotal = financeAfterDiscount;
+                                }
+
+                                const grandTotalStr = formatCurrency(financeGrandTotal) + "฿";
+                                const grandTotalLen = grandTotalStr.length;
+                                const grandTotalTextClass = grandTotalLen > 15 ? 'text-lg sm:text-xl' : (grandTotalLen > 12 ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl');
+
+                                return (
+                                   <div className="space-y-3 font-data text-sm flex-1 flex flex-col justify-end">
+                                      <div className="flex justify-between items-center text-slate-700">
+                                         <span className="kanit-text font-medium">รวมเป็นเงิน</span>
+                                         <span className="font-bold">{formatCurrency(financeSubtotal)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                         <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                                            ส่วนลด
+                                            {formData.discount > 0 && (
+                                               <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
+                                                  {formData.discountType === 'percent' 
+                                                     ? `(${formatCurrency(financeDiscountAmount)} ฿)` 
+                                                     : `(${Number(((Number(formData.discount) || 0) * 100 / (financeSubtotal || 1)).toFixed(2))}%)`}
+                                               </span>
+                                            )}
+                                         </span>                                         <div className="flex items-center gap-1">
+                                            <input
+                                               type="number"
+                                               min="0"
+                                               value={formData.discount || ''}
+                                               onChange={(e) => setFormData({...formData, discount: Number(e.target.value)})}
+                                               className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 transition-colors"
+                                               placeholder="0.00"
+                                            />
+                                            <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px]">
+                                               <button type="button" onClick={() => setFormData({...formData, discountType: 'amount'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
+                                               <div className="w-px bg-slate-200"></div>
+                                               <button type="button" onClick={() => setFormData({...formData, discountType: 'percent'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
+                                            </div>
+                                         </div>
+                                      </div>
+                                      {financeDiscountAmount > 0 && (
+                                          <div className="flex justify-between items-center text-rose-500 font-medium">
+                                             <span className="kanit-text">ส่วนลดรวม</span>
+                                             <span className="font-bold">- {formatCurrency(financeDiscountAmount)}</span>
+                                          </div>
+                                      )}
+
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                                         <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
+                                         <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                                            <label className="flex items-center gap-1.5 cursor-pointer group">
+                                               <input type="radio" name="financeTaxMode" value="include" checked={formData.taxMode === 'include'} onChange={() => setFormData({...formData, taxMode: 'include'})} className="hidden" />
+                                               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${formData.taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                                                  {formData.taxMode === 'include' && <div className="w-2 h-2 bg-sky-500 rounded-full animate-in zoom-in-50 duration-200"></div>}
+                                               </div>
+                                               <span className={formData.taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-500 group-hover:text-slate-700'}>รวม VAT</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 cursor-pointer group">
+                                               <input type="radio" name="financeTaxMode" value="exclude" checked={formData.taxMode === 'exclude'} onChange={() => setFormData({...formData, taxMode: 'exclude'})} className="hidden" />
+                                               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${formData.taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                                                  {formData.taxMode === 'exclude' && <div className="w-2 h-2 bg-sky-500 rounded-full animate-in zoom-in-50 duration-200"></div>}
+                                               </div>
+                                               <span className={formData.taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-500 group-hover:text-slate-700'}>แยก VAT</span>
+                                            </label>
+                                            <label className="flex items-center gap-1.5 cursor-pointer group">
+                                               <input type="radio" name="financeTaxMode" value="none" checked={formData.taxMode === 'none'} onChange={() => setFormData({...formData, taxMode: 'none', vatRate: 7})} className="hidden" />
+                                               <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${formData.taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                                                  {formData.taxMode === 'none' && <div className="w-2 h-2 bg-sky-500 rounded-full animate-in zoom-in-50 duration-200"></div>}
+                                               </div>
+                                               <span className={formData.taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-500 group-hover:text-slate-700'}>ไม่มี VAT</span>
+                                            </label>
+                                         </div>
+                                      </div>
+                                      {formData.taxMode !== 'none' && (
+                                         <div className="flex justify-between items-center text-slate-700 font-medium animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-2">
+                                               <span className="kanit-text">ภาษีมูลค่าเพิ่ม (VAT)</span>
+                                               <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+                                                  <input type="number" value={formData.vatRate || ''} onChange={(e) => setFormData({...formData, vatRate: Number(e.target.value)})} className="w-12 px-2 py-0.5 text-center text-xs font-bold text-sky-600 outline-none" />
+                                                  <span className="px-2 text-xs font-bold text-slate-400 bg-slate-50 kanit-text border-l border-slate-200">%</span>
+                                               </div>
+                                            </div>
+                                            <span className="font-bold">{formatCurrency(financeVatAmount)}</span>
+                                         </div>
+                                      )}
+
+                                      <div className="mt-4 p-5 bg-gradient-to-br from-sky-500 to-sky-600 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center text-white shadow-lg shadow-sky-500/20 gap-2">
+                                         <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shrink-0">
+                                               <Activity size={20} />
+                                            </div>
+                                            <span className="font-bold kanit-text shrink-0 text-sky-50">ยอดสุทธิ</span>
+                                         </div>
+                                         <span className={`font-black font-data text-right w-full sm:w-auto break-all leading-tight ${grandTotalTextClass}`}>
+                                         {formatCurrency(financeGrandTotal)}฿
+                                      </span>
+                                   </div>
+                                </div>
+                             );
+                          })()}
                        </div>
                     </div>
-
-                    <div>
-                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">ช่องทางการชำระ <span className="text-rose-500">*</span></label>
-                       <select value={formData.method} onChange={e => setFormData({...formData, method: e.target.value})} className={theme.input + " font-data appearance-none cursor-pointer"}>
-                          <option value="cash">เงินสด</option>
-                          <option value="transfer">โอนเงินเข้าบัญชี</option>
-                          <option value="credit_card">บัตรเครดิต</option>
-                          <option value="other">อื่นๆ</option>
-                       </select>
-                    </div>
-
-                    <div>
-                       <label className="block text-sm font-bold text-slate-600 mb-1.5 kanit-text">บันทึกเพิ่มเติม</label>
-                       <textarea rows="2" placeholder="รายละเอียดเพิ่มเติม..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} className={theme.input + " font-data resize-none"}></textarea>
-                    </div>
-
                  </form>
               </div>
-
               <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ยกเลิก</button>
+                 <button type="button" onClick={closeManualModal} className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ยกเลิก</button>
                  <button type="submit" form="finance-form" disabled={isProcessing} className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2">
                     {isProcessing ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={18} />} บันทึกรายการ
                  </button>
               </div>
-              </div>
-              </div>,
-              document.body
-              )}
+            </div>
+         </div>,
+         document.body
+      )}
 
       {/* --- POS Edit Modal Portal --- */}
       {isPosEditModalOpen && posEditForm && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md fade-in">
-          <div className="absolute inset-0" onClick={() => setIsPosEditModalOpen(false)}></div>
-          <div className="relative z-[210] w-full max-w-2xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden modal-animate-in">
+        <div className={`fixed inset-0 z-[200] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm ${isPosEditClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closePosEditModal}></div>
+          <div className={`relative z-[210] w-full max-w-4xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${isPosEditClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-sky-100 rounded-2xl flex items-center justify-center text-sky-600 shadow-sm">
                   <Receipt size={24} />
@@ -9190,36 +9692,42 @@ const FinancePage = ({
                   <p className="text-xs text-slate-500 font-data uppercase tracking-wider">{posEditForm.id}</p>
                 </div>
               </div>
-              <button onClick={() => setIsPosEditModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+              <button onClick={closePosEditModal} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-white hover:shadow-sm transition-all">
                 <X size={20} />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-white space-y-6">
-              {/* Section 1: Customer Info */}
+            <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
               <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center text-sky-500 shadow-sm border border-sky-100">
-                    <User size={18} />
-                  </div>
-                  <h4 className="font-bold text-slate-700 kanit-text">ข้อมูลลูกค้า</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div>
+                      <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">เลขที่รายการ</label>
+                      <input type="text" value={posEditForm.id} disabled className="w-full px-4 py-3 rounded-2xl bg-slate-100 border border-slate-100 text-slate-500 text-sm font-data cursor-not-allowed transition-all" />
+                   </div>
+                   <div>
+                      <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">สถานะบิล <span className="text-rose-500">*</span></label>
+                      <div className="flex bg-slate-50 p-1.5 rounded-2xl gap-2 border border-slate-100">
+                         <button type="button" onClick={() => setPosEditForm({...posEditForm, status: 'completed'})} className={`flex-1 py-2 rounded-xl text-xs font-bold kanit-text transition-all ${posEditForm.status === 'completed' ? 'bg-white text-emerald-600 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}>สำเร็จ (Completed)</button>
+                         <button type="button" onClick={() => setPosEditForm({...posEditForm, status: 'cancelled'})} className={`flex-1 py-2 rounded-xl text-xs font-bold kanit-text transition-all ${posEditForm.status === 'cancelled' ? 'bg-white text-rose-500 shadow-sm border border-rose-100' : 'text-slate-400 hover:text-slate-600'}`}>ยกเลิก (Void)</button>
+                      </div>
+                   </div>
                 </div>
-                <div className="relative">
-                  <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ค้นหาลูกค้า (HN, ชื่อ, เบอร์โทร)</label>
+
+                <div>
+                  <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ค้นหาลูกค้า/คนไข้ (HN, ชื่อ, เบอร์โทร)</label>
                   <div className="relative group">
                     <input 
                       type="text" 
                       value={patientSearchQuery} 
                       onChange={(e) => searchPatients(e.target.value)}
-                      onFocus={() => patientSearchQuery.length >= 2 && setShowPatientResults(true)}
+                      onFocus={() => setShowPatientResults(true)}                      
                       onBlur={() => setTimeout(() => setShowPatientResults(false), 200)}
                       placeholder="พิมพ์เพื่อค้นหาลูกค้า..."
                       className="w-full px-4 py-3 pl-11 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all"
                     />
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-sky-500 transition-colors" size={18} />
                     
-                    {/* Search Results Dropdown - Matching POS Style */}
                     {showPatientResults && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
                         <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
@@ -9234,7 +9742,11 @@ const FinancePage = ({
                           .map(p => (
                             <button 
                               key={p.id}
-                              onClick={() => selectPatient(p)}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                selectPatient(p);
+                              }}
                               className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
                             >
                               <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
@@ -9260,165 +9772,266 @@ const FinancePage = ({
                     <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-[11px] font-bold w-fit shadow-sm animate-in fade-in zoom-in-95">
                       <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                       <span className="font-data">HN: {posEditForm.patientId} | {posEditForm.patientName}</span>
+                      <button type="button" onClick={() => { setPosEditForm({...posEditForm, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} className="ml-2 text-emerald-400 hover:text-rose-500 transition-colors"><X size={14} /></button>
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Section 2: Items List */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-sky-50 rounded-lg flex items-center justify-center text-sky-500 shadow-sm border border-sky-100">
-                        <ShoppingBag size={18} />
-                    </div>
-                    <h4 className="font-bold text-slate-700 kanit-text">รายการสินค้าและบริการ</h4>
-                  </div>
-                  <button 
-                    onClick={handleAddPosItem}
-                    className="text-xs font-bold text-sky-600 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 kanit-text shadow-sm hover:shadow active:scale-95"
-                  >
-                    <Plus size={14} /> เพิ่มรายการ
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {posEditForm.items.map((item, idx) => (
-                    <div key={idx} className="group p-4 bg-slate-50/50 border border-slate-100 rounded-3xl hover:bg-slate-50 hover:border-sky-200 transition-all flex flex-col sm:flex-row gap-4 items-start sm:items-center relative">
-                      <div className="flex-1 w-full">
-                        <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest">สินค้า / บริการ</label>
-                        <CustomSelect 
-                          value={item.id} 
-                          onChange={(val) => handlePosItemChange(idx, 'id', val)}
-                          options={posProducts.map(p => ({ value: p.id, label: `${p.name} (${formatCurrency(p.price)}฿)` }))}
-                          placeholder="เลือกสินค้า..."
-                          className="w-full"
-                        />
-                      </div>
-                      <div className="flex gap-4 w-full sm:w-auto">
-                        <div className="w-20">
-                            <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
-                            <input 
-                            type="number" 
-                            min="1"
-                            value={item.quantity} 
-                            onChange={(e) => handlePosItemChange(idx, 'quantity', parseInt(e.target.value) || 0)}
-                            className="w-full px-3 py-2.5 rounded-2xl bg-white border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data text-center shadow-sm"
-                            />
-                        </div>
-                        <div className="w-28 text-right">
-                            <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">ราคา/หน่วย</label>
-                            <input 
-                            type="number" 
-                            value={item.price} 
-                            onChange={(e) => handlePosItemChange(idx, 'price', parseFloat(e.target.value) || 0)}
-                            className="w-full px-3 py-2.5 rounded-2xl bg-white border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data text-right shadow-sm"
-                            />
-                        </div>
-                      </div>
-                      <div className="hidden sm:block min-w-[100px] text-right">
-                        <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">ยอดรวม</label>
-                        <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)}฿</div>
-                      </div>
+                <div className="bg-slate-50/50 p-4 sm:p-5 rounded-3xl border border-slate-100 flex flex-col mt-4">
+                   <div className="flex items-center justify-between mb-3">
+                      <label className="block text-[11px] font-black text-slate-400 kanit-text uppercase tracking-widest">รายการสินค้าและบริการ <span className="text-rose-500">*</span></label>
                       <button 
-                        onClick={() => handleRemovePosItem(idx)}
-                        className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 sm:static sm:mt-5"
+                        type="button"
+                        onClick={handleAddPosItem}
+                        className="text-xs font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 kanit-text shadow-sm hover:shadow active:scale-95"
                       >
-                        <Trash2 size={18} />
+                        <Plus size={14} /> เพิ่มรายการ
                       </button>
-                    </div>
-                  ))}
-                  
-                  {posEditForm.items.length === 0 && (
-                    <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-[2.5rem] text-slate-400 kanit-text text-sm flex flex-col items-center gap-3">
-                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
-                        <ShoppingCart size={32} className="opacity-20" />
-                      </div>
-                      ยังไม่มีรายการสินค้า กรุณาเพิ่มรายการ
-                    </div>
-                  )}
+                   </div>
+
+                   <div className="space-y-3">
+                      {posEditForm.items.map((item, idx) => (
+                         <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group" style={{ zIndex: 50 - idx }}>
+                            <div className="flex-1 w-full relative">
+                               <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest">รายละเอียด</label>
+                               <input
+                                  type="text"
+                                  required
+                                  value={item.name}
+                                  onChange={(e) => handlePosItemChange(idx, 'name', e.target.value)}
+                                  placeholder="ค้นหา หรือพิมพ์เอง"
+                                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data peer"
+                               />
+                               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden hidden peer-focus:block hover:block modal-animate-in">
+                                  <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                     {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).map(p => (
+                                        <button
+                                           key={p.id}
+                                           type="button"
+                                           onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              handlePosItemChange(idx, 'id', p.id);
+                                           }}
+                                           className="w-full p-3 flex items-center justify-between hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                                        >
+                                           <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2">{p.name}</div>
+                                           <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
+                                        </button>
+                                     ))}
+                                     {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).length === 0 && (
+                                         <div className="p-4 text-center text-sm text-slate-400 kanit-text">
+                                             สามารถพิมพ์ชื่อรายการเองได้เลย
+                                         </div>
+                                     )}
+                                  </div>
+                               </div>
+                            </div>
+                            <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">                                   
+                               <div className="w-20">
+                                  <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
+                                  <input 
+                                  type="number" 
+                                  min="1"
+                                  value={item.quantity} 
+                                  onChange={(e) => handlePosItemChange(idx, 'quantity', parseInt(e.target.value) || 0)}
+                                  className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-center"
+                                  />
+                               </div>
+                               <div className="w-24 text-right">
+                                  <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">ราคา</label>
+                                  <input 
+                                  type="number" 
+                                  value={item.price} 
+                                  onChange={(e) => handlePosItemChange(idx, 'price', parseFloat(e.target.value) || 0)}
+                                  className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-right"
+                                  />
+                               </div>
+                            </div>
+                            <div className="hidden sm:block min-w-[80px] text-right">
+                               <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
+                               <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)}฿</div>
+                            </div>
+                            {(posEditForm.items || []).length > 1 && (
+                               <button 
+                                 type="button"
+                                 onClick={() => handleRemovePosItem(idx)}
+                                 className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 sm:static sm:mt-5 opacity-0 group-hover:opacity-100 sm:opacity-100"
+                               >
+                                 <Trash2 size={18} />
+                               </button>
+                            )}
+                         </div>
+                      ))}
+                      
+                      {posEditForm.items.length === 0 && (
+                        <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-[2.5rem] text-slate-400 kanit-text text-sm flex flex-col items-center gap-3">
+                          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
+                            <ShoppingCart size={32} className="opacity-20" />
+                          </div>
+                          ยังไม่มีรายการสินค้า กรุณาเพิ่มรายการ
+                        </div>
+                      )}
+                   </div>
                 </div>
 
-                {/* Summary Box */}
-                <div className="mt-4 p-5 bg-gradient-to-br from-sky-500 to-sky-600 rounded-3xl flex justify-between items-center text-white shadow-lg shadow-sky-500/20">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                      <Activity size={20} />
-                    </div>
-                    <span className="font-bold kanit-text">ยอดรวมสุทธิทั้งสิ้น</span>
-                  </div>
-                  <span className="text-3xl font-black font-data">
-                    {formatCurrency(posEditForm.items.reduce((sum, item) => sum + (item.price * item.quantity), 0))}฿
-                  </span>
-                </div>
-              </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4 items-stretch">
+                   <div className="flex flex-col space-y-4">
+                       <div>
+                          <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ช่องทางการชำระ <span className="text-rose-500">*</span></label>
+                          <CustomSelect 
+                            value={posEditForm.paymentMethod} 
+                            onChange={(val) => setPosEditForm({...posEditForm, paymentMethod: val})}
+                            options={[
+                                {value: 'cash', label: '💵 เงินสด'},
+                                {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
+                                {value: 'credit', label: '💳 บัตรเครดิต'},
+                                {value: 'other', label: '📦 อื่นๆ'}
+                            ]}
+                            className="w-full"
+                          />
+                       </div>
+                       <div className="flex flex-col flex-1">
+                          <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมายเหตุเพิ่มเติม</label>
+                          <textarea 
+                            value={posEditForm.note || ''} 
+                            onChange={(e) => setPosEditForm({...posEditForm, note: e.target.value})}
+                            className="w-full min-h-[100px] h-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data resize-none transition-all flex-1"
+                            placeholder="ใส่บันทึกเพิ่มเติมได้ที่นี่..."
+                          />
+                       </div>
+                   </div>
 
-              {/* Section 3: Status & Payment */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
-                <div>
-                  <label className="block text-[11px] font-black text-slate-400 mb-2.5 ml-1 kanit-text uppercase tracking-widest">สถานะการชำระเงิน</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                        {id: 'completed', label: 'ชำระเงินแล้ว', color: 'emerald', icon: CheckCircle2},
-                        {id: 'cancelled', label: 'ยกเลิกรายการ', color: 'rose', icon: XCircle}
-                    ].map(st => (
-                      <button
-                        key={st.id}
-                        onClick={() => setPosEditForm({...posEditForm, status: st.id})}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-2xl border font-bold text-xs kanit-text transition-all ${
-                          posEditForm.status === st.id
-                            ? st.id === 'completed' 
-                              ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/25'
-                              : 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/25'
-                            : 'bg-white border-slate-100 text-slate-400 hover:bg-slate-50'
-                        }`}
-                      >
-                        <st.icon size={16} />
-                        {st.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-black text-slate-400 mb-2.5 ml-1 kanit-text uppercase tracking-widest">ช่องทางชำระเงิน</label>
-                  <CustomSelect 
-                    value={posEditForm.paymentMethod} 
-                    onChange={(val) => setPosEditForm({...posEditForm, paymentMethod: val})}
-                    options={[
-                        {value: 'cash', label: '💵 เงินสด'},
-                        {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
-                        {value: 'credit', label: '💳 บัตรเครดิต'}
-                    ]}
-                    className="w-full"
-                  />
-                </div>
-              </div>
+                   <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full">
+                       {(() => {
+                          const financeSubtotal = (posEditForm.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                          const financeDiscountAmount = posEditForm.discountType === 'percent' ? (financeSubtotal * ((Number(posEditForm.discountValue) || 0) / 100)) : (Number(posEditForm.discountValue) || 0);
+                          const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
+                          let financeVatAmount = 0;
+                          let financeGrandTotal = financeAfterDiscount;
+                          if (posEditForm.taxMode === 'exclude') {
+                              financeVatAmount = financeAfterDiscount * ((Number(posEditForm.vatRate) || 7) / 100);
+                              financeGrandTotal = financeAfterDiscount + financeVatAmount;
+                          } else if (posEditForm.taxMode === 'include') {
+                              financeVatAmount = financeAfterDiscount - (financeAfterDiscount * 100 / (100 + (Number(posEditForm.vatRate) || 7)));
+                              financeGrandTotal = financeAfterDiscount;
+                          }
 
-              {/* Section 4: Extra Note */}
-              <div className="pt-4">
-                <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมายเหตุเพิ่มเติม</label>
-                <textarea 
-                  rows="3" 
-                  value={posEditForm.note || ''} 
-                  onChange={(e) => setPosEditForm({...posEditForm, note: e.target.value})}
-                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data resize-none transition-all"
-                  placeholder="ใส่บันทึกเพิ่มเติมได้ที่นี่..."
-                />
+                          const grandTotalStr = formatCurrency(financeGrandTotal) + "฿";
+                          const grandTotalLen = grandTotalStr.length;
+                          const grandTotalTextClass = grandTotalLen > 15 ? 'text-lg sm:text-xl' : (grandTotalLen > 12 ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl');
+
+                          return (
+                             <div className="space-y-3 font-data text-sm flex-1 flex flex-col justify-end">
+                                <div className="flex justify-between items-center text-slate-700">
+                                   <span className="kanit-text font-medium">รวมเป็นเงิน</span>
+                                   <span className="font-bold">{formatCurrency(financeSubtotal)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                   <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                                      ส่วนลด
+                                      {posEditForm.discountValue > 0 && (
+                                         <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
+                                            {posEditForm.discountType === 'percent' 
+                                               ? `(${formatCurrency(financeDiscountAmount)} ฿)` 
+                                               : `(${Number(((Number(posEditForm.discountValue) || 0) * 100 / (financeSubtotal || 1)).toFixed(2))}%)`}
+                                         </span>
+                                      )}
+                                   </span>
+                                   <div className="flex items-center gap-1">
+                                      <input
+                                         type="number"
+                                         min="0"
+                                         value={posEditForm.discountValue || ''}
+                                         onChange={(e) => setPosEditForm({...posEditForm, discountValue: Number(e.target.value)})}
+                                         className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 transition-colors"
+                                         placeholder="0.00"
+                                      />
+                                      <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px]">
+                                         <button type="button" onClick={() => setPosEditForm({...posEditForm, discountType: 'amount'})} className={`px-2 text-xs font-bold transition-colors ${posEditForm.discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
+                                         <div className="w-px bg-slate-200"></div>
+                                         <button type="button" onClick={() => setPosEditForm({...posEditForm, discountType: 'percent'})} className={`px-2 text-xs font-bold transition-colors ${posEditForm.discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
+                                      </div>
+                                   </div>
+                                </div>
+                                {financeDiscountAmount > 0 && (
+                                    <div className="flex justify-between items-center text-rose-500 font-medium">
+                                       <span className="kanit-text">ส่วนลดรวม</span>
+                                       <span className="font-bold">- {formatCurrency(financeDiscountAmount)}</span>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                                   <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
+                                   <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                                      <label className="flex items-center gap-1.5 cursor-pointer group">
+                                         <input type="radio" name="posTaxMode" value="include" checked={posEditForm.taxMode === 'include'} onChange={() => setPosEditForm({...posEditForm, taxMode: 'include'})} className="hidden" />
+                                         <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${posEditForm.taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                                            {posEditForm.taxMode === 'include' && <div className="w-2 h-2 bg-sky-500 rounded-full animate-in zoom-in-50 duration-200"></div>}
+                                         </div>
+                                         <span className={posEditForm.taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-500 group-hover:text-slate-700'}>รวม VAT</span>
+                                      </label>
+                                      <label className="flex items-center gap-1.5 cursor-pointer group">
+                                         <input type="radio" name="posTaxMode" value="exclude" checked={posEditForm.taxMode === 'exclude'} onChange={() => setPosEditForm({...posEditForm, taxMode: 'exclude'})} className="hidden" />
+                                         <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${posEditForm.taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                                            {posEditForm.taxMode === 'exclude' && <div className="w-2 h-2 bg-sky-500 rounded-full animate-in zoom-in-50 duration-200"></div>}
+                                         </div>
+                                         <span className={posEditForm.taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-500 group-hover:text-slate-700'}>แยก VAT</span>
+                                      </label>
+                                      <label className="flex items-center gap-1.5 cursor-pointer group">
+                                         <input type="radio" name="posTaxMode" value="none" checked={posEditForm.taxMode === 'none'} onChange={() => setPosEditForm({...posEditForm, taxMode: 'none', vatRate: 7})} className="hidden" />
+                                         <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${posEditForm.taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                                            {posEditForm.taxMode === 'none' && <div className="w-2 h-2 bg-sky-500 rounded-full animate-in zoom-in-50 duration-200"></div>}
+                                         </div>
+                                         <span className={posEditForm.taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-500 group-hover:text-slate-700'}>ไม่มี VAT</span>
+                                      </label>
+                                   </div>
+                                </div>
+                                {posEditForm.taxMode !== 'none' && (
+                                   <div className="flex justify-between items-center text-slate-700 font-medium animate-in fade-in slide-in-from-top-2">
+                                      <div className="flex items-center gap-2">
+                                         <span className="kanit-text">ภาษีมูลค่าเพิ่ม (VAT)</span>
+                                         <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+                                            <input type="number" value={posEditForm.vatRate || ''} onChange={(e) => setPosEditForm({...posEditForm, vatRate: Number(e.target.value)})} className="w-12 px-2 py-0.5 text-center text-xs font-bold text-sky-600 outline-none" />
+                                            <span className="px-2 text-xs font-bold text-slate-400 bg-slate-50 kanit-text border-l border-slate-200">%</span>
+                                         </div>
+                                      </div>
+                                      <span className="font-bold">{formatCurrency(financeVatAmount)}</span>
+                                   </div>
+                                )}
+
+                                <div className="mt-4 p-5 bg-gradient-to-br from-sky-500 to-sky-600 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center text-white shadow-lg shadow-sky-500/20 gap-2">
+                                   <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm shrink-0">
+                                         <Activity size={20} />
+                                      </div>
+                                      <span className="font-bold kanit-text shrink-0 text-sky-50">ยอดสุทธิ</span>
+                                   </div>
+                                   <span className={`font-black font-data text-right w-full sm:w-auto break-all leading-tight ${grandTotalTextClass}`}>
+                                      {formatCurrency(financeGrandTotal)}฿
+                                   </span>
+                                </div>
+                             </div>
+                          );
+                       })()}
+                   </div>
+                </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-4 shrink-0">
+            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
               <button 
-                onClick={() => setIsPosEditModalOpen(false)}
-                className="px-6 py-3 rounded-2xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text"
+                type="button"
+                onClick={closePosEditModal}
+                className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text"
               >
                 ยกเลิก
               </button>
               <button 
+                type="button"
                 onClick={handleSavePosEdit}
                 disabled={isSavingPos || posEditForm.items.length === 0}
-                className="px-8 py-3 rounded-2xl font-bold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-sky-500/25 kanit-text flex items-center gap-2"
+                className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2"
               >
                 {isSavingPos ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={18} />} บันทึกการแก้ไข
               </button>
