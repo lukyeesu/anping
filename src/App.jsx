@@ -8226,7 +8226,12 @@ const FinancePage = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // --- State for Mobile Filters ---
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
   const headerRef = useRef(null);
+  const filterRef = useRef(null);
 
   // POS Edit States
   const [isPosEditModalOpen, setIsPosEditModalOpen] = useState(false);
@@ -8583,25 +8588,54 @@ const FinancePage = ({
     };
   }, [filteredTransactions]);
 
+  // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+            // ป้องกันการเซ็ตค่า Height เป็น 0 เมื่อ Component ถูกซ่อน (display: none)
+            if (entry.target.offsetHeight > 0 && filterRef.current) {
+                // เซ็ตค่าพิกัดให้ filterRef ทันทีโดยไม่ต้องผ่าน State (ป้องกัน Re-render กระตุก)
+                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
+            }
+        }
+    });
+
+    observer.observe(headerEl);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     const mainElement = document.getElementById('main-scroll-container');
     if (!mainElement) return;
 
     const handleScroll = (e) => {
+      const { scrollTop } = e.target;
       if (headerRef.current) {
-          if (e.target.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+          if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
           else headerRef.current.classList.remove('is-scrolled');
+      }
+      if (filterRef.current) {
+          if (scrollTop > 20) filterRef.current.classList.add('is-stuck');
+          else filterRef.current.classList.remove('is-stuck');
       }
     };
 
     setTimeout(() => {
         if (mainElement && headerRef.current) {
-            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-            else headerRef.current.classList.remove('is-scrolled');
+            if (mainElement.scrollTop > 20) {
+               headerRef.current.classList.add('is-scrolled');
+               if (filterRef.current) filterRef.current.classList.add('is-stuck');
+            } else {
+               headerRef.current.classList.remove('is-scrolled');
+               if (filterRef.current) filterRef.current.classList.remove('is-stuck');
+            }
         }
     }, 50);
 
-    mainElement.addEventListener('scroll', handleScroll);
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
   }, []);
   
@@ -8864,6 +8898,87 @@ const FinancePage = ({
         </div>
       </div>
 
+      {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
+      <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
+        <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
+          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col gap-2">
+            <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 w-full">
+               <div className="relative flex-1 min-w-0 w-full">
+                  <input 
+                    type="text" 
+                    placeholder="ค้นหารายการ, หมวดหมู่..." 
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-10 pr-3 sm:pl-11 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all font-data truncate shadow-inner"
+                  />
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+               </div>
+               
+               {/* ปุ่ม Filter สำหรับ Mobile */}
+               <button 
+                 onClick={() => setShowMobileFilters(!showMobileFilters)} 
+                 className={`sm:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterBranch !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+               >
+                  <Filter size={18} />
+               </button>
+
+               {/* Filters สำหรับ Desktop */}
+               <div className="hidden sm:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
+                 <select 
+                   value={filterType} 
+                   onChange={(e) => setFilterType(e.target.value)} 
+                   className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
+                 >
+                   <option value="all">ทั้งหมด</option>
+                   <option value="income">รายรับ</option>
+                   <option value="expense">รายจ่าย</option>
+                   <option value="pos">POS</option>
+                   <option value="manual">Manual</option>
+                 </select>
+                 
+                 <select 
+                   value={filterBranch} 
+                   onChange={(e) => setFilterBranch(e.target.value)} 
+                   className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
+                 >
+                   <option value="all">ทุกสาขา</option>
+                   {branchesData && branchesData.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                   ))}
+                 </select>
+              </div>
+            </div>
+
+            {/* Filters แบบ Expandable สำหรับ Mobile */}
+            {showMobileFilters && (
+               <div className="sm:hidden flex gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2">
+                 <select 
+                   value={filterType} 
+                   onChange={(e) => setFilterType(e.target.value)} 
+                   className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold kanit-text bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600"
+                 >
+                   <option value="all">ทั้งหมด</option>
+                   <option value="income">รายรับ</option>
+                   <option value="expense">รายจ่าย</option>
+                   <option value="pos">POS</option>
+                   <option value="manual">Manual</option>
+                 </select>
+                 <select 
+                   value={filterBranch} 
+                   onChange={(e) => setFilterBranch(e.target.value)} 
+                   className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold kanit-text bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600"
+                 >
+                   <option value="all">ทุกสาขา</option>
+                   {branchesData && branchesData.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                   ))}
+                 </select>
+               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4">
         
         {/* Stats Section */}
@@ -8922,44 +9037,6 @@ const FinancePage = ({
                 </div>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Filter and Search */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6 bg-white p-3 rounded-[1.5rem] shadow-sm border border-slate-100/50">
-          <div className="relative flex-1">
-            <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="ค้นหารายการ, หมวดหมู่, หรือ Note..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all font-data"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
-             <select 
-               value={filterType} 
-               onChange={(e) => setFilterType(e.target.value)} 
-               className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
-             >
-               <option value="all">ทั้งหมด</option>
-               <option value="income">รายรับ</option>
-               <option value="expense">รายจ่าย</option>
-               <option value="pos">POS</option>
-               <option value="manual">Manual</option>
-             </select>
-             
-             <select 
-               value={filterBranch} 
-               onChange={(e) => setFilterBranch(e.target.value)} 
-               className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
-             >
-               <option value="all">ทุกสาขา</option>
-               {branchesData && branchesData.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-               ))}
-             </select>
           </div>
         </div>
 
