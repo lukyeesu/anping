@@ -1012,6 +1012,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const apptDatetimeWrapperRef = React.useRef(null);
 
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  
   const convertThaiToISO = (thaiDateTimeStr) => {
       if (!thaiDateTimeStr) return null;
       try {
@@ -8962,102 +8964,178 @@ const FinancePage = ({
         </div>
 
         {/* Transactions Table */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[900px]">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
-                  <th className="p-4 font-medium text-center w-[120px] kanit-text">วันที่/เวลา</th>
-                  <th className="p-4 font-medium kanit-text w-[120px]">เลขที่บิล</th>
-                  <th className="p-4 font-medium kanit-text">รายละเอียด</th>
-                  <th className="p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th>
-                  <th className="p-4 font-medium text-center kanit-text w-[120px]">ช่องทาง</th>
-                  <th className="p-4 font-medium text-right w-[150px] kanit-text">จำนวนเงิน</th>
-                  <th className="p-4 font-medium text-center w-[100px] kanit-text">สถานะ</th>
-                  <th className="p-4 font-medium text-center w-[100px] kanit-text">ดำเนินการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {isGlobalLoading ? (
-                   Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={`skel-${i}`}>
-                      <td className="p-4"><Skeleton width="80px" height="16px" className="mx-auto mb-1" /><Skeleton width="60px" height="12px" className="mx-auto" /></td>
-                      <td className="p-4"><Skeleton width="80px" height="16px" /></td>
-                      <td className="p-4"><Skeleton width="150px" height="16px" /></td>
-                      <td className="p-4"><Skeleton width="120px" height="16px"/></td>
-                      <td className="p-4"><Skeleton width="60px" height="24px" rounded="rounded-full" className="mx-auto" /></td>
-                      <td className="p-4 text-right"><Skeleton width="80px" height="20px" className="ml-auto" /></td>
-                      <td className="p-4"><Skeleton width="60px" height="24px" rounded="rounded-full" className="mx-auto" /></td>
-                      <td className="p-4"><div className="flex gap-2 justify-center"><Skeleton width="24px" height="24px" rounded="rounded-lg"/><Skeleton width="24px" height="24px" rounded="rounded-lg"/></div></td>
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0 sm:p-0">
+          <div className="px-2 sm:px-4 py-4">
+              {/* --- Desktop View (Table) --- */}
+              <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
+                      <th className="p-4 font-medium text-center w-[120px] kanit-text">วันที่/เวลา</th>
+                      <th className="p-4 font-medium kanit-text w-[120px]">เลขที่บิล</th>
+                      <th className="p-4 font-medium kanit-text">รายละเอียด</th>
+                      <th className="p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th>
+                      <th className="p-4 font-medium text-center kanit-text w-[120px]">ช่องทาง</th>
+                      <th className="p-4 font-medium text-right w-[150px] kanit-text">จำนวนเงิน</th>
+                      <th className="p-4 font-medium text-center w-[100px] kanit-text">สถานะ</th>
+                      <th className="p-4 font-medium text-center w-[100px] kanit-text">ดำเนินการ</th>
                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {isGlobalLoading ? (
+                       Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={`skel-${i}`}>
+                          <td className="p-4"><Skeleton width="80px" height="16px" className="mx-auto mb-1" /><Skeleton width="60px" height="12px" className="mx-auto" /></td>
+                          <td className="p-4"><Skeleton width="80px" height="16px" /></td>
+                          <td className="p-4"><Skeleton width="150px" height="16px" /></td>
+                          <td className="p-4"><Skeleton width="120px" height="16px"/></td>
+                          <td className="p-4"><Skeleton width="60px" height="24px" rounded="rounded-full" className="mx-auto" /></td>
+                          <td className="p-4 text-right"><Skeleton width="80px" height="20px" className="ml-auto" /></td>
+                          <td className="p-4"><Skeleton width="60px" height="24px" rounded="rounded-full" className="mx-auto" /></td>
+                          <td className="p-4"><div className="flex gap-2 justify-center"><Skeleton width="24px" height="24px" rounded="rounded-lg"/><Skeleton width="24px" height="24px" rounded="rounded-lg"/></div></td>
+                        </tr>
+                      ))
+                    ) : filteredTransactions.length > 0 ? (
+                      filteredTransactions.map((tx, i) => (
+                        <tr key={i} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
+                          <td className="p-4 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
+                              <span className="text-xs font-data text-slate-500 mt-0.5">{formatTime(tx.date)} น.</span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col gap-1">
+                              {tx.patientName && (
+                                <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
+                                  {tx.patientName}
+                                </span>
+                              )}
+                              <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note || '-'}>
+                                {tx.note || '-'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col items-start justify-center">
+                              {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>}
+                              {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100">ระบบ POS</span>}
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                             <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+                               {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
+                             </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                               <CheckCircle2 size={12} /> {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                             <div className="flex items-center justify-center gap-1">
+                                 <button onClick={() => handleEditTransaction(tx)} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
+                                    <Pencil size={16}/>
+                                 </button>
+                                 <button onClick={() => handleDeleteTransaction(tx)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
+                                    <Trash2 size={16}/>
+                                 </button>
+                             </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="8" className="p-10 text-center text-slate-400">
+                          <Receipt size={48} className="mx-auto mb-4 opacity-20" />
+                          <p className="kanit-text font-medium text-lg">ไม่มีรายการในระบบ</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* --- Mobile View (Cards) --- */}
+              <div className="lg:hidden space-y-3 mt-2">
+                {isGlobalLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={`skel-mob-fin-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                        <div className="flex justify-between items-center mb-1.5"><Skeleton width="64px" height="20px" /><Skeleton width="64px" height="20px" rounded="rounded-md" /></div>
+                        <div className="mb-3"><Skeleton width="160px" height="24px" className="mb-2" /><Skeleton width="96px" height="24px" rounded="rounded-lg" /></div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                            <div className="flex items-center gap-2"><Skeleton width="20px" height="20px" circle /><Skeleton width="128px" height="16px" /></div>
+                        </div>
+                    </div>
                   ))
                 ) : filteredTransactions.length > 0 ? (
                   filteredTransactions.map((tx, i) => (
-                    <tr key={i} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
-                      <td className="p-4 text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
-                          <span className="text-xs font-data text-slate-500 mt-0.5">{formatTime(tx.date)} น.</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col gap-1">
-                          {tx.patientName && (
-                            <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
-                              {tx.patientName}
+                    <div key={i} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(i % 25) * 30}ms` }}>
+                        <div className="flex justify-between items-start mb-2.5">
+                            <div className="flex flex-col gap-1">
+                                <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
+                                <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatTime(tx.date)} น.</div>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
                             </span>
-                          )}
-                          <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note || '-'}>
-                            {tx.note || '-'}
-                          </span>
                         </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col items-start justify-center">
-                          {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>}
-                          {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100">ระบบ POS</span>}
+                        
+                        <div className="mb-1">
+                            {tx.patientName ? (
+                                <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{tx.patientName}</div>
+                            ) : null}
+                            <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
+                                {tx.note || '-'}
+                            </div>
                         </div>
-                      </td>
-                      <td className="p-4 text-center">
-                         <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
-                           {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
-                         </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                           <CheckCircle2 size={12} /> {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                         <div className="flex items-center justify-center gap-1">
-                             <button onClick={() => handleEditTransaction(tx)} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
-                                <Pencil size={16}/>
-                             </button>
-                             <button onClick={() => handleDeleteTransaction(tx)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
-                                <Trash2 size={16}/>
-                             </button>
-                         </div>
-                      </td>
-                    </tr>
+
+                        <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <div className="flex flex-col gap-1.5 min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                    {!tx.isAuto ? (
+                                        <span className="text-[11px] font-bold text-slate-700 kanit-text truncate">{tx.category}</span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200">ระบบ POS</span>
+                                    )}
+                                </div>
+                                <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5">
+                                    {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : <><Package size={12}/> {tx.method}</>}
+                                </div>
+                            </div>
+                            <div className="text-right flex flex-col gap-1 shrink-0">
+                                <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions Row */}
+                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100">
+                            <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
+                                <Pencil size={14} /> แก้ไข
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
+                                <Trash2 size={14} /> ลบ
+                            </button>
+                        </div>
+                    </div>
                   ))
                 ) : (
-                  <tr>
-                    <td colSpan="8" className="p-10 text-center text-slate-400">
-                      <Receipt size={48} className="mx-auto mb-4 opacity-20" />
-                      <p className="kanit-text font-medium text-lg">ไม่มีรายการในระบบ</p>
-                    </td>
-                  </tr>
+                  <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                    <Receipt size={40} className="mx-auto mb-3 opacity-30" />
+                    <p className="kanit-text font-bold text-sm">ไม่มีรายการในระบบ</p>
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
           </div>
         </div>
       </div>
