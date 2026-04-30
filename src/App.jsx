@@ -10834,7 +10834,7 @@ export default function App() {
         </aside>
 
         {/* --- Mobile Top Header Spacer --- */}
-        <div className="md:hidden shrink-0 w-full h-[61px]" />
+        <div className={`md:hidden shrink-0 w-full transition-all duration-300 ease-in-out ${showMobileBars ? 'h-[61px]' : 'h-0'}`} />
         
         {/* --- Mobile Top Header --- */}
         <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
