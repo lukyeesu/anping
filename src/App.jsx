@@ -8318,11 +8318,11 @@ const InventoryManager = ({
               <button onClick={closeAdjustModal} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-xl transition-colors"><X size={24} /></button>
             </div>
             
-            <form onSubmit={handleSaveAdjustment} className="flex-1 overflow-y-auto custom-scrollbar p-0">
-              <div className="grid grid-cols-1 md:grid-cols-2">
-                {/* Left Column: ข้อมูลพื้นฐานและล็อต */}
-                <div className="p-6 border-b md:border-b-0 md:border-r border-slate-100 space-y-6">
-                  <div className="space-y-4">
+            <form onSubmit={handleSaveAdjustment} className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
+                <div className="grid grid-cols-1 md:grid-cols-2">
+                  {/* Left Column: ข้อมูลพื้นฐานและล็อต */}
+                  <div className="p-6 border-b md:border-b-0 md:border-r border-slate-100 space-y-6">
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-4 bg-sky-500 rounded-full"></div>
                       <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">ข้อมูลสาขาและคลัง</h4>
@@ -8365,145 +8365,145 @@ const InventoryManager = ({
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-4 pt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-4 bg-amber-500 rounded-full"></div>
-                      <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">การจัดการล็อต</h4>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase tracking-wider">เลือกล็อตเดิมที่มี</label>
-                        <CustomSelect 
-                          placeholder="เลือกจากล็อตเดิม..."
-                          value={adjustData.lotNo}
-                          compact
-                          fullWidth
-                          onChange={val => {
-                              const stock = inventoryData.find(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId && i.lotNo === val);
-                              setAdjustData({ 
-                                  ...adjustData, 
-                                  lotNo: val, 
-                                  expireDate: stock?.expireDate || '',
-                                  receiveDate: stock?.receiveDate || adjustData.receiveDate
-                              });
-                          }}
-                          options={[
-                              ...inventoryData
-                                  .filter(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId)
-                                  .map(i => ({ value: i.lotNo, label: `${i.lotNo || 'N/A'} (เหลือ ${i.quantity})` }))
-                          ]}
-                        />
+                    <div className="space-y-4 pt-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-4 bg-amber-500 rounded-full"></div>
+                        <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">การจัดการล็อต</h4>
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase tracking-wider">ระบุล็อตใหม่</label>
-                        <input 
-                          type="text" className={`${theme.input} !py-3 font-data uppercase text-sm`} 
-                          value={adjustData.lotNo} 
-                          onChange={e => {
-                              const newLot = e.target.value.toUpperCase();
-                              const stock = inventoryData.find(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId && i.lotNo === newLot);
-                              setAdjustData({
-                                  ...adjustData, 
-                                  lotNo: newLot, 
-                                  expireDate: stock?.expireDate || adjustData.expireDate,
-                                  receiveDate: stock?.receiveDate || adjustData.receiveDate
-                              });
-                          }} 
-                          placeholder="พิมพ์ชื่อล็อตใหม่..." 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Right Column: วันที่และจำนวน */}
-                <div className="p-6 bg-slate-50/30 space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
-                      <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">วันที่สำคัญ</h4>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">วันที่รับเข้าสินค้า</label>
-                        <div className="relative group">
-                          <input 
-                            type="text" className={`${theme.input} !py-3 pr-10 font-data text-sm group-hover:border-sky-300 transition-colors`} 
-                            value={adjustData.receiveDate} 
-                            onChange={e => setAdjustData({...adjustData, receiveDate: e.target.value})} 
-                            placeholder="วว/ดด/ปปปป" 
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase tracking-wider">เลือกล็อตเดิมที่มี</label>
+                          <CustomSelect 
+                            placeholder="เลือกจากล็อตเดิม..."
+                            value={adjustData.lotNo}
+                            compact
+                            fullWidth
+                            onChange={val => {
+                                const stock = inventoryData.find(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId && i.lotNo === val);
+                                setAdjustData({ 
+                                    ...adjustData, 
+                                    lotNo: val, 
+                                    expireDate: stock?.expireDate || '',
+                                    receiveDate: stock?.receiveDate || adjustData.receiveDate
+                                });
+                            }}
+                            options={[
+                                ...inventoryData
+                                    .filter(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId)
+                                    .map(i => ({ value: i.lotNo, label: `${i.lotNo || 'N/A'} (เหลือ ${i.quantity})` }))
+                            ]}
                           />
-                          <button type="button" onClick={() => handleOpenCalendarForAdjust('receiveDate')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-sky-500 transition-colors">
-                            <CalendarIcon size={18} />
-                          </button>
                         </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">วันหมดอายุของล็อต</label>
-                        <div className="relative group">
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase tracking-wider">ระบุล็อตใหม่</label>
                           <input 
-                            type="text" className={`${theme.input} !py-3 pr-10 font-data text-sm group-hover:border-amber-300 transition-colors`} 
-                            value={adjustData.expireDate} 
-                            onChange={e => setAdjustData({...adjustData, expireDate: e.target.value})} 
-                            placeholder="วว/ดด/ปปปป" 
+                            type="text" className={`${theme.input} !py-3 font-data uppercase text-sm`} 
+                            value={adjustData.lotNo} 
+                            onChange={e => {
+                                const newLot = e.target.value.toUpperCase();
+                                const stock = inventoryData.find(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId && i.lotNo === newLot);
+                                setAdjustData({
+                                    ...adjustData, 
+                                    lotNo: newLot, 
+                                    expireDate: stock?.expireDate || adjustData.expireDate,
+                                    receiveDate: stock?.receiveDate || adjustData.receiveDate
+                                });
+                            }} 
+                            placeholder="พิมพ์ชื่อล็อตใหม่..." 
                           />
-                          <button type="button" onClick={() => handleOpenCalendarForAdjust('expireDate')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors">
-                            <CalendarIcon size={18} />
-                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4 pt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
-                      <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">การปรับปรุงจำนวน</h4>
-                    </div>
-
+                  {/* Right Column: วันที่และจำนวน */}
+                  <div className="p-6 bg-slate-50/30 space-y-6">
                     <div className="space-y-4">
-                      <div className="flex bg-slate-200/50 p-1.5 rounded-2xl gap-1.5">
-                        <button 
-                          type="button" 
-                          onClick={() => setAdjustData({...adjustData, type: 'add'})}
-                          className={`flex-1 py-3 rounded-xl text-xs font-black kanit-text transition-all flex items-center justify-center gap-2 ${adjustData.type === 'add' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:bg-white'}`}
-                        >
-                          <Plus size={18} /> รับเข้า
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => setAdjustData({...adjustData, type: 'sub'})}
-                          className={`flex-1 py-3 rounded-xl text-xs font-black kanit-text transition-all flex items-center justify-center gap-2 ${adjustData.type === 'sub' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'text-slate-500 hover:bg-white'}`}
-                        >
-                          <Minus size={18} /> จ่ายออก
-                        </button>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-4 bg-indigo-500 rounded-full"></div>
+                        <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">วันที่สำคัญ</h4>
                       </div>
 
                       <div className="grid grid-cols-1 gap-4">
                         <div className="space-y-1.5">
-                          <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">จำนวน <span className="text-rose-500">*</span></label>
-                          <div className="relative">
+                          <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">วันที่รับเข้าสินค้า</label>
+                          <div className="relative group">
                             <input 
-                              required type="number" min="1" 
-                              className={`${theme.input} !py-3.5 font-data text-2xl font-black text-center ${adjustData.type === 'add' ? 'text-emerald-600 border-emerald-100 focus:border-emerald-500' : 'text-rose-600 border-rose-100 focus:border-rose-500'}`}
-                              value={adjustData.amount}
-                              onChange={e => setAdjustData({...adjustData, amount: e.target.value})}
+                              type="text" className={`${theme.input} !py-3 pr-10 font-data text-sm group-hover:border-sky-300 transition-colors`} 
+                              value={adjustData.receiveDate} 
+                              onChange={e => setAdjustData({...adjustData, receiveDate: e.target.value})} 
+                              placeholder="วว/ดด/ปปปป" 
                             />
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 kanit-text font-bold text-[10px] uppercase">Amount</div>
+                            <button type="button" onClick={() => handleOpenCalendarForAdjust('receiveDate')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-sky-500 transition-colors">
+                              <CalendarIcon size={18} />
+                            </button>
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">หมายเหตุ</label>
-                          <input 
-                            type="text" className={`${theme.input} !py-3.5 text-sm`}
-                            placeholder="ระบุเหตุผล..."
-                            value={adjustData.reason}
-                            onChange={e => setAdjustData({...adjustData, reason: e.target.value})}
-                          />
+                          <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">วันหมดอายุของล็อต</label>
+                          <div className="relative group">
+                            <input 
+                              type="text" className={`${theme.input} !py-3 pr-10 font-data text-sm group-hover:border-amber-300 transition-colors`} 
+                              value={adjustData.expireDate} 
+                              onChange={e => setAdjustData({...adjustData, expireDate: e.target.value})} 
+                              placeholder="วว/ดด/ปปปป" 
+                            />
+                            <button type="button" onClick={() => handleOpenCalendarForAdjust('expireDate')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors">
+                              <CalendarIcon size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 pt-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
+                        <h4 className="text-xs font-black text-slate-800 kanit-text uppercase tracking-widest">การปรับปรุงจำนวน</h4>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex bg-slate-200/50 p-1.5 rounded-2xl gap-1.5">
+                          <button 
+                            type="button" 
+                            onClick={() => setAdjustData({...adjustData, type: 'add'})}
+                            className={`flex-1 py-3 rounded-xl text-xs font-black kanit-text transition-all flex items-center justify-center gap-2 ${adjustData.type === 'add' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:bg-white'}`}
+                          >
+                            <Plus size={18} /> รับเข้า
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => setAdjustData({...adjustData, type: 'sub'})}
+                            className={`flex-1 py-3 rounded-xl text-xs font-black kanit-text transition-all flex items-center justify-center gap-2 ${adjustData.type === 'sub' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'text-slate-500 hover:bg-white'}`}
+                          >
+                            <Minus size={18} /> จ่ายออก
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">จำนวน <span className="text-rose-500">*</span></label>
+                            <div className="relative">
+                              <input 
+                                required type="number" min="1" 
+                                className={`${theme.input} !py-3.5 font-data text-2xl font-black text-center ${adjustData.type === 'add' ? 'text-emerald-600 border-emerald-100 focus:border-emerald-500' : 'text-rose-600 border-rose-100 focus:border-rose-500'}`}
+                                value={adjustData.amount}
+                                onChange={e => setAdjustData({...adjustData, amount: e.target.value})}
+                              />
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 kanit-text font-bold text-[10px] uppercase">Amount</div>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">หมายเหตุ</label>
+                            <input 
+                              type="text" className={`${theme.input} !py-3.5 text-sm`}
+                              placeholder="ระบุเหตุผล..."
+                              value={adjustData.reason}
+                              onChange={e => setAdjustData({...adjustData, reason: e.target.value})}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -8511,11 +8511,11 @@ const InventoryManager = ({
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="p-6 bg-white border-t border-slate-100 flex gap-4">
-                <button type="button" onClick={closeAdjustModal} className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold kanit-text hover:bg-slate-100 transition-all">ยกเลิก</button>
-                <button type="submit" disabled={isProcessing} className="flex-[2] py-4 bg-sky-500 text-white rounded-2xl font-black shadow-xl shadow-sky-500/30 hover:bg-sky-600 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-3 text-lg kanit-text">
-                  {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 size={24} />} บันทึกข้อมูล
+              {/* Action Buttons (Sticky Footer) */}
+              <div className="p-4 sm:p-5 bg-white border-t border-slate-100 flex gap-3 shrink-0 z-10 w-full mt-auto">
+                <button type="button" onClick={closeAdjustModal} className="flex-1 py-2.5 sm:py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-50 transition-colors shadow-sm">ยกเลิก</button>
+                <button type="submit" disabled={isProcessing} className="flex-[2] py-2.5 sm:py-3 bg-sky-500 text-white rounded-xl font-black shadow-md shadow-sky-500/30 hover:bg-sky-600 active:scale-95 transition-all flex items-center justify-center gap-2 sm:gap-3 text-base kanit-text">
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 size={20} />} บันทึกข้อมูล
                 </button>
               </div>
             </form>
