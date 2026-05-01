@@ -1498,17 +1498,17 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
         {/* --- 3. Sticky Filter ซ้อนกันเมื่อชน Header ปรับ z-index เป็น 20 --- */}
         <div ref={filterRef} className="sticky z-20 w-full pointer-events-none">
-          <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-            <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm">
+          <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
+            <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
               <div className="relative w-full">
                 <input 
                   type="text" 
                   placeholder="ค้นหาชื่อ, รหัส HN, แพทย์ผู้นัด..." 
                   value={search} 
                   onChange={(e) => setSearch(e.target.value)} 
-                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner" 
+                  className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" 
                 />
-                <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
               </div>
             </div>
           </div>
@@ -4017,11 +4017,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
         {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
         <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
-          <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-            <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm">
+          <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
+            <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
               <div className="relative w-full">
-                <input type="text" placeholder="ค้นหาชื่อ, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data" />
-                <Search className="w-5 h-5 text-slate-400 absolute left-4 top-3" />
+                <input type="text" placeholder="ค้นหาชื่อ, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" />
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
               </div>
             </div>
           </div>
@@ -6330,10 +6330,12 @@ const POSSystem = ({
 // --- ระบบฐานข้อมูลรายการ (Catalog Manager) ---
 const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading }) => {
   const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('all'); // เพิ่ม State สำหรับจัดการการกรอง
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [isEditFormClosing, setIsEditFormClosing] = useState(false);
   const [isProcessingProduct, setIsProcessingProduct] = useState(false);
-  const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1 };
+  const [showCategorySuggest, setShowCategorySuggest] = useState(false);
+  const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1, minStock: 5 };
   const [productForm, setProductForm] = useState(initialProductForm);
   const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
 
@@ -6407,7 +6409,8 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
         ...initialProductForm, 
         ...prod, 
         isCourse: !!prod.isCourse, 
-        courseSessions: prod.courseSessions || 1 
+        courseSessions: prod.courseSessions || 1,
+        minStock: prod.minStock !== undefined ? prod.minStock : 5
       });
       setIsEditFormOpen(true);
   };
@@ -6416,11 +6419,32 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       e.preventDefault();
       setIsProcessingProduct(true);
       
+      let finalId = productForm.id;
+      if (!finalId) {
+          let prefix = 'serv';
+          if (productForm.isCourse) prefix = 'cour';
+          else if (productForm.stockManaged) prefix = 'prod';
+
+          let maxNum = 0;
+          products.forEach(p => {
+              if (p.id && p.id.toLowerCase().startsWith(prefix)) {
+                  const numMatch = p.id.match(/\d+$/);
+                  if (numMatch) {
+                      const num = parseInt(numMatch[0], 10);
+                      if (num > maxNum) maxNum = num;
+                  }
+              }
+          });
+          // รันเลข 3 หลัก เช่น 001, 002
+          finalId = `${prefix}${String(maxNum + 1).padStart(3, '0')}`;
+      }
+
       const payload = {
           ...productForm,
-          id: productForm.id || `ITM${Date.now()}`,
+          id: finalId,
           price: Number(productForm.price),
-          courseSessions: Number(productForm.courseSessions) || 1
+          courseSessions: Number(productForm.courseSessions) || 1,
+          minStock: Number(productForm.minStock) || 0
       };
 
       try {
@@ -6459,8 +6483,16 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   };
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase()));
-  }, [products, search]);
+    return products.filter(p => {
+      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase());
+      let matchType = true;
+      if (filterType === 'product') matchType = p.stockManaged;
+      else if (filterType === 'course') matchType = p.isCourse;
+      else if (filterType === 'service') matchType = !p.stockManaged && !p.isCourse;
+      
+      return matchSearch && matchType;
+    });
+  }, [products, search, filterType]);
 
   const categories = useMemo(() => {
     return Array.from(new Set(products.map(p => p.type)));
@@ -6492,9 +6524,9 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
       {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
       <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
-        <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
           {/* แก้ไข flex-col เป็น flex-row แถวเดียว และปรับ gap */}
-          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4">
+          <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
             {/* ใส่ flex-1 และ min-w-0 เพื่อให้ช่องค้นหายืดขยายจนสุด */}
             <div className="relative flex-1 min-w-0 w-full">
               <input 
@@ -6506,9 +6538,19 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
               />
               <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
             </div>
-            {/* ใส่ shrink-0 ป้องกันไม่ให้ปุ่มโดนบีบจนข้อความตกบรรทัด */}
-            <div className="text-xs sm:text-sm font-bold text-slate-500 kanit-text whitespace-nowrap bg-white px-3 py-2.5 sm:px-4 sm:py-2.5 rounded-xl border border-slate-200 shadow-sm pointer-events-auto shrink-0">
-              ทั้งหมด {filteredProducts.length} รายการ
+            {/* ใส่ shrink-0 ป้องกันไม่ให้ปุ่มโดนบีบจนข้อความตกบรรทัด และเปลี่ยนเป็น Select Box สำหรับ Filter */}
+            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50">
+              <CustomSelect 
+                value={filterType}
+                onChange={(val) => setFilterType(val)}
+                options={[
+                  {value: 'all', label: `ทั้งหมด (${products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase())).length})`},
+                  {value: 'service', label: 'บริการ'},
+                  {value: 'product', label: 'สินค้า'},
+                  {value: 'course', label: 'คอร์ส'}
+                ]}
+                className="w-full sm:min-w-[160px]"
+              />
             </div>
           </div>
         </div>
@@ -6534,7 +6576,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                   <div className="min-w-0 relative z-10">
                     <div className="flex flex-wrap gap-1.5 mb-2.5">
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black kanit-text truncate uppercase border border-slate-200/50">{prod.type}</span>
-                        {prod.stockManaged && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก</span>}
+                        {prod.stockManaged && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : 5})</span>}
                         {prod.isCourse && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions})</span>}
                     </div>
                     <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
@@ -6584,15 +6626,44 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                             </div>
                         </div>
                         
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative z-20">
                             <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">หมวดหมู่ <span className="text-rose-500">*</span></label>
-                            <input required type="text" list="category-options" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={productForm.type} onChange={e => setProductForm({...productForm, type: e.target.value})} placeholder="พิมพ์หมวดหมู่ หรือเลือกจากรายการ" />
-                            <datalist id="category-options">
-                                {categories.filter(c => c !== 'ทั้งหมด').map((cat, idx) => <option key={idx} value={cat} />)}
-                            </datalist>
+                            <div className="relative">
+                                <input 
+                                    required 
+                                    type="text" 
+                                    className="w-full px-4 py-3 pr-10 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 transition-all font-data peer" 
+                                    value={productForm.type} 
+                                    onChange={e => setProductForm({...productForm, type: e.target.value})} 
+                                    placeholder="พิมพ์หมวดหมู่ หรือเลือกจากรายการ" 
+                                    onFocus={() => setShowCategorySuggest(true)}
+                                    onBlur={() => setTimeout(() => setShowCategorySuggest(false), 200)}
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                    <ChevronDown size={18} className="transition-transform duration-200 peer-focus:rotate-180" />
+                                </div>
+                                {showCategorySuggest && (
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                        {categories.filter(c => c !== 'ทั้งหมด' && c.toLowerCase().includes(productForm.type.toLowerCase())).map((cat, idx) => (
+                                            <div 
+                                                key={idx} 
+                                                onMouseDown={(e) => { e.preventDefault(); setProductForm({...productForm, type: cat}); setShowCategorySuggest(false); }} 
+                                                className={`px-4 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${productForm.type === cat ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                            >
+                                                {cat}
+                                            </div>
+                                        ))}
+                                        {categories.filter(c => c !== 'ทั้งหมด' && c.toLowerCase().includes(productForm.type.toLowerCase())).length === 0 && productForm.type && (
+                                            <div className="px-4 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
+                                                <Plus size={14} className="text-sky-500" /> เพิ่มหมวดหมู่ใหม่: "{productForm.type}"
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative z-10">
                             <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">เลือกไอคอน <span className="text-rose-500">*</span></label>
                             <div className="grid grid-cols-5 sm:grid-cols-8 gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 {Object.keys(POS_ICONS).map(iconKey => {
@@ -6627,6 +6698,16 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                 </div>
                             </div>
                         </div>
+
+                        {productForm.stockManaged && (
+                            <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-200/60 animate-in fade-in slide-in-from-top-2">
+                                <label className="block text-sm font-bold text-indigo-700 mb-2 kanit-text">แจ้งเตือนสต็อกขั้นต่ำ <span className="text-rose-500">*</span></label>
+                                <div className="flex items-center gap-3">
+                                    <input required type="number" min="0" className="w-full max-w-[200px] px-4 py-3 bg-white border border-indigo-200 rounded-xl outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all font-data font-bold text-indigo-700 text-lg text-center" value={productForm.minStock} onChange={e => setProductForm({...productForm, minStock: e.target.value})} placeholder="5" />
+                                    <span className="font-bold text-indigo-600 kanit-text">ชิ้น/หน่วย</span>
+                                </div>
+                            </div>
+                        )}
 
                         {productForm.isCourse && (
                             <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-200/60 animate-in fade-in slide-in-from-top-2">
@@ -6864,10 +6945,69 @@ const InventoryManager = ({
   const [search, setSearch] = useState('');
   const [activeBranch, setActiveBranch] = useState(currentBranch === 'all' ? 'ทั้งหมด' : currentBranch);
 
+  const headerRef = useRef(null);
+  const filterRef = useRef(null);
+  const sentinelRef = useRef(null);
+
   useEffect(() => {
     setActiveBranch(currentBranch === 'all' ? 'ทั้งหมด' : currentBranch);
   }, [currentBranch]);
 
+  // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+            // ป้องกันการเซ็ตค่า Height เป็น 0 เมื่อ Component ถูกซ่อน (display: none)
+            if (entry.target.offsetHeight > 0 && filterRef.current) {
+                // เซ็ตค่าพิกัดให้ filterRef ทันทีโดยไม่ต้องผ่าน State (ป้องกัน Re-render กระตุก)
+                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
+            }
+        }
+    });
+
+    observer.observe(headerEl);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const mainElement = document.getElementById('main-scroll-container');
+    if (!mainElement) return;
+
+    const handleScroll = (e) => {
+      const { scrollTop } = e.target;
+      if (headerRef.current) {
+          if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+          else headerRef.current.classList.remove('is-scrolled');
+      }
+
+      if (sentinelRef.current && filterRef.current && headerRef.current) {
+          const sentinelRect = sentinelRef.current.getBoundingClientRect();
+          const headerRect = headerRef.current.getBoundingClientRect();
+          if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
+          else filterRef.current.classList.remove('is-stuck');
+      }
+    };
+
+    setTimeout(() => {
+        if (mainElement && headerRef.current) {
+             if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+             else headerRef.current.classList.remove('is-scrolled');
+
+             if (sentinelRef.current && filterRef.current) {
+                 const sentinelRect = sentinelRef.current.getBoundingClientRect();
+                 const headerRect = headerRef.current.getBoundingClientRect();
+                 if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
+                 else filterRef.current.classList.remove('is-stuck');
+             }
+        }
+    }, 50);
+
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);  const [isModalClosing, setIsModalClosing] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isAdjustClosing, setIsAdjustClosing] = useState(false);
@@ -6977,7 +7117,6 @@ const InventoryManager = ({
   const initialForm = { 
     id: '', 
     productId: '', 
-    minStock: 5, 
     receiveDate: new Date().toISOString().split('T')[0], // เพิ่มวันที่รับเข้าเริ่มต้น
     expireDate: '', 
     lotNo: '',
@@ -7039,7 +7178,7 @@ const InventoryManager = ({
             productId: product.id,
             branchId: activeBranch,
             quantity: 0,
-            minStock: 5,
+            minStock: product.minStock !== undefined ? product.minStock : 5,
             receiveDate: '',
             expireDate: '',
             lotNo: '',
@@ -7049,7 +7188,7 @@ const InventoryManager = ({
         } else {
           // รวบรวมข้อมูลให้เป็นแบบ Group เสมอ เพื่อความเป็นระเบียบและรวม Lot ไว้ในปุ่ม
           const totalQty = branchStocks.reduce((sum, s) => sum + Number(s.quantity), 0);
-          const minStock = branchStocks.length > 0 ? Math.max(...branchStocks.map(s => s.minStock)) : 5;
+          const minStock = product.minStock !== undefined ? product.minStock : 5;
           
           results.push({
             id: `GROUPED_${product.id}_${activeBranch}`,
@@ -7065,7 +7204,7 @@ const InventoryManager = ({
       } else {
         // กรณีดู "ทุกสาขา" (ยังคงรวมยอดต่อสินค้าเพื่อให้ดูง่าย แต่เก็บข้อมูลล็อตไว้ข้างใน)
         const totalQty = productStocks.reduce((sum, s) => sum + Number(s.quantity), 0);
-        const minStock = productStocks.length > 0 ? Math.max(...productStocks.map(s => s.minStock)) : 5;
+        const minStock = product.minStock !== undefined ? product.minStock : 5;
         
         results.push({
           id: `GROUPED_${product.id}`,
@@ -7168,7 +7307,6 @@ const InventoryManager = ({
     setFormData({
       id: item.productId, 
       productId: item.productId,
-      minStock: baseInfo.minStock || 5,
       receiveDate: baseInfo.receiveDate || new Date().toISOString().split('T')[0],
       expireDate: baseInfo.expireDate || '',
       lotNo: baseInfo.lotNo || '',
@@ -7236,7 +7374,6 @@ const InventoryManager = ({
             productId: formData.productId,
             branchId: assignment.branchId,
             quantity: Number(assignment.quantity),
-            minStock: Number(formData.minStock),
             receiveDate: formData.receiveDate,
             expireDate: formData.expireDate,
             lotNo: formData.lotNo
@@ -7310,7 +7447,6 @@ const InventoryManager = ({
           productId: adjustItem.productId,
           branchId: targetBranchId,
           quantity: newQty,
-          minStock: existingStock?.minStock || adjustItem.minStock || 5,
           expireDate: adjustData.expireDate,
           lotNo: targetLotNo,
           receiveDate: adjustData.receiveDate
@@ -7352,94 +7488,126 @@ const InventoryManager = ({
   };
 
   return (
-    <div className="flex flex-col h-full fade-in pb-20 md:pb-0">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5 mb-8">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text flex items-center gap-3">
-            <Package className="w-7 h-7 text-sky-500" /> ระบบคลังสินค้า
-          </h2>
-          <p className="text-sm sm:text-base text-slate-500 kanit-text mt-1.5">จัดการสต๊อกยา เวชภัณฑ์ และสินค้าทุกสาขา</p>
-        </div>
-        <button 
-          onClick={handleOpenAdd}
-          className="w-full md:w-auto px-6 py-3.5 bg-sky-500 text-white rounded-2xl font-bold kanit-text hover:bg-sky-600 transition-all shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2.5 text-base"
-        >
-          <Plus size={20} /> เพิ่มรายการสต็อก
-        </button>
-      </div>
+    <div className="flex flex-col h-full fade-in pb-20 md:pb-0 relative">
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
-        <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0"><Package size={22} className="sm:w-6 sm:h-6" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="รายการทั้งหมด">รายการทั้งหมด</p>
-            <p className="text-lg sm:text-xl font-bold text-slate-800 font-data truncate">{stats.total}</p>
-          </div>
-        </div>
-        <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shrink-0"><AlertTriangle size={22} className="sm:w-6 sm:h-6" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="สต็อกใกล้หมด">สต็อกใกล้หมด</p>
-            <p className="text-lg sm:text-xl font-bold text-amber-600 font-data truncate">{stats.low}</p>
-          </div>
-        </div>
-        <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0"><X size={22} className="sm:w-6 sm:h-6" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="สินค้าหมด">สินค้าหมด</p>
-            <p className="text-lg sm:text-xl font-bold text-rose-600 font-data truncate">{stats.out}</p>
-          </div>
-        </div>
-        <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shrink-0"><AlertOctagon size={22} className="sm:w-6 sm:h-6" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="หมดอายุ">หมดอายุ</p>
-            <p className="text-lg sm:text-xl font-bold text-rose-700 font-data truncate">{stats.expired}</p>
-          </div>
-        </div>
-        <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden col-span-2 lg:col-span-1">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0"><Clock size={22} className="sm:w-6 sm:h-6" /></div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="ใกล้หมดอายุ">ใกล้หมดอายุ</p>
-            <p className="text-lg sm:text-xl font-bold text-amber-700 font-data truncate">{stats.nearExpiry}</p>
+      {/* --- 1. Sticky Header --- */}
+      <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
+        <div className="w-full pointer-events-auto sticky-header-bg">
+          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
+            <div>
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2">
+                <Package className="text-sky-500" /> ระบบคลังสินค้า
+              </h1>
+              <p className="text-slate-500 kanit-text sticky-header-desc">จัดการสต๊อกยา เวชภัณฑ์ และสินค้าทุกสาขา</p>
+            </div>
+            <button 
+              onClick={handleOpenAdd}
+              className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3`}
+            >
+              <Plus size={18} /> <span className="hidden sm:inline">เพิ่มรายการสต็อก</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Search & Filter */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-8 flex flex-col sm:flex-row gap-5 items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-          <input 
-            type="text" 
-            placeholder="ค้นหาชื่อสินค้า หรือรหัส..." 
-            className="w-full pl-12 pr-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-base font-data shadow-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-2">
+        {/* Stats Section */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0"><Package size={22} className="sm:w-6 sm:h-6" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="รายการทั้งหมด">รายการทั้งหมด</p>
+              <p className="text-lg sm:text-xl font-bold text-slate-800 font-data truncate">{stats.total}</p>
+            </div>
+          </div>
+          <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shrink-0"><AlertTriangle size={22} className="sm:w-6 sm:h-6" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="สต็อกใกล้หมด">สต็อกใกล้หมด</p>
+              <p className="text-lg sm:text-xl font-bold text-amber-600 font-data truncate">{stats.low}</p>
+            </div>
+          </div>
+          <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center shrink-0"><X size={22} className="sm:w-6 sm:h-6" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="สินค้าหมด">สินค้าหมด</p>
+              <p className="text-lg sm:text-xl font-bold text-rose-600 font-data truncate">{stats.out}</p>
+            </div>
+          </div>
+          <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shrink-0"><AlertOctagon size={22} className="sm:w-6 sm:h-6" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="หมดอายุ">หมดอายุ</p>
+              <p className="text-lg sm:text-xl font-bold text-rose-700 font-data truncate">{stats.expired}</p>
+            </div>
+          </div>
+          <div className="bg-white p-3.5 sm:p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 overflow-hidden col-span-2 lg:col-span-1">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0"><Clock size={22} className="sm:w-6 sm:h-6" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate" title="ใกล้หมดอายุ">ใกล้หมดอายุ</p>
+              <p className="text-lg sm:text-xl font-bold text-amber-700 font-data truncate">{stats.nearExpiry}</p>
+            </div>
+          </div>
         </div>
-        <div className="w-full sm:w-[240px] shrink-0">
-          <CustomSelect 
-            value={activeBranch}
-            onChange={val => setActiveBranch(val)}
-            options={[{ id: 'ทั้งหมด', name: 'ทุกสาขา (รวมยอด)' }, ...branches].map(b => ({ value: b.id, label: b.name }))}
-            placeholder="เลือกสาขา"
-            className="w-full bg-slate-50 border-slate-100 rounded-2xl"
-          />
+      </div>
+
+      {/* --- 2. Sentinel for Sticky Filter --- */}
+      <div ref={sentinelRef} className="w-full h-px opacity-0 pointer-events-none -mt-px"></div>
+
+      {/* --- 3. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
+      <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
+        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
+          <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
+            <div className="relative flex-1 min-w-0 w-full">
+              <input
+                type="text"
+                placeholder="ค้นหาชื่อสินค้า หรือรหัส..."
+                className="w-full pl-9 pr-3 sm:pl-11 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Search className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+            </div>
+            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[120px] sm:w-[240px]">
+              <CustomSelect
+                value={activeBranch}
+                onChange={val => setActiveBranch(val)}
+                options={[{ id: 'ทั้งหมด', name: 'ทุกสาขา (รวมยอด)' }, ...branchesData].map(b => ({ value: b.id, label: b.name }))}
+                placeholder="เลือกสาขา"
+                className="w-full"
+                compact
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-        {isGlobalLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4">
-            <Loader2 className="w-12 h-12 animate-spin opacity-20" />
-            <p className="kanit-text text-base italic">กำลังโหลดข้อมูลคลังสินค้า...</p>
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-12 flex-1 flex flex-col">
+        <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+          {isGlobalLoading ? (
+          <div className="flex-1 flex flex-col p-4 gap-3">
+             {/* Skeleton for Mobile & Desktop */}
+             <div className="hidden lg:flex w-full h-12 bg-slate-50 border-b border-slate-100" />
+             {Array.from({ length: 4 }).map((_, i) => (
+                <div key={`skel-inv-${i}`} className="flex flex-col lg:flex-row gap-4 p-4 lg:p-5 bg-white border border-slate-100 rounded-2xl lg:rounded-none lg:border-x-0 lg:border-t-0 shadow-sm lg:shadow-none items-start lg:items-center">
+                   <div className="flex items-center gap-4 w-full lg:w-1/4">
+                      <div className="w-12 h-12 bg-slate-200 rounded-xl animate-pulse shrink-0"></div>
+                      <div className="flex flex-col gap-2 w-full"><div className="h-4 w-3/4 bg-slate-200 rounded animate-pulse"></div><div className="h-3 w-1/2 bg-slate-200 rounded animate-pulse"></div></div>
+                   </div>
+                   <div className="hidden lg:block w-1/4"><div className="h-6 w-20 bg-slate-200 rounded-lg animate-pulse mx-auto"></div></div>
+                   <div className="hidden lg:block w-1/4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse mx-auto mb-1"></div><div className="h-3 w-16 bg-slate-200 rounded animate-pulse mx-auto"></div></div>
+                   <div className="w-full lg:w-1/4 flex lg:justify-center justify-between items-center bg-slate-50 lg:bg-transparent p-3 lg:p-0 rounded-xl border border-slate-100 lg:border-none">
+                      <div className="lg:hidden h-4 w-16 bg-slate-200 rounded animate-pulse"></div>
+                      <div className="h-8 w-12 bg-slate-200 rounded-lg animate-pulse"></div>
+                   </div>
+                </div>
+             ))}
           </div>
         ) : filteredData.length > 0 ? (
-          <div className="overflow-x-auto custom-scrollbar">
+          <>
+          {/* --- Desktop View (Table) --- */}
+          <div className="hidden lg:block overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-slate-50/70 border-b border-slate-100">
@@ -7613,18 +7781,177 @@ const InventoryManager = ({
               </tbody>
             </table>
           </div>
+
+          {/* --- Mobile View (Cards) --- */}
+          <div className="lg:hidden flex flex-col gap-3 p-3 bg-slate-50/50">
+             {filteredData.map((item, idx) => {
+                  const Icon = POS_ICONS[item.product.icon] || Package;
+                  const isLow = item.quantity <= item.minStock && item.quantity > 0;
+                  const isOut = item.quantity <= 0;
+                  
+                  let expiryStatus = 'normal';
+                  let expiredLots = 0;
+                  let warningLots = 0;
+                  
+                  const checkDate = (dateStr, qty) => {
+                      if (!dateStr || !dateStr.includes('/') || Number(qty) <= 0) return 'normal';
+                      const parts = dateStr.split('/');
+                      const expDate = new Date(parseInt(parts[2])-543, parseInt(parts[1])-1, parseInt(parts[0]));
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      
+                      const timeDiff = expDate.getTime() - today.getTime();
+                      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                      
+                      if (daysDiff <= 0) return 'danger';
+                      if (daysDiff <= 90) return 'warning';
+                      return 'normal';
+                  };
+
+                  if (item.isGrouped && item.stocks) {
+                      const uniqueLots = [];
+                      item.stocks.forEach(s => {
+                          if (Number(s.quantity) > 0) {
+                              const lotKey = s.lotNo ? `${s.lotNo}_${s.expireDate}` : s.id;
+                              if (!uniqueLots.find(u => u.key === lotKey)) {
+                                  uniqueLots.push({ key: lotKey, expireDate: s.expireDate, quantity: s.quantity });
+                              }
+                          }
+                      });
+
+                      uniqueLots.forEach(u => {
+                          const status = checkDate(u.expireDate, u.quantity);
+                          if (status === 'danger') expiredLots++;
+                          else if (status === 'warning') warningLots++;
+                      });
+                      
+                      if (expiredLots > 0) expiryStatus = 'danger';
+                      else if (warningLots > 0) expiryStatus = 'warning';
+                  } else {
+                      expiryStatus = checkDate(item.expireDate, item.quantity);
+                  }
+
+                  return (
+                     <div key={item.id} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3 space-row-animation active:scale-[0.98] transition-transform cursor-pointer" style={{ animationDelay: `${(idx % 25) * 30}ms` }} onClick={() => handleOpenLogs(item)}>
+                        
+                        <div className="flex justify-between items-start gap-2 mb-1">
+                           <div className="flex items-start gap-3 min-w-0 flex-1">
+                             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${isOut ? 'bg-rose-50 text-rose-500' : isLow ? 'bg-amber-50 text-amber-500' : 'bg-sky-50 text-sky-500'}`}>
+                               <Icon size={24} />
+                             </div>
+                             <div className="min-w-0 flex-1">
+                               <p className="font-bold text-slate-800 kanit-text text-sm sm:text-base line-clamp-2 leading-tight pr-1">{item.product.name}</p>
+                               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                   <p className="text-[10px] sm:text-xs text-slate-400 font-data tracking-tight whitespace-nowrap truncate max-w-[80px] sm:max-w-[100px]">{item.productId}</p>
+                                   <div className="w-1 h-1 rounded-full bg-slate-300 shrink-0"></div>
+                                   <p className="text-[10px] sm:text-xs text-slate-400 font-data tracking-tight whitespace-nowrap truncate max-w-[100px]">{item.product.type}</p>
+                               </div>
+                             </div>
+                           </div>
+                           <div className="shrink-0 flex flex-col items-end gap-1.5 pl-1">
+                               {expiryStatus === 'danger' ? (
+                                    <span className="text-[9px] sm:text-[10px] font-black text-white bg-rose-500 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm whitespace-nowrap">
+                                        <AlertOctagon size={12} className="shrink-0" /> {item.isGrouped && expiredLots > 0 ? `หมดอายุ (${expiredLots})` : 'หมดอายุ'}
+                                    </span>
+                                ) : expiryStatus === 'warning' ? (
+                                    <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-md flex items-center gap-1 border border-amber-200 whitespace-nowrap">
+                                        <Clock size={12} className="shrink-0" /> {item.isGrouped && warningLots > 0 ? `ใกล้หมดอายุ (${warningLots})` : 'ใกล้หมดอายุ'}
+                                    </span>
+                                ) : isOut ? (
+                                    <span className="text-[9px] sm:text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-md flex items-center gap-1 border border-rose-100 whitespace-nowrap">
+                                        <X size={12} className="shrink-0" /> สินค้าหมด
+                                    </span>
+                                ) : isLow ? (
+                                    <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-1 rounded-md flex items-center gap-1 border border-amber-100 whitespace-nowrap">
+                                        <AlertTriangle size={12} className="shrink-0" /> สต็อกต่ำ
+                                    </span>
+                                ) : (
+                                    <span className="text-[9px] sm:text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded-md flex items-center gap-1 border border-emerald-100 whitespace-nowrap">
+                                        <CheckCircle2 size={12} className="shrink-0" /> ปกติ
+                                    </span>
+                                )}
+                           </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100 flex flex-col gap-2">
+                           <div className="flex items-center justify-between">
+                              <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider kanit-text">สาขา</span>
+                              <div className="text-right">
+                                {item.isGrouped ? (
+                                    <div className="flex flex-wrap justify-end gap-1">
+                                        {Array.from(new Set(item.stocks.map(s => s.branchId))).map(bId => {
+                                            const bName = branches.find(b => b.id === bId)?.name || bId;
+                                            return (
+                                                <span key={bId} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[9px] sm:text-[10px] font-black uppercase border border-indigo-100 whitespace-nowrap">
+                                                    {bName}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <span className="px-2 py-0.5 bg-white text-slate-600 rounded-md text-[9px] sm:text-[10px] font-bold kanit-text uppercase border border-slate-200 shadow-sm whitespace-nowrap">
+                                        {branches.find(b => b.id === item.branchId)?.name || item.branchId}
+                                    </span>
+                                )}
+                              </div>
+                           </div>
+                           
+                           {item.isGrouped ? (
+                               <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider kanit-text">จัดการล็อต</span>
+                                  <button onClick={(e) => { e.stopPropagation(); handleOpenLotModal(item); }} className="text-[10px] sm:text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md border border-indigo-100 flex items-center gap-1 transition-colors">
+                                      <Package size={12} /> ข้อมูลล็อต ({item.stocks.length})
+                                  </button>
+                               </div>
+                           ) : (
+                               <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider kanit-text">ล็อต / หมดอายุ</span>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-[10px] sm:text-xs text-slate-500 font-data">LOT: {item.lotNo || '-'}</span>
+                                      <span className={`text-[10px] sm:text-xs font-bold font-data ${expiryStatus === 'danger' ? 'text-rose-600' : expiryStatus === 'warning' ? 'text-amber-600' : 'text-slate-600'}`}>EXP: {item.expireDate || '-'}</span>
+                                  </div>
+                               </div>
+                           )}
+
+                           <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-200">
+                               <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider kanit-text">คงเหลือ / ขั้นต่ำ</span>
+                               <div className="flex items-baseline gap-1.5 bg-white px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
+                                   <span className={`text-lg sm:text-xl font-black font-data leading-none ${isOut ? 'text-rose-500' : isLow ? 'text-amber-500' : 'text-sky-600'}`}>
+                                      {item.quantity}
+                                   </span>
+                                   <span className="text-[10px] sm:text-xs text-slate-400 font-medium">/ {item.minStock}</span>
+                               </div>
+                           </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 mt-1">
+                            <button onClick={(e) => { e.stopPropagation(); handleOpenLogs(item); }} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-[11px] sm:text-xs font-bold kanit-text border border-indigo-100 transition-colors">
+                                <History size={16} /> ประวัติ
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleOpenAdjust(item); }} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-xl text-[11px] sm:text-xs font-bold kanit-text border border-sky-100 transition-colors">
+                                <ArrowUpDown size={16} /> ปรับสต็อก
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }} className="flex items-center justify-center gap-1.5 py-2.5 sm:py-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] sm:text-xs font-bold kanit-text border border-slate-200 transition-colors">
+                                <Pencil size={16} /> แก้ไข
+                            </button>
+                        </div>
+                     </div>
+                  );
+             })}
+          </div>
+          </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-2">
               <Package size={32} className="opacity-20" />
             </div>
             <p className="kanit-text text-sm italic">ไม่พบข้อมูลสต็อกที่ต้องการ</p>
-          </div>
-        )}
-      </div>
+            </div>
+            )}
+            </div>
+            </div>
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && createPortal(
+            {/* Add/Edit Modal */}      {isModalOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeModal}></div>
           <div className={`bg-white rounded-3xl w-full max-w-md max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
@@ -7696,17 +8023,6 @@ const InventoryManager = ({
                 >
                   <Plus size={14} /> เพิ่มสาขาอื่น
                 </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1 kanit-text uppercase">แจ้งเตือนขั้นต่ำ <span className="text-rose-500">*</span></label>
-                  <input 
-                    required type="number" min="1" className={theme.input}
-                    value={formData.minStock}
-                    onChange={e => setFormData({...formData, minStock: e.target.value})}
-                  />
-                </div>
               </div>
             </form>
 
@@ -8901,8 +9217,8 @@ const FinancePage = ({
 
       {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
       <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
-        <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col gap-2">
+        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
+          <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col gap-2 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
             <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 w-full">
                <div className="relative flex-1 min-w-0 w-full">
                   <input 
@@ -10915,7 +11231,7 @@ export default function App() {
                  patientsData={patientsData}
                  posProducts={posProducts}
                />
-            </div>            <div style={{ display: currentTab === 'inventory' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
+            </div>            <div style={{ display: currentTab === 'inventory' ? 'block' : 'none' }} className="w-full">
                 <InventoryManager 
                     inventoryData={inventoryData} 
                     setInventoryData={setInventoryData} 
@@ -11183,11 +11499,14 @@ export default function App() {
         .is-scrolled .dash-date-badge { font-size: 0.75rem; }
         .is-scrolled .dash-date-badge svg { width: 14px; height: 14px; }
 
-        .sticky-filter-inner { transition: width 0.3s ease, margin 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, border-color 0.3s ease; width: calc(100% - 2rem); margin-top: 0.5rem; padding: 1rem; border-radius: 2rem; border-width: 1px; will-change: width, margin, padding, border-radius; }
-        @media (min-width: 768px) { .sticky-filter-inner { width: calc(100% - 4rem); } }
+        .sticky-filter-inner { transition: width 0.3s ease, margin 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, border-color 0.3s ease; width: calc(100% - 2rem); margin-top: 7px; border-radius: 2rem; border-width: 1px; will-change: width, margin, padding, border-radius; }
+        @media (min-width: 768px) { .sticky-filter-inner { width: calc(100% - 4rem); margin-top: 10px; } }
         @media (min-width: 1536px) { .sticky-filter-inner { width: calc(100% - 6rem); } }
-        .is-stuck .sticky-filter-inner { width: 100%; margin-top: 0; padding-top: 0.75rem; padding-bottom: 0.75rem; padding-left: 1rem; padding-right: 1rem; border-radius: 0 0 2rem 2rem; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }
-        @media (min-width: 768px) { .is-stuck .sticky-filter-inner { padding-left: 2rem; padding-right: 2rem; } }
+        .is-stuck .sticky-filter-inner { width: 100%; margin-top: 0; border-radius: 0 0 2rem 2rem; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; }
+        .is-stuck .sticky-filter-inner { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+        @media (min-width: 768px) { 
+          .is-stuck .sticky-filter-inner { padding-top: 1rem !important; padding-bottom: 1rem !important; padding-left: 2rem; padding-right: 2rem; } 
+        }
         @media (min-width: 1536px) { .is-stuck .sticky-filter-inner { padding-left: 3rem; padding-right: 3rem; } }
       `}} />
     </div>
