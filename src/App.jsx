@@ -6341,6 +6341,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
   const headerRef = React.useRef(null);
   const filterRef = React.useRef(null);
+  const sentinelRef = React.useRef(null); // เพิ่ม Sentinel Ref สำหรับจับพิกัด Sticky
 
   // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
   useEffect(() => {
@@ -6361,27 +6362,40 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
     return () => observer.disconnect();
   }, []);
 
-  // --- ระบบ Sticky เลียนแบบเวชระเบียน ---
+  // --- ระบบ Sticky เลียนแบบหน้าอื่นๆ ---
   useEffect(() => {
     const mainElement = document.getElementById('main-scroll-container');
     if (!mainElement) return;
 
     const handleScroll = (e) => {
+      if (!headerRef.current) return;
       const { scrollTop } = e.target;
-      if (headerRef.current) {
-        if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-        else headerRef.current.classList.remove('is-scrolled');
-      }
-      if (filterRef.current) {
-        if (scrollTop > 20) filterRef.current.classList.add('is-stuck');
-        else filterRef.current.classList.remove('is-stuck');
+      
+      if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+      else headerRef.current.classList.remove('is-scrolled');
+      
+      if (sentinelRef.current && filterRef.current) {
+         const sentinelRect = sentinelRef.current.getBoundingClientRect();
+         const headerRect = headerRef.current.getBoundingClientRect();
+         if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
+         else filterRef.current.classList.remove('is-stuck');
       }
     };
 
     setTimeout(() => {
-        if (mainElement && mainElement.scrollTop > 20) {
-            if (headerRef.current) headerRef.current.classList.add('is-scrolled');
-            if (filterRef.current) filterRef.current.classList.add('is-stuck');
+        if (mainElement && headerRef.current) {
+            if (mainElement.scrollTop > 20) {
+                headerRef.current.classList.add('is-scrolled');
+                if (sentinelRef.current && filterRef.current) {
+                    const sentinelRect = sentinelRef.current.getBoundingClientRect();
+                    const headerRect = headerRef.current.getBoundingClientRect();
+                    if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
+                    else filterRef.current.classList.remove('is-stuck');
+                }
+            } else {
+                headerRef.current.classList.remove('is-scrolled');
+                if (filterRef.current) filterRef.current.classList.remove('is-stuck');
+            }
         }
     }, 50);
 
@@ -6499,7 +6513,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   }, [products]);
 
   return (
-    <div className="fade-in pb-10 relative">
+    <div className="fade-in pb-10 relative flex flex-col h-full">
       
       {/* --- 1. Sticky Header --- */}
       <div ref={headerRef} className="sticky top-0 z-30 w-full pointer-events-none">
@@ -6513,7 +6527,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
             </div>
             <div className="flex gap-2">
               {!isEditFormOpen && (
-                <button onClick={handleOpenAddProduct} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-sky-500 text-white hover:bg-sky-600 kanit-text sticky-header-btn">
+                <button onClick={handleOpenAddProduct} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-sky-500 text-white hover:bg-sky-600 kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3">
                   <Plus size={18} /> <span className="hidden sm:inline">เพิ่มรายการใหม่</span>
                 </button>
               )}
@@ -6522,24 +6536,24 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
         </div>
       </div>
 
-      {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
+      {/* --- 2. Sentinel for Sticky Filter --- */}
+      <div ref={sentinelRef} className="w-full h-px opacity-0 pointer-events-none -mt-px"></div>
+
+      {/* --- 3. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
       <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
-        <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
-          {/* แก้ไข flex-col เป็น flex-row แถวเดียว และปรับ gap */}
-          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4">
-            {/* ใส่ flex-1 และ min-w-0 เพื่อให้ช่องค้นหายืดขยายจนสุด */}
+        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
+          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
             <div className="relative flex-1 min-w-0 w-full">
               <input 
                 type="text" 
                 placeholder="ค้นหาชื่อ หรือหมวดหมู่..." 
-                className="w-full pl-10 pr-3 sm:pl-11 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
+                className="w-full pl-9 pr-3 sm:pl-11 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
             </div>
-            {/* ใส่ shrink-0 ป้องกันไม่ให้ปุ่มโดนบีบจนข้อความตกบรรทัด และเปลี่ยนเป็น Select Box สำหรับ Filter */}
-            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50">
+            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[140px] sm:w-[180px]">
               <CustomSelect 
                 value={filterType}
                 onChange={(val) => setFilterType(val)}
@@ -6549,15 +6563,16 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                   {value: 'product', label: 'เฉพาะสินค้า'},
                   {value: 'course', label: 'เฉพาะคอร์ส'}
                 ]}
-                className="w-full sm:min-w-[160px]"
+                className="w-full"
+                compact
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* --- 3. ตาราง/เนื้อหา --- */}
-      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-12">
+      {/* --- 4. ตาราง/เนื้อหา --- */}
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-12 flex-1 flex flex-col">
         {isGlobalLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {Array.from({ length: 10 }).map((_, i) => (
@@ -6966,70 +6981,8 @@ const InventoryManager = ({
   const [search, setSearch] = useState('');
   const [activeBranch, setActiveBranch] = useState(currentBranch === 'all' ? 'ทั้งหมด' : currentBranch);
 
-  const headerRef = useRef(null);
-  const filterRef = useRef(null);
-  const sentinelRef = useRef(null);
-
-  useEffect(() => {
-    setActiveBranch(currentBranch === 'all' ? 'ทั้งหมด' : currentBranch);
-  }, [currentBranch]);
-
-  // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
-  useEffect(() => {
-    const headerEl = headerRef.current;
-    if (!headerEl) return;
-
-    const observer = new ResizeObserver((entries) => {
-        for (let entry of entries) {
-            // ป้องกันการเซ็ตค่า Height เป็น 0 เมื่อ Component ถูกซ่อน (display: none)
-            if (entry.target.offsetHeight > 0 && filterRef.current) {
-                // เซ็ตค่าพิกัดให้ filterRef ทันทีโดยไม่ต้องผ่าน State (ป้องกัน Re-render กระตุก)
-                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
-            }
-        }
-    });
-
-    observer.observe(headerEl);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const mainElement = document.getElementById('main-scroll-container');
-    if (!mainElement) return;
-
-    const handleScroll = (e) => {
-      const { scrollTop } = e.target;
-      if (headerRef.current) {
-          if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-          else headerRef.current.classList.remove('is-scrolled');
-      }
-
-      if (sentinelRef.current && filterRef.current && headerRef.current) {
-          const sentinelRect = sentinelRef.current.getBoundingClientRect();
-          const headerRect = headerRef.current.getBoundingClientRect();
-          if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
-          else filterRef.current.classList.remove('is-stuck');
-      }
-    };
-
-    setTimeout(() => {
-        if (mainElement && headerRef.current) {
-             if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-             else headerRef.current.classList.remove('is-scrolled');
-
-             if (sentinelRef.current && filterRef.current) {
-                 const sentinelRect = sentinelRef.current.getBoundingClientRect();
-                 const headerRect = headerRef.current.getBoundingClientRect();
-                 if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
-                 else filterRef.current.classList.remove('is-stuck');
-             }
-        }
-    }, 50);
-
-    mainElement.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, []);
-  const [isModalOpen, setIsModalOpen] = useState(false);  const [isModalClosing, setIsModalClosing] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalClosing, setIsModalClosing] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [isAdjustClosing, setIsAdjustClosing] = useState(false);
 
@@ -7047,6 +7000,77 @@ const InventoryManager = ({
   const [editingItem, setEditingItem] = useState(null);
   const [adjustItem, setAdjustItem] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // ลบการประกาศตัวแปรซ้ำซ้อน รวบรวม Ref มาไว้จุดเดียว
+  const headerRef = useRef(null);
+  const filterRef = useRef(null);
+  const sentinelRef = useRef(null);
+
+  useEffect(() => {
+    setActiveBranch(currentBranch === 'all' ? 'ทั้งหมด' : currentBranch);
+  }, [currentBranch]);
+
+  // ใช้ ResizeObserver เพื่อติดตามความสูงของ Header อย่างแม่นยำตลอดเวลาแม้ตอนเกิดแอนิเมชัน
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+            if (entry.target.offsetHeight > 0 && filterRef.current) {
+                filterRef.current.style.top = `${entry.target.offsetHeight}px`;
+            }
+        }
+    });
+
+    observer.observe(headerEl);
+    return () => observer.disconnect();
+  }, []);
+
+  // --- ระบบ Sticky เลียนแบบหน้านัดหมาย ---
+  useEffect(() => {
+    const mainElement = document.getElementById('main-scroll-container');
+    if (!mainElement) return;
+
+    const handleScroll = (e) => {
+      if (!headerRef.current) return;
+      const { scrollTop } = e.target;
+      
+      if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+      else headerRef.current.classList.remove('is-scrolled');
+      
+      if (sentinelRef.current && filterRef.current) {
+         const sentinelRect = sentinelRef.current.getBoundingClientRect();
+         const headerRect = headerRef.current.getBoundingClientRect();
+
+         if (sentinelRect.top <= headerRect.bottom + 2) {
+             filterRef.current.classList.add('is-stuck');
+         } else {
+             filterRef.current.classList.remove('is-stuck');
+         }
+      }
+    };
+
+    setTimeout(() => {
+        if (mainElement && headerRef.current) {
+            if (mainElement.scrollTop > 20) {
+                headerRef.current.classList.add('is-scrolled');
+                if (sentinelRef.current && filterRef.current) {
+                    const sentinelRect = sentinelRef.current.getBoundingClientRect();
+                    const headerRect = headerRef.current.getBoundingClientRect();
+                    if (sentinelRect.top <= headerRect.bottom + 2) filterRef.current.classList.add('is-stuck');
+                    else filterRef.current.classList.remove('is-stuck');
+                }
+            } else {
+                headerRef.current.classList.remove('is-scrolled');
+                if (filterRef.current) filterRef.current.classList.remove('is-stuck');
+            }
+        }
+    }, 50);
+
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // --- Closing logic with animation ---
   const closeModal = () => {
@@ -7578,7 +7602,7 @@ const InventoryManager = ({
       {/* --- 3. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
       <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
         <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
-          <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
+          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
             <div className="relative flex-1 min-w-0 w-full">
               <input
                 type="text"
