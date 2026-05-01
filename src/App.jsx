@@ -6524,9 +6524,9 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
       {/* --- 2. Sticky Filter ลอยอิสระ และสแนปติดใต้ Header เมื่อเลื่อน --- */}
       <div ref={filterRef} className="glass-filter-wrapper sticky z-20 w-full pointer-events-none">
-        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
+        <div className="w-full mx-auto pointer-events-none relative h-[88px] z-50">
           {/* แก้ไข flex-col เป็น flex-row แถวเดียว และปรับ gap */}
-          <div className="absolute left-0 right-0 mx-auto w-full bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
+          <div className="absolute left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4">
             {/* ใส่ flex-1 และ min-w-0 เพื่อให้ช่องค้นหายืดขยายจนสุด */}
             <div className="relative flex-1 min-w-0 w-full">
               <input 
@@ -6545,9 +6545,9 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                 onChange={(val) => setFilterType(val)}
                 options={[
                   {value: 'all', label: `ทั้งหมด (${products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase())).length})`},
-                  {value: 'service', label: 'บริการ'},
-                  {value: 'product', label: 'สินค้า'},
-                  {value: 'course', label: 'คอร์ส'}
+                  {value: 'service', label: 'เฉพาะบริการ'},
+                  {value: 'product', label: 'เฉพาะสินค้า'},
+                  {value: 'course', label: 'เฉพาะคอร์ส'}
                 ]}
                 className="w-full sm:min-w-[160px]"
               />
@@ -6558,7 +6558,28 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
       {/* --- 3. ตาราง/เนื้อหา --- */}
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-12">
-        {filteredProducts.length > 0 ? (
+        {isGlobalLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={`skel-cat-${i}`} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4">
+                <div className="flex items-start justify-between relative z-10">
+                  <div className="w-14 h-14 bg-slate-200 rounded-2xl animate-pulse"></div>
+                </div>
+                <div className="min-w-0 relative z-10">
+                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    <div className="w-16 h-5 bg-slate-200 rounded-lg animate-pulse"></div>
+                    <div className="w-24 h-5 bg-slate-200 rounded-lg animate-pulse"></div>
+                  </div>
+                  <div className="w-full h-5 bg-slate-200 rounded animate-pulse mb-2"></div>
+                  <div className="w-2/3 h-5 bg-slate-200 rounded animate-pulse mb-3"></div>
+                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
+                    <div className="w-24 h-7 bg-slate-200 rounded animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredProducts.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {filteredProducts.map((prod) => {
               const PIcon = typeof prod.icon === 'string' ? (POS_ICONS[prod.icon] || Package) : (prod.icon || Package);
