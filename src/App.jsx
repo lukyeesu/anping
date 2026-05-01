@@ -4884,7 +4884,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                     <Clock size={16} className="text-sky-500 shrink-0" />
                     
                     <CustomSelect 
-                        compact 
+                        compact dropUp
                         value={opdTime.h} 
                         onChange={v => setOpdTime({...opdTime, h: v})} 
                         options={Array.from({length:24}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
@@ -4893,7 +4893,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
                     <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
                     
                     <CustomSelect 
-                        compact 
+                        compact dropUp
                         value={opdTime.m} 
                         onChange={v => setOpdTime({...opdTime, m: v})} 
                         options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
