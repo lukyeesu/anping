@@ -200,16 +200,38 @@ const useModal = (onClosedCallback) => {
 const useSwipeDown = (onClose) => {
     const startY = useRef(null);
     const currentTranslateY = useRef(0);
-    const modalRef = useRef(null);
     const ticking = useRef(false); // ใช้กั้นรอบเฟรมให้วาดพอดี 60fps
+    const onCloseRef = useRef(onClose);
+    const listenersRef = useRef(null);
 
+    // เก็บ reference ปล่าสุดของฟังก์ชัน onClose เผื่อมีการเปลี่ยนแปลง
     useEffect(() => {
-        const element = modalRef.current;
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
+    // ใช้ Callback Ref เพื่อการันตีว่าจะได้ DOM Node ที่ถูกต้องเสมอเมื่อ Modal ถูกแสดง
+    const refCallback = React.useCallback((element) => {
+        // ถอด Event เก่าออกก่อนถ้ามี (Cleanup ป้องกันการผูกซ้ำซ้อน)
+        if (listenersRef.current && listenersRef.current.element) {
+            const prevEl = listenersRef.current.element;
+            const { ts, tm, te } = listenersRef.current;
+            prevEl.removeEventListener('touchstart', ts);
+            prevEl.removeEventListener('touchmove', tm);
+            prevEl.removeEventListener('touchend', te);
+            listenersRef.current = null;
+        }
+
+        // ถ้า Element ถูก Unmount ไปแล้ว ให้หยุดตรงนี้
         if (!element) return;
 
         const handleTouchStart = (e) => {
             // หากกำลังทัชบน Dropdown หรือส่วนที่อนุญาตให้เลื่อนได้ ให้ข้ามการลาก Modal
-            if (e.target.closest('.custom-scrollbar') || e.target.closest('.no-drag-zone')) return;
+            // [แก้ไข] จำกัดขอบเขตการเช็ค ไม่ให้ไต่ทะลุออกไปตรวจเช็ค DOM นอก Modal (ป้องกันบัคชนกับ Scrollbar หลัก)
+            const scrollTarget = e.target.closest('.custom-scrollbar');
+            if (scrollTarget && element.contains(scrollTarget)) return;
+
+            const noDragTarget = e.target.closest('.no-drag-zone');
+            if (noDragTarget && element.contains(noDragTarget)) return;
 
             if (e.touches.length === 1) {
                 startY.current = e.touches[0].clientY;
@@ -258,7 +280,7 @@ const useSwipeDown = (onClose) => {
                 // เด้งลงไปข้างล่างให้สุดก่อนปิด
                 element.style.setProperty('transition', 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 'important');
                 element.style.setProperty('transform', 'translateY(100%)', 'important');
-                onClose();
+                if (onCloseRef.current) onCloseRef.current();
             } else {
                 // เด้งกลับที่เดิมถ้าลากไม่ถึง
                 element.style.setProperty('transition', 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)', 'important');
@@ -266,10 +288,10 @@ const useSwipeDown = (onClose) => {
                 
                 // เคลียร์ inline style หลังแอนิเมชันจบ
                 setTimeout(() => {
-                    if (modalRef.current) {
-                        modalRef.current.style.removeProperty('transition');
-                        modalRef.current.style.removeProperty('transform');
-                        modalRef.current.style.removeProperty('will-change');
+                    if (element) {
+                        element.style.removeProperty('transition');
+                        element.style.removeProperty('transform');
+                        element.style.removeProperty('will-change');
                     }
                 }, 300);
             }
@@ -283,15 +305,12 @@ const useSwipeDown = (onClose) => {
         element.addEventListener('touchmove', handleTouchMove, { passive: false });
         element.addEventListener('touchend', handleTouchEnd);
 
-        return () => {
-            element.removeEventListener('touchstart', handleTouchStart);
-            element.removeEventListener('touchmove', handleTouchMove);
-            element.removeEventListener('touchend', handleTouchEnd);
-        };
-    }, [onClose]);
+        // เก็บข้อมูลไว้เพื่อ Cleanup ทีหลัง
+        listenersRef.current = { element, ts: handleTouchStart, tm: handleTouchMove, te: handleTouchEnd };
+    }, []);
 
     return {
-        ref: modalRef,
+        ref: refCallback,
         // คืนค่า style เป็น Object ว่าง เนื่องจากเราจัดการผ่าน Native DOM เพื่อลด Re-render แล้ว
         style: {}
     };
