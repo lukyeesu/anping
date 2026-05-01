@@ -196,6 +196,107 @@ const useModal = (onClosedCallback) => {
     return { isOpen, isClosing, open, close, setIsOpen };
 };
 
+// --- [NEW] Hook สำหรับจัดการลากปิด Modal บนมือถือ (Swipe down to close) พร้อมป้องกัน Pull-to-refresh ---
+const useSwipeDown = (onClose) => {
+    const startY = useRef(null);
+    const currentTranslateY = useRef(0);
+    const modalRef = useRef(null);
+    const ticking = useRef(false); // ใช้กั้นรอบเฟรมให้วาดพอดี 60fps
+
+    useEffect(() => {
+        const element = modalRef.current;
+        if (!element) return;
+
+        const handleTouchStart = (e) => {
+            // หากกำลังทัชบน Dropdown หรือส่วนที่อนุญาตให้เลื่อนได้ ให้ข้ามการลาก Modal
+            if (e.target.closest('.custom-scrollbar') || e.target.closest('.no-drag-zone')) return;
+
+            if (e.touches.length === 1) {
+                startY.current = e.touches[0].clientY;
+                // ปิด Transition ขณะลากให้ติดนิ้วที่สุด โดยใช้ setProperty เพื่อบังคับทับ !important ใน CSS
+                element.style.setProperty('transition', 'none', 'important');
+                // แจ้ง Browser ล่วงหน้าว่าจะมีการเปลี่ยน transform เพื่อดึง GPU มาประมวลผลแยก
+                element.style.setProperty('will-change', 'transform', 'important');
+            }
+        };
+
+        const handleTouchMove = (e) => {
+            if (startY.current === null) return;
+            const currentY = e.touches[0].clientY;
+            const deltaY = currentY - startY.current;
+            
+            // อนุญาตให้ลากลงได้อย่างเดียว
+            if (deltaY > 0) {
+                // ป้องกัน Browser ตรวจจับ Pull-to-refresh
+                if (e.cancelable) e.preventDefault();
+                currentTranslateY.current = deltaY;
+                
+                // ใช้ requestAnimationFrame ช่วยจัดคิวให้วาดภาพลงจอพอดี 60fps ไม่วาดซ้ำซ้อนให้กระตุก
+                if (!ticking.current) {
+                    window.requestAnimationFrame(() => {
+                        element.style.setProperty('transform', `translateY(${currentTranslateY.current}px)`, 'important');
+                        ticking.current = false;
+                    });
+                    ticking.current = true;
+                }
+            } else {
+                currentTranslateY.current = 0;
+                if (!ticking.current) {
+                    window.requestAnimationFrame(() => {
+                        element.style.setProperty('transform', 'translateY(0px)', 'important');
+                        ticking.current = false;
+                    });
+                    ticking.current = true;
+                }
+            }
+        };
+
+        const handleTouchEnd = () => {
+            if (startY.current === null) return;
+
+            if (currentTranslateY.current > 80) { // ลากลงเกิน 80px ให้ปิด
+                // เด้งลงไปข้างล่างให้สุดก่อนปิด
+                element.style.setProperty('transition', 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 'important');
+                element.style.setProperty('transform', 'translateY(100%)', 'important');
+                onClose();
+            } else {
+                // เด้งกลับที่เดิมถ้าลากไม่ถึง
+                element.style.setProperty('transition', 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)', 'important');
+                element.style.setProperty('transform', 'translateY(0px)', 'important');
+                
+                // เคลียร์ inline style หลังแอนิเมชันจบ
+                setTimeout(() => {
+                    if (modalRef.current) {
+                        modalRef.current.style.removeProperty('transition');
+                        modalRef.current.style.removeProperty('transform');
+                        modalRef.current.style.removeProperty('will-change');
+                    }
+                }, 300);
+            }
+            
+            currentTranslateY.current = 0;
+            startY.current = null;
+        };
+
+        // ผูก Event ฝั่ง Native DOM เพื่อรองรับการใช้ preventDefault (ข้ามข้อจำกัดของ React Passive Event)
+        element.addEventListener('touchstart', handleTouchStart, { passive: false });
+        element.addEventListener('touchmove', handleTouchMove, { passive: false });
+        element.addEventListener('touchend', handleTouchEnd);
+
+        return () => {
+            element.removeEventListener('touchstart', handleTouchStart);
+            element.removeEventListener('touchmove', handleTouchMove);
+            element.removeEventListener('touchend', handleTouchEnd);
+        };
+    }, [onClose]);
+
+    return {
+        ref: modalRef,
+        // คืนค่า style เป็น Object ว่าง เนื่องจากเราจัดการผ่าน Native DOM เพื่อลด Re-render แล้ว
+        style: {}
+    };
+};
+
 /**
  * Component สำหรับทำ Skeleton Loader (ก้อนกระพริบๆ)
  */
@@ -984,6 +1085,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const apptModal = useModal();
   const apptAlert = useModal();
   const apptCalendar = useModal();
+  const apptSwipeProps = useSwipeDown(apptCalendar.close); // เรียกใช้ Hook Swipe Down
 
   const [sweetAlert, setSweetAlert] = useState({ type: '', title: '', text: '', onConfirm: null });
   const [visibleCount, setVisibleCount] = useState(20);
@@ -1857,7 +1959,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       {apptCalendar.isOpen && (
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${apptCalendar.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={apptCalendar.close}></div>
-          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${apptCalendar.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+          <div 
+            ref={apptSwipeProps.ref} 
+            style={apptSwipeProps.style} 
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${apptCalendar.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             
             {apptCalView === 'days' && (
@@ -2917,6 +3023,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
   const closeMedCalendar = () => { setIsCalendarClosing(true); setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300); };
   const closeMedOpdCalendar = () => { setIsOpdCalendarClosing(true); setTimeout(() => { setShowOpdCalendar(false); setIsOpdCalendarClosing(false); }, 300); };
   const closeMedAlert = () => { setIsAlertClosing(true); setTimeout(() => { setSweetAlert(prev => ({...prev, isOpen: false})); setIsAlertClosing(false); }, 300); };
+
+  const medCalSwipeProps = useSwipeDown(closeMedCalendar);
+  const medOpdCalSwipeProps = useSwipeDown(closeMedOpdCalendar);
 
   // --- ฟังก์ชันจัดการเบอร์โทรศัพท์แบบไดนามิก ---
   const handlePatientPhoneChange = (index, value) => {
@@ -4654,7 +4763,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       {showCalendar && (
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeMedCalendar}></div>
-          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+          <div 
+            ref={medCalSwipeProps.ref} 
+            style={medCalSwipeProps.style}
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             {calView === 'days' && (
               <>
@@ -4687,7 +4800,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
       {showOpdCalendar && (
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeMedOpdCalendar}></div>
-          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white/95 backdrop-blur-xl sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isOpdCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+          <div 
+            ref={medOpdCalSwipeProps.ref} 
+            style={medOpdCalSwipeProps.style}
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white/95 backdrop-blur-xl sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isOpdCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             {opdCalView === 'days' && (
               <div className="space-y-3">
@@ -7105,6 +7222,8 @@ const InventoryManager = ({
     setIsCalendarClosing(true);
     setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300);
   };
+  
+  const invCalSwipeProps = useSwipeDown(closeCalendar);
 
   const handleOpenCalendar = () => {
     setCalendarTarget('form_expire');
@@ -8086,7 +8205,11 @@ const InventoryManager = ({
       {showCalendar && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeCalendar}></div>
-          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+          <div 
+            ref={invCalSwipeProps.ref} 
+            style={invCalSwipeProps.style}
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             
             {calView === 'days' && (
@@ -8612,6 +8735,7 @@ const FinancePage = ({
   const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
 
   const calendarModal = useModal();
+  const finCalSwipeProps = useSwipeDown(calendarModal.close);
   const [calDate, setCalDate] = useState(new Date());
   const [calView, setCalView] = useState('days');
   const [yearPageStart, setYearPageStart] = useState(0);
@@ -10562,7 +10686,11 @@ const FinancePage = ({
       {calendarModal.isOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${calendarModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={calendarModal.close}></div>
-          <div className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}>
+          <div 
+            ref={finCalSwipeProps.ref} 
+            style={finCalSwipeProps.style}
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
             
             {calView === 'days' && (
@@ -11470,7 +11598,6 @@ export default function App() {
             bottom: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
-            transform: none !important;
             border-bottom-left-radius: 0 !important;
             border-bottom-right-radius: 0 !important;
             border-top-left-radius: 2rem !important;
