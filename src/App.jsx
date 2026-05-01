@@ -234,7 +234,7 @@ const useSwipeDown = (onClose) => {
                 // ใช้ requestAnimationFrame ช่วยจัดคิวให้วาดภาพลงจอพอดี 60fps ไม่วาดซ้ำซ้อนให้กระตุก
                 if (!ticking.current) {
                     window.requestAnimationFrame(() => {
-                        element.style.setProperty('transform', `translateY(${currentTranslateY.current}px)`, 'important');
+                        if(element) element.style.setProperty('transform', `translateY(${currentTranslateY.current}px)`, 'important');
                         ticking.current = false;
                     });
                     ticking.current = true;
@@ -243,7 +243,7 @@ const useSwipeDown = (onClose) => {
                 currentTranslateY.current = 0;
                 if (!ticking.current) {
                     window.requestAnimationFrame(() => {
-                        element.style.setProperty('transform', 'translateY(0px)', 'important');
+                        if(element) element.style.setProperty('transform', 'translateY(0px)', 'important');
                         ticking.current = false;
                     });
                     ticking.current = true;
@@ -1964,7 +1964,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             style={apptSwipeProps.style} 
             className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${apptCalendar.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
             
             {apptCalView === 'days' && (
               <div className="w-full calendar-view-anim">
@@ -4768,7 +4770,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             style={medCalSwipeProps.style}
             className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
             {calView === 'days' && (
               <>
                 <div className="flex justify-between items-center mb-4"><button type="button" onClick={handlePrevMonth} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button><button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button><button type="button" onClick={handleNextMonth} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button></div>
@@ -4805,7 +4809,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             style={medOpdCalSwipeProps.style}
             className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white/95 backdrop-blur-xl sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isOpdCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
             {opdCalView === 'days' && (
               <div className="space-y-3">
                 <div className="flex justify-between items-center mb-2">
@@ -8210,7 +8216,9 @@ const InventoryManager = ({
             style={invCalSwipeProps.style}
             className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
             
             {calView === 'days' && (
               <>
@@ -10691,7 +10699,9 @@ const FinancePage = ({
             style={finCalSwipeProps.style}
             className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5 sm:hidden"></div>
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
             
             {calView === 'days' && (
               <div className="w-full calendar-view-anim">
