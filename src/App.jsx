@@ -3730,7 +3730,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
             .main-content { display: flex; flex-direction: row; gap: 20px; flex-grow: 1; margin-bottom: 10px; }
             .left-column { flex-grow: 1; display: flex; flex-direction: column; }
-            .right-column { width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-top: -35px; }
+            .right-column { width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-top: -35px; padding-top: 0.5cm; }
 
             .cc-section { flex: 1; display: flex; flex-direction: column; margin-bottom: 0px; }
             .cc-title { font-weight: bold; margin-bottom: 4px; }
@@ -3741,8 +3741,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
             .tx-content { flex: 1; min-height: 40px; padding-left: 10px; }
 
             .footer { display: flex; justify-content: flex-end; align-items: flex-end; padding-top: 10px; border-top: 1px dotted #ccc; }
-            .signature { text-align: center; font-size: 12px; width: 100%; margin-top: 30px; margin-bottom: 0px; padding-bottom: 2px; }
-            .body-diagram { width: 100%; height: auto; max-height: 240px; object-fit: contain; }            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */            @media print {
+            .signature { text-align: center; font-size: 12px; width: 100%; margin-top: 25px; margin-bottom: 0px; padding-bottom: 2px; }
+            .body-diagram { width: 100%; height: auto; max-height: 210px; object-fit: contain; }            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */            @media print {
                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
                .value, .val-box {
                  border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
