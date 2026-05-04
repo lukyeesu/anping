@@ -11652,11 +11652,11 @@ export default function App() {
         @keyframes spaceRowEnter {
           0% {
             opacity: 0;
-            transform: translateY(20px); /* เริ่มต้น: โปร่งใส และอยู่ต่ำลงไป 20px */
+            transform: translateY(15px); /* ลดระยะการเด้งลง เพื่อไม่ให้ทะลุกรอบขอบ */
           }
           100% {
             opacity: 1;
-            transform: translateY(0); /* สิ้นสุด: ชัดเจน 100% และกลับมาตำแหน่งปกติ */
+            transform: translateY(0); 
           }
         }
 
@@ -11664,11 +11664,10 @@ export default function App() {
         .space-row-animation {
           opacity: 0; /* ซ่อนไว้ก่อนที่แอนิเมชันจะเริ่ม */
           
-          /* เล่นแอนิเมชันนาน 0.8 วินาที ใช้ cubic-bezier เพื่อความนุ่มนวลแบบหน่วงปลาย */
-          animation: spaceRowEnter 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; 
+          /* เล่นแอนิเมชันให้กระชับขึ้น ใช้ ease-out ป้องกันปัญหาหน่วง */
+          animation: spaceRowEnter 0.5s ease-out forwards; 
           
-          /* บอกเบราว์เซอร์ล่วงหน้าว่าจะมีการเปลี่ยน 2 ค่านี้ เพื่อให้ประมวลผลลื่นไหลขึ้น (Hardware Acceleration) */
-          will-change: transform, opacity; 
+          /* [แก้ไข] ลบคำสั่ง will-change ออก เพื่อป้องกันบัค GPU Memory เต็ม (การ์ดแหว่ง/เป็นสีขาว) บนมือถือ */
         }
 
         /* --- CSS-Based 60FPS Sticky Header Animations --- */
