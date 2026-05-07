@@ -8,7 +8,8 @@ import {
   Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowUpDown, Loader2,
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
-  TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle
+  TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
+  UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -42,7 +43,7 @@ const mockPatients = [
 // --- Map ไอคอนที่สามารถเลือกได้สำหรับระบบ POS ---
 const POS_ICONS = {
   Stethoscope, Package, Pill, Briefcase, Users, Clock, CalendarDays, FileText, CreditCard, Tag, 
-  Heart: Activity, Syringe: Plus, Scissors: Plus, // ใช้ไอคอนที่มีอยู่ทดแทนหรือขยายเพิ่มได้
+  Heart: Activity, Syringe: Plus, Scissors: Plus, 
   List, ShoppingCart, Truck
 };
 
@@ -50,7 +51,10 @@ const POS_ICONS = {
 // --- 1. ย้ายฟังก์ชันและ Component ย่อยออกมาไว้ด้านนอก เพื่อป้องกันการ Unmount ---
 // -------------------------------------------------------------------------
 const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyu6OHkP7SYE9iDmA2XW5ErVAx0w8n99Kj_ZOocZgi-LcIEMsbfYqtRmbkCOhW1r1aoow/exec"; 
-const VISION_API_KEY = "AIzaSyAlp6qqbUh0ti4fJ4ozGvqoIAOI0coRQBM"; // ใส่ Google Vision API Key ของคุณที่นี่เพื่อใช้งานระบบสแกนบัตร OCR
+const VISION_API_KEY = "AIzaSyAlp6qqbUh0ti4fJ4ozGvqoIAOI0coRQBM"; 
+
+// --- เพิ่มตัวแปร Global สำหรับชื่อเดือนภาษาไทย ---
+const monthsTH = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 
 // --- ฟังก์ชันและ Component เสริมที่ขาดหายไป ---
 const formatDate = (dateString) => {
@@ -84,7 +88,6 @@ const parsePatientName = (fullName) => {
     let gender = 'ไม่ระบุ';
     let rawName = (fullName || '').trim();
     
-    // รองรับทั้งชื่อเต็มและตัวย่อ
     const knownPrefixes = [
         { p: 'นางสาว', g: 'หญิง', match: ['นางสาว', 'น.ส.', 'นส.'] },
         { p: 'นาย', g: 'ชาย', match: ['นาย'] },
@@ -108,7 +111,6 @@ const parsePatientName = (fullName) => {
         if (matched) break;
     }
 
-    // ลบช่องว่างที่เกินมาและแยกชื่อ-สกุล
     rawName = rawName.replace(/\s+/g, ' ').trim();
     const spaceIdx = rawName.indexOf(' ');
     let firstName = rawName;
@@ -121,7 +123,6 @@ const parsePatientName = (fullName) => {
     return { prefix, firstName, lastName, gender };
 };
 
-// --- ฟังก์ชันช่วยดึงชื่อเต็มและ ID ให้รองรับทั้งโครงสร้างเก่าและใหม่ ---
 const getPatientFullName = (p) => {
    if (!p) return '-';
    if (p.firstName || p.lastName || p.prefix) {
@@ -139,7 +140,6 @@ const generateNextHN = (patients) => {
   let maxNum = 0;
   patients.forEach(p => {
      const hnString = p.hn || p.id || '';
-     // ดึงตัวเลขชุดสุดท้ายที่อยู่ท้ายสุดของ HN (รองรับทั้งแบบเก่า HN0001 และแบบใหม่ HN69-0001)
      const numMatch = hnString.match(/(\d+)$/);
      if (numMatch) {
          const num = parseInt(numMatch[1], 10);
@@ -167,13 +167,8 @@ const getAgeString = (dobStr) => {
 
 const getPatientId = (p) => p ? (p.hn || p.id || '-') : '-';
 
-// -------------------------------------------------------------------------
-// --- [NEW] Common Components & Hooks สำหรับลดความซ้ำซ้อนและจัดการแอนิเมชัน ---
-// -------------------------------------------------------------------------
-
 /**
  * Hook สำหรับจัดการ Modal ที่มีแอนิเมชันปิด
- * @param {Function} onClosedCallback ฟังก์ชันที่จะเรียกหลังจากแอนิเมชันปิดเสร็จสิ้น (ถ้ามี)
  */
 const useModal = (onClosedCallback) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -190,28 +185,24 @@ const useModal = (onClosedCallback) => {
             setIsOpen(false);
             setIsClosing(false);
             if (onClosedCallback) onClosedCallback();
-        }, 350); // ระยะเวลาสัมพันธ์กับ modal-animate-out (0.3s)
+        }, 350); 
     };
 
     return { isOpen, isClosing, open, close, setIsOpen };
 };
 
-// --- [NEW] Hook สำหรับจัดการลากปิด Modal บนมือถือ (Swipe down to close) พร้อมป้องกัน Pull-to-refresh ---
 const useSwipeDown = (onClose) => {
     const startY = useRef(null);
     const currentTranslateY = useRef(0);
-    const ticking = useRef(false); // ใช้กั้นรอบเฟรมให้วาดพอดี 60fps
+    const ticking = useRef(false); 
     const onCloseRef = useRef(onClose);
     const listenersRef = useRef(null);
 
-    // เก็บ reference ปล่าสุดของฟังก์ชัน onClose เผื่อมีการเปลี่ยนแปลง
     useEffect(() => {
         onCloseRef.current = onClose;
     }, [onClose]);
 
-    // ใช้ Callback Ref เพื่อการันตีว่าจะได้ DOM Node ที่ถูกต้องเสมอเมื่อ Modal ถูกแสดง
     const refCallback = React.useCallback((element) => {
-        // ถอด Event เก่าออกก่อนถ้ามี (Cleanup ป้องกันการผูกซ้ำซ้อน)
         if (listenersRef.current && listenersRef.current.element) {
             const prevEl = listenersRef.current.element;
             const { ts, tm, te } = listenersRef.current;
@@ -221,12 +212,9 @@ const useSwipeDown = (onClose) => {
             listenersRef.current = null;
         }
 
-        // ถ้า Element ถูก Unmount ไปแล้ว ให้หยุดตรงนี้
         if (!element) return;
 
         const handleTouchStart = (e) => {
-            // หากกำลังทัชบน Dropdown หรือส่วนที่อนุญาตให้เลื่อนได้ ให้ข้ามการลาก Modal
-            // [แก้ไข] จำกัดขอบเขตการเช็ค ไม่ให้ไต่ทะลุออกไปตรวจเช็ค DOM นอก Modal (ป้องกันบัคชนกับ Scrollbar หลัก)
             const scrollTarget = e.target.closest('.custom-scrollbar');
             if (scrollTarget && element.contains(scrollTarget)) return;
 
@@ -235,9 +223,7 @@ const useSwipeDown = (onClose) => {
 
             if (e.touches.length === 1) {
                 startY.current = e.touches[0].clientY;
-                // ปิด Transition ขณะลากให้ติดนิ้วที่สุด โดยใช้ setProperty เพื่อบังคับทับ !important ใน CSS
                 element.style.setProperty('transition', 'none', 'important');
-                // แจ้ง Browser ล่วงหน้าว่าจะมีการเปลี่ยน transform เพื่อดึง GPU มาประมวลผลแยก
                 element.style.setProperty('will-change', 'transform', 'important');
             }
         };
@@ -247,13 +233,10 @@ const useSwipeDown = (onClose) => {
             const currentY = e.touches[0].clientY;
             const deltaY = currentY - startY.current;
             
-            // อนุญาตให้ลากลงได้อย่างเดียว
             if (deltaY > 0) {
-                // ป้องกัน Browser ตรวจจับ Pull-to-refresh
                 if (e.cancelable) e.preventDefault();
                 currentTranslateY.current = deltaY;
                 
-                // ใช้ requestAnimationFrame ช่วยจัดคิวให้วาดภาพลงจอพอดี 60fps ไม่วาดซ้ำซ้อนให้กระตุก
                 if (!ticking.current) {
                     window.requestAnimationFrame(() => {
                         if(element) element.style.setProperty('transform', `translateY(${currentTranslateY.current}px)`, 'important');
@@ -276,17 +259,14 @@ const useSwipeDown = (onClose) => {
         const handleTouchEnd = () => {
             if (startY.current === null) return;
 
-            if (currentTranslateY.current > 80) { // ลากลงเกิน 80px ให้ปิด
-                // เด้งลงไปข้างล่างให้สุดก่อนปิด
+            if (currentTranslateY.current > 80) { 
                 element.style.setProperty('transition', 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 'important');
                 element.style.setProperty('transform', 'translateY(100%)', 'important');
                 if (onCloseRef.current) onCloseRef.current();
             } else {
-                // เด้งกลับที่เดิมถ้าลากไม่ถึง
                 element.style.setProperty('transition', 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)', 'important');
                 element.style.setProperty('transform', 'translateY(0px)', 'important');
                 
-                // เคลียร์ inline style หลังแอนิเมชันจบ
                 setTimeout(() => {
                     if (element) {
                         element.style.removeProperty('transition');
@@ -300,25 +280,19 @@ const useSwipeDown = (onClose) => {
             startY.current = null;
         };
 
-        // ผูก Event ฝั่ง Native DOM เพื่อรองรับการใช้ preventDefault (ข้ามข้อจำกัดของ React Passive Event)
         element.addEventListener('touchstart', handleTouchStart, { passive: false });
         element.addEventListener('touchmove', handleTouchMove, { passive: false });
         element.addEventListener('touchend', handleTouchEnd);
 
-        // เก็บข้อมูลไว้เพื่อ Cleanup ทีหลัง
         listenersRef.current = { element, ts: handleTouchStart, tm: handleTouchMove, te: handleTouchEnd };
     }, []);
 
     return {
         ref: refCallback,
-        // คืนค่า style เป็น Object ว่าง เนื่องจากเราจัดการผ่าน Native DOM เพื่อลด Re-render แล้ว
         style: {}
     };
 };
 
-/**
- * Component สำหรับทำ Skeleton Loader (ก้อนกระพริบๆ)
- */
 const Skeleton = ({ className = '', width, height, rounded = 'rounded-xl', circle }) => (
     <div 
         className={`bg-slate-200 animate-pulse ${circle ? 'rounded-full' : rounded} ${className}`}
@@ -326,16 +300,12 @@ const Skeleton = ({ className = '', width, height, rounded = 'rounded-xl', circl
     />
 );
 
-/**
- * Component สำหรับ Modal ที่มีแอนิเมชันในตัว
- */
 const AnimatedModal = ({ isOpen, isClosing, onClose, title, children, maxWidth = 'max-w-2xl', icon: Icon }) => {
     if (!isOpen) return null;
 
     const modalContent = (
         <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
             <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full ${maxWidth} max-h-[85dvh] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-                {/* Modal Header */}
                 <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
                     <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                         {Icon && (
@@ -352,7 +322,6 @@ const AnimatedModal = ({ isOpen, isClosing, onClose, title, children, maxWidth =
                     </button>
                 </div>
                 
-                {/* Modal Body */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30">
                     {children}
                 </div>
@@ -363,17 +332,14 @@ const AnimatedModal = ({ isOpen, isClosing, onClose, title, children, maxWidth =
     return createPortal(modalContent, document.body);
 };
 
-// --- เพิ่มฟังก์ชันหา string วันที่ล่าสุดสำหรับจัดเรียง ---
 const getPatientLastVisitStr = (p) => {
-    // ใช้ datetime จากประวัติการรักษาล่าสุด หรือถ้าไม่มีให้ใช้วันที่ลงทะเบียน (createdAt) หรือ lastVisit
     const dt = p.opdRecords && p.opdRecords.length > 0 ? p.opdRecords[0].datetime : (p.createdAt || p.lastVisit || '');
     if (!dt) return '000000000000';
 
-    // 1. จัดการกรณีเป็น ISO String (เช่น 2023-10-25T09:30:00.000Z)
     if (dt.includes('T')) {
         const dateObj = new Date(dt);
         if (!isNaN(dateObj.getTime())) {
-            const y = dateObj.getFullYear() + 543; // แปลงเป็น พ.ศ. ให้เรียงร่วมกับ format ไทยได้
+            const y = dateObj.getFullYear() + 543; 
             const m = String(dateObj.getMonth() + 1).padStart(2, '0');
             const d = String(dateObj.getDate()).padStart(2, '0');
             const h = String(dateObj.getHours()).padStart(2, '0');
@@ -382,7 +348,6 @@ const getPatientLastVisitStr = (p) => {
         }
     }
 
-    // 2. แยกส่วนวันที่และเวลาออกจากกัน (สมมติ format: DD/MM/YYYY HH:mm น.)
     const parts = dt.split(' ');
     const dateStr = parts[0] || '';
     const timeStr = parts[1] ? parts[1].replace('น.', '').trim() : '00:00';
@@ -390,7 +355,6 @@ const getPatientLastVisitStr = (p) => {
     let year = '0000', month = '00', day = '00';
     let hour = '00', minute = '00';
 
-    // แยกวันที่
     if (dateStr.includes('/')) {
         const dParts = dateStr.split('/');
         if (dParts.length === 3) {
@@ -398,11 +362,10 @@ const getPatientLastVisitStr = (p) => {
             month = dParts[1].padStart(2, '0');
             year = dParts[2];
         }
-    } else if (dateStr.includes('-')) { // รองรับ YYYY-MM-DD
+    } else if (dateStr.includes('-')) { 
         const dParts = dateStr.split('-');
         if (dParts.length === 3) {
             year = dParts[0];
-            // ชดเชยปี ค.ศ. เป็น พ.ศ. ชั่วคราวเพื่อให้เรียงลำดับได้ถูกต้อง
             if (year.startsWith('20')) {
                 year = String(parseInt(year, 10) + 543);
             }
@@ -410,17 +373,15 @@ const getPatientLastVisitStr = (p) => {
             day = dParts[2].padStart(2, '0');
         }
     } else {
-        return dt; // Fallback
+        return dt; 
     }
 
-    // แยกเวลา
     if (timeStr.includes(':')) {
         const tParts = timeStr.split(':');
         hour = (tParts[0] || '00').padStart(2, '0');
         minute = (tParts[1] || '00').padStart(2, '0');
     }
 
-    // รวมเป็น String สำหรับจัดเรียง: YYYYMMDDHHmm
     return `${year}${month}${day}${hour}${minute}`;
 };
 
@@ -442,7 +403,7 @@ const PlaceholderPage = ({ title, desc, icon: Icon }) => (
     <div className="mt-8 px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 text-slate-400 text-sm">เชื่อมต่อฐานข้อมูลส่วนนี้ผ่าน Google Apps Script ได้ในอนาคต</div>
   </div>
 );
-// --- คอมโพเนนต์ Custom Dropdown สมัยใหม่ที่ใช้แทน <select> ---
+
 const CustomSelect = ({ value, onChange, options, placeholder, className, disabled, compact, fullWidth, dropUp }) => {
     const [isOpen, setIsOpen] = useState(false);
     const selectedOption = options.find(o => (typeof o === 'object' ? String(o.value) : String(o)) === String(value));
@@ -460,7 +421,6 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                 }
             >
                 <span className={`truncate ${compact ? 'font-bold text-slate-700 text-sm' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
-                {/* แก้ไข: ลบเงื่อนไข isOpen ออก เพื่อไม่ให้แสดงไอคอน ^ ในโหมด compact ป้องกันปุ่มขยับ */}
                 {!compact && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && (
@@ -487,7 +447,6 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
     );
 };
 
-// --- ข้อมูลสำหรับ Calendar View ---
 const systemStatusTypes = [
   { value: 'confirmed', label: 'ยืนยันแล้ว', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   { value: 'pending', label: 'รอยืนยัน', color: 'bg-amber-100 text-amber-700 border-amber-200' },
@@ -496,72 +455,221 @@ const systemStatusTypes = [
 const colorPresets = [];
 
 // [UPDATED COMPONENT] Calendar View Implementation
-const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [] }) => {
+const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop }) => {
   const [viewDate, setViewDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('month'); // 'month', 'week', 'day', 'list'
-  const [selectedDayDetails, setSelectedDayDetails] = useState(null); // Data for modal
-  const [isDayModalClosing, setIsDayModalClosing] = useState(false); // State for modal closing animation
+  const [viewMode, setViewMode] = useState('month'); 
+  const [selectedDayDetails, setSelectedDayDetails] = useState(null); 
+  const [isDayModalClosing, setIsDayModalClosing] = useState(false); 
   
-  const monthsTH = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-  const monthsShortTH = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffModalDate, setStaffModalDate] = useState(null);
+  
+  const closeStaffModal = () => setShowStaffModal(false);
+  const staffSwipeHandlers = useSwipeDown(closeStaffModal);
+
+  // --- [NEW]: ระบบ Custom Drag & Drop Engine (สร้างเอง 100% ลื่นไหล 60FPS) ---
+  const dragState = useRef({
+    isDragging: false, element: null, clone: null, eventData: null,
+    startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null
+  });
+
+  const handlePointerDown = (e, ev) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return; 
+    e.stopPropagation();
+
+    const target = e.currentTarget;
+    const rect = target.getBoundingClientRect();
+    if (dragState.current.holdTimer) clearTimeout(dragState.current.holdTimer);
+
+    if (dragState.current.clone && dragState.current.clone.parentNode) {
+        dragState.current.clone.parentNode.removeChild(dragState.current.clone);
+    }
+
+    const isTouch = e.pointerType === 'touch';
+    const shiftY = isTouch ? 45 : 15;
+
+    dragState.current = {
+      isDragging: false, element: target, clone: null, eventData: ev,
+      startX: e.clientX, startY: e.clientY,
+      offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+      shiftY: shiftY,
+      currentDropzone: null, holdTimer: null
+    };
+
+    const startDragging = () => {
+      const state = dragState.current;
+      state.isDragging = true;
+      document.body.classList.add('is-custom-dragging');
+
+      const clone = target.cloneNode(true);
+      clone.classList.remove('hover:opacity-80', 'active:cursor-grabbing');
+
+      clone.style.width = `${target.offsetWidth}px`;
+      clone.style.height = `${target.offsetHeight}px`;
+      clone.style.position = 'fixed';
+      clone.style.zIndex = '999999';
+      clone.style.opacity = '1'; 
+      clone.style.pointerEvents = 'none'; 
+      clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 2px #0ea5e9';
+      clone.style.margin = '0';
+      clone.style.left = '0px';
+      clone.style.top = '0px';
+      
+      clone.style.transform = `translate3d(${state.startX - state.offsetX}px, ${state.startY - state.offsetY - state.shiftY}px, 0) scale(1.15) rotate(-3deg)`;
+      clone.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      
+      setTimeout(() => {
+          if (dragState.current.clone) {
+              dragState.current.clone.style.transition = 'none'; 
+          }
+      }, 150);
+
+      document.body.appendChild(clone);
+      state.clone = clone;
+      target.style.opacity = '0.15'; 
+      
+      if (navigator.vibrate && isTouch) navigator.vibrate(50);
+    };
+
+    if (e.pointerType === 'touch') {
+      dragState.current.holdTimer = setTimeout(startDragging, 200);
+    }
+
+    const handlePointerMove = (moveEvent) => {
+      const state = dragState.current;
+      if (!state.element) return;
+
+      const dx = Math.abs(moveEvent.clientX - state.startX);
+      const dy = Math.abs(moveEvent.clientY - state.startY);
+
+      if (!state.isDragging && (dx > 5 || dy > 5)) {
+        if (state.holdTimer) clearTimeout(state.holdTimer);
+        if (e.pointerType === 'mouse') startDragging();
+        else { dragState.current.element = null; return; }
+      }
+
+      if (state.isDragging) {
+        if (moveEvent.cancelable) moveEvent.preventDefault();
+        
+        if (state.clone) {
+          state.clone.style.transform = `translate3d(${moveEvent.clientX - state.offsetX}px, ${moveEvent.clientY - state.offsetY - state.shiftY}px, 0) scale(1.15) rotate(-3deg)`;
+        }
+
+        const elementsUnder = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
+        const dropzoneEl = elementsUnder.find(el => el.classList && el.classList.contains('calendar-dropzone'));
+
+        if (state.currentDropzone !== dropzoneEl) {
+          if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
+          if (dropzoneEl) dropzoneEl.classList.add('dropzone-active');
+          state.currentDropzone = dropzoneEl;
+        }
+      }
+    };
+
+    const handlePointerUp = (upEvent) => {
+      const state = dragState.current;
+      if (state.holdTimer) clearTimeout(state.holdTimer);
+
+      let wasDragging = state.isDragging; // --- จำสถานะว่าเพิ่งลากเสร็จ ---
+
+      if (state.isDragging) {
+        if (state.currentDropzone) {
+          const dateStr = state.currentDropzone.getAttribute('data-date');
+          if (dateStr && onEventDrop) {
+            const [d, m, y] = dateStr.split('/');
+            const dateObj = new Date(y - 543, m - 1, d);
+            onEventDrop(state.eventData.id, dateObj);
+          }
+        }
+      } else {
+        const cx = upEvent.type.includes('touch') ? upEvent.changedTouches[0].clientX : upEvent.clientX;
+        const cy = upEvent.type.includes('touch') ? upEvent.changedTouches[0].clientY : upEvent.clientY;
+        const dx = Math.abs(cx - state.startX);
+        const dy = Math.abs(cy - state.startY);
+        if (dx < 5 && dy < 5 && state.eventData) {
+          if (onEventClick) onEventClick(state.eventData);
+        }
+      }
+
+      if (isTouch) {
+          document.removeEventListener('touchmove', handlePointerMove);
+          document.removeEventListener('touchend', handlePointerUp);
+          document.removeEventListener('touchcancel', handlePointerUp);
+      } else {
+          document.removeEventListener('mousemove', handlePointerMove);
+          document.removeEventListener('mouseup', handlePointerUp);
+      }
+
+      if (state.clone && state.clone.parentNode) state.clone.parentNode.removeChild(state.clone);
+      if (state.element) state.element.style.opacity = '1';
+      if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
+      document.body.classList.remove('is-custom-dragging');
+      dragState.current = { isDragging: false, element: null, clone: null, eventData: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null };
+
+      // --- [FIX] บล็อกการ Click หากเพิ่งวางรายการเพื่อไม่ให้ Modal เปิดซ้อน ---
+      if (wasDragging) {
+          const preventClick = (eClick) => {
+              eClick.stopPropagation();
+              eClick.preventDefault();
+              window.removeEventListener('click', preventClick, true);
+          };
+          window.addEventListener('click', preventClick, true);
+          setTimeout(() => window.removeEventListener('click', preventClick, true), 100);
+      }
+    };
+
+    if (isTouch) {
+        document.addEventListener('touchmove', handlePointerMove, { passive: false });
+        document.addEventListener('touchend', handlePointerUp);
+        document.addEventListener('touchcancel', handlePointerUp);
+    } else {
+        document.addEventListener('mousemove', handlePointerMove);
+        document.addEventListener('mouseup', handlePointerUp);
+    }
+  };
+  // --- END Custom Drag Engine ---
+
+  const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+  const thaiMonthsShort = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  const monthsShortTH = thaiMonthsShort;
   const daysTH = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
   const daysShortTH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 
-  // Helper to resolve status for Calendar
   const resolveStatus = (value, list) => {
       const found = list.find(s => s.value === value);
       if (found) return { label: found.label, color: found.color, type: found.type };
-      
       const sys = systemStatusTypes.find(s => s.value === value);
       if (sys) return { label: sys.label, color: sys.color, type: sys.value };
-
       return { label: value || '-', color: 'bg-slate-100 text-slate-500 border-slate-200' };
   };
 
   const changePeriod = (offset) => {
     const newDate = new Date(viewDate);
-    if (viewMode === 'month') {
-        newDate.setMonth(newDate.getMonth() + offset);
-    } else if (viewMode === 'week' || viewMode === 'list') {
-        newDate.setDate(newDate.getDate() + (offset * 7));
-    } else if (viewMode === 'day') {
-        newDate.setDate(newDate.getDate() + offset);
-    }
+    if (viewMode === 'month') newDate.setMonth(newDate.getMonth() + offset);
+    else if (viewMode === 'week' || viewMode === 'list') newDate.setDate(newDate.getDate() + (offset * 7));
+    else if (viewMode === 'day') newDate.setDate(newDate.getDate() + offset);
     setViewDate(newDate);
   };
 
   const isToday = (dateObj) => {
     const today = new Date();
-    return dateObj.getDate() === today.getDate() && 
-           dateObj.getMonth() === today.getMonth() && 
-           dateObj.getFullYear() === today.getFullYear();
+    return dateObj.getDate() === today.getDate() && dateObj.getMonth() === today.getMonth() && dateObj.getFullYear() === today.getFullYear();
   };
 
-  // Group events by day using rawDeliveryStart
   const eventsMap = useMemo(() => {
     const map = {};
     activities.forEach(item => {
         const dateStr = item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
         if(!dateStr) return;
-        
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return;
-
-        // Key "YYYY-M-D"
         const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
         if (!map[key]) map[key] = [];
         map[key].push(item);
     });
-    
-    // Sort by time within each day
     Object.keys(map).forEach(key => {
-        map[key].sort((a, b) => {
-            const dateA = new Date(a.rawDeliveryStart || a.rawDateTime);
-            const dateB = new Date(b.rawDeliveryStart || b.rawDateTime);
-            return dateA - dateB;
-        });
+        map[key].sort((a, b) => new Date(a.rawDeliveryStart || a.rawDateTime) - new Date(b.rawDeliveryStart || b.rawDateTime));
     });
-    
     return map;
   }, [activities]);
 
@@ -570,21 +678,317 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
     return eventsMap[key] || [];
   };
 
-  // --- Render Helpers ---
-  const renderEventItem = (ev, idx, compact = false) => {
-     const timeStr = ev.rawDeliveryStart 
-        ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})
-        : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '');
+  const getDoctorOnDutyStatus = (dateObj) => {
+      const dayOfWeek = dateObj.getDay(); 
+      const dateStr = `${String(dateObj.getDate()).padStart(2,'0')}/${String(dateObj.getMonth()+1).padStart(2,'0')}/${dateObj.getFullYear()+543}`;
+      const doctorsOnDuty = staffData.filter(s => {
+          if (s.role !== 'doctor' || !s.schedule) return false;
+          const specificData = s.schedule[dateStr];
+          if (specificData !== undefined) return specificData.active;
+          if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
+          if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
+          return false;
+      });
+      return doctorsOnDuty;
+  };
 
+  const closeDayDetailsModal = () => {
+      setIsDayModalClosing(true);
+      setTimeout(() => {
+          setSelectedDayDetails(null);
+          setIsDayModalClosing(false);
+      }, 300);
+  };
+
+  const renderDayDetailsModal = () => {
+      if (!selectedDayDetails) return null;
+      const { date, events } = selectedDayDetails;
+
+      const modalContent = (
+        <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 z-[160] fade-in">
+            <div 
+                className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm ${isDayModalClosing ? 'backdrop-animate-out' : 'animate-in fade-in duration-300'}`} 
+                onClick={closeDayDetailsModal} 
+            />
+            <div className={`bg-white w-full max-w-5xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[80dvh] sm:max-h-[90dvh] ${isDayModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+                <div className="px-4 py-3 sm:px-6 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-3 shrink-0">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 bg-sky-100 text-sky-600 rounded-xl sm:rounded-2xl flex flex-col items-center justify-center shadow-inner shrink-0 mt-1 sm:mt-0">
+                            <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{daysShortTH[date.getDay()]}</span>
+                            <span className="text-lg sm:text-2xl font-black leading-none mt-0.5">{date.getDate()}</span>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 pr-2">
+                            <div className="min-w-0">
+                                <h3 className="text-sm sm:text-xl font-bold text-slate-800 truncate leading-tight">รายการประจำวัน</h3>
+                                <p className="text-slate-500 text-[10px] sm:text-sm font-medium truncate mt-0.5">{daysTH[date.getDay()]}ที่ {date.getDate()} {monthsTH[date.getMonth()]} {date.getFullYear()+543}</p>
+                            </div>
+                            <button 
+                                onClick={() => { setStaffModalDate(date); setShowStaffModal(true); }}
+                                className="flex items-center w-fit gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border transition-all hover:shadow-sm active:scale-95 cursor-pointer shrink-0 bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                                title="คลิกเพื่อดูรายชื่อพนักงานที่เข้างานวันนี้"
+                            >
+                                <Users size={14} className="sm:w-[16px] sm:h-[16px]" />
+                                <span className="text-[10px] sm:text-xs font-bold kanit-text">บุคลากรเข้างาน</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button onClick={closeDayDetailsModal} className="p-1.5 sm:p-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition shadow-sm shrink-0 self-start">
+                        <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-slate-50/30">
+                   {events.length > 0 ? (
+                       <>
+                        <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto overflow-y-hidden">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text">
+                                            <th className="p-4 font-bold w-[10%] text-center">HN/เวลา</th>
+                                            <th className="p-4 font-bold w-[25%]">คนไข้/อาการ</th>
+                                            <th className="p-4 font-bold w-[15%] text-center">เบอร์โทร</th>
+                                            <th className="p-4 font-bold w-[20%]">แพทย์</th>
+                                            <th className="p-4 font-bold w-[15%]">สถานะ</th>
+                                            <th className="p-4 font-bold w-[15%] text-right">จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {events.map((ev, idx) => {
+                                            const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+                                            const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-');
+                                            return (
+                                                <tr key={ev.id || idx} onClick={() => onEventClick && onEventClick(ev)} className="hover:bg-sky-50/30 cursor-pointer transition-colors group">
+                                                    <td className="p-4 font-bold text-slate-700 whitespace-nowrap align-top text-center">
+                                                        <div className="flex flex-col items-center gap-1.5">
+                                                            <span className="font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg text-xs w-fit whitespace-nowrap">{ev.hn || '-'}</span>
+                                                            <span className="mt-1 text-sm font-data">{timeStr} น.</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 align-top">
+                                                        <div className="font-bold text-slate-800">{ev.name}</div>
+                                                        <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5 truncate max-w-[200px]">{ev.category || '-'}</div>
+                                                    </td>
+                                                    <td className="p-4 align-top text-center">
+                                                        <div className="flex justify-center">
+                                                            {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
+                                                                <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors font-data">
+                                                                    <Phone size={14} /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                                                </a>
+                                                            ) : <span className="text-slate-400">-</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 align-top">
+                                                        <div className="text-sm font-bold text-sky-600">{ev.artist || '-'}</div>
+                                                        <div className="text-xs text-slate-500 mt-1">{ev.customer ? `Sale: ${ev.customer}` : ''}</div>
+                                                    </td>
+                                                    <td className="p-4 align-top">
+                                                        <div className="flex flex-col gap-1.5 items-start">
+                                                            <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1.5 ${statusInfo.color}`}>
+                                                                <div className={`w-1.5 h-1.5 rounded-full ${statusInfo.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-400').replace('-50', '-500')}`}></div>
+                                                                {statusInfo.label}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 align-top text-right">
+                                                        <button className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
+                                                            <Pencil size={18} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="md:hidden space-y-3">
+                            {events.map((ev, idx) => {
+                                const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+                                const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-');
+                                return (
+                                    <div key={ev.id || idx} onClick={() => onEventClick && onEventClick(ev)} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 active:scale-95 transition-transform cursor-pointer">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md text-[10px] w-fit whitespace-nowrap">{ev.hn || '-'}</span>
+                                                <div className="flex items-center gap-1 mt-0.5">
+                                                    <Clock size={14} className="text-slate-400" />
+                                                    <span className="text-xs font-bold text-slate-600 font-data">{timeStr} น.</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-1 items-end shrink-0 ml-2">
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${statusInfo.color}`}>
+                                                    <div className={`w-1 h-1 rounded-full ${statusInfo.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-400').replace('-50', '-500')}`}></div>
+                                                    {statusInfo.label}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="mt-1">
+                                            <h4 className="font-bold text-slate-800 text-sm line-clamp-2">{ev.name}</h4>
+                                            <div className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit mt-1 truncate max-w-full">{ev.category || '-'}</div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] font-semibold text-slate-400 mb-0.5">แพทย์</p>
+                                                <p className="font-bold text-sky-600 truncate">{ev.artist || '-'}</p>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] font-semibold text-slate-400 mb-0.5">คนไข้</p>
+                                                <p className="font-semibold text-slate-700 truncate">{ev.customer || '-'}</p>
+                                            </div>
+                                            {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) && (
+                                                <div className="col-span-2 mt-0.5">
+                                                    <p className="text-[9px] font-semibold text-slate-400 mb-0.5">เบอร์โทร</p>
+                                                    <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
+                                                        <Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                       </>
+                   ) : (
+                       <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
+                           <CalendarIcon size={48} className="opacity-20 mb-4" />
+                           <p className="kanit-text font-bold text-lg">ไม่มีรายการนัดหมาย</p>
+                       </div>
+                   )}
+                </div>
+            </div>
+        </div>
+      );
+
+      return createPortal(modalContent, document.body);
+  };
+
+  const renderStaffScheduleModal = () => {
+      if (!showStaffModal || !staffModalDate) return null;
+
+      const dayOfWeek = staffModalDate.getDay();
+      const dateStr = `${String(staffModalDate.getDate()).padStart(2,'0')}/${String(staffModalDate.getMonth()+1).padStart(2,'0')}/${staffModalDate.getFullYear()+543}`;
+
+      const workingStaff = staffData.filter(s => {
+          if (!s.schedule) return false;
+          const specificData = s.schedule[dateStr];
+          if (specificData !== undefined) return specificData.active;
+          if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
+          if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
+          return false;
+      });
+
+      const groupedStaff = {
+          doctor: workingStaff.filter(s => s.role === 'doctor'),
+          nurse: workingStaff.filter(s => s.role === 'nurse'),
+          sale: workingStaff.filter(s => s.role === 'sale'),
+          admin: workingStaff.filter(s => s.role === 'admin' || !['doctor', 'nurse', 'sale'].includes(s.role))
+      };
+
+      const roleLabels = { doctor: 'แพทย์ (Doctor)', nurse: 'พยาบาล/ผู้ช่วย (Nurse)', sale: 'พนักงานขาย/ที่ปรึกษา', admin: 'แอดมิน/จัดการทั่วไป' };
+      const roleColors = {
+          doctor: 'text-indigo-600 bg-indigo-50 border-indigo-200',
+          nurse: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+          sale: 'text-amber-600 bg-amber-50 border-amber-200',
+          admin: 'text-slate-600 bg-slate-100 border-slate-200'
+      };
+
+      const modalContent = (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
+              <div className="absolute inset-0" onClick={closeStaffModal}></div>
+              <div ref={staffSwipeHandlers.ref} style={staffSwipeHandlers.style} className="bg-white rounded-[1.5rem] sm:rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden modal-animate-in relative z-10 mobile-bottom-sheet">
+                  <div className="py-4 -mt-4 mb-2 sm:hidden flex justify-center w-full touch-none cursor-grab active:cursor-grabbing shrink-0">
+                      <div className="w-12 h-1.5 bg-slate-200 rounded-full pointer-events-none"></div>
+                  </div>
+                  
+                  <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                      <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner">
+                              <Users size={20} className="sm:w-6 sm:h-6" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-slate-800 kanit-text text-base sm:text-lg">บุคลากรที่เข้างาน</h3>
+                              <p className="text-[10px] sm:text-xs text-slate-500 font-medium kanit-text">{daysTH[dayOfWeek]}ที่ {staffModalDate.getDate()} {thaiMonths[staffModalDate.getMonth()]} {staffModalDate.getFullYear()+543}</p>
+                          </div>
+                      </div>
+                      <button onClick={closeStaffModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+                  </div>
+
+                  <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+                      {workingStaff.length > 0 ? (
+                          <div className="space-y-6">
+                              {Object.keys(groupedStaff).map(roleKey => {
+                                  const staffs = groupedStaff[roleKey];
+                                  if (staffs.length === 0) return null;
+                                  return (
+                                      <div key={roleKey} className="space-y-3">
+                                          <h4 className="font-bold text-slate-700 kanit-text text-sm flex items-center gap-2 border-b border-slate-200/60 pb-2">
+                                              <span className={`w-2 h-2 rounded-full ${roleColors[roleKey].split(' ')[1]}`}></span>
+                                              {roleLabels[roleKey]} ({staffs.length})
+                                          </h4>
+                                          <div className="grid grid-cols-1 gap-2.5">
+                                              {staffs.map(s => {
+                                                  let timeStr = 'เวลาทำงานปกติ';
+                                                  if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
+                                                      timeStr = `${s.schedule[dayOfWeek].start} - ${s.schedule[dayOfWeek].end} น.`;
+                                                  }
+                                                  const specificData = s.schedule[dateStr];
+                                                  if (specificData !== undefined) {
+                                                      timeStr = `${specificData.start} - ${specificData.end} น.`;
+                                                  }
+                                                  return (
+                                                      <div key={s.id} className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-sky-200 transition-colors">
+                                                          <div className="flex items-center gap-3 min-w-0">
+                                                              {s.photo ? (
+                                                                  <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0 shadow-sm" />
+                                                              ) : (
+                                                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm text-lg ${roleKey==='doctor'?'bg-indigo-400':roleKey==='nurse'?'bg-emerald-400':roleKey==='sale'?'bg-amber-400':'bg-slate-400'}`}>{s.name.charAt(0)}</div>
+                                                              )}
+                                                              <div className="min-w-0">
+                                                                  <p className="font-bold text-slate-800 kanit-text text-sm truncate leading-tight">{s.name}</p>
+                                                                  <div className="text-[10px] text-slate-500 font-data truncate mt-0.5 flex items-center gap-1">
+                                                                      <Phone size={10} className="text-slate-400 shrink-0" /> {s.phone || 'ไม่มีเบอร์ติดต่อ'}
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                          <div className="shrink-0 text-right">
+                                                              <div className={`text-[10px] font-bold px-2 py-1 rounded-md border flex items-center justify-center gap-1 whitespace-nowrap ${roleColors[roleKey]}`}>
+                                                                  <Clock size={10} className="shrink-0" /> {timeStr}
+                                                              </div>
+                                                          </div>
+                                                      </div>
+                                                  )
+                                              })}
+                                          </div>
+                                      </div>
+                                  )
+                              })}
+                          </div>
+                      ) : (
+                          <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-100 border-dashed">
+                              <Users size={40} className="mx-auto mb-3 opacity-20" />
+                              <p className="kanit-text font-bold text-sm">ไม่มีพนักงานลงตารางงานในวันนี้</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      );
+      return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
+  };
+
+  const renderEventItem = (ev, idx, compact = false) => {
+     const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '');
      const displayText = `${timeStr ? timeStr + ' ' : ''}${ev.name} (${ev.artist || '-'})`;
      const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
      let itemColor = statusInfo.color || 'bg-slate-50 border-slate-200 text-slate-600';
      
      let dotColor = 'bg-slate-400';
      const preset = colorPresets.find(p => p.value === itemColor);
-     if (preset) {
-         dotColor = preset.dot;
-     } else {
+     if (preset) dotColor = preset.dot;
+     else {
          if (itemColor.includes('emerald') || itemColor.includes('green')) dotColor = 'bg-emerald-500';
          else if (itemColor.includes('blue') || itemColor.includes('sky') || itemColor.includes('indigo')) dotColor = 'bg-sky-500';
          else if (itemColor.includes('amber') || itemColor.includes('yellow') || itemColor.includes('orange')) dotColor = 'bg-amber-500';
@@ -593,24 +997,23 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
      }
 
      return (
-       <button 
-          key={idx} 
-          onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-          className={`text-left rounded-[4px] sm:rounded-md border transition-all w-full mb-0.5 sm:mb-1 flex items-center shrink-0 ${itemColor} leading-none
+       <div 
+          key={ev.id || idx} 
+          onPointerDown={(e) => handlePointerDown(e, ev)}
+          style={{ touchAction: 'none', userSelect: 'none' }} 
+          className={`text-left rounded-[4px] sm:rounded-md border transition-colors w-full mb-0.5 sm:mb-1 flex items-center shrink-0 cursor-grab active:cursor-grabbing hover:opacity-80 ${itemColor} leading-none select-none
              ${compact ? 'p-0.5 sm:p-1 min-h-[18px] sm:h-auto gap-0.5 sm:gap-1 justify-start overflow-hidden' : 'px-1.5 py-1 sm:px-2 sm:py-1 h-auto min-h-[16px] sm:min-h-[26px] gap-1 truncate'}
           `}
           title={`${timeStr} ${ev.name} (${ev.artist})`}
        >
           <div className={`w-1.5 h-1.5 sm:w-1.5 sm:h-1.5 rounded-full shrink-0 ${dotColor}`}></div>
-          {/* เปลี่ยนจากซ่อนบนมือถือ (hidden) เป็น block พร้อมใส่ truncate ให้ตัดข้อความอัตโนมัติ */}
           <span className={`truncate font-medium tracking-tighter font-data ${compact ? 'block text-[8px] sm:text-[10px]' : 'text-[9px] sm:text-xs'}`}>
              {displayText}
           </span>
-       </button>
+       </div>
      );
   };
 
-  // --- Views ---
   const renderMonthView = () => {
       const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
       const firstDayOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
@@ -624,36 +1027,84 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
             </div>
             
             <div className="grid grid-cols-7 auto-rows-fr bg-slate-50/20">
-                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                    <div key={`empty-${i}`} className="border-b border-r border-slate-100 bg-slate-50/40 h-[60px] sm:h-[120px]"></div>
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const currentDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-                    const events = getEventsForDate(currentDate);
-                    const isCurrent = isToday(currentDate);
-                    
-                    return (
-                        <div 
-                            key={day} 
-                            onClick={() => setSelectedDayDetails({ date: currentDate, events })}
-                            className={`border-b border-r border-slate-100 p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1.5 transition-colors hover:bg-slate-50 group h-[60px] sm:h-[120px] relative cursor-pointer ${isCurrent ? 'bg-sky-50/40' : 'bg-white'}`}
-                        >
-                            <div className="flex justify-between items-start p-0.5 sm:p-1 shrink-0">
-                                <span className={`text-[10px] sm:text-sm font-bold w-4 h-4 sm:w-8 sm:h-8 flex items-center justify-center rounded-full ${isCurrent ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700'}`}>
-                                    {day}
-                                </span>
-                                {events.length > 0 && <span className="text-[7px] sm:text-[10px] font-bold text-sky-500 bg-sky-50 px-1 sm:px-2 py-0.5 rounded-full border border-sky-100">+{events.length}</span>}
+                {(() => {
+                    const emptyEndCount = (7 - ((firstDayOfMonth + daysInMonth) % 7)) % 7;
+                    const totalCells = firstDayOfMonth + daysInMonth + emptyEndCount;
+                    const cells = [];
+                    for (let i = 0; i < firstDayOfMonth; i++) cells.push({ type: 'empty', key: `empty-start-${i}` });
+                    for (let i = 1; i <= daysInMonth; i++) cells.push({ type: 'day', day: i, key: `day-${i}` });
+                    for (let i = 0; i < emptyEndCount; i++) cells.push({ type: 'empty', key: `empty-end-${i}` });
+
+                    return cells.map((cell, index) => {
+                        let cornerClass = '';
+                        // สั่งให้ช่องซ้ายล่างสุด และขวาล่างสุด โค้งรับพอดีกับกล่อง Container เพื่อให้เส้นไฮไลต์ตอนลากโค้งตาม
+                        if (index === totalCells - 7) cornerClass = 'rounded-bl-2xl sm:rounded-bl-3xl';
+                        if (index === totalCells - 1) cornerClass = 'rounded-br-2xl sm:rounded-br-3xl';
+
+                        if (cell.type === 'empty') {
+                            return <div key={cell.key} className={`border-b border-r border-slate-100 bg-slate-50/40 h-[75px] sm:h-[120px] ${cornerClass}`}></div>;
+                        }
+
+                        const day = cell.day;
+                        const currentDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+                        const events = getEventsForDate(currentDate);
+                        const isCurrent = isToday(currentDate);
+                        const dateStr = `${String(day).padStart(2,'0')}/${String(viewDate.getMonth()+1).padStart(2,'0')}/${viewDate.getFullYear()+543}`;
+                        
+                        const docsOnThisDay = staffData.filter(s => {
+                            if (s.role !== 'doctor' || !s.schedule) return false;
+                            const specificData = s.schedule[dateStr];
+                            if (specificData !== undefined) return specificData.active;
+                            if (typeof s.schedule === 'object' && s.schedule[currentDate.getDay()]) return s.schedule[currentDate.getDay()].active;
+                            if (Array.isArray(s.schedule)) return s.schedule.includes(currentDate.getDay());
+                            return false;
+                        });
+                        const hasDoctor = docsOnThisDay.length > 0;
+                        
+                        return (
+                            <div 
+                                key={day} 
+                                data-date={dateStr}
+                                onClick={() => setSelectedDayDetails({ date: currentDate, events })}
+                                className={`calendar-dropzone border-b border-r border-slate-100 p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1.5 transition-colors group h-[75px] sm:h-[120px] relative cursor-pointer ${isCurrent ? 'bg-sky-50/40' : 'bg-white hover:bg-slate-50'} ${cornerClass}`}
+                            >
+                                <div className="flex justify-between items-center p-0.5 sm:p-1 shrink-0 w-full min-w-0 gap-1">
+                                    <div className="shrink-0 flex items-center justify-start w-5 sm:w-8">
+                                        <span className={`text-[10px] sm:text-sm font-bold w-4 h-4 sm:w-8 sm:h-8 flex items-center justify-center rounded-full ${isCurrent ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700'}`}>
+                                            {day}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap items-center justify-center gap-0.5 sm:gap-1 flex-1 min-w-0 text-center">
+                                       {hasDoctor ? (
+                                          docsOnThisDay.map((d, idx) => {
+                                             const shortName = d.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
+                                             return (
+                                                <span key={idx} className="text-[7px] sm:text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full flex items-center justify-center gap-1 border border-emerald-100 truncate max-w-full font-medium" title={`แพทย์เข้ากะ: ${d.name}`}>
+                                                   <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-emerald-500 shrink-0"></div>
+                                                   <span className="truncate">{shortName || 'แพทย์'}</span>
+                                                </span>
+                                             )
+                                          })
+                                       ) : (
+                                          <span className="text-[7px] sm:text-[9px] bg-rose-50 text-rose-500 px-1.5 py-0.5 rounded-full flex items-center justify-center gap-1 border border-rose-100 max-w-full font-medium truncate" title="ไม่มีแพทย์เข้ากะ">
+                                              <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-rose-500 shrink-0"></div>
+                                              <span className="truncate">หยุด</span>
+                                          </span>
+                                       )}
+                                    </div>
+
+                                    <div className="shrink-0 flex items-center justify-end w-5 sm:w-8">
+                                        {events.length > 0 && <span className="text-[7px] sm:text-[10px] font-bold text-sky-500 bg-sky-50 px-1 sm:px-2 py-0.5 rounded-full border border-sky-100">+{events.length}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex-1 flex flex-col gap-[1px] sm:gap-0.5 overflow-y-auto custom-scrollbar px-0 pr-0.5 mt-0.5 sm:mt-0">
+                                    {events.map((ev, idx) => renderEventItem(ev, idx, true))}
+                                </div>
                             </div>
-                            <div className="flex-1 flex flex-col gap-[1px] sm:gap-0.5 overflow-y-auto custom-scrollbar px-0 pr-0.5">
-                                {events.map((ev, idx) => renderEventItem(ev, idx, true))}
-                            </div>
-                        </div>
-                    );
-                })}
-                {Array.from({ length: (7 - ((firstDayOfMonth + daysInMonth) % 7)) % 7 }).map((_, i) => (
-                    <div key={`end-empty-${i}`} className="border-b border-r border-slate-100 bg-slate-50/40 h-[60px] sm:h-[120px]"></div>
-                ))}
+                        );
+                    });
+                })()}
             </div>
         </div>
       );
@@ -687,13 +1138,19 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                      {days.map((d, i) => {
                          const events = getEventsForDate(d);
                          const isCurrent = isToday(d);
+                         const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+                         const cornerClass = i === 0 ? 'rounded-bl-2xl sm:rounded-bl-3xl' : (i === 6 ? 'rounded-br-2xl sm:rounded-br-3xl' : '');
+
                          return (
                              <div 
                                 key={i} 
+                                data-date={dateStr}
                                 onClick={() => setSelectedDayDetails({ date: d, events })}
-                                className={`p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1 min-h-[200px] sm:min-h-[300px] hover:bg-slate-50 cursor-pointer overflow-y-auto custom-scrollbar ${isCurrent ? 'bg-sky-50/30' : ''}`}
+                                className={`calendar-dropzone p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1 min-h-[200px] sm:min-h-[300px] hover:bg-slate-50 cursor-pointer overflow-y-auto custom-scrollbar transition-colors relative ${isCurrent ? 'bg-sky-50/30' : ''} ${cornerClass}`}
                              >
-                                 {events.map((ev, idx) => renderEventItem(ev, idx, true))}
+                                 <div className="flex flex-col gap-1 w-full h-full">
+                                     {events.map((ev, idx) => renderEventItem(ev, idx, true))}
+                                 </div>
                              </div>
                          );
                      })}
@@ -706,63 +1163,69 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
   const renderDayView = () => {
       const events = getEventsForDate(viewDate);
       const isCurrentDay = isToday(viewDate);
+      const docsOnDuty = getDoctorOnDutyStatus(viewDate);
+      const hasDoctor = docsOnDuty.length > 0;
       
       return (
           <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col p-3 sm:p-6 min-h-[400px]">
-              <div className="flex items-center gap-3 mb-4 sm:mb-6 shrink-0">
-                  <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center shadow-sm shrink-0 ${isCurrentDay ? 'bg-sky-500 text-white border-none' : 'bg-sky-50 text-sky-600 border border-sky-100'}`}>
-                      <span className="text-[9px] sm:text-[10px] font-bold uppercase">{daysShortTH[viewDate.getDay()]}</span>
-                      <span className="text-xl sm:text-2xl font-black leading-none">{viewDate.getDate()}</span>
+              <div className="flex items-center gap-3 mb-4 sm:mb-6 shrink-0 border-b border-slate-100 pb-4 justify-between">
+                  <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center shadow-sm shrink-0 ${isCurrentDay ? 'bg-sky-500 text-white border-none' : 'bg-sky-50 text-sky-600 border border-sky-100'}`}>
+                          <span className="text-[9px] sm:text-[10px] font-bold uppercase">{daysShortTH[viewDate.getDay()]}</span>
+                          <span className="text-xl sm:text-2xl font-black leading-none">{viewDate.getDate()}</span>
+                      </div>
+                      <div className="min-w-0">
+                          <h3 className="text-lg sm:text-xl font-bold text-slate-800 truncate">{daysTH[viewDate.getDay()]}ที่ {viewDate.getDate()} {thaiMonths[viewDate.getMonth()]} {viewDate.getFullYear()+543}</h3>
+                          <p className="text-slate-500 text-xs sm:text-sm font-medium">{events.length} รายการนัดหมาย</p>
+                      </div>
                   </div>
-                  <div className="min-w-0">
-                      <h3 className="text-lg sm:text-xl font-bold text-slate-800 truncate">{daysTH[viewDate.getDay()]}ที่ {viewDate.getDate()} {monthsTH[viewDate.getMonth()]} {viewDate.getFullYear()+543}</h3>
-                      <p className="text-slate-500 text-xs sm:text-sm font-medium">{events.length} รายการนัดหมาย</p>
-                  </div>
+                  <button 
+                      onClick={() => { setStaffModalDate(viewDate); setShowStaffModal(true); }}
+                      className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all hover:shadow-sm active:scale-95 cursor-pointer ${hasDoctor ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'}`}
+                      title="คลิกเพื่อดูรายชื่อพนักงานที่เข้างานวันนี้"
+                  >
+                      {hasDoctor ? <BadgeCheck size={18} /> : <CalendarX2 size={18} />}
+                      <span className="text-xs font-bold kanit-text">{hasDoctor ? `มีแพทย์ประจำกะ (${docsOnDuty.length} ท่าน)` : 'ไม่มีแพทย์ลงตารางวันนี้'}</span>
+                  </button>
               </div>
+              <button 
+                  onClick={() => { setStaffModalDate(viewDate); setShowStaffModal(true); }}
+                  className={`sm:hidden flex w-full items-center justify-center gap-2 px-3 py-2 mb-3 rounded-lg border transition-colors active:bg-opacity-70 ${hasDoctor ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}
+              >
+                  {hasDoctor ? <BadgeCheck size={16} /> : <CalendarX2 size={16} />}
+                  <span className="text-[11px] font-bold kanit-text">{hasDoctor ? `มีแพทย์ประจำกะ (${docsOnDuty.length} ท่าน)` : 'ไม่มีแพทย์ลงตารางวันนี้'}</span>
+              </button>
+
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 space-y-2 sm:space-y-3">
                   {events.length > 0 ? events.map((ev, idx) => {
                       const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
                       return (
                       <div key={idx} onClick={() => onEventClick(ev)} className="flex items-stretch gap-2 sm:gap-4 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:border-sky-200 hover:shadow-md transition-all cursor-pointer bg-white group">
                           <div className="w-16 sm:w-20 text-center shrink-0 flex flex-col items-center justify-center gap-1">
-                              <span className="font-bold text-sky-600 bg-sky-50 px-1.5 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs w-full sm:w-fit whitespace-nowrap truncate">
-                                  {ev.hn || '-'}
-                              </span>
-                              <span className="text-xs sm:text-sm font-bold text-slate-600 block mt-0.5 font-data">
-                                  {ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'}
-                              </span>
+                              <span className="font-bold text-sky-600 bg-sky-50 px-1.5 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs w-full sm:w-fit whitespace-nowrap truncate">{ev.hn || '-'}</span>
+                              <span className="text-xs sm:text-sm font-bold text-slate-600 block mt-0.5 font-data">{ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'}</span>
                           </div>
                           <div className="w-1 bg-slate-100 rounded-full group-hover:bg-sky-400 transition-colors shrink-0"></div>
                           <div className="flex-1 min-w-0 py-0.5 sm:py-1 flex flex-col justify-center">
-                              {/* ย้ายสถานะขึ้นมาไว้มุมขวาบนในบรรทัดเดียวกับชื่อคนไข้ */}
                               <div className="flex flex-row justify-between items-start mb-0.5 gap-1">
                                   <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate pr-1">{ev.name}</h4>
-                                  <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit shrink-0 ${statusInfo.color}`}>
-                                      {statusInfo.label}
-                                  </span>
+                                  <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
                               </div>
-                              {/* เพิ่ม Action Call: เบอร์โทรศัพท์เป็นปุ่มสวยงามใต้ชื่อคนไข้ */}
                               {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
                                   <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
                                       <Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
                                   </a>
                               ) : null}
-                              {/* เอาไอคอนออกทั้งหมด เหลือแต่ข้อความสะอาดตา */}
                               <p className="text-xs sm:text-sm text-slate-500 truncate flex items-center gap-1.5 mt-1.5">
                                   <span className="font-medium text-sky-600 truncate">แพทย์: {ev.artist || '-'}</span> 
-                                  {ev.customer && (
-                                      <>
-                                          <span className="text-slate-300 mx-0.5 sm:mx-1 shrink-0">|</span> 
-                                          <span className="truncate">{ev.customer}</span>
-                                      </>
-                                  )}
+                                  {ev.customer && <><span className="text-slate-300 mx-0.5 sm:mx-1 shrink-0">|</span> <span className="truncate">{ev.customer}</span></>}
                               </p>
                           </div>
                       </div>
                   )}) : (
-                      <div className="flex flex-col items-center justify-center h-48 text-slate-400">
-                          <CalendarIcon className="w-10 h-10 sm:w-12 sm:h-12 mb-3 opacity-20" />
-                          <p className="font-medium text-sm sm:text-base">ไม่มีรายการนัดหมายในวันนี้</p>
+                      <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-slate-400 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 border-dashed">
+                          <div className="p-3 sm:p-4 bg-slate-50 rounded-full shadow-inner mb-3 sm:mb-4"><CalendarIcon className="w-8 h-8 sm:w-10 sm:h-10 text-slate-300" /></div>
+                          <p className="font-bold text-sm sm:text-lg text-slate-500">ไม่มีรายการในวันนี้</p>
                       </div>
                   )}
               </div>
@@ -781,15 +1244,11 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
       return (
           <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col p-3 sm:p-6 overflow-y-auto custom-scrollbar min-h-[400px]">
-              <h3 className="font-bold text-slate-800 mb-3 sm:mb-5 px-1 sm:px-2 flex items-center gap-2 text-sm sm:text-base">
-                  <List className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> 
-                  รายการประจำสัปดาห์
-              </h3>
+              <h3 className="font-bold text-slate-800 mb-3 sm:mb-5 px-1 sm:px-2 flex items-center gap-2 text-sm sm:text-base"><List className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> รายการประจำสัปดาห์</h3>
               <div className="space-y-4 sm:space-y-6">
                   {days.map((d, dayIdx) => {
                       const events = getEventsForDate(d);
                       const isCurrent = isToday(d);
-                      
                       return (
                           <div key={dayIdx} className="space-y-2 sm:space-y-3">
                               <div className={`sticky top-0 z-10 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center gap-2 border-l-4 shadow-sm ${isCurrent ? 'bg-sky-50 border-sky-500 text-sky-700' : 'bg-slate-50 border-slate-300 text-slate-600'}`}>
@@ -801,34 +1260,22 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                   {events.length > 0 ? events.map((ev, idx) => {
                                       const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
                                       return (
-                                      <div key={idx} onClick={() => onEventClick(ev)} className="bg-white border border-slate-100 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer flex items-stretch gap-2 sm:gap-4">
+                                      <div key={ev.id || idx} onClick={() => onEventClick(ev)} className="bg-white border border-slate-100 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer flex items-stretch gap-2 sm:gap-4">
                                           <div className="text-xs font-bold text-slate-500 pt-1 w-14 sm:w-20 shrink-0 flex flex-col items-center justify-center gap-1.5">
-                                              <span className="font-bold text-sky-600 bg-sky-50 px-1.5 sm:px-2.5 py-1 rounded-md sm:rounded-lg text-[9px] sm:text-xs w-full text-center truncate">
-                                                  {ev.hn || '-'}
-                                              </span>
+                                              <span className="font-bold text-sky-600 bg-sky-50 px-1.5 sm:px-2.5 py-1 rounded-md sm:rounded-lg text-[9px] sm:text-xs w-full text-center truncate">{ev.hn || '-'}</span>
                                               <span className="font-data text-[10px] sm:text-xs text-center">{ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'} น.</span>
                                           </div>
                                           <div className="flex-1 min-w-0 border-l border-slate-100 pl-2 sm:pl-4 flex flex-col justify-center">
-                                              {/* ปรับเลย์เอาต์มุมมองรายการให้เหมือนมุมมองวัน 100% */}
                                               <div className="flex flex-row justify-between items-start mb-0.5 gap-1">
                                                   <span className="font-bold text-slate-800 text-sm sm:text-base truncate pr-1">{ev.name}</span>
-                                                  <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit shrink-0 ${statusInfo.color}`}>
-                                                      {statusInfo.label}
-                                                  </span>
+                                                  <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
                                               </div>
                                               {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
-                                                  <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
-                                                      <Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
-                                                  </a>
+                                                  <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors"><Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}</a>
                                               ) : null}
                                               <div className="text-[10px] sm:text-xs text-slate-500 mt-1.5 truncate flex items-center gap-1.5">
                                                   <span className="font-medium text-sky-600 truncate">แพทย์: {ev.artist || '-'}</span> 
-                                                  {ev.customer && (
-                                                      <>
-                                                          <span className="text-slate-300 mx-0.5 sm:mx-1 shrink-0">•</span> 
-                                                          <span className="truncate">{ev.customer}</span>
-                                                      </>
-                                                  )}
+                                                  {ev.customer && <><span className="text-slate-300 mx-0.5 sm:mx-1 shrink-0">•</span> <span className="truncate">{ev.customer}</span></>}
                                               </div>
                                           </div>
                                       </div>
@@ -842,188 +1289,16 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       );
   };
 
-  const closeDayDetailsModal = () => {
-      setIsDayModalClosing(true);
-      setTimeout(() => {
-          setSelectedDayDetails(null);
-          setIsDayModalClosing(false);
-      }, 300);
-  };
-
-  const renderDayDetailsModal = () => {
-      if (!selectedDayDetails) return null;
-      const { date, events } = selectedDayDetails;
-
-      const modalContent = (
-        <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 z-[90]">
-            <div 
-                className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm ${isDayModalClosing ? 'backdrop-animate-out' : 'animate-in fade-in duration-300'}`} 
-                onClick={closeDayDetailsModal} 
-            />
-            <div className={`bg-white w-full max-w-5xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[80dvh] sm:max-h-[90dvh] ${isDayModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-                {/* แก้ไข UX/UI ส่วนหัว Modal รายการประจำวัน (จัดระเบียบ ให้อยู่กึ่งกลาง ไม่ล้นกรอบ) */}
-                <div className="px-4 py-3 sm:px-6 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-3 shrink-0">
-                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div className="w-10 h-10 sm:w-14 sm:h-14 bg-sky-100 text-sky-600 rounded-xl sm:rounded-2xl flex flex-col items-center justify-center shadow-inner shrink-0">
-                            <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{daysShortTH[date.getDay()]}</span>
-                            <span className="text-lg sm:text-2xl font-black leading-none mt-0.5">{date.getDate()}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="text-sm sm:text-xl font-bold text-slate-800 truncate leading-tight">รายการประจำวัน</h3>
-                            <p className="text-slate-500 text-[10px] sm:text-sm font-medium truncate mt-0.5">{daysTH[date.getDay()]}ที่ {date.getDate()} {monthsTH[date.getMonth()]} {date.getFullYear()+543}</p>
-                        </div>
-                    </div>
-                    <button onClick={closeDayDetailsModal} className="p-1.5 sm:p-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition shadow-sm shrink-0">
-                        <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                    </button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-slate-50/30">
-                    {events.length > 0 ? (
-                        <>
-                            <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                                {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
-                                <div className="overflow-x-auto overflow-y-hidden">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide">
-                                                <th className="p-4 font-bold w-[10%] text-center">HN/เวลา</th>
-                                                <th className="p-4 font-bold w-[25%]">คนไข้/อาการ</th>
-                                                <th className="p-4 font-bold w-[15%] text-center">เบอร์โทร</th>
-                                                <th className="p-4 font-bold w-[20%]">แพทย์</th>
-                                                <th className="p-4 font-bold w-[15%]">สถานะ</th>
-                                                <th className="p-4 font-bold w-[15%] text-right">จัดการ</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {events.map((item, i) => {
-                                                const time = item.rawDeliveryStart ? new Date(item.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-';
-                                                const statusInfo = resolveStatus(item.dealStatus, dealStatuses);
-                                                
-                                                return (
-                                                    <tr key={i} onClick={() => onEventClick(item)} className="hover:bg-sky-50/30 cursor-pointer transition-colors group">
-                                                        <td className="p-4 font-bold text-slate-700 whitespace-nowrap align-top text-center">
-                                                            <div className="flex flex-col items-center gap-1.5">
-                                                                <span className="font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg text-xs w-fit whitespace-nowrap">
-                                                                    {item.hn || '-'}
-                                                                </span>
-                                                                <span className="mt-1 text-sm font-data">{time} น.</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-4 align-top">
-                                                            <div className="font-bold text-slate-800">{item.name}</div>
-                                                            <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5">{item.category}</div>
-                                                        </td>
-                                                        <td className="p-4 align-top text-center">
-                                                            <div className="flex justify-center">
-                                                                {item.phone && item.phone[0] ? (
-                                                                  <a href={`tel:${item.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors font-data">
-                                                                    <Phone size={14} /> {item.phone[0]}
-                                                                  </a>
-                                                                ) : <span className="text-slate-400">-</span>}
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-4 align-top">
-                                                            <div className="text-sm font-bold text-sky-600">{item.artist}</div>
-                                                            <div className="text-xs text-slate-500 mt-1">{item.customer}</div>
-                                                        </td>
-                                                        <td className="p-4 align-top">
-                                                            <div className="flex flex-col gap-1.5 items-start">
-                                                                <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1.5 ${statusInfo.color}`}>
-                                                                    <div className={`w-1.5 h-1.5 rounded-full ${statusInfo.type === 'confirmed' ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                                                                    {statusInfo.label}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-4 align-top text-right">
-                                                           <button onClick={(e) => { e.stopPropagation(); onEventClick(item); }} className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข"><Pencil size={18} /></button>
-                                                        </td>
-                                                    </tr>
-                                                )
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            {/* Mobile Card View */}
-                            <div className="md:hidden space-y-3">
-                                {events.map((item, i) => {
-                                    const time = item.rawDeliveryStart ? new Date(item.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-';
-                                    const statusInfo = resolveStatus(item.dealStatus, dealStatuses);
-
-                                    return (
-                                        <div key={i} onClick={() => onEventClick(item)} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 active:scale-95 transition-transform">
-                                            <div className="flex justify-between items-start">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md text-[10px] w-fit whitespace-nowrap">{item.hn || '-'}</span>
-                                                    <div className="flex items-center gap-1 mt-0.5">
-                                                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                                         <span className="text-xs font-bold text-slate-600 font-data">{time} น.</span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-col gap-1 items-end shrink-0 ml-2">
-                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${statusInfo.color}`}>
-                                                        <div className={`w-1 h-1 rounded-full ${statusInfo.type === 'confirmed' ? 'bg-emerald-500' : 'bg-slate-400'}`}></div>
-                                                        {statusInfo.label}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="mt-1">
-                                                <h4 className="font-bold text-slate-800 text-sm line-clamp-2">{item.name}</h4>
-                                                <div className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit mt-1">{item.category}</div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
-                                                <div className="min-w-0">
-                                                    <p className="text-[9px] font-semibold text-slate-400 mb-0.5">แพทย์</p>
-                                                    <p className="font-bold text-sky-600 truncate">{item.artist}</p>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[9px] font-semibold text-slate-400 mb-0.5">คนไข้</p>
-                                                    <p className="font-semibold text-slate-700 truncate">{item.customer}</p>
-                                                </div>
-                                                <div className="col-span-2 mt-0.5">
-                                                    <p className="text-[9px] font-semibold text-slate-400 mb-0.5">เบอร์โทร</p>
-                                                    {item.phone && item.phone.length > 0 && item.phone[0] ? (
-                                                        <a href={`tel:${item.phone[0]}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 font-bold font-data text-[11px]">
-                                                            <Phone size={12} /> {item.phone[0]}
-                                                        </a>
-                                                    ) : <span className="text-slate-400 text-[11px]">-</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-slate-400 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 border-dashed">
-                            <div className="p-3 sm:p-4 bg-slate-50 rounded-full shadow-inner mb-3 sm:mb-4">
-                                <CalendarIcon className="w-8 h-8 sm:w-10 sm:h-10 text-slate-300" />
-                            </div>
-                            <p className="font-bold text-sm sm:text-lg text-slate-500">ไม่มีรายการในวันนี้</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-      );
-
-      return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
-  };
-
   const getTitle = () => {
-      if (viewMode === 'month') return `${monthsTH[viewDate.getMonth()]} ${viewDate.getFullYear() + 543}`;
-      if (viewMode === 'day') return `${viewDate.getDate()} ${monthsTH[viewDate.getMonth()]} ${viewDate.getFullYear() + 543}`;
+      if (viewMode === 'month') return `${thaiMonths[viewDate.getMonth()]} ${viewDate.getFullYear() + 543}`;
+      if (viewMode === 'day') return `${viewDate.getDate()} ${thaiMonths[viewDate.getMonth()]} ${viewDate.getFullYear() + 543}`;
       if (viewMode === 'week' || viewMode === 'list') {
           const start = new Date(viewDate);
           start.setDate(start.getDate() - start.getDay());
           const end = new Date(start);
           end.setDate(end.getDate() + 6);
           if (start.getMonth() === end.getMonth()) {
-              return `${start.getDate()} - ${end.getDate()} ${monthsTH[start.getMonth()]} ${start.getFullYear() + 543}`;
+              return `${start.getDate()} - ${end.getDate()} ${thaiMonths[start.getMonth()]} ${start.getFullYear() + 543}`;
           } else {
               return `${start.getDate()} ${monthsShortTH[start.getMonth()]} - ${end.getDate()} ${monthsShortTH[end.getMonth()]} ${end.getFullYear() + 543}`;
           }
@@ -1031,17 +1306,36 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 duration-500 flex flex-col h-full w-full">
+    <div className="space-y-4 duration-500 flex flex-col h-full w-full relative z-10 fade-in">
        {renderDayDetailsModal()}
+       {renderStaffScheduleModal()}
+       
+       <style>{`
+          /* CSS กฎเหล็กเพื่อให้ Custom Drag & Drop ทำงานได้อย่างสมบูรณ์และไม่มีดีเลย์ */
+          body.is-custom-dragging { touch-action: none !important; overflow: hidden !important; }
+          body.is-custom-dragging * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
+          
+          /* ป้องกันการกระพริบเมื่อเมาส์ลากผ่านของข้างในช่องวันที่ */
+          body.is-custom-dragging .calendar-dropzone * { pointer-events: none !important; }
+          
+          .calendar-dropzone { position: relative; }
+          
+          /* วาดกรอบสีฟ้า 4 ด้านเป๊ะๆ ให้อยู่ด้านบนสุดเวลาเมาส์ลากผ่าน */
+          .calendar-dropzone.dropzone-active::after {
+              content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+              border: 2px solid #0ea5e9 !important; background-color: rgba(224, 242, 254, 0.4) !important;
+              z-index: 50 !important; pointer-events: none !important;
+              box-shadow: inset 0 0 12px rgba(14, 165, 233, 0.25) !important; border-radius: inherit; 
+          }
+       `}</style>
 
-       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 sm:gap-4 mb-2 sm:mb-4 bg-white/50 p-3 sm:p-4 rounded-[1.5rem] border border-slate-100/80 shadow-sm">
-          {/* Title & Current Date Display */}
+       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white/50 p-4 rounded-[1.5rem] border border-slate-100/80 shadow-sm">
           <div className="flex items-center justify-between w-full lg:w-auto gap-3">
              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center shadow-inner border border-sky-100/50">
-                   <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text leading-tight">ปฏิทินงาน</h2>
+                 <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center shadow-inner border border-sky-100/50"><CalendarIcon className="w-6 h-6" /></div>
+                 <div>
+                     <h2 className="text-xl font-bold text-slate-800 kanit-text leading-tight">ปฏิทินงาน</h2>
+                 </div>
              </div>
              <div className="flex items-center gap-1.5 bg-sky-50/50 px-3 py-1.5 rounded-xl border border-sky-100/50 lg:bg-transparent lg:border-none lg:p-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></div>
@@ -1049,37 +1343,20 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
              </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
-             {/* Mode Selector */}
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-sm shrink-0">
-                 {[
-                     { id: 'month', label: 'เดือน', icon: CalendarIcon },
-                     { id: 'week', label: 'สัปดาห์', icon: TableIcon },
-                     { id: 'day', label: 'วัน', icon: CalendarDays },
-                     { id: 'list', label: 'รายการ', icon: LayoutList },
-                 ].map(mode => (
-                     <button
-                        key={mode.id}
-                        onClick={() => setViewMode(mode.id)}
-                        className={`px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                            viewMode === mode.id 
-                            ? 'bg-white text-sky-600 shadow-sm ring-1 ring-slate-200/50' 
-                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                        }`}
-                     >
-                         <mode.icon className="w-3.5 h-3.5 shrink-0" />
-                         <span className="hidden min-[400px]:inline">{mode.label}</span>
+                 {[{ id: 'month', label: 'เดือน', icon: CalendarIcon }, { id: 'week', label: 'สัปดาห์', icon: TableIcon }, { id: 'day', label: 'วัน', icon: CalendarDays }, { id: 'list', label: 'รายการ', icon: LayoutList }].map(mode => (
+                     <button key={mode.id} onClick={() => setViewMode(mode.id)} className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${viewMode === mode.id ? 'bg-white text-sky-600 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                         <mode.icon size={14} className="shrink-0" /><span className="hidden sm:inline">{mode.label}</span>
                      </button>
                  ))}
              </div>
-
-             {/* Date Controller (Navigation) */}
              <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm shrink-0 ml-auto lg:ml-0">
-                <button onClick={() => changePeriod(-1)} className="p-1.5 sm:p-2 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors" title="ก่อนหน้า"><ChevronLeft size={18}/></button>
-                <div className="w-px h-4 bg-slate-100 mx-0.5"></div>
-                <button onClick={() => setViewDate(new Date())} className="px-3 sm:px-4 py-1.5 text-sky-600 text-[10px] sm:text-xs font-bold hover:bg-sky-50 rounded-lg transition-colors whitespace-nowrap">วันนี้</button>
-                <div className="w-px h-4 bg-slate-100 mx-0.5"></div>
-                <button onClick={() => changePeriod(1)} className="p-1.5 sm:p-2 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors" title="ถัดไป"><ChevronRight size={18}/></button>
+                <button onClick={() => changePeriod(-1)} className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors"><ChevronLeft size={16}/></button>
+                <div className="w-px h-4 bg-slate-100 mx-1"></div>
+                <button onClick={() => setViewDate(new Date())} className="px-3 py-1.5 text-sky-600 text-xs font-bold hover:bg-sky-50 rounded-lg transition-colors whitespace-nowrap">วันนี้</button>
+                <div className="w-px h-4 bg-slate-100 mx-1"></div>
+                <button onClick={() => changePeriod(1)} className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors"><ChevronRight size={16}/></button>
              </div>
           </div>
        </div>
@@ -1093,7 +1370,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 };
 
 // เพิ่ม prop setPatientsData เพื่อให้สามารถเพิ่มคนไข้ใหม่จากหน้านัดหมายได้
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, callAppScript, showToast, isGlobalLoading }) => {
+const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -1233,6 +1510,42 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         }
       });
       apptAlert.open();
+  };
+
+  // --- ฟังก์ชันสำหรับ Drag & Drop เลื่อนนัดหมาย (Optimistic UI) ---
+  const handleEventDrop = async (eventId, newDate) => {
+      let updatedAppt = null;
+      setQueueData(prev => {
+          const appt = prev.find(a => a.id === eventId);
+          if (!appt) return prev;
+
+          // คงเวลาเดิมเอาไว้ เปลี่ยนแค่วันที่
+          const oldTime = appt.datetime ? (appt.datetime.split(' ')[1] || '09:00 น.') : '09:00 น.';
+          const d = String(newDate.getDate()).padStart(2, '0');
+          const m = String(newDate.getMonth() + 1).padStart(2, '0');
+          const y = newDate.getFullYear() + 543;
+          const newDatetimeStr = `${d}/${m}/${y} ${oldTime}`;
+          const isoDate = convertThaiToISO(newDatetimeStr);
+
+          updatedAppt = {
+              ...appt,
+              datetime: newDatetimeStr,
+              rawDeliveryStart: isoDate,
+              rawDateTime: isoDate
+          };
+
+          return prev.map(a => a.id === eventId ? updatedAppt : a);
+      });
+
+      if (updatedAppt) {
+          showToast(`เลื่อนนัดหมายไปวันที่ ${updatedAppt.datetime.split(' ')[0]} แล้ว`, 'success');
+          // ทำการเซฟเบื้องหลังโดยไม่ต้องบล็อกหน้าจอผู้ใช้
+          try {
+              await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
+          } catch(e) {
+              showToast('บันทึกการเลื่อนนัดไม่สำเร็จ ข้อมูลอาจไม่ตรงกับเซิร์ฟเวอร์', 'warning');
+          }
+      }
   };
 
   const handleSaveAppt = async (e) => {
@@ -1582,9 +1895,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             onEventClick={(ev) => handleOpenEdit(ev.originalData || ev, true)} 
             onDayClick={(date) => console.log('Day clicked:', date)} 
             dealStatuses={systemStatusTypes} 
+            staffData={staffData}
+            onEventDrop={handleEventDrop}
          />
       );
-  }, [augmentedQueueData]); // อัปเดตปฏิทินเมื่อข้อมูลคิวหรือข้อมูลคนไข้มีการเปลี่ยนแปลง
+  }, [augmentedQueueData, staffData]); // อัปเดตปฏิทินเมื่อข้อมูลคิวหรือข้อมูลคนไข้มีการเปลี่ยนแปลง
 
   return (
     <>
@@ -1606,12 +1921,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         </div>
 
         {/* --- 2. ปฏิทิน --- */}
-        {/* ลบ relative z-30 ออก เพื่อไม่ให้มันขัง Modal เอาไว้ข้างใต้ Header */}
-        <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-2 mb-3">
-          <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100/50 shrink-0">
-             {/* เรียกใช้งานปฏิทินที่ถูกล็อกการ Re-render เอาไว้แล้ว */}
+        <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-2 mb-4">
+             {/* เรียกใช้งานปฏิทินที่ถูกล็อกการ Re-render เอาไว้แล้ว และตกแต่งกล่องไปในตัว CalendarView เลย */}
              {memoizedCalendarView}
-          </div>
         </div>
 
         {/* เพิ่ม Sentinel ตรงนี้ เพื่อเป็นตัวจับพิกัดที่แท้จริงแทนการจับที่ตัวฟิลเตอร์โดยตรง */}
@@ -1752,7 +2064,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       </div>
 
       {apptModal.isOpen && (
-        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${apptModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[170] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${apptModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-2xl max-h-[80dvh] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${apptModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
               <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
@@ -1976,7 +2288,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       )}
 
       {apptCalendar.isOpen && (
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${apptCalendar.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[180] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${apptCalendar.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={apptCalendar.close}></div>
           <div 
             ref={apptSwipeProps.ref} 
@@ -2081,7 +2393,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       )}
 
       {apptAlert.isOpen && (
-        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${apptAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[190] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${apptAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full max-h-[80dvh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col items-center text-center ${apptAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
             <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
@@ -2091,7 +2403,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       )}
 
       {isProcessing && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm fade-in">
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm fade-in">
           <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 modal-animate-in">
             <div className="relative w-16 h-16"><div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div><div className="absolute inset-0 border-4 border-sky-500 rounded-full border-t-transparent animate-spin"></div></div>
             <p className="font-semibold text-slate-700 kanit-text">กำลังประมวลผล...</p>
@@ -4922,93 +5234,13 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
 
       {sweetAlert.isOpen && (
         <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isAlertClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full max-h-[80dvh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
             <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={closeMedAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยันลบ</button></div>
+            <div className="flex gap-3 w-full"><button onClick={closeMedAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
           </div>
         </div>
       )}
-
-      {isProcessing && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm fade-in">
-          <div className="bg-white px-8 py-6 rounded-3xl shadow-2xl flex flex-col items-center gap-4 modal-animate-in">
-            <div className="relative w-16 h-16"><div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div><div className="absolute inset-0 border-4 border-sky-500 rounded-full border-t-transparent animate-spin"></div></div>
-            <p className="font-semibold text-slate-700 kanit-text">กำลังประมวลผล...</p>
-          </div>
-        </div>
-      )}
-
-      {/* --- Modal สแกนบัตรประชาชน (Smart ID / OCR) --- */}
-      {isScannerOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
-            
-            {/* Header */}
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
-                <ScanText className="text-indigo-500" /> สแกนบัตรประชาชน
-              </h3>
-              <button 
-                onClick={() => !isScanning && setIsScannerOpen(false)} 
-                className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors"
-                disabled={isScanning}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            {/* Camera Area */}
-            <div className="p-6 bg-slate-800 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden">
-              {/* Animated Background Scan Line (Pure CSS) */}
-              {!isScanning && (
-                <div className="absolute top-0 left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_15px_3px_rgba(99,102,241,0.5)] animate-[scanLine_2s_ease-in-out_infinite] z-20"></div>
-              )}
-
-              {/* Target Frame - ให้แสดงผลตลอดเวลาเพื่อไม่ให้วิดีโอดับเมื่อกำลังสแกน */}
-              <div className="w-full max-w-[320px] aspect-[1.58/1] border-2 border-slate-600 rounded-xl relative flex items-center justify-center bg-slate-900/50 backdrop-blur-sm z-10 shadow-2xl overflow-hidden">
-                {/* Corners */}
-                <div className="absolute top-[-2px] left-[-2px] w-8 h-8 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl z-20"></div>
-                <div className="absolute top-[-2px] right-[-2px] w-8 h-8 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl z-20"></div>
-                <div className="absolute bottom-[-2px] left-[-2px] w-8 h-8 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl z-20"></div>
-                <div className="absolute bottom-[-2px] right-[-2px] w-8 h-8 border-b-4 border-r-4 border-indigo-500 rounded-br-xl z-20"></div>
-                
-                {/* แสดงภาพจากกล้องจริง */}
-                <video autoPlay playsInline muted ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-0"></video>
-                
-                {!videoRef.current?.srcObject && <Camera size={48} className="text-slate-400 opacity-50 z-10" />}
-                
-                {/* Scanner Overlay Content (แสดงเมื่อกำลังสแกนทับบนวิดีโอ) */}
-                {isScanning ? (
-                  <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
-                    <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                    <p className="font-bold text-white kanit-text text-sm animate-pulse">กำลังประมวลผล OCR...</p>
-                  </div>
-                ) : (
-                  <div className="absolute bottom-3 right-4 w-12 h-16 border border-slate-600/50 rounded-md bg-slate-800/50 flex flex-col items-center justify-center gap-1 opacity-50 z-20">
-                      <div className="w-4 h-4 rounded-full bg-slate-600/50"></div>
-                      <div className="w-8 h-1 bg-slate-600/50 rounded-full"></div>
-                  </div>
-                )}
-              </div>
-              <p className="text-sm text-slate-300 mt-5 kanit-text font-medium z-10 bg-slate-900/60 px-4 py-1.5 rounded-full">จัดวางบัตรประชาชนให้อยู่ในกรอบ</p>
-            </div>
-            
-            {/* Actions (เอาปุ่มอัปโหลดออกและให้ปุ่มเริ่มสแกนเต็มจอ) */}
-            <div className="p-4 bg-white">
-              <button 
-                onClick={handleRealScan} 
-                disabled={isScanning}
-                className="w-full py-3.5 bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 kanit-text hover:bg-indigo-600 shadow-md shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
-              >
-                {isScanning ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"></div> : <ScanText size={18}/>}
-                {isScanning ? 'กำลังสแกน...' : 'เริ่มสแกน'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </>
   );
 };
@@ -5916,172 +6148,196 @@ const POSSystem = ({
               </div>
             )}
           </div>
+          
           {/* Cart Summary & Checkout */}
-          <div className="bg-white shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.04)] z-20 flex flex-col lg:rounded-t-3xl xl:rounded-t-[2rem] relative border-t border-slate-100">
+          <div className="bg-white shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.04)] z-30 flex flex-col lg:rounded-t-3xl xl:rounded-t-[2rem] relative border-t border-slate-100">
             
-            {/* Toggle Tab - ชิดขอบบน ไม่มีพื้นหลัง โฮเวอร์เป็นสีฟ้าขอบมน */}
+            {/* --- ส่วนรายละเอียดที่ขยายขึ้นด้านบน (Absolute Position + Grid Animation นุ่มนวล 500ms) --- */}
             <div 
-              className="w-full flex justify-center items-center py-2 sm:py-2.5 bg-transparent hover:bg-sky-50 text-slate-400 hover:text-sky-500 cursor-pointer transition-colors lg:rounded-t-3xl xl:rounded-t-[2rem]"
-              onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
-              title={isSummaryExpanded ? "ย่อรายละเอียด" : "ขยายเพื่อดูหรือตั้งค่าส่วนลด/ภาษี"}
+                className={`absolute bottom-[100%] left-0 right-0 bg-white/95 backdrop-blur-xl transition-all duration-500 ease-in-out lg:rounded-t-3xl xl:rounded-t-[2rem] overflow-hidden z-20 flex flex-col ${isSummaryExpanded ? 'opacity-100 translate-y-0 border-t border-x border-slate-100 pb-2 shadow-[0_-10px_20px_rgba(0,0,0,0.03)]' : 'opacity-0 translate-y-2 border-transparent pb-0 shadow-none pointer-events-none'}`}
             >
-              <div className="flex items-center gap-1.5 kanit-text font-bold text-[11px] sm:text-xs tracking-wide">
-                {isSummaryExpanded ? <ChevronDown size={14} className="sm:w-4 sm:h-4 text-sky-500" /> : <ChevronUp size={14} className="sm:w-4 sm:h-4 text-sky-500" />}
-                <span>{isSummaryExpanded ? 'ย่อรายละเอียดส่วนลดและภาษี' : 'ตั้งค่าส่วนลดและภาษี'}</span>
-                {/* แจ้งเตือนกระพริบเมื่อมีการตั้งค่าไว้แต่ถูกพับอยู่ */}
-                {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
-                   <span className="flex h-2 w-2 relative ml-0.5">
-                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                     <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                   </span>
-                )}
-              </div>
-            </div>
-
-            <div className="px-3 pb-3 sm:px-4 sm:pb-4 pt-1 sm:pt-2 flex flex-col">
-              
-              {/* Collapsible Summary Lines (ซ่อน/แสดงด้วย Grid Transition) */}
-              <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${isSummaryExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                <div className="overflow-hidden">
-                  <div className="space-y-2.5 sm:space-y-3 pb-3 font-data text-xs sm:text-sm">
-                    {/* รวมเป็นเงิน */}
-                    <div className="flex justify-between items-center text-slate-700">
-                      <span className="kanit-text font-medium">รวมเป็นเงิน</span>
-                      <span className="font-bold">{formatCurrency(subtotal)}</span>
+              <div className={`grid transition-[grid-template-rows] duration-500 ease-in-out w-full ${isSummaryExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div className="overflow-hidden flex flex-col w-full">
+                  {/* Toggle Tab ด้านบน (แสดงตอนกางออก) */}
+                  <div 
+                    className="w-full flex justify-center items-center py-2 sm:py-2.5 bg-slate-50/80 hover:bg-sky-50 text-slate-500 hover:text-sky-600 cursor-pointer transition-colors lg:rounded-t-3xl xl:rounded-t-[2rem] border-b border-slate-100 shrink-0"
+                    onClick={() => setIsSummaryExpanded(false)}
+                    title="ย่อรายละเอียด"
+                  >
+                    <div className="flex items-center gap-1.5 kanit-text font-bold text-[11px] sm:text-xs tracking-wide">
+                      <ChevronDown size={14} className="sm:w-4 sm:h-4 text-sky-500" />
+                      <span>ย่อรายละเอียดส่วนลดและภาษี</span>
                     </div>
+                  </div>
 
-                    {/* ส่วนลดเพิ่มเติม */}
-                    <div className="flex justify-between items-center">
-                      <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
-                        ส่วนลดเพิ่มเติม
-                        {discount > 0 && (
-                           <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
-                              {discountType === 'percent' 
-                                 ? `(${formatCurrency(discountAmount)} ฿)` 
-                                 : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
-                           </span>
-                        )}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min="0"
-                          value={discount || ''}
-                          onChange={(e) => setDiscount(Number(e.target.value))}
-                          className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
-                          placeholder="0.00"
-                        />
-                        <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
-                          <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
-                          <div className="w-px bg-slate-200"></div>
-                          <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
+                  <div className="p-4 sm:p-5 max-h-[50vh] overflow-y-auto custom-scrollbar flex-1">
+                    <div className="space-y-2.5 sm:space-y-3 font-data text-xs sm:text-sm">
+                      {/* รวมเป็นเงิน */}
+                      <div className="flex justify-between items-center text-slate-700">
+                        <span className="kanit-text font-medium">รวมเป็นเงิน</span>
+                        <span className="font-bold">{formatCurrency(subtotal)}</span>
+                      </div>
+
+                      {/* ส่วนลดเพิ่มเติม */}
+                      <div className="flex justify-between items-center">
+                        <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                          ส่วนลดเพิ่มเติม
+                          {discount > 0 && (
+                             <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
+                                {discountType === 'percent' 
+                                   ? `(${formatCurrency(discountAmount)} ฿)` 
+                                   : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
+                             </span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            value={discount || ''}
+                            onChange={(e) => setDiscount(Number(e.target.value))}
+                            className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
+                            placeholder="0.00"
+                          />
+                          <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
+                            <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
+                            <div className="w-px bg-slate-200"></div>
+                            <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* ส่วนลดรวมทั้งหมด */}
-                    <div className="flex justify-between items-center text-rose-500 font-medium">
-                      <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
-                      <span className="font-bold">- {formatCurrency(discountAmount)}</span>
-                    </div>
-
-                    <div className="h-px w-full bg-slate-100 my-1.5"></div>
-
-                    {/* ยอดหลังหักส่วนลด */}
-                    <div className="flex justify-between items-center text-slate-700 font-medium">
-                      <span className="kanit-text">ยอดหลังหักส่วนลด</span>
-                      <span className="font-bold">{formatCurrency(afterDiscount)}</span>
-                    </div>
-
-                    {/* การคิดภาษี (Radio Buttons) */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
-                      <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
-                      <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
-                        <label className="flex items-center gap-1.5 cursor-pointer group">
-                          <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
-                          <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                            {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                          </div>
-                          <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer group">
-                          <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
-                          <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                            {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                          </div>
-                          <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer group">
-                          <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
-                          <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                            {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                          </div>
-                          <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
-                        </label>
+                      {/* ส่วนลดรวมทั้งหมด */}
+                      <div className="flex justify-between items-center text-rose-500 font-medium">
+                        <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
+                        <span className="font-bold">- {formatCurrency(discountAmount)}</span>
                       </div>
-                    </div>
 
-                    {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
-                    <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
-                      <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
-                      <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
-                    </div>
+                      <div className="h-px w-full bg-slate-100 my-1.5"></div>
 
-                    {/* ภาษีมูลค่าเพิ่ม + Input % */}
-                    <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
-                      <div className="flex items-center gap-2">
-                          <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
-                          <div className="flex items-center gap-1">
-                              <input
-                                  type="number"
-                                  value={vatRate}
-                                  onChange={(e) => setVatRate(Number(e.target.value))}
-                                  disabled={taxMode === 'none'}
-                                  className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
-                              />
-                              <span className="text-xs sm:text-sm">%</span>
-                          </div>
+                      {/* ยอดหลังหักส่วนลด */}
+                      <div className="flex justify-between items-center text-slate-700 font-medium">
+                        <span className="kanit-text">ยอดหลังหักส่วนลด</span>
+                        <span className="font-bold">{formatCurrency(afterDiscount)}</span>
                       </div>
-                      <span className="font-bold">{formatCurrency(vatAmount)}</span>
+
+                      {/* การคิดภาษี (Radio Buttons) */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                        <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
+                        <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                          <label className="flex items-center gap-1.5 cursor-pointer group">
+                            <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
+                            <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                              {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                            </div>
+                            <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer group">
+                            <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
+                            <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                              {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                            </div>
+                            <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer group">
+                            <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
+                            <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                              {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                            </div>
+                            <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
+                      <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity duration-500 ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
+                        <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
+                        <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
+                      </div>
+
+                      {/* ภาษีมูลค่าเพิ่ม + Input % */}
+                      <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity duration-500 ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
+                        <div className="flex items-center gap-2">
+                            <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    value={vatRate}
+                                    onChange={(e) => setVatRate(Number(e.target.value))}
+                                    disabled={taxMode === 'none'}
+                                    className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
+                                />
+                                <span className="text-xs sm:text-sm">%</span>
+                            </div>
+                        </div>
+                        <span className="font-bold">{formatCurrency(vatAmount)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+              <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
+            </div>
 
-              {/* Always Visible: ยอดสุทธิ (เปลี่ยนเป็นส่วนแสดงผลเฉยๆ) */}
-              <div className={`flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 mb-3 select-none transition-all ${isSummaryExpanded ? 'pt-3 border-t border-slate-100' : ''}`}>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <span className="kanit-text">ยอดสุทธิ</span>
-                  {/* Indicator แจ้งเตือนเมื่อถูกย่อและมีการตั้งค่าส่วนลด/ภาษี */}
-                  {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
-                     <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md kanit-text border border-amber-100 animate-in fade-in">
-                        มีส่วนลด/ภาษี
-                     </span>
-                  )}
+            {/* --- แถบหลักที่อยู่ติดล่างเสมอ --- */}
+            <div className="relative z-30 bg-white lg:rounded-t-3xl xl:rounded-t-[2rem]">
+                {/* Toggle Tab ด้านล่าง (แสดงตอนพับ) ใช้ Grid Transition นุ่มนวล 500ms */}
+                <div className={`grid transition-[grid-template-rows] duration-500 ease-in-out w-full ${isSummaryExpanded ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
+                  <div className="overflow-hidden w-full">
+                    <div 
+                      className="w-full flex justify-center items-center bg-transparent hover:bg-sky-50 text-slate-400 hover:text-sky-500 cursor-pointer lg:rounded-t-3xl xl:rounded-t-[2rem] transition-colors py-2 sm:py-2.5"
+                      onClick={() => setIsSummaryExpanded(true)}
+                      title="ตั้งค่าส่วนลดและภาษี"
+                    >
+                      <div className="flex items-center gap-1.5 kanit-text font-bold text-[11px] sm:text-xs tracking-wide">
+                        <ChevronUp size={14} className="sm:w-4 sm:h-4 text-sky-500" />
+                        <span>ตั้งค่าส่วนลดและภาษี</span>
+                        {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
+                           <span className="flex h-2 w-2 relative ml-0.5">
+                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                           </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <span className="font-data text-sky-600">{formatCurrency(grandTotal)}</span>
-              </div>
 
-              {/* Checkout Actions */}
-              <div className="flex gap-2">
-                <button 
-                  onClick={clearCart} 
-                  disabled={cart.length === 0}
-                  className="px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 text-slate-500 font-semibold hover:bg-slate-50 hover:text-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="ล้างตะกร้า"
-                >
-                  <Trash2 size={18} className="sm:w-5 sm:h-5" />
-                </button>
-                <button 
-                  onClick={handleCheckout}
-                  disabled={cart.length === 0}
-                  className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-lg shadow-md transition-all active:scale-[0.98] kanit-text disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
-                    cart.length > 0 ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 shadow-none'
-                  }`}
-                >
-                  ชำระเงิน {cart.length > 0 ? formatCurrency(grandTotal) : ''}
-                </button>
-              </div>
+                <div className={`px-3 pb-3 sm:px-4 sm:pb-4 flex flex-col transition-all duration-500 ease-in-out ${isSummaryExpanded ? 'pt-3 sm:pt-4' : 'pt-1 sm:pt-2'}`}>
+                  {/* Always Visible: ยอดสุทธิ */}
+                  <div className={`flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 mb-3 select-none transition-all duration-500 ease-in-out ${isSummaryExpanded ? 'pt-3 border-t border-slate-100' : ''}`}>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className="kanit-text">ยอดสุทธิ</span>
+                      {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
+                         <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md kanit-text border border-amber-100 animate-in fade-in">
+                            มีส่วนลด/ภาษี
+                         </span>
+                      )}
+                    </div>
+                    <span className="font-data text-sky-600">{formatCurrency(grandTotal)}</span>
+                  </div>
+
+                  {/* Checkout Actions */}
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={clearCart} 
+                      disabled={cart.length === 0}
+                      className="px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 text-slate-500 font-semibold hover:bg-slate-50 hover:text-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="ล้างตะกร้า"
+                    >
+                      <Trash2 size={18} className="sm:w-5 sm:h-5" />
+                    </button>
+                    <button 
+                      onClick={handleCheckout}
+                      disabled={cart.length === 0}
+                      className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-lg shadow-md transition-all active:scale-[0.98] kanit-text disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                        cart.length > 0 ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 shadow-none'
+                      }`}
+                    >
+                      ชำระเงิน {cart.length > 0 ? formatCurrency(grandTotal) : ''}
+                    </button>
+                  </div>
+                </div>
             </div>
           </div>
           
@@ -10846,9 +11102,1950 @@ const FinancePage = ({
         </div>,
         document.body
       )}
-              </div>
-              );
+    </div>
+  );
+};
+
+// --- ระบบจัดการพนักงาน (Staff Manager) ---
+const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading }) => {
+  const [search, setSearch] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
+  
+  const [isProcessing, setIsProcessing] = useState(false);
+  const staffModal = useModal();
+  const scheduleModal = useModal();
+  const payrollModal = useModal();
+  const alertModal = useModal();
+  const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
+
+  const [editingId, setEditingId] = useState(null);
+  
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffModalDate, setStaffModalDate] = useState(null);
+  const closeStaffModal = () => setShowStaffModal(false);
+  const staffSwipeHandlers = useSwipeDown(closeStaffModal);
+
+  const dragStaffState = useRef({
+    isDragging: false, element: null, clone: null, eventData: null,
+    startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null
+  });
+
+  const handleStaffDrop = async (dragData, toDateStr) => {
+    if (dragData.fromDate === toDateStr) return; 
+
+    const staffToUpdate = staffData.find(s => s.id === dragData.staffId);
+    if (!staffToUpdate) return;
+
+    let newSchedule = { ...(staffToUpdate.schedule || {}) };
+    newSchedule[dragData.fromDate] = { active: false }; 
+    newSchedule[toDateStr] = { 
+        active: true, 
+        start: dragData.start || '09:00', 
+        end: dragData.end || '20:00' 
+    };
+
+    const updatedStaff = { ...staffToUpdate, schedule: newSchedule };
+    
+    // --- Optimistic UI Update: เปลี่ยนแปลงหน้าจอทันทีไม่ต้องรอโหลด ---
+    setStaffData(prev => prev.map(s => s.id === dragData.staffId ? updatedStaff : s));
+    
+    setIsProcessing(true);
+    try {
+        if (callAppScript) await callAppScript('SAVE_DATA', 'Staff', updatedStaff);
+        showToast(`ย้ายกะทำงานของ ${staffToUpdate.name.split(' ')[0]} สำเร็จ`, 'success');
+    } catch (error) {
+        showToast('ย้ายตารางงานไม่สำเร็จ', 'danger');
+        // หากเซิร์ฟเวอร์มีปัญหา ให้ย้อนกลับการกระทำ
+        setStaffData(prev => prev.map(s => s.id === dragData.staffId ? staffToUpdate : s));
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
+  const handleStaffPointerDown = (e, ev) => {
+    e.stopPropagation();
+    if (isProcessing) return; // ป้องกันคลิกซ้อนตอนกำลังโหลด
+    if (e.pointerType === 'mouse' && e.button !== 0) return; 
+
+    const target = e.currentTarget;
+    const rect = target.getBoundingClientRect();
+    if (dragStaffState.current.holdTimer) clearTimeout(dragStaffState.current.holdTimer);
+
+    if (dragStaffState.current.clone && dragStaffState.current.clone.parentNode) {
+        dragStaffState.current.clone.parentNode.removeChild(dragStaffState.current.clone);
+    }
+
+    const isTouch = e.pointerType === 'touch';
+    const shiftY = isTouch ? 45 : 15;
+
+    dragStaffState.current = {
+      isDragging: false, element: target, clone: null, eventData: ev,
+      startX: e.clientX, startY: e.clientY,
+      offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+      shiftY: shiftY,
+      currentDropzone: null, holdTimer: null
+    };
+
+    const startDragging = () => {
+      const state = dragStaffState.current;
+      state.isDragging = true;
+      document.body.classList.add('is-custom-dragging');
+
+      const clone = target.cloneNode(true);
+      clone.classList.remove('hover:opacity-80', 'active:cursor-grabbing');
+
+      clone.style.width = `${target.offsetWidth}px`;
+      clone.style.height = `${target.offsetHeight}px`;
+      clone.style.position = 'fixed';
+      clone.style.zIndex = '999999';
+      clone.style.opacity = '1'; 
+      clone.style.pointerEvents = 'none'; 
+      clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 2px #0ea5e9';
+      clone.style.margin = '0';
+      clone.style.left = '0px';
+      clone.style.top = '0px';
+      
+      clone.style.transform = `translate3d(${state.startX - state.offsetX}px, ${state.startY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
+      clone.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      
+      setTimeout(() => {
+          if (dragStaffState.current.clone) dragStaffState.current.clone.style.transition = 'none';
+      }, 150);
+
+      document.body.appendChild(clone);
+      state.clone = clone;
+      target.style.opacity = '0.15';
+      
+      if (navigator.vibrate && isTouch) navigator.vibrate(50);
+    };
+
+    if (e.pointerType === 'touch') {
+      dragStaffState.current.holdTimer = setTimeout(startDragging, 200);
+    }
+
+    const handlePointerMove = (moveEvent) => {
+      const state = dragStaffState.current;
+      if (!state.element) return;
+
+      const dx = Math.abs(moveEvent.clientX - state.startX);
+      const dy = Math.abs(moveEvent.clientY - state.startY);
+
+      if (!state.isDragging && (dx > 5 || dy > 5)) {
+        if (state.holdTimer) clearTimeout(state.holdTimer);
+        if (e.pointerType === 'mouse') startDragging();
+        else { dragStaffState.current.element = null; return; }
+      }
+
+      if (state.isDragging) {
+        if (moveEvent.cancelable) moveEvent.preventDefault();
+        
+        if (state.clone) {
+          state.clone.style.transform = `translate3d(${moveEvent.clientX - state.offsetX}px, ${moveEvent.clientY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
+        }
+
+        const elementsUnder = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
+        const dropzoneEl = elementsUnder.find(el => el.classList && el.classList.contains('calendar-dropzone'));
+
+        if (state.currentDropzone !== dropzoneEl) {
+          if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
+          if (dropzoneEl) dropzoneEl.classList.add('dropzone-active');
+          state.currentDropzone = dropzoneEl;
+        }
+      }
+    };
+
+    const handlePointerUp = (upEvent) => {
+      const state = dragStaffState.current;
+      if (state.holdTimer) clearTimeout(state.holdTimer);
+
+      let wasDragging = state.isDragging; // --- จำสถานะว่าเพิ่งลากเสร็จ ---
+
+      if (state.isDragging) {
+        if (state.currentDropzone) {
+          const dateStr = state.currentDropzone.getAttribute('data-date');
+          if (dateStr) {
+             handleStaffDrop(state.eventData, dateStr);
+          }
+        }
+      }
+
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointercancel', handlePointerUp);
+
+      if (state.clone && state.clone.parentNode) state.clone.parentNode.removeChild(state.clone);
+      if (state.element) state.element.style.opacity = '1';
+      if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
+      document.body.classList.remove('is-custom-dragging');
+      dragStaffState.current = { isDragging: false, element: null, clone: null, eventData: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null };
+
+      // --- [FIX] บล็อกการ Click หากเพิ่งวางรายการเพื่อไม่ให้ Modal เปิดซ้อน ---
+      if (wasDragging) {
+          const preventClick = (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              window.removeEventListener('click', preventClick, true);
+          };
+          window.addEventListener('click', preventClick, true);
+          setTimeout(() => window.removeEventListener('click', preventClick, true), 100);
+      }
+    };
+
+    document.addEventListener('pointermove', handlePointerMove, { passive: false });
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointercancel', handlePointerUp);
+  };
+
+  const activeTimelineDrag = useRef(null);
+
+  const formatTimeNum = (num) => {
+      const h = Math.floor(num);
+      const m = Math.round((num - h) * 60);
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const parseTimeStr = (str) => {
+      if (!str) return 0;
+      const [h, m] = str.split(':').map(Number);
+      return h + (m / 60);
+  };
+
+  const handleTimelinePointerDown = (e, staff, dateStr, actionType) => {
+      e.stopPropagation();
+      if (isProcessing) return; // ป้องกันลาก/คลิกซ้อน
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+      const blockEl = e.currentTarget.closest('.timeline-block');
+      if (!blockEl) return;
+
+      const containerWidth = blockEl.parentElement.offsetWidth;
+      const pixelsPerHour = containerWidth / 18; 
+
+      activeTimelineDrag.current = {
+          staffId: staff.id,
+          dateStr,
+          actionType, 
+          startX: e.clientX,
+          origStartNum: parseTimeStr(staff.start),
+          origEndNum: parseTimeStr(staff.end),
+          blockEl,
+          pixelsPerHour,
+          currentStartNum: parseTimeStr(staff.start),
+          currentEndNum: parseTimeStr(staff.end)
+      };
+
+      document.body.classList.add('is-custom-dragging');
+      blockEl.style.transition = 'none'; 
+      blockEl.classList.add('z-50', 'ring-2', 'ring-indigo-400', 'shadow-lg');
+
+      document.addEventListener('pointermove', handleTimelinePointerMove);
+      document.addEventListener('pointerup', handleTimelinePointerUp);
+      document.addEventListener('pointercancel', handleTimelinePointerUp);
+  };
+
+  const handleTimelinePointerMove = (e) => {
+      const state = activeTimelineDrag.current;
+      if (!state) return;
+
+      const deltaX = e.clientX - state.startX;
+      let deltaHours = deltaX / state.pixelsPerHour;
+      
+      deltaHours = Math.round(deltaHours * 2) / 2;
+
+      let newStart = state.origStartNum;
+      let newEnd = state.origEndNum;
+
+      if (state.actionType === 'move') {
+          newStart = Math.max(6, Math.min(24 - (state.origEndNum - state.origStartNum), state.origStartNum + deltaHours));
+          newEnd = newStart + (state.origEndNum - state.origStartNum);
+      } else if (state.actionType === 'resize-start') {
+          newStart = Math.max(6, Math.min(state.origEndNum - 0.5, state.origStartNum + deltaHours));
+      } else if (state.actionType === 'resize-end') {
+          newEnd = Math.max(state.origStartNum + 0.5, Math.min(24, state.origEndNum + deltaHours));
+      }
+
+      state.currentStartNum = newStart;
+      state.currentEndNum = newEnd;
+
+      const leftPercent = ((newStart - 6) / 18) * 100;
+      const widthPercent = ((newEnd - newStart) / 18) * 100;
+      
+      state.blockEl.style.left = `${leftPercent}%`;
+      state.blockEl.style.width = `${widthPercent}%`;
+      
+      const textEl = state.blockEl.querySelector('.timeline-text');
+      if (textEl) textEl.textContent = `${formatTimeNum(newStart)} - ${formatTimeNum(newEnd)}`;
+  };
+
+  const handleTimelinePointerUp = async (e) => {
+      const state = activeTimelineDrag.current;
+      if (!state) return;
+
+      let wasDragged = (state.currentStartNum !== state.origStartNum || state.currentEndNum !== state.origEndNum);
+
+      document.removeEventListener('pointermove', handleTimelinePointerMove);
+      document.removeEventListener('pointerup', handleTimelinePointerUp);
+      document.removeEventListener('pointercancel', handleTimelinePointerUp);
+
+      document.body.classList.remove('is-custom-dragging');
+      if (state.blockEl) {
+          state.blockEl.style.transition = ''; 
+          state.blockEl.classList.remove('z-50', 'ring-2', 'ring-indigo-400', 'shadow-lg');
+      }
+
+      // เคลียร์ State การลากทันที เพื่อป้องกันการอ้างอิงผิดพลาดถ้ามีการคลิกซ้อนรัวๆ
+      activeTimelineDrag.current = null;
+
+      // --- [FIX] บล็อกการ Click หากยืดหดหรือเลื่อนเวลา ---
+      if (wasDragged) {
+          const preventClick = (eClick) => {
+              eClick.stopPropagation();
+              eClick.preventDefault();
+              window.removeEventListener('click', preventClick, true);
+          };
+          window.addEventListener('click', preventClick, true);
+          setTimeout(() => window.removeEventListener('click', preventClick, true), 100);
+      }
+
+      if (wasDragged) {
+          const newStartStr = formatTimeNum(state.currentStartNum);
+          const newEndStr = formatTimeNum(state.currentEndNum);
+
+          const staffToUpdate = staffData.find(s => s.id === state.staffId);
+          if (staffToUpdate) {
+              const newSchedule = { ...(staffToUpdate.schedule || {}) };
+              const existingData = newSchedule[state.dateStr] || {};
+              newSchedule[state.dateStr] = {
+                  ...existingData,
+                  active: true,
+                  start: newStartStr,
+                  end: newEndStr
               };
+
+              const updatedStaff = { ...staffToUpdate, schedule: newSchedule };
+              
+              // --- Optimistic UI Update: อัปเดตตารางเวลาใหม่ให้ผู้ใช้เห็นทันที ---
+              setStaffData(prev => prev.map(s => s.id === state.staffId ? updatedStaff : s));
+
+              setIsProcessing(true);
+              try {
+                  if (callAppScript) await callAppScript('SAVE_DATA', 'Staff', updatedStaff);
+                  showToast('อัปเดตเวลาทำงานสำเร็จ', 'success');
+              } catch (error) {
+                  showToast('อัปเดตไม่สำเร็จ กรุณาลองใหม่', 'danger');
+                  // Revert กลับเป็นเวลาเดิมหากเกิดข้อผิดพลาด
+                  setStaffData(prev => prev.map(s => s.id === state.staffId ? staffToUpdate : s));
+              } finally {
+                  setIsProcessing(false);
+              }
+          }
+      }
+  };
+
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const videoRef = React.useRef(null);
+  const [showPrefixDropdown, setShowPrefixDropdown] = useState(false);
+
+  const [showDobCalendar, setShowDobCalendar] = useState(false);
+  const [dobCalDate, setDobCalDate] = useState(new Date());
+  const [dobCalView, setDobCalView] = useState('days');
+  const [dobYearPageStart, setDobYearPageStart] = useState(0);
+  const [isDobCalendarClosing, setIsDobCalendarClosing] = useState(false);
+  const dobWrapperRef = React.useRef(null);
+
+  const closeDobCalendar = () => {
+      setIsDobCalendarClosing(true);
+      setTimeout(() => { setShowDobCalendar(false); setIsDobCalendarClosing(false); }, 300);
+  };
+  const dobCalSwipeProps = useSwipeDown(closeDobCalendar);
+
+  const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const daysTH = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
+  // เปิดกล้องเมื่อเปิด Scanner
+  useEffect(() => {
+    let stream = null;
+    if (isScannerOpen && navigator.mediaDevices) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(s => { stream = s; if (videoRef.current) videoRef.current.srcObject = s; })
+        .catch(err => { showToast('อุปกรณ์ไม่รองรับ หรือไม่ได้อนุญาตให้ใช้กล้อง', 'warning'); });
+    }
+    return () => { if (stream) stream.getTracks().forEach(track => track.stop()); };
+  }, [isScannerOpen]);
+  
+  // Form พนักงาน
+  const initialForm = { 
+    id: '', prefix: '', firstName: '', lastName: '', name: '', role: 'nurse', phone: '', idCard: '', dob: '', gender: '',
+    nationality: 'ไทย', ethnicity: 'ไทย', religion: 'พุทธ',
+    address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '',
+    curAddress: '', curMoo: '', curRoad: '', curSubDistrict: '', curDistrict: '', curProvince: '', curZipcode: '',
+    emName: '', emRelation: '', emPhone: '', emAddress: '',
+    baseSalary: 0, commissionRate: 0, commissionType: 'percent', commissionCondition: 'all', commissionThreshold: 0, branchId: 'b1', schedule: {}, photo: '' 
+  };
+  const [formData, setFormData] = useState(initialForm);
+
+  // Form ตารางงาน
+  const initialSchedule = {
+      0: { active: false, start: '09:00', end: '20:00' },
+      1: { active: true, start: '09:00', end: '20:00' },
+      2: { active: true, start: '09:00', end: '20:00' },
+      3: { active: true, start: '09:00', end: '20:00' },
+      4: { active: true, start: '09:00', end: '20:00' },
+      5: { active: true, start: '09:00', end: '20:00' },
+      6: { active: false, start: '09:00', end: '20:00' }
+  };
+  const [selectedScheduleStaff, setSelectedScheduleStaff] = useState(null);
+  const [scheduleForm, setScheduleForm] = useState(initialSchedule);
+
+  // --- States สำหรับปฏิทินตารางงานพิเศษ ---
+  const [schedCalDate, setSchedCalDate] = useState(new Date());
+  const [schedSelectedDate, setSchedSelectedDate] = useState(new Date());
+  const [overviewDate, setOverviewDate] = useState(new Date()); // เพิ่มตัวแปรนี้สำหรับปฏิทินภาพรวมรายเดือน
+  const [overviewViewMode, setOverviewViewMode] = useState('month'); // 'month' หรือ 'week'
+
+  // Form จ่ายเงินเดือน/ค่าคอม
+  const [selectedPayrollStaff, setSelectedPayrollStaff] = useState(null);
+  const [payrollForm, setPayrollForm] = useState({ salary: 0, commission: 0, bonus: 0, deduction: 0, total: 0, note: '' });
+
+  // --- Modal สำหรับแสดงรายชื่อพนักงานที่เข้ากะ ---
+  const renderStaffScheduleModal = () => {
+      if (!showStaffModal || !staffModalDate) return null;
+
+      const dayOfWeek = staffModalDate.getDay();
+      const dateStr = `${String(staffModalDate.getDate()).padStart(2,'0')}/${String(staffModalDate.getMonth()+1).padStart(2,'0')}/${staffModalDate.getFullYear()+543}`;
+
+      // ดึงพนักงาน "ทั้งหมด" ที่ตั้งค่าว่าทำงานในวันนี้
+      const workingStaff = staffData.filter(s => {
+          if (!s.schedule) return false;
+          const specificData = s.schedule[dateStr];
+          if (specificData !== undefined) return specificData.active;
+          if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
+          if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
+          return false;
+      });
+
+      // จัดกลุ่มพนักงานตามตำแหน่ง
+      const groupedStaff = {
+          doctor: workingStaff.filter(s => s.role === 'doctor'),
+          nurse: workingStaff.filter(s => s.role === 'nurse'),
+          sale: workingStaff.filter(s => s.role === 'sale'),
+          admin: workingStaff.filter(s => s.role === 'admin' || !['doctor', 'nurse', 'sale'].includes(s.role))
+      };
+
+      const roleLabels = { doctor: 'แพทย์ (Doctor)', nurse: 'พยาบาล/ผู้ช่วย (Nurse)', sale: 'พนักงานขาย/ที่ปรึกษา', admin: 'แอดมิน/จัดการทั่วไป' };
+      const roleColors = {
+          doctor: 'text-indigo-600 bg-indigo-50 border-indigo-200',
+          nurse: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+          sale: 'text-amber-600 bg-amber-50 border-amber-200',
+          admin: 'text-slate-600 bg-slate-100 border-slate-200'
+      };
+
+      const modalContent = (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
+              <div className="absolute inset-0" onClick={closeStaffModal}></div>
+              <div ref={staffSwipeHandlers.ref} style={staffSwipeHandlers.style} className="bg-white rounded-[1.5rem] sm:rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden modal-animate-in relative z-10 mobile-bottom-sheet">
+                  <div className="py-4 -mt-4 mb-2 sm:hidden flex justify-center w-full touch-none cursor-grab active:cursor-grabbing shrink-0">
+                      <div className="w-12 h-1.5 bg-slate-200 rounded-full pointer-events-none"></div>
+                  </div>
+                  
+                  <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                      <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner">
+                              <Users size={20} className="sm:w-6 sm:h-6" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-slate-800 kanit-text text-base sm:text-lg">บุคลากรที่เข้างาน</h3>
+                              <p className="text-[10px] sm:text-xs text-slate-500 font-medium kanit-text">{daysTH[dayOfWeek]}ที่ {staffModalDate.getDate()} {thaiMonths[staffModalDate.getMonth()]} {staffModalDate.getFullYear()+543}</p>
+                          </div>
+                      </div>
+                      <button onClick={closeStaffModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+                  </div>
+
+                  <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+                      {workingStaff.length > 0 ? (
+                          <div className="space-y-6">
+                              {Object.keys(groupedStaff).map(roleKey => {
+                                  const staffs = groupedStaff[roleKey];
+                                  if (staffs.length === 0) return null;
+                                  return (
+                                      <div key={roleKey} className="space-y-3">
+                                          <h4 className="font-bold text-slate-700 kanit-text text-sm flex items-center gap-2 border-b border-slate-200/60 pb-2">
+                                              <span className={`w-2 h-2 rounded-full ${roleColors[roleKey].split(' ')[1]}`}></span>
+                                              {roleLabels[roleKey]} ({staffs.length})
+                                          </h4>
+                                          <div className="grid grid-cols-1 gap-2.5">
+                                              {staffs.map(s => {
+                                                  let timeStr = 'เวลาทำงานปกติ';
+                                                  if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
+                                                      timeStr = `${s.schedule[dayOfWeek].start} - ${s.schedule[dayOfWeek].end} น.`;
+                                                  }
+                                                  const specificData = s.schedule[dateStr];
+                                                  if (specificData !== undefined) {
+                                                      timeStr = `${specificData.start} - ${specificData.end} น.`;
+                                                  }
+                                                  return (
+                                                      <div key={s.id} className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-sky-200 transition-colors">
+                                                          <div className="flex items-center gap-3 min-w-0">
+                                                              {s.photo ? (
+                                                                  <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0 shadow-sm" />
+                                                              ) : (
+                                                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm text-lg ${roleKey==='doctor'?'bg-indigo-400':roleKey==='nurse'?'bg-emerald-400':roleKey==='sale'?'bg-amber-400':'bg-slate-400'}`}>{s.name.charAt(0)}</div>
+                                                              )}
+                                                              <div className="min-w-0">
+                                                                  <p className="font-bold text-slate-800 kanit-text text-sm truncate leading-tight">{s.name}</p>
+                                                                  <div className="text-[10px] text-slate-500 font-data truncate mt-0.5 flex items-center gap-1">
+                                                                      <Phone size={10} className="text-slate-400 shrink-0" /> {s.phone || 'ไม่มีเบอร์ติดต่อ'}
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                          <div className="shrink-0 text-right">
+                                                              <div className={`text-[10px] font-bold px-2 py-1 rounded-md border flex items-center justify-center gap-1 whitespace-nowrap ${roleColors[roleKey]}`}>
+                                                                  <Clock size={10} className="shrink-0" /> {timeStr}
+                                                              </div>
+                                                          </div>
+                                                      </div>
+                                                  )
+                                              })}
+                                          </div>
+                                      </div>
+                                  )
+                              })}
+                          </div>
+                      ) : (
+                          <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-100 border-dashed">
+                              <Users size={40} className="mx-auto mb-3 opacity-20" />
+                              <p className="kanit-text font-bold text-sm">ไม่มีพนักงานลงตารางงานในวันนี้</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      );
+      return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
+  };
+
+  // --- ฟังก์ชันจัดการปฏิทินวันเกิด ---
+  const handleOpenDobCalendar = () => {
+    if (formData.dob?.length === 10) {
+      const parts = formData.dob.split('/');
+      const y = parseInt(parts[2], 10) - 543;
+      if (!isNaN(y)) setDobCalDate(new Date(y, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)));
+      else setDobCalDate(new Date());
+    } else setDobCalDate(new Date());
+    setDobCalView('days');
+    setShowDobCalendar(true);
+  };
+
+  const handleDobChange = (e) => {
+    if (e.nativeEvent && e.nativeEvent.inputType && e.nativeEvent.inputType.includes('delete')) {
+        setFormData({ ...formData, dob: e.target.value });
+        return;
+    }
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 8) value = value.slice(0, 8);
+    if (value.length > 4) value = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(4)}`;
+    else if (value.length > 2) value = `${value.slice(0, 2)}/${value.slice(2)}`;
+    setFormData({ ...formData, dob: value });
+  };
+
+  const handlePrevDobMonth = () => setDobCalDate(new Date(dobCalDate.getFullYear(), dobCalDate.getMonth() - 1, 1));
+  const handleNextDobMonth = () => setDobCalDate(new Date(dobCalDate.getFullYear(), dobCalDate.getMonth() + 1, 1));
+  const handleSelectDobDate = (day) => {
+    setFormData({ ...formData, dob: `${String(day).padStart(2, '0')}/${String(dobCalDate.getMonth() + 1).padStart(2, '0')}/${dobCalDate.getFullYear() + 543}` });
+    closeDobCalendar();
+  };
+
+  useEffect(() => {
+    if (dobCalView === 'years') setDobYearPageStart(Math.floor((dobCalDate.getFullYear() + 543) / 12) * 12);
+  }, [dobCalView, dobCalDate]);
+
+  const blankDobDays = Array.from({ length: new Date(dobCalDate.getFullYear(), dobCalDate.getMonth(), 1).getDay() }, (_, i) => i);
+  const monthDobDays = Array.from({ length: new Date(dobCalDate.getFullYear(), dobCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1);
+
+  // --- ฟังก์ชันอัปโหลดรูปภาพพนักงาน ---
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { 
+        showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 2MB', 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, photo: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const copyAddressToCurrent = () => {
+    setFormData({
+      ...formData, curAddress: formData.address, curMoo: formData.moo, curRoad: formData.road,
+      curSubDistrict: formData.subDistrict, curDistrict: formData.district, curProvince: formData.province, curZipcode: formData.zipcode
+    });
+  };
+
+  // --- ฟังก์ชัน OCR และ Smart Card ---
+  const captureImageToBase64 = () => {
+    const video = videoRef.current;
+    if (!video) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg').split(',')[1]; 
+  };
+
+  const parseIdCardText = (text) => {
+    const lines = text.split('\n').map(line => line.trim());
+    let extractedData = { idCard: '', prefix: '', firstName: '', lastName: '', dob: '', gender: '', address: '', moo: '', road: '', subDistrict: '', district: '', province: '' };
+    const idMatch = text.replace(/\s/g, '').match(/\d{13}/);
+    if (idMatch) extractedData.idCard = idMatch[0];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.includes('ชื่อตัวและชื่อสกุล') || line.match(/^(นาย|นาง|นางสาว|น\.ส\.|ด\.ช\.|ด\.ญ\.)/)) {
+            let nameLine = line.replace('ชื่อตัวและชื่อสกุล', '').trim();
+            if (!nameLine && i + 1 < lines.length) nameLine = lines[i+1].trim();
+            const prefixMatch = nameLine.match(/^(นาย|นางสาว|นาง|น\.ส\.|ด\.ช\.|ด\.ญ\.)/);
+            if (prefixMatch) {
+                let rawPrefix = prefixMatch[1];
+                if (rawPrefix === 'น.ส.') rawPrefix = 'นางสาว';
+                extractedData.prefix = rawPrefix;
+                if (['นาย', 'ด.ช.'].includes(rawPrefix)) extractedData.gender = 'ชาย';
+                else if (['นาง', 'นางสาว', 'ด.ญ.'].includes(rawPrefix)) extractedData.gender = 'หญิง';
+                const nameParts = nameLine.substring(prefixMatch[0].length).trim().split(/\s+/);
+                if (nameParts.length >= 1) extractedData.firstName = nameParts[0];
+                if (nameParts.length >= 2) extractedData.lastName = nameParts.slice(1).join(' ');
+            }
+            break;
+        }
+    }
+
+    const dobMatch = text.match(/(?:เกิดวันที่|Date of Birth|เกิด)\s*(\d{1,2})\s+([ก-๙a-zA-Z.]+)\s+(\d{4})/);
+    if (dobMatch) {
+        const day = dobMatch[1].padStart(2, '0'); const monthStr = dobMatch[2]; const year = dobMatch[3];
+        const thaiMonthsMap = { 'ม.ค.': '01', 'มกราคม': '01', 'ก.พ.': '02', 'กุมภาพันธ์': '02', 'มี.ค.': '03', 'มีนาคม': '03', 'เม.ย.': '04', 'เมษายน': '04', 'พ.ค.': '05', 'พฤษภาคม': '05', 'มิ.ย.': '06', 'มิถุนายน': '06', 'ก.ค.': '07', 'กรกฎาคม': '07', 'ส.ค.': '08', 'สิงหาคม': '08', 'ก.ย.': '09', 'กันยายน': '09', 'ต.ค.': '10', 'ตุลาคม': '10', 'พ.ย.': '11', 'พฤศจิกายน': '11', 'ธ.ค.': '12', 'ธันวาคม': '12' };
+        let month = '01';
+        for (const [key, value] of Object.entries(thaiMonthsMap)) { if (monthStr.includes(key)) { month = value; break; } }
+        extractedData.dob = `${day}/${month}/${year}`;
+    }
+
+    const religionMatch = text.match(/ศาสนา\s*([ก-๙]+)/);
+    if (religionMatch) extractedData.religion = religionMatch[1].trim();
+    const nationalityMatch = text.match(/สัญชาติ\s*([ก-๙]+)/);
+    if (nationalityMatch) extractedData.nationality = nationalityMatch[1].trim();
+
+    const addressIndex = lines.findIndex(line => line.includes('ที่อยู่') || line.includes('Address'));
+    if (addressIndex !== -1) {
+        let addressText = lines[addressIndex].replace(/ที่อยู่|Address/g, '').trim();
+        let lineOffset = 1;
+        while (addressIndex + lineOffset < lines.length) {
+            const nextLine = lines[addressIndex + lineOffset];
+            if (nextLine.includes('ศาสนา') || nextLine.match(/\d{13}/) || nextLine.includes('วันออกบัตร') || nextLine.includes('Date of Issue')) break;
+            addressText += ' ' + nextLine.trim(); lineOffset++;
+        }
+        addressText = addressText.replace(/\s+/g, ' ').trim();
+        let provMatch = addressText.match(/(?:จังหวัด|จ\.)\s*([^\s]+)/); if (provMatch) extractedData.province = provMatch[1];
+        let distMatch = addressText.match(/(?:อำเภอ|เขต|อ\.)\s*([^\s]+)/); if (distMatch) extractedData.district = distMatch[1];
+        let subDistMatch = addressText.match(/(?:ตำบล|แขวง|ต\.)\s*([^\s]+)/); if (subDistMatch) extractedData.subDistrict = subDistMatch[1];
+        let roadMatch = addressText.match(/(?:ถนน|ถ\.)\s*([^\s]+)/); if (roadMatch) extractedData.road = roadMatch[1];
+        let mooMatch = addressText.match(/หมู่(?:ที่)?\s*([^\s]+)/); if (mooMatch) extractedData.moo = mooMatch[1];
+        let houseMatch = addressText.split(/\s+(หมู่|ซอย|ตรอก|ถนน|ตำบล|แขวง|อำเภอ|เขต|จังหวัด)/)[0];
+        if (houseMatch) extractedData.address = houseMatch.replace(/^ที่อยู่\s*/, '').trim();
+    }
+    setFormData(prev => ({ ...prev, ...extractedData }));
+    setIsScannerOpen(false);
+    showToast('ดึงข้อมูลจากบัตรประชาชน (OCR) สำเร็จ', 'success');
+  };
+
+  const handleRealScan = async () => {
+    if (!VISION_API_KEY) { showToast('กรุณาตั้งค่า VISION_API_KEY', 'warning'); return; }
+    const base64Image = captureImageToBase64();
+    if (!base64Image) { showToast('ไม่สามารถจับภาพได้', 'warning'); return; }
+    setIsScanning(true);
+    try {
+        const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }] }] }) });
+        const data = await response.json();
+        if (data.error) showToast(`API Error`, 'danger');
+        else if (data.responses && data.responses[0] && data.responses[0].fullTextAnnotation) parseIdCardText(data.responses[0].fullTextAnnotation.text); 
+        else showToast('ไม่พบข้อความ สแกนใหม่', 'warning');
+    } catch (error) { showToast('เกิดข้อผิดพลาด API', 'danger'); } 
+    finally { setIsScanning(false); }
+  };
+
+  const handleSmartCardRead = async () => {
+    setIsProcessing(true);
+    try {
+        const response = await fetch('http://localhost:8181/api/read-card', { method: 'GET', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(5000) });
+        if (!response.ok) throw new Error('ไม่อ่าน');
+        const data = await response.json();
+        setFormData(prev => ({
+            ...prev, 
+            idCard: data.pid || data.citizenId || '', 
+            prefix: data.titleName || data.titleTH || '', 
+            firstName: data.fname || data.firstNameTH || '', 
+            lastName: data.lname || data.lastNameTH || '',
+            dob: data.dob ? `${data.dob.substring(6,8)}/${data.dob.substring(4,6)}/${data.dob.substring(0,4)}` : '',
+            gender: data.gender === '1' || data.gender === 'Male' ? 'ชาย' : (data.gender === '2' || data.gender === 'Female' ? 'หญิง' : 'ไม่ระบุ'),
+            address: data.address || data.houseNo || '', 
+            moo: data.moo || '', 
+            subDistrict: data.subDistrict || data.tumbol || '', 
+            district: data.district || data.amphur || '', 
+            province: data.province || '',
+        }));
+        showToast('ดึงข้อมูลบัตรสำเร็จ', 'success');
+    } catch (error) { showToast('เชื่อมต่อเครื่องอ่านไม่ได้', 'danger'); } 
+    finally { setIsProcessing(false); }
+  };
+
+  const roleMap = {
+    'doctor': { label: 'แพทย์ (Doctor)', color: 'bg-indigo-50 text-indigo-600 border-indigo-200', icon: Stethoscope },
+    'nurse': { label: 'พยาบาล/ผู้ช่วย (Nurse)', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: HeartPulse || Plus },
+    'sale': { label: 'พนักงานขาย (Sale)', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: Tag },
+    'admin': { label: 'แอดมิน (Admin)', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Settings },
+  };
+
+  const daysMap = [
+    { val: 1, label: 'จันทร์', short: 'จ', color: 'bg-yellow-100 text-yellow-700' },
+    { val: 2, label: 'อังคาร', short: 'อ', color: 'bg-pink-100 text-pink-700' },
+    { val: 3, label: 'พุธ', short: 'พ', color: 'bg-green-100 text-green-700' },
+    { val: 4, label: 'พฤหัส', short: 'พฤ', color: 'bg-orange-100 text-orange-700' },
+    { val: 5, label: 'ศุกร์', short: 'ศ', color: 'bg-blue-100 text-blue-700' },
+    { val: 6, label: 'เสาร์', short: 'ส', color: 'bg-purple-100 text-purple-700' },
+    { val: 0, label: 'อาทิตย์', short: 'อา', color: 'bg-red-100 text-red-700' }
+  ];
+
+  const filteredStaff = useMemo(() => {
+    return staffData.filter(s => {
+      const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || (s.phone && s.phone.includes(search));
+      const matchRole = filterRole === 'all' || s.role === filterRole;
+      return matchSearch && matchRole;
+    });
+  }, [staffData, search, filterRole]);
+
+  const stats = useMemo(() => {
+    const today = new Date().getDay();
+    const doctors = staffData.filter(s => s.role === 'doctor').length;
+    const workingToday = staffData.filter(s => {
+       if (Array.isArray(s.schedule)) return s.schedule.includes(today);
+       if (typeof s.schedule === 'object' && s.schedule[today]) return s.schedule[today].active;
+       return false;
+    }).length;
+    return { total: staffData.length, doctors, workingToday };
+  }, [staffData]);
+
+  // --- Handlers ---
+  const handleOpenAdd = () => {
+    setEditingId(null);
+    setFormData(initialForm);
+    staffModal.open();
+  };
+
+  const handleOpenEdit = (staff) => {
+    setEditingId(staff.id);
+    const parsed = parsePatientName(staff.name || '');
+    setFormData({ 
+       ...initialForm, 
+       ...staff, 
+       prefix: staff.prefix || parsed.prefix,
+       firstName: staff.firstName || parsed.firstName,
+       lastName: staff.lastName || parsed.lastName,
+       baseSalary: staff.baseSalary || 0, 
+       commissionRate: staff.commissionRate || 0 
+    });
+    staffModal.open();
+  };
+
+  const handleSaveStaff = async (e) => {
+    e.preventDefault();
+    setIsProcessing(true);
+    
+    const finalId = editingId || `STF${Date.now()}`;
+    const fullName = `${formData.prefix}${formData.firstName} ${formData.lastName}`.trim();
+    
+    const payload = {
+       ...formData,
+       id: finalId,
+       name: fullName || formData.name,
+       baseSalary: Number(formData.baseSalary),
+       commissionRate: Number(formData.commissionRate),
+       createdAt: editingId ? formData.createdAt : new Date().toISOString()
+    };
+
+    try {
+      if (callAppScript) {
+        await callAppScript('SAVE_DATA', 'Staff', payload);
+      }
+      if (editingId) {
+         setStaffData(prev => prev.map(s => s.id === editingId ? payload : s));
+         showToast('อัปเดตข้อมูลพนักงานสำเร็จ', 'success');
+      } else {
+         setStaffData(prev => [payload, ...prev]);
+         showToast('เพิ่มพนักงานใหม่สำเร็จ', 'success');
+      }
+      staffModal.close();
+    } catch(err) {
+      showToast('เกิดข้อผิดพลาดในการบันทึก', 'danger');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDelete = (staff) => {
+    setAlertConfig({
+      title: 'ยืนยันการลบพนักงาน',
+      text: `คุณต้องการลบข้อมูลพนักงาน "${staff.name}" ใช่หรือไม่?`,
+      onConfirm: async () => {
+         alertModal.close();
+         setIsProcessing(true);
+         try {
+           if (callAppScript) {
+             await callAppScript('DELETE_DATA', 'Staff', { id: staff.id });
+           }
+           setStaffData(prev => prev.filter(s => s.id !== staff.id));
+           showToast('ลบพนักงานสำเร็จ', 'danger');
+         } catch(err) {
+           showToast('ลบไม่สำเร็จ กรุณาลองใหม่', 'warning');
+         } finally {
+           setIsProcessing(false);
+         }
+      }
+    });
+    alertModal.open();
+  };
+
+  // --- Schedule ---
+  const handleOpenSchedule = (staff) => {
+    setSelectedScheduleStaff(staff);
+    setSchedCalDate(new Date());
+    setSchedSelectedDate(new Date());
+    if (Array.isArray(staff.schedule)) {
+        let converted = { ...initialSchedule };
+        Object.keys(converted).forEach(day => { converted[day].active = false; });
+        staff.schedule.forEach(day => {
+            if (converted[day]) converted[day].active = true;
+        });
+        setScheduleForm(converted);
+    } else {
+        setScheduleForm(staff.schedule || initialSchedule);
+    }
+    scheduleModal.open();
+  };
+
+  const handleSaveSchedule = async () => {
+    setIsProcessing(true);
+    const updatedStaff = { ...selectedScheduleStaff, schedule: scheduleForm };
+    try {
+      if (callAppScript) {
+        await callAppScript('SAVE_DATA', 'Staff', updatedStaff);
+      }
+      setStaffData(prev => prev.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+      showToast('อัปเดตตารางงานสำเร็จ', 'success');
+      scheduleModal.close();
+    } catch(err) {
+      showToast('เกิดข้อผิดพลาด', 'danger');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // --- Payroll ---
+  const handleOpenPayroll = (staff) => {
+    setSelectedPayrollStaff(staff);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const mySales = posHistoryData.filter(tx => 
+        tx.sellerId === staff.id && 
+        tx.status === 'completed' &&
+        new Date(tx.createdAt || tx.date) > thirtyDaysAgo
+    );
+    
+    const calculatedCommission = mySales.reduce((sum, tx) => sum + (Number(tx.commissionAmount) || 0), 0);
+    const baseS = Number(staff.baseSalary) || 0;
+
+    setPayrollForm({
+       salary: baseS,
+       commission: calculatedCommission,
+       bonus: 0,
+       deduction: 0,
+       total: baseS + calculatedCommission,
+       note: `เงินเดือนและค่าคอมฯ (${mySales.length} บิล)`
+    });
+
+    payrollModal.open();
+  };
+
+  useEffect(() => {
+     const s = Number(payrollForm.salary) || 0;
+     const c = Number(payrollForm.commission) || 0;
+     const b = Number(payrollForm.bonus) || 0;
+     const d = Number(payrollForm.deduction) || 0;
+     setPayrollForm(prev => ({ ...prev, total: (s + c + b) - d }));
+  }, [payrollForm.salary, payrollForm.commission, payrollForm.bonus, payrollForm.deduction]);
+
+  const handleSavePayroll = async (e) => {
+    e.preventDefault();
+    setIsProcessing(true);
+
+    const financePayload = {
+       id: `EXP-PR-${Date.now()}`,
+       date: new Date().toISOString(),
+       type: 'expense',
+       category: 'เงินเดือน/ค่าตอบแทนพนักงาน',
+       amount: payrollForm.total,
+       subtotal: payrollForm.total,
+       discountAmount: 0,
+       vatAmount: 0,
+       method: 'transfer', 
+       status: 'completed',
+       isAuto: false,
+       branchId: selectedPayrollStaff.branchId || 'b1',
+       note: `จ่ายให้: ${selectedPayrollStaff.name}\nเงินเดือน: ${payrollForm.salary} | ค่าคอม: ${payrollForm.commission} | โบนัส: ${payrollForm.bonus} | หัก: ${payrollForm.deduction}\n${payrollForm.note}`,
+       items: [{ name: `เงินเดือน/ค่าคอม (${selectedPayrollStaff.name})`, quantity: 1, price: payrollForm.total, total: payrollForm.total }]
+    };
+
+    try {
+      if (callAppScript) {
+        await callAppScript('SAVE_DATA', 'Finance_Expenses', financePayload);
+      }
+      if (setFinanceData) {
+         setFinanceData(prev => [financePayload, ...prev]);
+      }
+      showToast('บันทึกการจ่ายเงินเดือนเข้าสู่ระบบการเงินแล้ว', 'success');
+      payrollModal.close();
+    } catch (err) {
+      showToast('ไม่สามารถบันทึกได้', 'danger');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const formatCurrency = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(Number(amount) || 0);
+
+  return (
+    <div className="fade-in pb-10 flex flex-col h-full w-full">
+      {renderStaffScheduleModal()}
+      <div className="sticky top-0 z-30 w-full pointer-events-none mb-4">
+        <div className="w-full pointer-events-auto bg-white/80 backdrop-blur-xl border-b border-slate-200/80 shadow-sm px-4 md:px-8 2xl:px-12 py-4 flex flex-row justify-between items-center gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text flex items-center gap-2">
+              <UserCog className="text-sky-500" /> จัดการพนักงาน
+            </h1>
+            <p className="text-slate-500 text-xs sm:text-sm kanit-text mt-0.5">จัดการข้อมูล, ตารางงาน และค่าคอมมิชชั่น</p>
+          </div>
+          <button onClick={handleOpenAdd} className="bg-sky-500 text-white hover:bg-sky-600 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold shadow-md shadow-sky-500/20 transition-all active:scale-95 flex items-center gap-2 kanit-text text-sm sm:text-base pointer-events-auto">
+            <Plus size={18} /> <span className="hidden sm:inline">เพิ่มพนักงาน</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 space-y-4">
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+           <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center shrink-0"><Users size={20} /></div>
+              <div><p className="text-[10px] sm:text-xs font-bold text-slate-400 kanit-text uppercase">พนักงานทั้งหมด</p><p className="text-lg sm:text-xl font-black text-slate-800 font-data">{stats.total}</p></div>
+           </div>
+           <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0"><Stethoscope size={20} /></div>
+              <div><p className="text-[10px] sm:text-xs font-bold text-slate-400 kanit-text uppercase">แพทย์ประจำ</p><p className="text-lg sm:text-xl font-black text-slate-800 font-data">{stats.doctors}</p></div>
+           </div>
+           <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0"><CalendarClock size={20} /></div>
+              <div><p className="text-[10px] sm:text-xs font-bold text-slate-400 kanit-text uppercase">เข้ากะวันนี้</p><p className="text-lg sm:text-xl font-black text-emerald-600 font-data">{stats.workingToday}</p></div>
+           </div>
+        </div>
+
+        {/* --- NEW: ปฏิทินภาพรวมการทำงานของพนักงาน --- */}
+        {(() => {
+            const handlePrevOverview = () => {
+                const newDate = new Date(overviewDate);
+                if (overviewViewMode === 'month') newDate.setMonth(newDate.getMonth() - 1);
+                else if (overviewViewMode === 'week') newDate.setDate(newDate.getDate() - 7);
+                else newDate.setDate(newDate.getDate() - 1); // สำหรับมุมมองวัน
+                setOverviewDate(newDate);
+            };
+            const handleNextOverview = () => {
+                const newDate = new Date(overviewDate);
+                if (overviewViewMode === 'month') newDate.setMonth(newDate.getMonth() + 1);
+                else if (overviewViewMode === 'week') newDate.setDate(newDate.getDate() + 7);
+                else newDate.setDate(newDate.getDate() + 1); // สำหรับมุมมองวัน
+                setOverviewDate(newDate);
+            };
+
+            const overviewLabel = overviewViewMode === 'month'
+                ? `${thaiMonths[overviewDate.getMonth()]} ${overviewDate.getFullYear() + 543}`
+                : overviewViewMode === 'week' ? (() => {
+                    const start = new Date(overviewDate);
+                    start.setDate(overviewDate.getDate() - overviewDate.getDay());
+                    const end = new Date(start);
+                    end.setDate(start.getDate() + 6);
+                    if (start.getMonth() === end.getMonth()) {
+                        return `${start.getDate()} - ${end.getDate()} ${thaiMonths[start.getMonth()]} ${start.getFullYear() + 543}`;
+                    }
+                    return `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
+                })()
+                : `${overviewDate.getDate()} ${thaiMonths[overviewDate.getMonth()]} ${overviewDate.getFullYear() + 543}`;
+
+            const renderDayCell = (currentDate, isCurrentMonth = true, cornerClass = '') => {
+                const day = currentDate.getDate();
+                const dateStr = `${String(day).padStart(2,'0')}/${String(currentDate.getMonth()+1).padStart(2,'0')}/${currentDate.getFullYear()+543}`;
+                const dayOfWeek = currentDate.getDay();
+                const isTodayDate = new Date().getDate() === day && new Date().getMonth() === currentDate.getMonth() && new Date().getFullYear() === currentDate.getFullYear();
+                
+                // ตรวจสอบว่าช่องนี้คือวันที่กำลังถูกเลือกดูรายละเอียดอยู่หรือไม่ (เฉพาะในโหมดสัปดาห์)
+                const isSelected = overviewViewMode === 'week' && currentDate.getDate() === overviewDate.getDate() && currentDate.getMonth() === overviewDate.getMonth();
+
+                const workingList = [];
+                const offList = [];
+
+                staffData.forEach(s => {
+                    if (!s.schedule) return;
+                    const specificData = s.schedule[dateStr];
+                    let isWorking = false;
+                    let isExplicitlyOff = false;
+                    let timeStr = '';
+
+                    if (specificData !== undefined) {
+                        isWorking = specificData.active;
+                        isExplicitlyOff = !specificData.active;
+                        if (isWorking) timeStr = `${specificData.start}-${specificData.end}`;
+                    } else {
+                        if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
+                            isWorking = s.schedule[dayOfWeek].active;
+                            if (isWorking) timeStr = `${s.schedule[dayOfWeek].start}-${s.schedule[dayOfWeek].end}`;
+                        } else if (Array.isArray(s.schedule) && s.schedule.includes(dayOfWeek)) {
+                            isWorking = true;
+                            timeStr = 'ปกติ';
+                        }
+                    }
+
+                    const shortName = s.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
+                    if (isWorking) workingList.push({ id: s.id, name: shortName, timeStr, role: s.role });
+                    else if (isExplicitlyOff) offList.push({ id: s.id, name: shortName });
+                });
+
+                return (
+                    <div 
+                        key={currentDate.getTime()} 
+                        data-date={dateStr}
+                        onClick={() => { 
+                            if (isProcessing) return;
+                            setOverviewDate(currentDate); 
+                            if (overviewViewMode === 'month') setOverviewViewMode('week'); 
+                        }}
+                        className={`calendar-dropzone p-1 sm:p-1.5 cursor-pointer ${overviewViewMode==='week' ? 'min-h-[120px]' : 'min-h-[70px] sm:min-h-[90px]'} flex flex-col gap-0.5 transition-all duration-200 group ${!isCurrentMonth ? 'opacity-40 bg-slate-50/20' : isTodayDate ? 'bg-indigo-50/10' : 'bg-white hover:bg-indigo-50/30'} ${isSelected ? 'ring-2 ring-inset ring-indigo-500 shadow-sm relative z-10 bg-white' : ''} ${cornerClass}`}
+                        title="คลิกเพื่อดูรายละเอียดรายวัน"
+                    >
+                        <div className={`text-[10px] sm:text-xs font-bold text-right mb-0.5 transition-colors ${isTodayDate || isSelected ? 'text-indigo-600' : 'text-slate-500 group-hover:text-indigo-500'}`}>{day}</div>
+                        <div className="flex flex-col gap-0.5 overflow-y-auto custom-scrollbar flex-1 pr-0.5 no-drag-zone">
+                            {workingList.map(ws => {
+                                const colorClass = ws.role === 'doctor' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : ws.role === 'nurse' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-700 border-slate-200';
+                                return (
+                                    <div 
+                                        key={ws.id} 
+                                        onPointerDown={(e) => handleStaffPointerDown(e, { staffId: ws.id, fromDate: dateStr, start: ws.start, end: ws.end })}
+                                        style={{ touchAction: 'none', userSelect: 'none' }}
+                                        className={`text-[8px] sm:text-[9px] px-1 py-0.5 rounded border kanit-text font-medium leading-tight ${colorClass} flex flex-col xl:flex-row xl:justify-between xl:items-center gap-0.5 xl:gap-1 select-none ${isProcessing ? 'opacity-50 pointer-events-none' : 'cursor-grab active:cursor-grabbing hover:opacity-80'}`} 
+                                        title={`ลากเพื่อย้ายกะ ${ws.name} (${ws.timeStr})`}
+                                    >
+                                        <span className="truncate font-bold pointer-events-none">{ws.name}</span>
+                                        <span className="shrink-0 opacity-80 text-[7px] sm:text-[8px] pointer-events-none">{ws.timeStr}</span>
+                                    </div>
+                                );
+                            })}
+                            {offList.map(os => (
+                                <div key={`off-${os.id}`} className="text-[8px] sm:text-[9px] px-1 py-0.5 bg-rose-50 text-rose-600 border border-rose-100 rounded truncate kanit-text font-medium leading-tight line-through opacity-70 select-none pointer-events-none" title={`${os.name} (หยุด)`}>
+                                    {os.name}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- มุมมองวัน (Timeline 06:00 - 24:00) ---
+            const renderDayTimeline = () => {
+                const day = overviewDate.getDate();
+                const dateStr = `${String(day).padStart(2,'0')}/${String(overviewDate.getMonth()+1).padStart(2,'0')}/${overviewDate.getFullYear()+543}`;
+                const dayOfWeek = overviewDate.getDay();
+
+                const workingList = [];
+                staffData.forEach(s => {
+                    if (!s.schedule) return;
+                    const specificData = s.schedule[dateStr];
+                    let isWorking = false;
+                    let start = '09:00';
+                    let end = '20:00';
+
+                    if (specificData !== undefined) {
+                        isWorking = specificData.active;
+                        if (isWorking) { start = specificData.start || '09:00'; end = specificData.end || '20:00'; }
+                    } else {
+                        if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
+                            isWorking = s.schedule[dayOfWeek].active;
+                            if (isWorking) { start = s.schedule[dayOfWeek].start || '09:00'; end = s.schedule[dayOfWeek].end || '20:00'; }
+                        } else if (Array.isArray(s.schedule) && s.schedule.includes(dayOfWeek)) {
+                            isWorking = true;
+                        }
+                    }
+
+                    if (isWorking) {
+                        workingList.push({ ...s, start, end });
+                    }
+                });
+
+                // เรียงลำดับตามเวลาเข้างาน
+                workingList.sort((a,b) => a.start.localeCompare(b.start));
+
+                const hours = Array.from({ length: 19 }, (_, i) => i + 6); // 6 to 24 (18 ชั่วโมง)
+
+                return (
+                    <div className="calendar-dropzone border border-slate-100 rounded-xl overflow-hidden bg-white flex flex-col shadow-sm mt-4 relative" data-date={dateStr}>
+                        <div className="overflow-x-auto custom-scrollbar flex-1 no-drag-zone">
+                            <div className="min-w-[800px] flex flex-col">
+                                {/* Time Header */}
+                                <div className="flex border-b border-slate-100 bg-slate-50/80 sticky top-0 z-10 pointer-events-none">
+                                    <div className="w-48 shrink-0 border-r border-slate-100 p-3 font-bold text-slate-500 text-xs kanit-text flex items-center justify-center">รายชื่อพนักงาน</div>
+                                    <div className="flex-1 relative flex">
+                                        {hours.slice(0, -1).map(h => (
+                                            <div key={h} className="flex-1 border-r border-slate-100/50 text-center py-2 text-[10px] font-bold text-slate-400 font-data">
+                                                {String(h).padStart(2,'0')}:00
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Timeline Rows */}
+                                <div className="flex flex-col bg-white relative">
+                                    {/* Background Grid Lines */}
+                                    <div className="absolute inset-0 flex pointer-events-none pl-48">
+                                        {hours.slice(0, -1).map(h => (
+                                            <div key={h} className="flex-1 border-r border-slate-50"></div>
+                                        ))}
+                                    </div>
+
+                                    {workingList.length > 0 ? workingList.map((ws, idx) => {
+                                        let sTime = Math.max(6, parseTimeStr(ws.start));
+                                        let eTime = Math.min(24, parseTimeStr(ws.end));
+                                        if (eTime < sTime) eTime = sTime;
+
+                                        const left = ((sTime - 6) / 18) * 100;
+                                        const width = ((eTime - sTime) / 18) * 100;
+
+                                        const rInfo = roleMap[ws.role] || roleMap['admin'];
+
+                                        return (
+                                            <div key={ws.id || idx} className="flex border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative z-10">
+                                                <div className="w-48 shrink-0 border-r border-slate-100 p-2.5 flex items-center gap-2.5 bg-white group-hover:bg-slate-50/50 transition-colors pointer-events-none">
+                                                    {ws.photo ? (
+                                                        <img src={ws.photo} className="w-8 h-8 rounded-full object-cover border border-slate-200" alt="Profile"/>
+                                                    ) : (
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${ws.role==='doctor'?'bg-indigo-400':ws.role==='nurse'?'bg-emerald-400':ws.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
+                                                            {ws.name.charAt(0)}
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="text-xs font-bold text-slate-700 kanit-text truncate" title={ws.name}>{ws.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0]}</div>
+                                                        <div className="text-[9px] text-slate-400 font-data truncate">{ws.start} - {ws.end} น.</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 relative flex items-center py-2">
+                                                    <div 
+                                                        className={`timeline-block absolute h-8 rounded-lg shadow-sm border flex items-center transition-all ${rInfo.color} ${isProcessing ? 'opacity-60 pointer-events-none' : ''}`}
+                                                        style={{ left: `${left}%`, width: `${width}%`, minWidth: '40px', touchAction: 'none' }}
+                                                        title={`ปรับแต่งเวลา ${ws.name} (${ws.start} - ${ws.end} น.)`}
+                                                    >
+                                                        {/* ขอบลากยืดหดด้านซ้าย (Start Time) */}
+                                                        <div 
+                                                            className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-black/10 z-10 rounded-l-lg flex flex-col justify-center items-center opacity-0 group-hover:opacity-100"
+                                                            onPointerDown={(e) => handleTimelinePointerDown(e, ws, dateStr, 'resize-start')}
+                                                        >
+                                                            <div className="w-[1px] h-3 bg-current opacity-50"></div>
+                                                        </div>
+                                                        
+                                                        {/* ขอบลากเลื่อนตรงกลาง (Move Entire Block) */}
+                                                        <div 
+                                                            className="flex-1 w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing px-2.5 overflow-hidden select-none"
+                                                            onPointerDown={(e) => handleTimelinePointerDown(e, ws, dateStr, 'move')}
+                                                        >
+                                                            <span className="timeline-text text-[10px] sm:text-xs font-bold kanit-text truncate tracking-wide pointer-events-none w-full text-center">
+                                                                {ws.start} - {ws.end}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* ขอบลากยืดหดด้านขวา (End Time) */}
+                                                        <div 
+                                                            className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-black/10 z-10 rounded-r-lg flex flex-col justify-center items-center opacity-0 group-hover:opacity-100"
+                                                            onPointerDown={(e) => handleTimelinePointerDown(e, ws, dateStr, 'resize-end')}
+                                                        >
+                                                            <div className="w-[1px] h-3 bg-current opacity-50"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    }) : (
+                                        <div className="p-10 text-center text-slate-400 kanit-text text-sm">ไม่มีพนักงานลงกะในวันนี้</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm p-4 sm:p-5 overflow-hidden flex flex-col mb-2">
+                    {/* --- จัด Layout ส่วนหัวปฏิทินใหม่ให้เป็นระเบียบ --- */}
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-4 gap-4">
+                        <div className="w-full lg:w-auto flex items-center justify-between">
+                            <div>
+                                <h3 className="font-bold text-slate-800 text-lg kanit-text flex items-center gap-2">
+                                    <CalendarDays className="text-indigo-500" /> ตารางการทำงานของพนักงาน
+                                </h3>
+                                <p className="text-xs text-slate-500 kanit-text mt-0.5">ภาพรวมการเข้างานและวันหยุดของบุคลากร</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
+                            {/* ปุ่มสลับโหมด เดือน/สัปดาห์ (ถอดปุ่ม 'วัน' ออก) */}
+                            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-sm shrink-0">
+                                <button 
+                                    onClick={() => setOverviewViewMode('month')} 
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold kanit-text flex items-center gap-1.5 transition-all ${overviewViewMode === 'month' ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                                >
+                                    <CalendarIcon className="w-3.5 h-3.5" /> <span className="hidden min-[400px]:inline">เดือน</span>
+                                </button>
+                                <button 
+                                    onClick={() => setOverviewViewMode('week')} 
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold kanit-text flex items-center gap-1.5 transition-all ${overviewViewMode === 'week' ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                                >
+                                    <TableIcon className="w-3.5 h-3.5" /> <span className="hidden min-[400px]:inline">สัปดาห์</span>
+                                </button>
+                            </div>
+
+                            {/* ปุ่มเลื่อนวันที่ และปุ่ม "วันนี้" */}
+                            <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm shrink-0 ml-auto lg:ml-0">
+                                <button 
+                                    onClick={handlePrevOverview} 
+                                    className="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                >
+                                    <ChevronLeft size={18}/>
+                                </button>
+                                
+                                <div className="w-px h-4 bg-slate-100 mx-0.5"></div>
+                                
+                                <button 
+                                    onClick={() => setOverviewDate(new Date())} 
+                                    className="px-3 py-1.5 text-indigo-600 text-[10px] sm:text-xs font-bold hover:bg-indigo-50 rounded-lg transition-colors whitespace-nowrap kanit-text"
+                                >
+                                    วันนี้
+                                </button>
+                                
+                                <div className="w-px h-4 bg-slate-100 mx-0.5"></div>
+                                
+                                <button 
+                                    onClick={handleNextOverview} 
+                                    className="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                >
+                                    <ChevronRight size={18}/>
+                                </button>
+                            </div>
+
+                            {/* แสดงข้อความวันที่ปัจจุบัน (ซ่อนบนมือถือจอเล็กสุดเพื่อประหยัดพื้นที่) */}
+                            <div className="hidden min-[450px]:flex items-center justify-center bg-indigo-50/50 px-3 py-1.5 rounded-xl border border-indigo-100/50 min-w-[140px]">
+                                <span className="font-bold text-indigo-700 text-xs sm:text-sm kanit-text truncate text-center w-full">
+                                    {overviewLabel}
+                                </span>
+                            </div>
+                        </div>
+                        {/* แสดงข้อความวันที่บนมือถือจอเล็ก (ไหลลงมาบรรทัดใหม่) */}
+                        <div className="min-[450px]:hidden w-full flex items-center justify-center bg-indigo-50/50 px-3 py-1.5 rounded-xl border border-indigo-100/50 mt-1">
+                             <span className="font-bold text-indigo-700 text-xs kanit-text truncate">
+                                 {overviewLabel}
+                             </span>
+                        </div>
+                    </div>
+
+                    {/* การแสดงผลสลับระหว่าง เดือน กับ สัปดาห์+ไทม์ไลน์ */}
+                    {overviewViewMode === 'month' ? (
+                        <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
+                            <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80">
+                                {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (
+                                    <div key={d} className={`py-2 text-center text-xs sm:text-sm font-bold kanit-text ${i===0 || i===6 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-100 border-l border-t border-slate-100">
+                                {(() => {
+                                    const daysInMonth = new Date(overviewDate.getFullYear(), overviewDate.getMonth() + 1, 0).getDate();
+                                    const firstDayOfMonth = new Date(overviewDate.getFullYear(), overviewDate.getMonth(), 1).getDay();
+                                    const emptyEndCount = (7 - ((firstDayOfMonth + daysInMonth) % 7)) % 7;
+                                    const totalCells = firstDayOfMonth + daysInMonth + emptyEndCount;
+                                    const cells = [];
+                                    for (let i = 0; i < firstDayOfMonth; i++) cells.push({ type: 'empty', key: `empty-start-${i}` });
+                                    for (let i = 1; i <= daysInMonth; i++) cells.push({ type: 'day', day: i, key: `day-${i}` });
+                                    for (let i = 0; i < emptyEndCount; i++) cells.push({ type: 'empty', key: `empty-end-${i}` });
+
+                                    return cells.map((cell, index) => {
+                                        let cornerClass = '';
+                                        if (index === totalCells - 7) cornerClass = 'rounded-bl-xl';
+                                        if (index === totalCells - 1) cornerClass = 'rounded-br-xl';
+
+                                        if (cell.type === 'empty') {
+                                            return <div key={cell.key} className={`bg-slate-50/40 min-h-[70px] sm:min-h-[90px] ${cornerClass}`}></div>;
+                                        }
+                                        const currentDate = new Date(overviewDate.getFullYear(), overviewDate.getMonth(), cell.day);
+                                        return renderDayCell(currentDate, true, cornerClass);
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50 shadow-sm">
+                                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80">
+                                    {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (
+                                        <div key={d} className={`py-2 text-center text-xs sm:text-sm font-bold kanit-text ${i===0 || i===6 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-7 auto-rows-fr divide-x border-l border-slate-100">
+                                    {Array.from({length: 7}, (_, i) => {
+                                        const d = new Date(overviewDate);
+                                        d.setDate(overviewDate.getDate() - overviewDate.getDay() + i);
+                                        const isCurrentMonth = d.getMonth() === overviewDate.getMonth();
+                                        const cornerClass = i === 0 ? 'rounded-bl-xl' : (i === 6 ? 'rounded-br-xl' : '');
+                                        return renderDayCell(d, isCurrentMonth, cornerClass);
+                                    })}
+                                </div>
+                            </div>
+                            
+                            {/* แสดง Timeline รายชั่วโมงของวันที่เลือกไว้ด้านล่าง */}
+                            {renderDayTimeline()}
+                        </div>
+                    )}
+                </div>
+            );
+        })()}
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm z-20">
+           <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="text" placeholder="ค้นหาชื่อ, เบอร์โทร..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500/20 transition-colors font-data" />
+           </div>
+           <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="w-full sm:w-48 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none kanit-text font-medium text-slate-600">
+              <option value="all">ทุกตำแหน่ง</option>
+              <option value="doctor">แพทย์</option>
+              <option value="nurse">พยาบาล/ผู้ช่วย</option>
+              <option value="sale">เซลส์/ที่ปรึกษา</option>
+              <option value="admin">แอดมิน</option>
+           </select>
+        </div>
+
+        {/* Table/List */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex-1 min-h-[400px]">
+           <div className="hidden lg:block overflow-x-auto">
+               <table className="w-full text-left border-collapse min-w-[900px]">
+                   <thead>
+                       <tr className="bg-slate-50/80 border-b border-slate-100 kanit-text text-slate-500 text-sm">
+                           <th className="p-4 font-semibold pl-6">พนักงาน</th>
+                           <th className="p-4 font-semibold text-center">ตำแหน่ง</th>
+                           <th className="p-4 font-semibold">ตารางงาน (วัน)</th>
+                           <th className="p-4 font-semibold text-right">เงินเดือนฐาน</th>
+                           <th className="p-4 font-semibold text-center">ค่าคอมฯ</th>
+                           <th className="p-4 font-semibold text-right pr-6">จัดการ</th>
+                       </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-50">
+                       {filteredStaff.length > 0 ? filteredStaff.map((s, i) => {
+                           const rInfo = roleMap[s.role] || roleMap['admin'];
+                           const RoleIcon = rInfo.icon;
+                           
+                           let activeDays = [];
+                           if (Array.isArray(s.schedule)) {
+                               activeDays = s.schedule;
+                           } else if (typeof s.schedule === 'object') {
+                               activeDays = Object.keys(s.schedule).filter(k => s.schedule[k].active).map(Number);
+                           }
+
+                           return (
+                           <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
+                               <td className="p-4 pl-6">
+                                   <div className="flex items-center gap-3">
+                                       {s.photo ? (
+                                           <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200" />
+                                       ) : (
+                                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm ${s.role==='doctor'?'bg-indigo-400':s.role==='nurse'?'bg-emerald-400':s.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
+                                               {s.name.charAt(0)}
+                                           </div>
+                                       )}
+                                       <div>
+                                           <p className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight">{s.name}</p>
+                                           <p className="text-xs text-slate-500 font-data flex items-center gap-1"><Phone size={10}/> {s.phone || '-'}</p>
+                                       </div>
+                                   </div>
+                               </td>
+                               <td className="p-4 text-center">
+                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold kanit-text border shadow-sm w-fit mx-auto ${rInfo.color}`}>
+                                       <RoleIcon size={12} /> {rInfo.label.split(' ')[0]}
+                                   </span>
+                               </td>
+                               <td className="p-4">
+                                   <div className="flex flex-wrap gap-1">
+                                       {activeDays.length > 0 ? daysMap.map(d => activeDays.includes(d.val) ? <span key={d.val} className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${d.color}`}>{d.short}</span> : null) : <span className="text-xs text-slate-400">- ไม่ระบุ -</span>}
+                                   </div>
+                               </td>
+                               <td className="p-4 text-right font-data font-bold text-slate-700">
+                                   {formatCurrency(s.baseSalary)}
+                               </td>
+                               <td className="p-4 text-center">
+                                   {s.commissionRate > 0 ? (
+                                      <span className="bg-sky-50 text-sky-600 px-2 py-1 rounded-md text-xs font-black font-data border border-sky-100">{s.commissionRate}%</span>
+                                   ) : <span className="text-slate-300">-</span>}
+                               </td>
+                               <td className="p-4 pr-6 text-right">
+                                   <div className="flex items-center justify-end gap-1 transition-opacity">
+                                       <button onClick={() => handleOpenPayroll(s)} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg" title="จ่ายเงินเดือน"><Wallet size={18}/></button>
+                                       <button onClick={() => handleOpenSchedule(s)} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg" title="จัดตารางงาน"><CalendarClock size={18}/></button>
+                                       <button onClick={() => handleOpenEdit(s)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg" title="แก้ไข"><Pencil size={18}/></button>
+                                       <button onClick={() => handleDelete(s)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="ลบ"><Trash2 size={18}/></button>
+                                   </div>
+                               </td>
+                           </tr>
+                       )}) : (
+                           <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text">ไม่พบข้อมูลพนักงาน</td></tr>
+                       )}
+                   </tbody>
+               </table>
+           </div>
+           
+           {/* Mobile view */}
+           <div className="lg:hidden flex flex-col divide-y divide-slate-50">
+               {filteredStaff.length > 0 ? filteredStaff.map(s => {
+                   const rInfo = roleMap[s.role] || roleMap['admin'];
+                   const RoleIcon = rInfo.icon;
+                   return (
+                       <div key={s.id} className="p-4 flex flex-col gap-3">
+                           <div className="flex justify-between items-start">
+                               <div className="flex items-center gap-3">
+                                   {s.photo ? (
+                                       <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200" />
+                                   ) : (
+                                       <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm ${s.role==='doctor'?'bg-indigo-400':s.role==='nurse'?'bg-emerald-400':s.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
+                                           {s.name.charAt(0)}
+                                       </div>
+                                   )}
+                                   <div>
+                                       <p className="font-bold text-slate-800 kanit-text leading-tight">{s.name}</p>
+                                       <p className="text-[11px] text-slate-500 font-data mt-0.5">{s.phone || 'ไม่มีเบอร์โทร'}</p>
+                                   </div>
+                               </div>
+                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold kanit-text border shadow-sm ${rInfo.color}`}>
+                                   <RoleIcon size={10} /> {rInfo.label.split(' ')[0]}
+                               </span>
+                           </div>
+                           <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between">
+                               <div className="flex flex-col">
+                                   <span className="text-[9px] font-bold text-slate-400 kanit-text uppercase">เงินเดือนฐาน</span>
+                                   <span className="text-sm font-black font-data text-slate-700">{formatCurrency(s.baseSalary)}</span>
+                               </div>
+                               <div className="flex flex-col items-end">
+                                   <span className="text-[9px] font-bold text-slate-400 kanit-text uppercase">ค่าคอมมิชชั่น</span>
+                                   {s.commissionRate > 0 ? <span className="text-sm font-black font-data text-sky-600">{s.commissionRate}%</span> : <span className="text-xs text-slate-300">-</span>}
+                               </div>
+                           </div>
+                           <div className="flex gap-1.5 pt-1">
+                               <button onClick={() => handleOpenPayroll(s)} className="flex-1 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold kanit-text flex justify-center items-center gap-1"><Wallet size={14}/> จ่ายเงิน</button>
+                               <button onClick={() => handleOpenSchedule(s)} className="flex-1 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold kanit-text flex justify-center items-center gap-1"><CalendarClock size={14}/> ตาราง</button>
+                               <button onClick={() => handleOpenEdit(s)} className="w-10 flex justify-center items-center bg-slate-50 text-slate-500 rounded-lg"><Pencil size={14}/></button>
+                           </div>
+                       </div>
+                   )
+               }) : <div className="p-8 text-center text-slate-400">ไม่พบข้อมูลพนักงาน</div>}
+           </div>
+        </div>
+      </div>
+
+      {/* --- Modal: Add/Edit Staff --- */}
+      <AnimatedModal isOpen={staffModal.isOpen} isClosing={staffModal.isClosing} onClose={staffModal.close} title={editingId ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่'} icon={UserCog} maxWidth="max-w-5xl">
+        <form onSubmit={handleSaveStaff} className="p-4 sm:p-6 space-y-6">
+           
+           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative z-[50]">
+              <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><UserCog size={20} /> ข้อมูลพื้นฐานพนักงาน</h4>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <button type="button" onClick={handleSmartCardRead} disabled={isProcessing} className="text-xs sm:text-sm px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-emerald-100 shadow-sm disabled:opacity-50">
+                    <CreditCard size={16} /> <span className="hidden sm:inline">อ่านข้อมูลจากบัตร</span><span className="sm:hidden">อ่านบัตร</span>
+                  </button>
+                  <button type="button" onClick={() => setIsScannerOpen(true)} className="text-xs sm:text-sm px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-indigo-100 shadow-sm">
+                    <ScanText size={16} /> <span className="hidden sm:inline">สแกนจากกล้อง (OCR)</span><span className="sm:hidden">สแกนกล้อง</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-6 mb-6 items-center sm:items-start">
+                  <div className="flex flex-col items-center gap-2 shrink-0">
+                      <div className="relative w-28 h-28 sm:w-32 sm:h-32 bg-slate-100 border-2 border-dashed border-slate-300 rounded-full flex items-center justify-center overflow-hidden group">
+                          {formData.photo ? (
+                              <img src={formData.photo} alt="Profile" className="w-full h-full object-cover" />
+                          ) : (
+                              <User size={40} className="text-slate-300" />
+                          )}
+                          <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                              <Upload size={20} className="mb-1" />
+                              <span className="text-[10px] font-bold kanit-text">อัปโหลดรูป</span>
+                              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                          </label>
+                      </div>
+                      <span className="text-[10px] text-slate-400 kanit-text">ขนาดไม่เกิน 2MB</span>
+                  </div>
+
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full">
+                      <div className="relative" style={{ zIndex: 50 }}>
+                        <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label>
+                        <div className="relative">
+                          <input required type="text" className={`${theme.input} font-data pr-10`} value={formData.prefix} onChange={(e) => setFormData({...formData, prefix: e.target.value})} placeholder="พิมพ์หรือเลือก" onFocus={() => setShowPrefixDropdown(true)} onBlur={() => setTimeout(() => setShowPrefixDropdown(false), 200)} />
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ChevronDown size={18} className={`transition-transform duration-200 ${showPrefixDropdown ? 'rotate-180' : ''}`} />
+                          </div>
+                          {showPrefixDropdown && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                              {['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.'].map(opt => (
+                                <div key={opt} onMouseDown={(e) => { e.preventDefault(); setFormData({...formData, prefix: opt}); setShowPrefixDropdown(false); }} className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${formData.prefix === opt ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}>
+                                  {opt}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-1 relative" style={{ zIndex: 45 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อ <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} /></div>
+                      <div className="lg:col-span-1 relative" style={{ zIndex: 45 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">นามสกุล <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} /></div>
+                      
+                      <div className="md:col-span-2 lg:col-span-1 relative" style={{ zIndex: 40 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ตำแหน่ง <span className="text-rose-500">*</span></label>
+                        <CustomSelect value={formData.role} onChange={(val) => setFormData({...formData, role: val})} options={[{value:'doctor', label:'แพทย์'}, {value:'nurse', label:'พยาบาล/ผู้ช่วย'}, {value:'sale', label:'พนักงานขาย'}, {value:'admin', label:'แอดมิน'}]} />
+                      </div>
+                      
+                      <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input required type="tel" className={`${theme.input} font-data`} value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} /></div>
+                      <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เลขบัตรประชาชน</label><input type="text" className={`${theme.input} font-data`} value={formData.idCard} onChange={(e) => setFormData({...formData, idCard: e.target.value})} maxLength="13" /></div>
+                      
+                      <div className="relative" style={{ zIndex: 30 }}>
+                        <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">วันเกิด</label>
+                        <div ref={dobWrapperRef} className="relative group">
+                          <input type="text" className={`${theme.input} pr-12 font-data`} value={formData.dob} onChange={handleDobChange} placeholder="DD/MM/YYYY" maxLength="10" />
+                          <button type="button" onClick={handleOpenDobCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>
+                        </div>
+                      </div>
+                      <div className="relative" style={{ zIndex: 30 }}>
+                        <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เพศ</label>
+                        <CustomSelect value={formData.gender} onChange={(val) => setFormData({...formData, gender: val})} options={[{value:'', label:'เลือก'}, 'ชาย', 'หญิง', 'ไม่ระบุ']} />
+                      </div>
+                  </div>
+              </div>
+           </div>
+
+           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-[40]">
+              <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><MapPin size={20} /> ข้อมูลที่อยู่</h4>
+              <div className="mb-6">
+                <h5 className="font-semibold text-slate-700 mb-3 kanit-text">ที่อยู่ตามบัตรประชาชน</h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน</label><input type="text" className={`${theme.input} font-data`} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.moo} onChange={(e) => setFormData({...formData, moo: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.road} onChange={(e) => setFormData({...formData, road: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.subDistrict} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.zipcode} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" /></div>
+                </div>
+              </div>
+              <div className="h-px w-full bg-slate-100 my-6"></div>
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <h5 className="font-semibold text-slate-700 kanit-text">ที่อยู่ปัจจุบัน <span className="text-slate-400 font-normal text-xs">(ที่พักอาศัย)</span></h5>
+                  <button type="button" onClick={copyAddressToCurrent} className="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg kanit-text transition-colors font-medium flex items-center justify-center gap-1.5 w-full sm:w-auto"><MapPin size={14} /> ใช้ที่อยู่เดียวกับบัตรประชาชน</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ปัจจุบัน</label><input type="text" className={`${theme.input} font-data`} value={formData.curAddress} onChange={(e) => setFormData({...formData, curAddress: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.curSubDistrict} onChange={(e) => setFormData({...formData, curSubDistrict: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.curDistrict} onChange={(e) => setFormData({...formData, curDistrict: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.curProvince} onChange={(e) => setFormData({...formData, curProvince: e.target.value})} /></div>
+                </div>
+              </div>
+           </div>
+
+           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-[30]">
+              <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Phone size={20} /> ผู้ติดต่อกรณีฉุกเฉิน</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อผู้ติดต่อ</label><input type="text" className={`${theme.input} font-data`} value={formData.emName} onChange={(e) => setFormData({...formData, emName: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เกี่ยวข้องเป็น</label><input type="text" className={`${theme.input} font-data`} value={formData.emRelation} onChange={(e) => setFormData({...formData, emRelation: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input type="tel" className={`${theme.input} font-data`} value={formData.emPhone} onChange={(e) => setFormData({...formData, emPhone: e.target.value})} /></div>
+                <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ที่ติดต่อได้</label><input type="text" className={`${theme.input} font-data`} value={formData.emAddress} onChange={(e) => setFormData({...formData, emAddress: e.target.value})} /></div>
+              </div>
+           </div>
+
+           <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm relative z-[20]">
+              <h4 className="font-bold text-emerald-600 kanit-text border-b border-emerald-100 pb-3 mb-5 flex items-center gap-2"><DollarSign size={20} /> ข้อมูลค่าตอบแทน</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                 <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">เงินเดือนฐาน (Base Salary)</label>
+                    <input type="number" min="0" className={`${theme.input} !py-3 text-base font-data font-bold text-slate-700 bg-emerald-50/30 border-emerald-100 focus:border-emerald-500 focus:ring-emerald-500/20`} value={formData.baseSalary} onChange={e=>setFormData({...formData, baseSalary: e.target.value})} placeholder="0" />
+                 </div>
+                 
+                 <div className="space-y-4">
+                    <div className="relative" style={{ zIndex: 15 }}>
+                        <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">เงื่อนไขค่าคอมมิชชั่น</label>
+                        <CustomSelect
+                            value={formData.commissionCondition}
+                            onChange={(val) => setFormData({...formData, commissionCondition: val})}
+                            options={[
+                                {value: 'all', label: 'ให้ทุกบิลการขาย'},
+                                {value: 'threshold', label: 'ให้ตั้งแต่บิลที่กำหนด (ต่อวัน)'}
+                            ]}
+                        />
+                    </div>
+
+                    {formData.commissionCondition === 'threshold' && (
+                        <div className="animate-in fade-in slide-in-from-top-2">
+                            <label className="block text-xs font-bold text-slate-500 mb-1 kanit-text">เริ่มให้ค่าคอมตั้งแต่คนที่ (บิลที่)</label>
+                            <input type="number" min="1" className={`${theme.input} !py-2.5 font-data`} value={formData.commissionThreshold} onChange={e=>setFormData({...formData, commissionThreshold: e.target.value})} placeholder="เช่น เริ่มคนที่ 4 ใส่เลข 4" />
+                            <p className="text-[10px] text-slate-400 mt-1 kanit-text">ระบบจะนับจำนวนบิลสำเร็จของพนักงานคนนี้ในวันนั้นๆ หากนับถึงยอดที่ตั้งไว้ จะคำนวณค่าคอมให้ในบิลนี้</p>
+                        </div>
+                    )}
+
+                    <div className="relative" style={{ zIndex: 10 }}>
+                        <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">อัตราค่าคอมมิชชั่น</label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input type="number" min="0" step="0.01" className={`${theme.input} !py-3 pr-8 text-base font-data font-bold text-sky-600 bg-sky-50/30 border-sky-100 focus:border-sky-500 focus:ring-sky-500/20`} value={formData.commissionRate} onChange={e=>setFormData({...formData, commissionRate: e.target.value})} placeholder="0.00" />
+                            </div>
+                            <div className="w-[100px] shrink-0">
+                                <CustomSelect
+                                    value={formData.commissionType}
+                                    onChange={(val) => setFormData({...formData, commissionType: val})}
+                                    options={[{value: 'percent', label: '%'}, {value: 'amount', label: 'บาท'}]}
+                                />
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 kanit-text">* คำนวณอัตโนมัติเมื่อเลือกพนักงานคนนี้เป็นผู้ขายในหน้า POS</p>
+                    </div>
+                 </div>
+              </div>
+           </div>
+
+           <div className="flex gap-3 pt-4 border-t border-slate-100">
+              <button type="button" onClick={staffModal.close} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors kanit-text">ยกเลิก</button>
+              <button type="submit" disabled={isProcessing} className="flex-[2] py-3 bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 hover:bg-sky-600 transition-all flex justify-center items-center gap-2 kanit-text">
+                 {isProcessing ? <Loader2 className="w-5 h-5 animate-spin"/> : <CheckCircle2 size={18}/>} บันทึกข้อมูล
+              </button>
+           </div>
+        </form>
+      </AnimatedModal>
+
+      {/* --- Modal: Schedule (ปฏิทินตารางงานเต็มรูปแบบ) --- */}
+      <AnimatedModal isOpen={scheduleModal.isOpen} isClosing={scheduleModal.isClosing} onClose={scheduleModal.close} title="ปฏิทินตารางการทำงาน" icon={CalendarClock} maxWidth="max-w-5xl">
+         <div className="p-0 sm:p-0 flex flex-col md:flex-row h-full max-h-[85vh] overflow-hidden">
+            
+            {/* Left Panel: Calendar Grid */}
+            <div className="flex-[2] p-4 sm:p-6 bg-slate-50/30 overflow-y-auto custom-scrollbar border-b md:border-b-0 md:border-r border-slate-200 relative">
+               <div className="mb-6 flex items-center gap-4">
+                  {selectedScheduleStaff?.photo ? (
+                      <img src={selectedScheduleStaff.photo} className="w-14 h-14 rounded-full object-cover shadow-sm border border-slate-200 shrink-0" alt="Profile" />
+                  ) : (
+                      <div className="w-14 h-14 bg-sky-100 text-sky-600 rounded-full flex justify-center items-center text-xl font-black shrink-0">{selectedScheduleStaff?.name?.charAt(0)}</div>
+                  )}
+                  <div className="text-left min-w-0">
+                      <h3 className="font-bold text-slate-800 text-lg kanit-text truncate leading-tight">{selectedScheduleStaff?.name}</h3>
+                      <p className="text-xs text-slate-500 kanit-text truncate">{roleMap[selectedScheduleStaff?.role]?.label}</p>
+                  </div>
+               </div>
+
+               <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                   <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                       <h4 className="font-bold text-slate-700 text-base kanit-text flex items-center gap-2 hidden sm:flex"><CalendarIcon size={18} className="text-indigo-500" /> ปฏิทินเดือนนี้</h4>
+                       <div className="flex items-center gap-2 bg-slate-50 rounded-full px-1.5 py-1.5 border border-slate-100 w-full sm:w-auto justify-between sm:justify-start">
+                          <button type="button" onClick={() => setSchedCalDate(new Date(schedCalDate.getFullYear(), schedCalDate.getMonth() - 1, 1))} className="p-2 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-full transition-colors shadow-sm border border-transparent hover:border-slate-200 shrink-0"><ChevronLeft size={16}/></button>
+                          <span className="font-bold text-indigo-700 text-sm kanit-text w-28 text-center">{thaiMonths[schedCalDate.getMonth()]} {schedCalDate.getFullYear() + 543}</span>
+                          <button type="button" onClick={() => setSchedCalDate(new Date(schedCalDate.getFullYear(), schedCalDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-full transition-colors shadow-sm border border-transparent hover:border-slate-200 shrink-0"><ChevronRight size={16}/></button>
+                       </div>
+                   </div>
+                   
+                   <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center mb-3">
+                       {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d,i) => <div key={i} className={`text-[11px] sm:text-xs font-bold kanit-text ${i===0||i===6?'text-rose-500':'text-slate-500'}`}>{d}</div>)}
+                   </div>
+                   
+                   <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                       {Array.from({ length: new Date(schedCalDate.getFullYear(), schedCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="aspect-[4/3] sm:aspect-square"></div>)}
+                       {Array.from({ length: new Date(schedCalDate.getFullYear(), schedCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                           const dateStr = `${String(day).padStart(2,'0')}/${String(schedCalDate.getMonth()+1).padStart(2,'0')}/${schedCalDate.getFullYear()+543}`;
+                           const isSelected = schedSelectedDate.getDate() === day && schedSelectedDate.getMonth() === schedCalDate.getMonth() && schedSelectedDate.getFullYear() === schedCalDate.getFullYear();
+                           
+                           const sData = scheduleForm[dateStr];
+                           
+                           // --- Logic ใหม่: ดึงค่าเฉพาะจากปฏิทินที่กำหนดวันต่อวัน ไม่มีรูทีน ---
+                           let isWorking = false;
+                           let isExplicitlyOff = false;
+                           let timeStr = '';
+
+                           if (sData !== undefined) {
+                               isWorking = sData.active;
+                               isExplicitlyOff = !sData.active;
+                               timeStr = isWorking ? `${sData.start}` : 'หยุด';
+                           }
+
+                           let btnClass = 'bg-slate-50 border-slate-100 text-slate-600 hover:border-slate-300 hover:bg-slate-100';
+                           if (isWorking) btnClass = 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100';
+                           else if (isExplicitlyOff) btnClass = 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100';
+
+                           if (isSelected) btnClass += ' ring-2 ring-indigo-500 shadow-lg scale-105 z-10 border-transparent';
+
+                           return (
+                               <button 
+                                   key={day} type="button" 
+                                   onClick={() => setSchedSelectedDate(new Date(schedCalDate.getFullYear(), schedCalDate.getMonth(), day))}
+                                   className={`aspect-[4/3] sm:aspect-square w-full rounded-[0.8rem] flex flex-col items-center justify-center relative transition-all border-2 ${btnClass}`}
+                               >
+                                   <span className={`font-black text-sm sm:text-base font-data leading-none ${isSelected ? 'text-indigo-700' : ''}`}>{day}</span>
+                                   {(isWorking || isExplicitlyOff) && (
+                                       <span className={`text-[8px] sm:text-[9px] font-bold kanit-text mt-1 px-1 rounded ${isWorking ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>
+                                          {timeStr}
+                                       </span>
+                                   )}
+                               </button>
+                           );
+                       })}
+                   </div>
+               </div>
+            </div>
+
+            {/* Right Panel: Editor */}
+            <div className="flex-1 bg-white p-4 sm:p-6 flex flex-col overflow-y-auto custom-scrollbar md:min-w-[320px]">
+               {(() => {
+                   const dateStr = `${String(schedSelectedDate.getDate()).padStart(2,'0')}/${String(schedSelectedDate.getMonth()+1).padStart(2,'0')}/${schedSelectedDate.getFullYear()+543}`;
+                   const sData = scheduleForm[dateStr];
+
+                   let currentActive = false;
+                   let currentExplicitlyOff = false;
+                   let currentStart = '09:00';
+                   let currentEnd = '20:00';
+
+                   if (sData !== undefined) {
+                       currentActive = sData.active;
+                       currentExplicitlyOff = !sData.active;
+                       if (sData.start) currentStart = sData.start;
+                       if (sData.end) currentEnd = sData.end;
+                   }
+
+                   return (
+                       <div className="flex flex-col h-full">
+                           <div className="text-center mb-6 pb-4 border-b border-slate-100">
+                               <div className="w-14 h-14 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                                   <CalendarDays size={24} />
+                               </div>
+                               <h4 className="font-bold text-slate-800 text-lg kanit-text leading-tight">จัดการวันที่ {schedSelectedDate.getDate()}</h4>
+                               <p className="text-sm text-slate-500 kanit-text">{thaiMonths[schedSelectedDate.getMonth()]} {schedSelectedDate.getFullYear() + 543}</p>
+                           </div>
+
+                           <div className="space-y-4 flex-1">
+                               <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest kanit-text text-center mb-2">กำหนดสถานะการทำงาน</label>
+                               
+                               <div className="grid grid-cols-2 gap-2">
+                                  <button 
+                                     type="button"
+                                     onClick={() => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: currentStart, end: currentEnd }}))}
+                                     className={`py-3.5 rounded-xl font-bold text-sm kanit-text transition-all border-2 flex flex-col items-center justify-center gap-1.5 active:scale-95 ${currentActive ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/30' : 'bg-white text-emerald-600 border-emerald-100 hover:bg-emerald-50'}`}
+                                  >
+                                     <CheckCircle2 size={20} /> เข้างาน (ทำกะ)
+                                  </button>
+                                  <button 
+                                     type="button"
+                                     onClick={() => setScheduleForm(prev => ({...prev, [dateStr]: { active: false }}))}
+                                     className={`py-3.5 rounded-xl font-bold text-sm kanit-text transition-all border-2 flex flex-col items-center justify-center gap-1.5 active:scale-95 ${currentExplicitlyOff ? 'bg-rose-500 text-white border-rose-500 shadow-md shadow-rose-500/30' : 'bg-white text-rose-500 border-rose-100 hover:bg-rose-50'}`}
+                                  >
+                                     <XCircle size={20} /> วันหยุดพัก
+                                  </button>
+                               </div>
+
+                               <div className={`mt-6 space-y-4 transition-all duration-300 ${currentActive ? 'opacity-100' : 'opacity-30 pointer-events-none filter grayscale'}`}>
+                                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                                       <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest kanit-text text-center">กำหนดเวลาเข้า-ออกงาน</label>
+                                       <div className="flex items-center gap-3">
+                                           <div className="flex-1">
+                                               <input 
+                                                   type="time" className={`${theme.input} !py-2.5 font-data text-sm font-bold text-center bg-white border-slate-200 focus:border-sky-400`}
+                                                   value={currentStart}
+                                                   onChange={(e) => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: e.target.value, end: currentEnd }}))}
+                                               />
+                                           </div>
+                                           <span className="text-slate-400 font-bold">-</span>
+                                           <div className="flex-1">
+                                               <input 
+                                                   type="time" className={`${theme.input} !py-2.5 font-data text-sm font-bold text-center bg-white border-slate-200 focus:border-sky-400`}
+                                                   value={currentEnd}
+                                                   onChange={(e) => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: currentStart, end: e.target.value }}))}
+                                               />
+                                           </div>
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+
+                           <div className="pt-4 mt-4 border-t border-slate-100">
+                               <button 
+                                  onClick={() => {
+                                      const newForm = {...scheduleForm};
+                                      delete newForm[dateStr];
+                                      setScheduleForm(newForm);
+                                  }}
+                                  className={`w-full py-3 border font-bold kanit-text text-sm rounded-xl transition-all flex items-center justify-center gap-2 ${!currentActive && !currentExplicitlyOff ? 'bg-slate-100 text-slate-400 border-transparent pointer-events-none' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 shadow-sm active:scale-95'}`}
+                               >
+                                 <Trash2 size={16} /> ล้างค่าในวันนี้ (ไม่ระบุ)
+                               </button>
+                           </div>
+                       </div>
+                   )
+               })()}
+            </div>
+         </div>
+         <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
+            <button onClick={scheduleModal.close} className="px-6 py-3 bg-slate-100 border border-transparent text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors kanit-text">ยกเลิก</button>
+            <button onClick={handleSaveSchedule} disabled={isProcessing} className="px-8 py-3 bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 hover:bg-sky-600 transition-all flex items-center justify-center gap-2 kanit-text text-base active:scale-95">
+                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 size={20} />} บันทึกตารางงาน
+            </button>
+         </div>
+      </AnimatedModal>
+
+      {/* --- Modal: Payroll --- */}
+      <AnimatedModal isOpen={payrollModal.isOpen} isClosing={payrollModal.isClosing} onClose={payrollModal.close} title="จ่ายเงินเดือน / ค่าคอมมิชชั่น" icon={Wallet}>
+         <form onSubmit={handleSavePayroll} className="p-6">
+            <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 mb-6">
+               {selectedPayrollStaff?.photo ? (
+                   <img src={selectedPayrollStaff.photo} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-emerald-200" alt="Profile" />
+               ) : (
+                   <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-emerald-500 font-black text-xl shadow-sm">{selectedPayrollStaff?.name?.charAt(0)}</div>
+               )}
+               <div>
+                  <h4 className="font-bold text-emerald-800 kanit-text text-lg">{selectedPayrollStaff?.name}</h4>
+                  <p className="text-xs text-emerald-600/80 font-data">อัตราคอมมิชชั่น: {selectedPayrollStaff?.commissionRate || 0}%</p>
+               </div>
+            </div>
+
+            <div className="space-y-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+               <div className="flex justify-between items-center">
+                  <label className="text-sm font-bold text-slate-600 kanit-text">เงินเดือนฐาน</label>
+                  <input type="number" className="w-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-right font-data font-bold focus:border-sky-500 outline-none" value={payrollForm.salary} onChange={e => setPayrollForm({...payrollForm, salary: e.target.value})} />
+               </div>
+               <div className="flex justify-between items-center">
+                  <div className="flex flex-col">
+                     <label className="text-sm font-bold text-sky-600 kanit-text">ค่าคอมมิชชั่น <span className="text-slate-400 text-xs font-normal">(คำนวณจาก POS อัตโนมัติ)</span></label>
+                  </div>
+                  <input type="number" className="w-32 px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg text-right font-data font-bold text-sky-700 focus:border-sky-500 outline-none" value={payrollForm.commission} onChange={e => setPayrollForm({...payrollForm, commission: e.target.value})} />
+               </div>
+               <div className="flex justify-between items-center">
+                  <label className="text-sm font-bold text-slate-600 kanit-text">โบนัส / ค่าล่วงเวลา (+)</label>
+                  <input type="number" className="w-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-right font-data font-bold focus:border-emerald-500 outline-none" value={payrollForm.bonus} onChange={e => setPayrollForm({...payrollForm, bonus: e.target.value})} />
+               </div>
+               <div className="flex justify-between items-center">
+                  <label className="text-sm font-bold text-slate-600 kanit-text">รายการหัก / ขาดลามาสาย (-)</label>
+                  <input type="number" className="w-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-right font-data font-bold text-rose-500 focus:border-rose-500 outline-none" value={payrollForm.deduction} onChange={e => setPayrollForm({...payrollForm, deduction: e.target.value})} />
+               </div>
+               <div className="h-px bg-slate-100 my-4"></div>
+               <div className="flex justify-between items-end">
+                  <label className="text-lg font-black text-slate-800 kanit-text">ยอดรับสุทธิ</label>
+                  <span className="text-3xl font-black text-emerald-500 font-data tracking-tight">{formatCurrency(payrollForm.total)}</span>
+               </div>
+            </div>
+            
+            <div className="mt-4">
+               <label className="block text-xs font-bold text-slate-500 mb-1 kanit-text">หมายเหตุการจ่ายเงิน (จะบันทึกลงหน้ารายจ่าย)</label>
+               <textarea className={`${theme.input} !py-2.5 text-sm resize-none h-20`} value={payrollForm.note} onChange={e=>setPayrollForm({...payrollForm, note: e.target.value})} placeholder="รายละเอียดเพิ่มเติม..." />
+            </div>
+
+            <div className="flex gap-3 mt-6">
+               <button type="button" onClick={payrollModal.close} className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors">ยกเลิก</button>
+               <button type="submit" disabled={isProcessing} className="flex-[2] py-3.5 bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-all flex justify-center items-center gap-2">
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin"/> : <CheckCircle2 size={20}/>} ยืนยันอนุมัติจ่าย
+               </button>
+            </div>
+         </form>
+      </AnimatedModal>
+
+      {/* Modal สำหรับกล้อง (Staff Manager) */}
+      {isScannerOpen && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
+                <ScanText className="text-indigo-500" /> สแกนบัตรประชาชน
+              </h3>
+              <button onClick={() => !isScanning && setIsScannerOpen(false)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors" disabled={isScanning}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 bg-slate-800 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden">
+              {!isScanning && (
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-indigo-500 shadow-[0_0_15px_3px_rgba(99,102,241,0.5)] animate-[scanLine_2s_ease-in-out_infinite] z-20"></div>
+              )}
+
+              <div className="w-full max-w-[320px] aspect-[1.58/1] border-2 border-slate-600 rounded-xl relative flex items-center justify-center bg-slate-900/50 backdrop-blur-sm z-10 shadow-2xl overflow-hidden">
+                <div className="absolute top-[-2px] left-[-2px] w-8 h-8 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl z-20"></div>
+                <div className="absolute top-[-2px] right-[-2px] w-8 h-8 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl z-20"></div>
+                <div className="absolute bottom-[-2px] left-[-2px] w-8 h-8 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl z-20"></div>
+                <div className="absolute bottom-[-2px] right-[-2px] w-8 h-8 border-b-4 border-r-4 border-indigo-500 rounded-br-xl z-20"></div>
+                
+                <video autoPlay playsInline muted ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-0"></video>
+                {!videoRef.current?.srcObject && <Camera size={48} className="text-slate-400 opacity-50 z-10" />}
+                
+                {isScanning ? (
+                  <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
+                    <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                    <p className="font-bold text-white kanit-text text-sm animate-pulse">กำลังประมวลผล OCR...</p>
+                  </div>
+                ) : (
+                  <div className="absolute bottom-3 right-4 w-12 h-16 border border-slate-600/50 rounded-md bg-slate-800/50 flex flex-col items-center justify-center gap-1 opacity-50 z-20">
+                      <div className="w-4 h-4 rounded-full bg-slate-600/50"></div>
+                      <div className="w-8 h-1 bg-slate-600/50 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-slate-300 mt-5 kanit-text font-medium z-10 bg-slate-900/60 px-4 py-1.5 rounded-full">จัดวางบัตรประชาชนให้อยู่ในกรอบ</p>
+            </div>
+            
+            <div className="p-4 bg-white">
+              <button onClick={handleRealScan} disabled={isScanning} className="w-full py-3.5 bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 kanit-text hover:bg-indigo-600 shadow-md shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100">
+                {isScanning ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"></div> : <ScanText size={18}/>}
+                {isScanning ? 'กำลังสแกน...' : 'เริ่มสแกน'}
+              </button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* Alert Modal */}
+      {alertModal.isOpen && createPortal(
+         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${alertModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+           <div className={`bg-white rounded-[1.5rem] p-6 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${alertModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+             <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={32} /></div>
+             <h3 className="text-xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3>
+             <p className="text-slate-500 mb-6 text-sm kanit-text">{alertConfig.text}</p>
+             <div className="flex gap-3 w-full">
+               <button onClick={alertModal.close} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors">ยกเลิก</button>
+               <button onClick={alertConfig.onConfirm} disabled={isProcessing} className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold shadow-md shadow-rose-500/30 flex justify-center items-center">
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin"/> : 'ยืนยันลบ'}
+               </button>
+             </div>
+           </div>
+         </div>, document.body
+      )}
+    </div>
+  );
+};
 
 export default function App() {
   // --- แก้ไข: จดจำหน้าปัจจุบันใน LocalStorage (รีเฟรชแล้วอยู่หน้าเดิม ยกเว้นตั้งค่า) ---
@@ -11055,13 +13252,14 @@ export default function App() {
   }, [currentTab]);
 
   const [patientsData, setPatientsData] = useState(GOOGLE_SCRIPT_URL ? [] : mockPatients);
-  const [branchesData, setBranchesData] = useState(GOOGLE_SCRIPT_URL ? [] : mockBranches); // เพิ่ม State จัดการสาขา
+  const [branchesData, setBranchesData] = useState(GOOGLE_SCRIPT_URL ? [] : mockBranches); 
   const [queueData, setQueueData] = useState([]);
   const [inventoryData, setInventoryData] = useState([]);
-  const [inventoryLogsData, setInventoryLogsData] = useState([]); // เพิ่ม State เก็บประวัติคลังสินค้า
-  const [posHistoryData, setPosHistoryData] = useState([]); // เพิ่ม State เก็บประวัติ POS
-  const [financeData, setFinanceData] = useState([]); // เพิ่ม State เก็บประวัติการเงิน
-  const [posProducts, setPosProducts] = useState([]); // เปลี่ยนจาก mockProducts เป็นอาร์เรย์ว่าง เพื่อรอดึงข้อมูลของจริง
+  const [inventoryLogsData, setInventoryLogsData] = useState([]); 
+  const [posHistoryData, setPosHistoryData] = useState([]); 
+  const [financeData, setFinanceData] = useState([]); 
+  const [posProducts, setPosProducts] = useState([]); 
+  const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
   const [isDataFetched, setIsDataFetched] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
 
@@ -11107,7 +13305,7 @@ export default function App() {
       if (!GOOGLE_SCRIPT_URL || isDataFetched) return;
       setIsGlobalLoading(true);
       try {
-        // ใช้ Promise.all เพื่อดึงข้อมูลทุกอย่างขนานกัน (Parallel Fetching) ช่วยลดเวลาโหลดเริ่มต้นได้อย่างมาก
+        // ใช้ Promise.all เพื่อดึงข้อมูลทุกอย่างขนานกัน
         const [
           resPatients,
           resQueue,
@@ -11117,7 +13315,8 @@ export default function App() {
           resPosItems,
           resBranches,
           resFinanceRevenue,
-          resFinanceExpenses
+          resFinanceExpenses,
+          resStaff // เพิ่มการดึงพนักงาน
         ] = await Promise.all([
           callAppScript('GET_DATA', 'Patients'),
           callAppScript('GET_DATA', 'Queue'),
@@ -11127,7 +13326,8 @@ export default function App() {
           callAppScript('GET_DATA', 'setting_pos'),
           callAppScript('GET_DATA', 'Branches'),
           callAppScript('GET_DATA', 'Finance_Revenue'),
-          callAppScript('GET_DATA', 'Finance_Expenses')
+          callAppScript('GET_DATA', 'Finance_Expenses'),
+          callAppScript('GET_DATA', 'Staff') // ดึงข้อมูล Staff
         ]);
 
         if (resPatients?.status === 'success') { 
@@ -11167,6 +13367,11 @@ export default function App() {
         }
         setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
 
+        // รับข้อมูลพนักงาน
+        if (resStaff?.status === 'success' && resStaff.data) {
+           setStaffData(resStaff.data.reverse());
+        }
+
       } catch (error) { 
         console.error("Initial Fetch Error:", error);
         showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); 
@@ -11183,18 +13388,18 @@ export default function App() {
     { id: 'pos', label: 'POS', icon: Calculator },
     { id: 'catalog', label: 'สินค้า/บริการ', icon: Tag },
     { id: 'inventory', label: 'คลังสินค้า', icon: Package },
-    { id: 'reports', label: 'รายงาน', icon: BarChart3 },
     { id: 'finance', label: 'การเงิน', icon: Banknote },
-    { id: 'branches', label: 'จัดการสาขา', icon: Building2 },
+    { id: 'staff', label: 'พนักงาน', icon: UserCog }, // เพิ่มเมนูพนักงาน
+    { id: 'reports', label: 'รายงาน', icon: BarChart3 },
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
   ];
 
-  // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า เพื่อดึงค่า Index ไปคำนวณระยะการสไลด์
-  const mobileNavItems = navItems.slice(0, 5);
+  // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า
+  const mobileNavItems = navItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'settings'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans selection:bg-sky-200 selection:text-sky-900">
+    <div className="w-full h-screen bg-slate-50 flex relative overflow-hidden text-slate-800">
       <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-sky-200/40 blur-[100px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-200/30 blur-[100px] pointer-events-none z-0"></div>
 
@@ -11394,13 +13599,13 @@ export default function App() {
                 <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
             </div>
             <div style={{ display: currentTab === 'queue' ? 'block' : 'none' }} className="w-full">
-                <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+                {/* เพิ่มการส่ง props staffData ให้ AppointmentManager เพื่อนำไปเข้า Calendar */}
+                <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
-                        <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full">
+            <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full">
                 <CatalogManager products={posProducts} setProducts={setPosProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
-            <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative">
-               {/* แก้ไข: ส่ง Props posProducts และข้อมูลสต็อกลงไปให้ POSSystem ใช้งาน */}
+            <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative min-h-0">
                 <POSSystem 
                     products={posProducts} 
                     setProducts={setPosProducts} 
@@ -11411,6 +13616,7 @@ export default function App() {
                     inventoryData={inventoryData}
                     setInventoryData={setInventoryData}
                     setInventoryLogsData={setInventoryLogsData}
+                    staffData={staffData} // ส่งข้อมูลพนักงานไปที่ POS เพื่อเลือกเซลส์
                     currentBranch={currentBranch}
                     branchesData={branchesData}
                     showToast={showToast} 
@@ -11447,8 +13653,21 @@ export default function App() {
                     currentBranch={currentBranch}
                 />
             </div>
+            <div style={{ display: currentTab === 'staff' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
+                <StaffManager 
+                   staffData={staffData} 
+                   setStaffData={setStaffData} 
+                   financeData={financeData} 
+                   setFinanceData={setFinanceData} 
+                   posHistoryData={posHistoryData} 
+                   branchesData={branchesData}
+                   callAppScript={callAppScript} 
+                   showToast={showToast} 
+                   isGlobalLoading={isGlobalLoading} 
+                />
+            </div>
             {currentTab === 'reports' && <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8"><PlaceholderPage title="รายงานระดับองค์กร" desc="ดูสถิติ รายได้ และประสิทธิภาพการทำงานของคลินิก" icon={BarChart3} /></div>}
-            <div style={{ display: currentTab === 'branches' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
+            <div style={{ display: currentTab === 'settings' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
                 <BranchManager 
                     branchesData={branchesData} 
                     setBranchesData={setBranchesData} 
@@ -11666,8 +13885,37 @@ export default function App() {
           
           /* เล่นแอนิเมชันให้กระชับขึ้น ใช้ ease-out ป้องกันปัญหาหน่วง */
           animation: spaceRowEnter 0.5s ease-out forwards; 
-          
-          /* [แก้ไข] ลบคำสั่ง will-change ออก เพื่อป้องกันบัค GPU Memory เต็ม (การ์ดแหว่ง/เป็นสีขาว) บนมือถือ */
+        }
+
+        /* --- [NEW] CSS สำหรับ Custom Pointer Engine 60FPS ของเราเอง --- */
+        body.is-custom-dragging {
+            touch-action: none !important;
+            overflow: hidden !important; 
+        }
+        body.is-custom-dragging * {
+            cursor: grabbing !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        /* ปิดการรับเมาส์ของไส้ใน เพื่อให้การตรวจจับทะลุไปถึงช่องตารางได้แม่นยำ */
+        body.is-custom-dragging .calendar-dropzone * {
+            pointer-events: none !important;
+        }
+        
+        /* สไตล์กรอบตาราง 4 ด้านเป๊ะแบบ Inset ไม่โดนตัดแหว่ง */
+        .calendar-dropzone {
+            position: relative; 
+        }
+        .calendar-dropzone.dropzone-active::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 2px solid #0ea5e9 !important; 
+            background-color: rgba(224, 242, 254, 0.4) !important;
+            z-index: 50 !important;
+            pointer-events: none !important;
+            box-shadow: inset 0 0 12px rgba(14, 165, 233, 0.25) !important;
+            border-radius: inherit; 
         }
 
         /* --- CSS-Based 60FPS Sticky Header Animations --- */
