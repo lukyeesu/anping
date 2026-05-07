@@ -485,7 +485,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
         dragState.current.clone.parentNode.removeChild(dragState.current.clone);
     }
 
-    const isTouch = e.pointerType === 'touch';
+    // รองรับทั้ง touch และ pen เพื่อใช้บน Tablet/Mobile ได้สมบูรณ์แบบ
+    const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
     const shiftY = isTouch ? 45 : 15;
 
     dragState.current = {
@@ -515,7 +516,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       clone.style.left = '0px';
       clone.style.top = '0px';
       
-      clone.style.transform = `translate3d(${state.startX - state.offsetX}px, ${state.startY - state.offsetY - state.shiftY}px, 0) scale(1.15) rotate(-3deg)`;
+      // ลบการเอียง rotate(-3deg) ออกตามต้องการ
+      clone.style.transform = `translate3d(${state.startX - state.offsetX}px, ${state.startY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
       clone.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)';
       
       setTimeout(() => {
@@ -531,7 +533,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       if (navigator.vibrate && isTouch) navigator.vibrate(50);
     };
 
-    if (e.pointerType === 'touch') {
+    if (isTouch) {
+      // หน่วงเวลาเล็กน้อยสำหรับมือถือ เพื่อแยกระหว่างการลากหน้าจอ กับการแตะค้างเพื่อย้ายกล่อง
       dragState.current.holdTimer = setTimeout(startDragging, 200);
     }
 
@@ -552,7 +555,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
         if (moveEvent.cancelable) moveEvent.preventDefault();
         
         if (state.clone) {
-          state.clone.style.transform = `translate3d(${moveEvent.clientX - state.offsetX}px, ${moveEvent.clientY - state.offsetY - state.shiftY}px, 0) scale(1.15) rotate(-3deg)`;
+          // ลบการเอียงออก
+          state.clone.style.transform = `translate3d(${moveEvent.clientX - state.offsetX}px, ${moveEvent.clientY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
         }
 
         const elementsUnder = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
@@ -570,7 +574,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       const state = dragState.current;
       if (state.holdTimer) clearTimeout(state.holdTimer);
 
-      let wasDragging = state.isDragging; // --- จำสถานะว่าเพิ่งลากเสร็จ ---
+      let wasDragging = state.isDragging; 
 
       if (state.isDragging) {
         if (state.currentDropzone) {
@@ -582,23 +586,18 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           }
         }
       } else {
-        const cx = upEvent.type.includes('touch') ? upEvent.changedTouches[0].clientX : upEvent.clientX;
-        const cy = upEvent.type.includes('touch') ? upEvent.changedTouches[0].clientY : upEvent.clientY;
-        const dx = Math.abs(cx - state.startX);
-        const dy = Math.abs(cy - state.startY);
+        // จัดการกรณีเป็นการคลิก (ไม่ถึงระยะลาก)
+        const dx = Math.abs(upEvent.clientX - state.startX);
+        const dy = Math.abs(upEvent.clientY - state.startY);
         if (dx < 5 && dy < 5 && state.eventData) {
           if (onEventClick) onEventClick(state.eventData);
         }
       }
 
-      if (isTouch) {
-          document.removeEventListener('touchmove', handlePointerMove);
-          document.removeEventListener('touchend', handlePointerUp);
-          document.removeEventListener('touchcancel', handlePointerUp);
-      } else {
-          document.removeEventListener('mousemove', handlePointerMove);
-          document.removeEventListener('mouseup', handlePointerUp);
-      }
+      // ใช้ Pointer Events ล้วน ๆ แทนการใช้ Touch/Mouse ผสมกันเหมือนเมื่อก่อน
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointercancel', handlePointerUp);
 
       if (state.clone && state.clone.parentNode) state.clone.parentNode.removeChild(state.clone);
       if (state.element) state.element.style.opacity = '1';
@@ -606,7 +605,6 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       document.body.classList.remove('is-custom-dragging');
       dragState.current = { isDragging: false, element: null, clone: null, eventData: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null };
 
-      // --- [FIX] บล็อกการ Click หากเพิ่งวางรายการเพื่อไม่ให้ Modal เปิดซ้อน ---
       if (wasDragging) {
           const preventClick = (eClick) => {
               eClick.stopPropagation();
@@ -618,14 +616,9 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       }
     };
 
-    if (isTouch) {
-        document.addEventListener('touchmove', handlePointerMove, { passive: false });
-        document.addEventListener('touchend', handlePointerUp);
-        document.addEventListener('touchcancel', handlePointerUp);
-    } else {
-        document.addEventListener('mousemove', handlePointerMove);
-        document.addEventListener('mouseup', handlePointerUp);
-    }
+    document.addEventListener('pointermove', handlePointerMove, { passive: false });
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointercancel', handlePointerUp);
   };
   // --- END Custom Drag Engine ---
 
