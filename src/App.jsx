@@ -11692,6 +11692,22 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       endDate: null
   });
 
+  // --- State สำหรับดูโปรไฟล์และรูปภาพพนักงาน ---
+  const [viewProfileStaff, setViewProfileStaff] = useState(null);
+  const [isProfileClosing, setIsProfileClosing] = useState(false);
+  const [viewImageSrc, setViewImageSrc] = useState(null);
+  const [isImageClosing, setIsImageClosing] = useState(false);
+
+  const closeProfileModal = () => {
+      setIsProfileClosing(true);
+      setTimeout(() => { setViewProfileStaff(null); setIsProfileClosing(false); }, 300);
+  };
+
+  const closeImageViewer = () => {
+      setIsImageClosing(true);
+      setTimeout(() => { setViewImageSrc(null); setIsImageClosing(false); }, 300);
+  };
+
   const unpaidDatesMemo = useMemo(() => {
       if (!selectedPayrollStaff) return [];
       let unpaid = [];
@@ -12966,11 +12982,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                            }
 
                            return (
-                           <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
+                           <tr key={s.id} onClick={() => setViewProfileStaff(s)} className="hover:bg-slate-50/50 transition-colors group cursor-pointer space-row-animation">
                                <td className="p-4 pl-6">
                                    <div className="flex items-center gap-3">
                                        {s.photo ? (
-                                           <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200" />
+                                           <img src={s.photo} alt={s.name} onClick={(e) => { e.stopPropagation(); setViewImageSrc(s.photo); }} className="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200 hover:scale-110 transition-transform cursor-zoom-in" />
                                        ) : (
                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm ${s.role==='doctor'?'bg-indigo-400':s.role==='nurse'?'bg-emerald-400':s.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
                                                {s.name.charAt(0)}
@@ -13001,11 +13017,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                    ) : <span className="text-slate-300">-</span>}
                                </td>
                                <td className="p-4 pr-6 text-right">
-                                   <div className="flex items-center justify-end gap-1 transition-opacity">
-                                       <button onClick={() => handleOpenPayroll(s)} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg" title="จ่ายเงินเดือน"><Wallet size={18}/></button>
-                                       <button onClick={() => handleOpenSchedule(s)} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg" title="จัดตารางงาน"><CalendarClock size={18}/></button>
-                                       <button onClick={() => handleOpenEdit(s)} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg" title="แก้ไข"><Pencil size={18}/></button>
-                                       <button onClick={() => handleDelete(s)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="ลบ"><Trash2 size={18}/></button>
+                                   <div className="flex items-center justify-end gap-1 transition-opacity no-drag-zone">
+                                       <button onClick={(e) => { e.stopPropagation(); handleOpenPayroll(s); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg" title="จ่ายเงินเดือน"><Wallet size={18}/></button>
+                                       <button onClick={(e) => { e.stopPropagation(); handleOpenSchedule(s); }} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg" title="จัดตารางงาน"><CalendarClock size={18}/></button>
+                                       <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(s); }} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg" title="แก้ไข"><Pencil size={18}/></button>
+                                       <button onClick={(e) => { e.stopPropagation(); handleDelete(s); }} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="ลบ"><Trash2 size={18}/></button>
                                    </div>
                                </td>
                            </tr>
@@ -13062,13 +13078,13 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                    }
 
                    return (
-                       <div key={s.id} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3 space-row-animation active:scale-[0.98] transition-transform" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
+                       <div key={s.id} onClick={() => setViewProfileStaff(s)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3 space-row-animation active:scale-[0.98] transition-transform cursor-pointer hover:border-sky-300 hover:shadow-md" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
                            
                            {/* แถวที่ 1: รูปภาพ, ชื่อ, เบอร์โทร และ ตำแหน่ง */}
                            <div className="flex justify-between items-start gap-2">
                                <div className="flex items-center gap-3">
                                    {s.photo ? (
-                                       <img src={s.photo} alt={s.name} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover shadow-sm border border-slate-200 shrink-0" />
+                                       <img src={s.photo} alt={s.name} onClick={(e) => { e.stopPropagation(); setViewImageSrc(s.photo); }} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover shadow-sm border border-slate-200 shrink-0 hover:scale-105 transition-transform cursor-zoom-in" />
                                    ) : (
                                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center font-bold text-xl text-white shadow-sm shrink-0 ${s.role==='doctor'?'bg-indigo-400':s.role==='nurse'?'bg-emerald-400':s.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
                                            {s.name.charAt(0)}
@@ -13108,17 +13124,17 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                            </div>
 
                            {/* แถวที่ 3: ปุ่มจัดการ */}
-                           <div className="grid grid-cols-4 gap-2 pt-2 mt-1 border-t border-slate-100">
-                               <button onClick={() => handleOpenPayroll(s)} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-emerald-100 shadow-sm">
+                           <div className="grid grid-cols-4 gap-2 pt-2 mt-1 border-t border-slate-100 no-drag-zone">
+                               <button onClick={(e) => { e.stopPropagation(); handleOpenPayroll(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-emerald-100 shadow-sm">
                                    <Wallet size={14}/> จ่ายเงิน
                                </button>
-                               <button onClick={() => handleOpenSchedule(s)} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-indigo-100 shadow-sm">
+                               <button onClick={(e) => { e.stopPropagation(); handleOpenSchedule(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-indigo-100 shadow-sm">
                                    <CalendarClock size={14}/> ตารางงาน
                                </button>
-                               <button onClick={() => handleOpenEdit(s)} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 shadow-sm">
+                               <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 shadow-sm">
                                    <Pencil size={14}/> แก้ไขข้อมูล
                                </button>
-                               <button onClick={() => handleDelete(s)} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-rose-50 text-rose-500 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 hover:border-rose-200 shadow-sm">
+                               <button onClick={(e) => { e.stopPropagation(); handleDelete(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-rose-50 text-rose-500 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 hover:border-rose-200 shadow-sm">
                                    <Trash2 size={14}/> ลบพนักงาน
                                </button>
                            </div>
@@ -13233,10 +13249,13 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                   <button type="button" onClick={copyAddressToCurrent} className="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg kanit-text transition-colors font-medium flex items-center justify-center gap-1.5 w-full sm:w-auto"><MapPin size={14} /> ใช้ที่อยู่เดียวกับบัตรประชาชน</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ปัจจุบัน</label><input type="text" className={`${theme.input} font-data`} value={formData.curAddress} onChange={(e) => setFormData({...formData, curAddress: e.target.value})} /></div>
+                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน</label><input type="text" className={`${theme.input} font-data`} value={formData.curAddress} onChange={(e) => setFormData({...formData, curAddress: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.curMoo} onChange={(e) => setFormData({...formData, curMoo: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.curRoad} onChange={(e) => setFormData({...formData, curRoad: e.target.value})} /></div>
                   <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.curSubDistrict} onChange={(e) => setFormData({...formData, curSubDistrict: e.target.value})} /></div>
                   <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.curDistrict} onChange={(e) => setFormData({...formData, curDistrict: e.target.value})} /></div>
                   <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.curProvince} onChange={(e) => setFormData({...formData, curProvince: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.curZipcode} onChange={(e) => setFormData({...formData, curZipcode: e.target.value})} maxLength="5" /></div>
                 </div>
               </div>
            </div>
@@ -13995,6 +14014,193 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
           </div>
         </div>,
         document.body
+      )}
+
+      {/* --- Modal: Profile Viewer --- */}
+      {viewProfileStaff && createPortal(
+        <div className={`fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm ${isProfileClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+            <div className="absolute inset-0" onClick={closeProfileModal}></div>
+            <div className={`bg-white rounded-[2rem] sm:rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[90dvh] overflow-hidden relative z-10 ${isProfileClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+                
+                {/* ปุ่มปิด: แยกออกมาให้ลอยอยู่หน้าสุด (Z-Index สูงสุด) และไม่เลื่อนหาย */}
+                <button onClick={closeProfileModal} className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-black/5 hover:bg-black/10 text-slate-500 hover:text-slate-800 rounded-full backdrop-blur-md transition-colors z-[60] shadow-sm border border-black/5">
+                    <X size={20} />
+                </button>
+
+                {/* กล่อง Scroll หลัก: มัดรวม Header และเนื้อหาไว้ด้วยกัน */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar w-full relative">
+                    
+                    {/* Header Background: ปรับสีฟ้าไล่ไปขาว (บนลงล่าง) */}
+                    <div className="h-28 sm:h-36 bg-gradient-to-b from-sky-400 via-sky-100 to-white w-full relative overflow-hidden shrink-0">
+                        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
+                    </div>
+
+                    {/* ส่วนเนื้อหา: ใช้ relative z-10 เพื่อให้อยู่เหนือ Header เสมอ */}
+                    <div className="px-5 sm:px-8 pb-6 sm:pb-8 relative z-10">
+                        {/* Profile Header Info */}
+                        <div className="flex flex-row items-end gap-4 sm:gap-6 mb-6 sm:mb-8 px-1 sm:px-0">
+                            
+                            {/* รูปภาพโปรไฟล์: จัดให้อยู่แถวเดียวกับชื่อเสมอ */}
+                            <div className="relative shrink-0 -mt-16 sm:-mt-20">
+                                {viewProfileStaff.photo ? (
+                                    <img src={viewProfileStaff.photo} alt={viewProfileStaff.name} onClick={() => setViewImageSrc(viewProfileStaff.photo)} className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-[4px] sm:border-[6px] border-white bg-white shadow-md cursor-zoom-in hover:scale-105 transition-transform" />
+                                ) : (
+                                    <div className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full border-[4px] sm:border-[6px] border-white bg-white shadow-md flex items-center justify-center font-bold text-4xl sm:text-5xl text-white ${viewProfileStaff.role==='doctor'?'bg-indigo-400':viewProfileStaff.role==='nurse'?'bg-emerald-400':viewProfileStaff.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
+                                        {viewProfileStaff.name?.charAt(0)}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ชื่อและข้อมูลเบื้องต้น */}
+                            <div className="flex-1 min-w-0 pb-1 sm:pb-3">
+                                <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-800 kanit-text leading-tight truncate" title={viewProfileStaff.name}>
+                                    {viewProfileStaff.name}
+                                </h2>
+                                <div className="flex flex-wrap items-center gap-2 mt-1.5 sm:mt-2">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-bold kanit-text border shadow-sm ${roleMap[viewProfileStaff.role]?.color || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                        {roleMap[viewProfileStaff.role] ? React.createElement(roleMap[viewProfileStaff.role].icon, { size: 14 }) : null}
+                                        {roleMap[viewProfileStaff.role]?.label || 'ไม่ระบุตำแหน่ง'}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 kanit-text shadow-sm">
+                                        <Building2 size={14} className="text-slate-400 shrink-0" /> <span className="truncate">{branchesData.find(b => b.id === viewProfileStaff.branchId)?.name || 'ทุกสาขา'}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ข้อมูลรายละเอียดพนักงาน (Grid) */}
+                        <div className="space-y-4 sm:space-y-5">
+                            <div className="bg-slate-50/50 p-5 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                                <h4 className="text-sm font-bold text-slate-800 kanit-text mb-4 flex items-center gap-2 pb-2 border-b border-slate-200/60"><User size={18} className="text-sky-500" /> ข้อมูลส่วนตัว</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-5 gap-x-4 pl-1">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เลขบัตรประชาชน</p>
+                                        <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.idCard || '-'}</p>
+                                    </div>
+                                    <div className="col-span-1 sm:col-span-2">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เบอร์โทรศัพท์</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.phone || '-'}</p>
+                                            {viewProfileStaff.phone && (
+                                                <a href={`tel:${viewProfileStaff.phone}`} className="p-1 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 hover:bg-emerald-100 transition-colors shadow-sm">
+                                                    <Phone size={12} />
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">วันเกิด</p>
+                                        <p className="text-sm font-bold text-slate-700 font-data flex items-center gap-1.5 whitespace-nowrap">
+                                            {viewProfileStaff.dob || '-'} 
+                                            <span className="text-[10px] text-slate-400 font-medium kanit-text bg-white px-1.5 py-0.5 rounded-md border border-slate-200 shadow-sm">{viewProfileStaff.dob ? getAgeString(viewProfileStaff.dob) : ''}</span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เพศ</p>
+                                        <p className="text-sm font-bold text-slate-700 kanit-text">{viewProfileStaff.gender || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">สัญชาติ</p>
+                                        <p className="text-sm font-bold text-slate-700 kanit-text">{viewProfileStaff.nationality || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เชื้อชาติ</p>
+                                        <p className="text-sm font-bold text-slate-700 kanit-text">{viewProfileStaff.ethnicity || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">ศาสนา</p>
+                                        <p className="text-sm font-bold text-slate-700 kanit-text">{viewProfileStaff.religion || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-emerald-50/30 p-5 rounded-[1.5rem] border border-emerald-100/80 shadow-sm">
+                                <h4 className="text-sm font-bold text-emerald-800 kanit-text mb-4 flex items-center gap-2 pb-2 border-b border-emerald-200/60"><DollarSign size={18} className="text-emerald-500" /> ข้อมูลการจ้างงาน</h4>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-5 gap-x-4 pl-1">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest kanit-text mb-1">ประเภท</p>
+                                        <p className="text-sm font-black text-emerald-800 kanit-text bg-white px-2 py-0.5 rounded-md border border-emerald-100 shadow-sm w-fit">{viewProfileStaff.employmentType === 'monthly' ? 'รายเดือน' : viewProfileStaff.employmentType === 'daily' ? 'รายวัน' : 'Part-time'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest kanit-text mb-1">เงินเดือนฐาน</p>
+                                        <p className="text-sm font-black text-emerald-700 font-data">{formatCurrency(viewProfileStaff.baseSalary)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest kanit-text mb-1">เรท OT (ชม.)</p>
+                                        <p className="text-sm font-bold text-emerald-800 font-data">{viewProfileStaff.otRate > 0 ? `${viewProfileStaff.otRate} ฿` : '-'}</p>
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-3 pt-4 border-t border-emerald-100/60 mt-1">
+                                        <div className="flex flex-col">
+                                            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest kanit-text mb-1.5">ค่าคอมมิชชั่น</p>
+                                            <p className="text-sm font-bold text-emerald-800 kanit-text flex items-center gap-2">
+                                                <span className="bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shadow-sm text-emerald-700 font-data">{viewProfileStaff.commissionRate > 0 ? `${viewProfileStaff.commissionRate}${viewProfileStaff.commissionType === 'percent' ? '%' : '฿'}` : 'ไม่มี'}</span>
+                                                {viewProfileStaff.commissionRate > 0 && <span className="text-xs text-emerald-600 font-medium">{viewProfileStaff.commissionCondition === 'threshold' ? `(เริ่มคำนวณตั้งแต่บิลที่ ${viewProfileStaff.commissionThreshold})` : '(รับค่าคอมในทุกบิล)'}</span>}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50/50 p-5 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                                <h4 className="text-sm font-bold text-slate-800 kanit-text mb-4 flex items-center gap-2 pb-2 border-b border-slate-200/60"><MapPin size={18} className="text-sky-500" /> ที่อยู่ & ติดต่อฉุกเฉิน</h4>
+                                <div className="space-y-5 pl-1">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1.5">ที่อยู่ตามบัตรประชาชน</p>
+                                            <p className="text-sm font-medium text-slate-700 kanit-text bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm leading-relaxed min-h-[60px]">
+                                                {`${viewProfileStaff.address || ''} ${viewProfileStaff.moo ? 'ม.'+viewProfileStaff.moo : ''} ${viewProfileStaff.road ? 'ถ.'+viewProfileStaff.road : ''} ${viewProfileStaff.subDistrict || ''} ${viewProfileStaff.district || ''} ${viewProfileStaff.province || ''} ${viewProfileStaff.zipcode || ''}`.trim() || '- ไม่ระบุ -'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1.5">ที่อยู่ปัจจุบัน (ที่พักอาศัย)</p>
+                                            <p className="text-sm font-medium text-slate-700 kanit-text bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm leading-relaxed min-h-[60px]">
+                                                {`${viewProfileStaff.curAddress || ''} ${viewProfileStaff.curMoo ? 'ม.'+viewProfileStaff.curMoo : ''} ${viewProfileStaff.curRoad ? 'ถ.'+viewProfileStaff.curRoad : ''} ${viewProfileStaff.curSubDistrict || ''} ${viewProfileStaff.curDistrict || ''} ${viewProfileStaff.curProvince || ''} ${viewProfileStaff.curZipcode || ''}`.trim() || '- ไม่ระบุ -'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 shadow-sm">
+                                        <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest kanit-text mb-2.5 flex items-center gap-1.5"><AlertCircle size={12}/> ผู้ติดต่อฉุกเฉิน</p>
+                                        <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 bg-white p-3 rounded-lg border border-rose-50">
+                                            <div className="flex-1">
+                                                <span className="text-[10px] text-slate-400 block kanit-text">ชื่อ-สกุล</span>
+                                                <span className="text-sm font-bold text-slate-700">{viewProfileStaff.emName || '-'}</span>
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="text-[10px] text-slate-400 block kanit-text">เกี่ยวข้องเป็น</span>
+                                                <span className="text-sm font-bold text-slate-700">{viewProfileStaff.emRelation || '-'}</span>
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="text-[10px] text-slate-400 block kanit-text">เบอร์โทรศัพท์</span>
+                                                <span className="text-sm font-black text-rose-600 font-data">{viewProfileStaff.emPhone || '-'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ปุ่มปิดด้านล่าง (Footer) */}
+                <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex justify-end shrink-0 w-full z-20">
+                    <button onClick={closeProfileModal} className="w-full sm:w-auto px-8 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors kanit-text">
+                        ปิดหน้าต่าง
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+      )}
+
+      {/* --- Full Screen Image Viewer --- */}
+      {viewImageSrc && createPortal(
+          <div className={`fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-xl ${isImageClosing ? 'backdrop-animate-out' : 'fade-in'}`} onClick={closeImageViewer}>
+              <button onClick={closeImageViewer} className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-rose-500 text-white rounded-full backdrop-blur-md transition-colors z-10">
+                  <X size={28} />
+              </button>
+              <img src={viewImageSrc} alt="Full Screen View" className={`max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl ${isImageClosing ? 'modal-animate-out' : 'scale-in'}`} onClick={(e) => e.stopPropagation()} />
+          </div>,
+          document.body
       )}
     </div>
   );
