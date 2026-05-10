@@ -449,15 +449,15 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 onBlur={() => setTimeout(() => setIsOpen(false), 150)}
                 className={compact 
-                    ? `flex items-center ${fullWidth ? 'w-full px-3 justify-between' : 'justify-center px-2.5'} gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-lg py-1.5 transition-all font-data shadow-sm`
+                    ? `flex items-center ${fullWidth ? 'w-full px-3 justify-between' : 'justify-center px-2.5'} gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-xl py-2 transition-all font-data shadow-sm`
                     : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
                 }
             >
-                <span className={`truncate ${compact ? 'font-bold text-slate-700 text-sm' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
-                {!compact && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+                <span className={`truncate ${compact ? 'font-medium text-slate-600 text-sm kanit-text' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
+                {(!compact || fullWidth) && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && (
-                <div className={`absolute z-[100] bg-white border border-slate-200 rounded-xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'min-w-full w-max max-w-[90vw] max-h-48 left-0 origin-top zoom-in-95' : 'w-full max-h-48 origin-top zoom-in-95'}`}>
+                <div className={`absolute z-[100] bg-white border border-slate-200 rounded-2xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'min-w-full w-max max-w-[90vw] max-h-48 left-0 origin-top zoom-in-95' : 'w-full max-h-48 origin-top zoom-in-95'}`}>
                     {options.length > 0 ? options.map((opt, i) => {
                         const val = typeof opt === 'object' ? opt.value : opt;
                         const lbl = typeof opt === 'object' ? opt.label : opt;
@@ -466,7 +466,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                             <div
                                 key={i}
                                 onMouseDown={(e) => { e.preventDefault(); onChange(val); setIsOpen(false); }}
-                                className={`px-4 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors whitespace-nowrap ${compact ? 'text-sm py-2' : 'text-sm py-2.5'} ${isSelected ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                className={`px-4 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors whitespace-nowrap ${compact ? 'text-sm py-2.5' : 'text-sm py-2.5'} ${isSelected ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
                             >
                                 {lbl}
                             </div>
@@ -9764,55 +9764,63 @@ const FinancePage = ({
 
                  {/* Filters สำหรับ Desktop */}
                  <div className="hidden sm:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
-                   <select 
-                     value={filterType} 
-                     onChange={(e) => setFilterType(e.target.value)} 
-                     className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
-                   >
-                     <option value="all">ทั้งหมด</option>
-                     <option value="income">รายรับ</option>
-                     <option value="expense">รายจ่าย</option>
-                     <option value="pos">POS</option>
-                     <option value="manual">Manual</option>
-                   </select>
+                   <div className="w-[120px] relative">
+                     <CustomSelect 
+                       value={filterType} 
+                       onChange={(val) => setFilterType(val)} 
+                       options={[
+                         {value: 'all', label: 'ทั้งหมด'},
+                         {value: 'income', label: 'รายรับ'},
+                         {value: 'expense', label: 'รายจ่าย'},
+                         {value: 'pos', label: 'POS'},
+                         {value: 'manual', label: 'Manual'}
+                       ]}
+                       compact fullWidth className="w-full"
+                     />
+                   </div>
                    
-                   <select 
-                     value={filterBranch} 
-                     onChange={(e) => setFilterBranch(e.target.value)} 
-                     className="px-3 py-2 rounded-lg text-sm font-semibold kanit-text bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600 cursor-pointer"
-                   >
-                     <option value="all">ทุกสาขา</option>
-                     {branchesData && branchesData.map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                     ))}
-                   </select>
+                   <div className="w-[130px] relative">
+                     <CustomSelect 
+                       value={filterBranch} 
+                       onChange={(val) => setFilterBranch(val)} 
+                       options={[
+                         {value: 'all', label: 'ทุกสาขา'},
+                         ...(branchesData || []).map(b => ({value: b.id, label: b.name}))
+                       ]}
+                       compact fullWidth className="w-full"
+                     />
+                   </div>
                 </div>
               </div>
 
               {/* Filters แบบ Expandable สำหรับ Mobile */}
               {showMobileFilters && (
-                 <div className="sm:hidden flex gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2">
-                   <select 
-                     value={filterType} 
-                     onChange={(e) => setFilterType(e.target.value)} 
-                     className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold kanit-text bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600"
-                   >
-                     <option value="all">ทั้งหมด</option>
-                     <option value="income">รายรับ</option>
-                     <option value="expense">รายจ่าย</option>
-                     <option value="pos">POS</option>
-                     <option value="manual">Manual</option>
-                   </select>
-                   <select 
-                     value={filterBranch} 
-                     onChange={(e) => setFilterBranch(e.target.value)} 
-                     className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold kanit-text bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-600"
-                   >
-                     <option value="all">ทุกสาขา</option>
-                     {branchesData && branchesData.map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                     ))}
-                   </select>
+                 <div className="sm:hidden flex gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 relative z-[60]">
+                   <div className="flex-1 relative">
+                     <CustomSelect 
+                       value={filterType} 
+                       onChange={(val) => setFilterType(val)} 
+                       options={[
+                         {value: 'all', label: 'ทั้งหมด'},
+                         {value: 'income', label: 'รายรับ'},
+                         {value: 'expense', label: 'รายจ่าย'},
+                         {value: 'pos', label: 'POS'},
+                         {value: 'manual', label: 'Manual'}
+                       ]}
+                       compact fullWidth className="w-full"
+                     />
+                   </div>
+                   <div className="flex-1 relative">
+                     <CustomSelect 
+                       value={filterBranch} 
+                       onChange={(val) => setFilterBranch(val)} 
+                       options={[
+                         {value: 'all', label: 'ทุกสาขา'},
+                         ...(branchesData || []).map(b => ({value: b.id, label: b.name}))
+                       ]}
+                       compact fullWidth className="w-full"
+                     />
+                   </div>
                  </div>
               )}
             </div>
@@ -12908,13 +12916,20 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input type="text" placeholder="ค้นหาชื่อ, เบอร์โทร..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500/20 transition-colors font-data" />
            </div>
-           <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="w-full sm:w-48 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none kanit-text font-medium text-slate-600">
-              <option value="all">ทุกตำแหน่ง</option>
-              <option value="doctor">แพทย์</option>
-              <option value="nurse">พยาบาล/ผู้ช่วย</option>
-              <option value="sale">เซลส์/ที่ปรึกษา</option>
-              <option value="admin">แอดมิน</option>
-           </select>
+           <div className="w-full sm:w-48 relative shrink-0">
+             <CustomSelect 
+                value={filterRole} 
+                onChange={(val) => setFilterRole(val)} 
+                options={[
+                  {value: 'all', label: 'ทุกตำแหน่ง'},
+                  {value: 'doctor', label: 'แพทย์'},
+                  {value: 'nurse', label: 'พยาบาล/ผู้ช่วย'},
+                  {value: 'sale', label: 'เซลส์/ที่ปรึกษา'},
+                  {value: 'admin', label: 'แอดมิน'}
+                ]}
+                compact fullWidth className="w-full"
+             />
+           </div>
         </div>
 
         {/* Table/List */}
