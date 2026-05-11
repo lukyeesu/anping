@@ -5895,7 +5895,17 @@ const POSSystem = ({
     const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
 
     const receiptNo = txn.id;
-    const customerName = txn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)';
+    let customerName = txn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)';
+    let customerHN = '-';
+    
+    if (customerName.includes(' - ')) {
+        const parts = customerName.split(' - ');
+        customerHN = parts[0];
+        customerName = parts.slice(1).join(' - ');
+    } else if (txn.patientId) {
+        customerHN = txn.patientId;
+    }
+    
     const cashierName = "Admin User";
     
     // ดึงรายการจาก rawTx (ถ้ามี) หรือจาก items ปกติ
@@ -6011,9 +6021,8 @@ const POSSystem = ({
                 .footer-row { display: flex; gap: 10px; align-items: baseline; }
                 .footer-label { font-weight: 600; width: 60px; }
                 
-                .signature-area { margin-top: 50px; text-align: right; display: flex; justify-content: flex-end; }
-                .signature-box { text-align: center; width: 200px; }
-                .signature-line { border-bottom: 1px dashed #94a3b8; margin-bottom: 5px; height: 20px; }
+                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
+                .signature-box { text-align: center; width: 250px; }
 
                 @media print {
                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -6042,7 +6051,7 @@ const POSSystem = ({
                     <div class="doc-info-box info-box">
                         <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
                         <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
-                        <div class="info-row"><div class="info-label">อ้างอิง:</div><div class="info-val">-</div></div>
+                        <div class="info-row"><div class="info-label">อ้างอิง:</div><div class="info-val">${customerHN}</div></div>
                     </div>
                 </div>
 
@@ -6110,9 +6119,12 @@ const POSSystem = ({
 
                 <div class="signature-area">
                     <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div>(....................................................)</div>
-                        <div style="margin-top: 4px;">ผู้รับเงิน</div>
+                        <div>(ลงชื่อ)....................................................</div>
+                        <div style="margin-top: 6px;">ผู้รับบริการ</div>
+                    </div>
+                    <div class="signature-box">
+                        <div>(ลงชื่อ)....................................................</div>
+                        <div style="margin-top: 6px;">เจ้าหน้าที่</div>
                     </div>
                 </div>
             </div>
@@ -6152,6 +6164,7 @@ const POSSystem = ({
                 <div style="line-height: 1.6;">
                     <div><strong>เลขที่:</strong> ${receiptNo}</div>
                     <div><strong>วันที่:</strong> ${dateStr}</div>
+                    ${customerHN !== '-' ? `<div><strong>HN:</strong> ${customerHN}</div>` : ''}
                     <div><strong>ลูกค้า:</strong> ${customerName}</div>
                     <div><strong>แคชเชียร์:</strong> ${cashierName}</div>
                 </div>
@@ -9998,6 +10011,324 @@ const FinancePage = ({
     return 'text-2xl sm:text-3xl lg:text-2xl xl:text-3xl tracking-tight';
   };
 
+  const handlePrintReceipt = (txn, format = 'A4') => {
+    if (!txn) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+    }
+
+    const clinicName = branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
+    const clinicAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110";
+    const clinicPhone = "02-XXX-XXXX";
+    const taxId = "0123456789012";
+
+    const dateObj = new Date(txn.date || txn.createdAt || new Date());
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const y = dateObj.getFullYear() + 543;
+    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
+
+    const receiptNo = txn.id;
+    let customerName = txn.patientName || (txn.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)';
+    let customerHN = '-';
+    
+    if (customerName.includes(' - ')) {
+        const parts = customerName.split(' - ');
+        customerHN = parts[0];
+        customerName = parts.slice(1).join(' - ');
+    } else if (txn.patientId) {
+        customerHN = txn.patientId;
+    } else if (txn.rawTx?.patientId) {
+        customerHN = txn.rawTx.patientId;
+    }
+
+    // --- [NEW] ดึงข้อมูลที่อยู่และเลขบัตรประชาชนจากประวัติคนไข้ ---
+    let customerAddress = '-';
+    let customerTaxId = '-';
+    let customerPhone = '-';
+
+    if (customerHN !== '-' && patientsData) {
+        // แปลงเป็น String เพื่อป้องกันบั๊กการเปรียบเทียบข้อมูล
+        const patient = patientsData.find(p => String(p.hn) === String(customerHN) || String(p.id) === String(customerHN));
+        
+        if (patient) {
+            // ฟังก์ชันเติมคำนำหน้าให้สวยงาม
+            const formatSubDist = (sd) => sd ? (sd.includes('ตำบล') || sd.includes('แขวง') ? sd : `ต.${sd}`) : '';
+            const formatDist = (d) => d ? (d.includes('อำเภอ') || d.includes('เขต') ? d : `อ.${d}`) : '';
+            const formatProv = (p) => p ? (p.includes('กรุงเทพ') ? p : (p.includes('จังหวัด') || p.includes('จ.') ? p : `จ.${p}`)) : '';
+
+            // ประกอบร่างที่อยู่ปัจจุบัน
+            const curAddrParts = [
+                patient.curAddress, 
+                patient.curMoo ? `ม.${patient.curMoo}` : '', 
+                patient.curRoad ? `ถ.${patient.curRoad}` : '', 
+                formatSubDist(patient.curSubDistrict), 
+                formatDist(patient.curDistrict), 
+                formatProv(patient.curProvince), 
+                patient.curZipcode
+            ].filter(Boolean);
+            
+            // ประกอบร่างที่อยู่ตามบัตรประชาชน
+            const mainAddrParts = [
+                patient.address, 
+                patient.moo ? `ม.${patient.moo}` : '', 
+                patient.road ? `ถ.${patient.road}` : '', 
+                formatSubDist(patient.subDistrict), 
+                formatDist(patient.district), 
+                formatProv(patient.province), 
+                patient.zipcode
+            ].filter(Boolean);
+            
+            // เช็คว่ามีข้อมูลที่อยู่ปัจจุบันอย่างน้อย 1 ฟิลด์หรือไม่ (ป้องกันฟิลด์เป็นแค่ช่องว่าง)
+            const hasCurAddress = curAddrParts.length > 0 && (patient.curAddress || patient.curSubDistrict || patient.curProvince);
+            
+            // ถ้ามีที่อยู่ปัจจุบัน ให้ใช้ที่อยู่ปัจจุบัน, ถ้าว่างหรือไม่ได้ใส่ข้อมูล ให้ใช้ที่อยู่ตามบัตรประชาชน
+            if (hasCurAddress) {
+                customerAddress = curAddrParts.join(' ').trim();
+            } else if (mainAddrParts.length > 0) {
+                customerAddress = mainAddrParts.join(' ').trim();
+            }
+
+            // เลขที่ผู้เสียภาษีของลูกค้า ให้ใช้เลขบัตรประชาชนตามที่บันทึกบนเวชระเบียน
+            if (patient.idCard && patient.idCard.trim() !== '') {
+                customerTaxId = patient.idCard.trim();
+            }
+            
+            // จัดการเบอร์โทรศัพท์
+            if (patient.phones && Array.isArray(patient.phones) && patient.phones.length > 0 && patient.phones[0]) {
+               customerPhone = patient.phones[0];
+            } else if (patient.phone) {
+               customerPhone = Array.isArray(patient.phone) ? patient.phone[0] : patient.phone;
+            } else if (patient.phone1) {
+               customerPhone = patient.phone1;
+            }
+        }
+    }
+    // --------------------------------------------------------
+
+    const cashierName = "Admin User";
+    
+    // ดึงรายการจาก rawTx (ถ้ามี) หรือจาก items ปกติ
+    const itemsToPrint = txn.rawTx?.items || txn.items || [{name: txn.category || 'รายการ', quantity: 1, price: txn.amount, total: txn.amount}];
+    const subtotal = txn.rawTx?.subtotal || txn.subtotal || txn.amount || 0;
+    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
+    const discountType = txn.rawTx?.discountType || txn.discountType || 'amount';
+    const discountValue = txn.rawTx?.discountValue || txn.discountValue || 0;
+    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
+    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
+    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
+    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
+    const paymentMethod = txn.method || txn.rawTx?.paymentMethod || 'cash';
+    
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
+
+    let paymentMethodThai = 'เงินสด';
+    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
+    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
+
+    // ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย (Baht Text)
+    const bahtText = (amount) => {
+        if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
+        const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+        const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+        let numberStr = Math.abs(amount).toFixed(2).toString();
+        let [integerPart, fractionalPart] = numberStr.split('.');
+        const convertToText = (str) => {
+            let text = '';
+            for (let i = 0; i < str.length; i++) {
+                let n = parseInt(str[i]);
+                let pos = str.length - i - 1;
+                if (n === 0) continue;
+                if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
+                else if (n === 2 && pos === 1) text += 'ยี่สิบ';
+                else if (n === 1 && pos === 1) text += 'สิบ';
+                else text += numbers[n] + positions[pos];
+            }
+            return text;
+        };
+        let result = convertToText(integerPart) + 'บาท';
+        if (fractionalPart === '00') result += 'ถ้วน';
+        else result += convertToText(fractionalPart) + 'สตางค์';
+        return result;
+    };
+    
+    let itemsHtml = itemsToPrint.map((item, index) => `
+        <tr>
+            <td class="text-center">${index + 1}</td>
+            <td>${item.name}</td>
+            <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
+            <td class="text-right">${formatCurrency(item.price)}</td>
+            <td class="text-right">0.00</td>
+            <td class="text-right font-bold">${formatCurrency(item.total)}</td>
+        </tr>
+    `).join('');
+
+    const html = `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
+                @page { size: A4; margin: 5mm; }
+                .page-break { page-break-before: always; break-before: page; }
+                .container { padding: 0; max-width: 100%; }
+                
+                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
+                .doc-title-wrapper { text-align: right; }
+                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
+                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } /* สีฟ้า */
+
+                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
+                
+                .info-box { display: flex; flex-direction: column; gap: 4px; }
+                .info-row { display: flex; align-items: baseline; }
+                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
+                .info-val { flex: 1; }
+                .font-bold { font-weight: 700; }
+
+                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
+                
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
+                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
+                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                
+                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 30px; margin-top: 20px; }
+                .summary-left { font-size: 13px; }
+                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+                .summary-right { display: flex; flex-direction: column; gap: 6px; }
+                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
+                .sum-row.grand-total { background-color: #f0f9ff; padding: 8px 10px; font-weight: 700; border-radius: 4px; font-size: 14px; align-items: center; border-bottom: 2px solid #bae6fd; }
+
+                .footer-info { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+                .footer-row { display: flex; gap: 10px; align-items: baseline; }
+                .footer-label { font-weight: 600; width: 60px; }
+                
+                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
+                .signature-box { text-align: center; width: 250px; }
+
+                @media print {
+                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+            </style>
+        </head>
+        <body>
+            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
+            <div class="container">
+                <div class="header-top">
+                    <div class="doc-title-wrapper">
+                        <div class="doc-type">${docType}</div>
+                        <div class="doc-title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
+                    </div>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
+                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} (สำนักงานใหญ่)</div></div>
+                        <div class="info-row" style="margin-top: 4px;">
+                            <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
+                        </div>
+                    </div>
+                    <div class="doc-info-box info-box">
+                        <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
+                        <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
+                        <div class="info-row"><div class="info-label">อ้างอิง (HN):</div><div class="info-val">${customerHN}</div></div>
+                    </div>
+                </div>
+
+                <div class="info-grid" style="margin-top: -10px;">
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">ลูกค้า:</div><div class="info-val">${customerName}</div></div>
+                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${customerAddress}</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${customerTaxId}</div></div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">โทร:</div><div class="info-val">${customerPhone}</div></div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 50px;">ลำดับ</th>
+                            <th>คำอธิบาย</th>
+                            <th class="text-center" style="width: 80px;">จำนวน</th>
+                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
+                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
+                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <div class="summary-section">
+                    <div class="summary-left">
+                        <div class="summary-left-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            สรุป
+                        </div>
+                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrency(priceExcludingVat)} บาท</span></div>
+                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrency(vatAmount)} บาท</span></div>
+                        <div class="sum-row font-bold" style="margin-top: 15px;">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span>(${bahtText(grandTotal)})</span>
+                        </div>
+                    </div>
+                    <div class="summary-right">
+                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrency(subtotal)} บาท</span></div>
+                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrency(discountAmount)} บาท</span></div>
+                        <div class="sum-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrency(afterDiscount)} บาท</span></div>
+                        <div class="sum-row grand-total">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span style="color: #0ea5e9;">${formatCurrency(grandTotal)} บาท</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer-info">
+                    <div class="footer-row">
+                        <div class="footer-label">ชำระเงิน:</div>
+                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurrency(grandTotal)} บาท</div>
+                    </div>
+                    <div class="footer-row">
+                        <div class="footer-label">หมายเหตุ:</div>
+                        <div>${txn.note || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="signature-area">
+                    <div class="signature-box">
+                        <div>(ลงชื่อ)....................................................</div>
+                        <div style="margin-top: 6px;">ผู้รับบริการ</div>
+                    </div>
+                    <div class="signature-box">
+                        <div>(ลงชื่อ)....................................................</div>
+                        <div style="margin-top: 6px;">เจ้าหน้าที่</div>
+                    </div>
+                </div>
+            </div>
+            `).join('<div class="page-break"></div>')}
+        </body>
+        </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => { printWindow.print(); }, 800);
+  };
+
   const handleEditTransaction = (tx) => {
       if (tx.isAuto) {
         // ค้นหาต้นฉบับจาก posHistoryData โดยใช้ tx.id หรือ receiptNo
@@ -10530,6 +10861,9 @@ const FinancePage = ({
                           </td>
                           <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                              <div className="flex items-center justify-center gap-1">
+                                 <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเสร็จ">
+                                    <Printer size={16}/>
+                                 </button>
                                  <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
                                     <Pencil size={16}/>
                                  </button>
@@ -10607,7 +10941,10 @@ const FinancePage = ({
                         </div>
 
                         {/* Actions Row */}
-                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100">
+                        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
+                            <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
+                                <Printer size={14} /> พิมพ์
+                            </button>
                             <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
                                 <Pencil size={14} /> แก้ไข
                             </button>
@@ -10860,18 +11197,25 @@ const FinancePage = ({
                       </div>
                  </div>
               )}
-              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-                 <button type="button" onClick={closeDetailModal} className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ปิดหน้าต่าง</button>
-                 <button type="button" onClick={(e) => { 
-                     e.preventDefault();
-                     e.stopPropagation();
-                     const txToEdit = selectedTxn; // ล็อกข้อมูลบิลนี้เอาไว้ก่อน
-                     closeDetailModal(); // สั่งปิดหน้าต่างนี้
-                     // หน่วงเวลา 350ms ให้หน้าต่างเก่าปิดสนิท แล้วค่อยเปิดฟอร์มแก้ไข
-                     setTimeout(() => handleEditTransaction(txToEdit), 350); 
-                 }} className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2">
-                    <Pencil size={18} /> แก้ไขข้อมูล
-                 </button>
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
+                 <div className="w-full sm:w-auto">
+                     <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(selectedTxn, 'A4'); }} className="w-full sm:w-auto px-4 sm:px-5 py-2.5 rounded-xl font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors shadow-sm kanit-text flex items-center justify-center gap-2">
+                        <Printer size={18} /> <span className="hidden sm:inline">พิมพ์ใบเสร็จ</span>
+                     </button>
+                 </div>
+                 <div className="flex gap-2 w-full sm:w-auto">
+                     <button type="button" onClick={closeDetailModal} className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ปิดหน้าต่าง</button>
+                     <button type="button" onClick={(e) => { 
+                         e.preventDefault();
+                         e.stopPropagation();
+                         const txToEdit = selectedTxn; // ล็อกข้อมูลบิลนี้เอาไว้ก่อน
+                         closeDetailModal(); // สั่งปิดหน้าต่างนี้
+                         // หน่วงเวลา 350ms ให้หน้าต่างเก่าปิดสนิท แล้วค่อยเปิดฟอร์มแก้ไข
+                         setTimeout(() => handleEditTransaction(txToEdit), 350); 
+                     }} className="flex-[1.5] sm:flex-none px-4 sm:px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center justify-center gap-2">
+                        <Pencil size={18} /> <span className="hidden sm:inline">แก้ไขข้อมูล</span>
+                     </button>
+                 </div>
               </div>
            </div>
         </div>,
