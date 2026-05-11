@@ -5427,6 +5427,22 @@ const POSSystem = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
 
+  // --- [NEW] Ref สำหรับควบคุม Scroll ใน Modal ชำระเงิน ---
+  const checkoutScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (paymentMethod === 'transfer' || checkoutSuccess) {
+      setTimeout(() => {
+        if (checkoutScrollRef.current) {
+          checkoutScrollRef.current.scrollTo({
+            top: checkoutScrollRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 150); // หน่วงเวลาเล็กน้อยเพื่อให้ DOM เรนเดอร์รูป QR หรือข้อความสำเร็จเสร็จก่อน
+    }
+  }, [paymentMethod, checkoutSuccess]);
+
   // --- เพิ่ม State สำหรับ Infinite Scroll ของประวัติการขาย ---
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(25);
   const [isHistoryLoadingMore, setIsHistoryLoadingMore] = useState(false);
@@ -5646,16 +5662,21 @@ const POSSystem = ({
     };
 
     try {
-        // ส่งข้อมูลไปบันทึกลงชีตชื่อ 'POS_Transactions' (เปลี่ยนชื่อได้ตามต้องการ)
+        // ส่งข้อมูลไปบันทึกลงชีตชื่อ 'POS_Transactions' (สำคัญสุด ให้ทำเป็นลำดับแรก)
         await callAppScript('SAVE_DATA', 'POS_Transactions', transactionData);
+        
+        // --- เริ่มปรับปรุง: รวบรวม API Calls สำหรับสต็อกและคอร์สไว้ยิงพร้อมกัน (Promise.all) ---
+        const backgroundTasks = [];
         
         // --- ระบบตัดสต็อกอัตโนมัติ (Automatic Stock Deduction - FEFO: First Expired First Out) ---
         const targetBranch = currentBranch === 'all' ? 'b1' : currentBranch;
+        let localInvData = [...inventoryData];
+        let localLogs = [];
         
         for (const item of cart) {
             if (item.product.stockManaged) {
                 // ดึงรายการสต็อกทั้งหมดของสินค้านี้ในสาขานี้ และเรียงลำดับตามวันหมดอายุ (FEFO)
-                const productStocks = inventoryData
+                const productStocks = localInvData
                     .filter(inv => inv.productId === item.product.id && inv.branchId === targetBranch)
                     .sort((a, b) => {
                         if (!a.expireDate) return 1;
@@ -5681,8 +5702,8 @@ const POSSystem = ({
 
                     const updatedStock = { ...stockItem, quantity: newQty };
                     
-                    // บันทึกการอัปเดตสต็อกรายล็อต
-                    await callAppScript('SAVE_DATA', 'Inventory', updatedStock);
+                    // เพิ่มคิวเข้า Background Tasks
+                    backgroundTasks.push(callAppScript('SAVE_DATA', 'Inventory', updatedStock));
                     
                     // สร้าง Log การตัดสต็อกรายล็อต
                     const branchName = branchesData.find(b => b.id === targetBranch)?.name || targetBranch;
@@ -5699,22 +5720,23 @@ const POSSystem = ({
                         expireDate: stockItem.expireDate,
                         timestamp: new Date().toISOString()
                     };
-                    await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
+                    backgroundTasks.push(callAppScript('SAVE_DATA', 'InventoryLogs', logPayload));
 
-                    // อัปเดต State สต็อกและ Log ทันที
-                    setInventoryData(prev => prev.map(s => s.id === stockItem.id ? updatedStock : s));
-                    setInventoryLogsData(prev => [logPayload, ...prev]);
+                    // อัปเดต Local State สต็อกและ Log ทันที
+                    const idx = localInvData.findIndex(s => s.id === stockItem.id);
+                    if (idx !== -1) localInvData[idx] = updatedStock;
+                    localLogs.push(logPayload);
                 }
 
                 // กรณีสต็อกไม่พอ (หักจนติดลบในล็อตสุดท้าย หรือแจ้งเตือน)
                 if (remainingToDeduct > 0) {
                     console.warn(`Stock insufficient for ${item.product.name}. Remaining to deduct: ${remainingToDeduct}`);
-                    // อาจจะเลือกหักจากล็อตสุดท้ายให้ติดลบ หรือแจ้งเตือนผู้ใช้
                 }
             }
         }
 
         // --- เพิ่มระบบจัดการคอร์ส/แพ็กเกจ ---
+        let updatedPatientForState = null;
         if (selectedPatientId && patientsData.length > 0) {
             const currentPatient = patientsData.find(p => (p.id || p.hn) === selectedPatientId);
             if (currentPatient) {
@@ -5751,12 +5773,24 @@ const POSSystem = ({
 
                 if (hasChanges) {
                     const updatedPatient = { ...currentPatient, courses: updatedCourses };
-                    await callAppScript('SAVE_DATA', 'Patients', updatedPatient);
-                    if (setPatientsData) {
-                        setPatientsData(prev => prev.map(p => (p.id || p.hn) === selectedPatientId ? updatedPatient : p));
-                    }
+                    backgroundTasks.push(callAppScript('SAVE_DATA', 'Patients', updatedPatient));
+                    updatedPatientForState = updatedPatient;
                 }
             }
+        }
+
+        // ประมวลผล Task ทั้งหมดพร้อมกัน (ช่วยให้ทำรายการเสร็จเร็วขึ้นหลายเท่าตัว)
+        if (backgroundTasks.length > 0) {
+            await Promise.all(backgroundTasks);
+        }
+
+        // อัปเดต React States รวดเดียว
+        if (localLogs.length > 0) {
+            setInventoryData(localInvData);
+            setInventoryLogsData(prev => [...localLogs, ...prev]);
+        }
+        if (updatedPatientForState && setPatientsData) {
+            setPatientsData(prev => prev.map(p => (p.id || p.hn) === selectedPatientId ? updatedPatientForState : p));
         }
 
         // อัปเดต State ประวัติการขายทันทีเพื่อให้แสดงใน Modal
@@ -5837,6 +5871,322 @@ const POSSystem = ({
     } finally {
         setIsSavingHistory(false);
     }
+  };
+
+  // --- เพิ่มฟังก์ชันพิมพ์ใบเสร็จ (รองรับ A4 และ 80mm) ---
+  const handlePrintReceipt = (txn, format) => {
+    if (!txn) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+    }
+
+    const clinicName = branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
+    const clinicAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110";
+    const clinicPhone = "02-XXX-XXXX";
+    const taxId = "0123456789012";
+
+    const dateObj = new Date(txn.createdAt || txn.date || new Date());
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const y = dateObj.getFullYear() + 543;
+    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
+
+    const receiptNo = txn.id;
+    const customerName = txn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)';
+    const cashierName = "Admin User";
+    
+    // ดึงรายการจาก rawTx (ถ้ามี) หรือจาก items ปกติ
+    const itemsToPrint = txn.rawTx?.items || txn.items || [];
+    const subtotal = txn.rawTx?.subtotal || txn.subtotal || 0;
+    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
+    const discountType = txn.rawTx?.discountType || txn.discountType || 'amount';
+    const discountValue = txn.rawTx?.discountValue || txn.discountValue || 0;
+    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
+    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
+    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
+    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
+    const paymentMethod = txn.paymentMethod || txn.method || 'cash';
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
+
+    let paymentMethodThai = 'เงินสด';
+    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
+    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
+
+    // ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย (Baht Text)
+    const bahtText = (amount) => {
+        if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
+        const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+        const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+        let numberStr = Math.abs(amount).toFixed(2).toString();
+        let [integerPart, fractionalPart] = numberStr.split('.');
+        const convertToText = (str) => {
+            let text = '';
+            for (let i = 0; i < str.length; i++) {
+                let n = parseInt(str[i]);
+                let pos = str.length - i - 1;
+                if (n === 0) continue;
+                if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
+                else if (n === 2 && pos === 1) text += 'ยี่สิบ';
+                else if (n === 1 && pos === 1) text += 'สิบ';
+                else text += numbers[n] + positions[pos];
+            }
+            return text;
+        };
+        let result = convertToText(integerPart) + 'บาท';
+        if (fractionalPart === '00') result += 'ถ้วน';
+        else result += convertToText(fractionalPart) + 'สตางค์';
+        return result;
+    };
+    
+    let itemsHtml = '';
+    if (format === 'A4') {
+        itemsHtml = itemsToPrint.map((item, index) => `
+            <tr>
+                <td class="text-center">${index + 1}</td>
+                <td>${item.name}</td>
+                <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
+                <td class="text-right">${formatCurrency(item.price)}</td>
+                <td class="text-right">0.00</td>
+                <td class="text-right font-bold">${formatCurrency(item.total)}</td>
+            </tr>
+        `).join('');
+    } else {
+        itemsHtml = itemsToPrint.map(item => `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; page-break-inside: avoid;">
+                <div style="flex: 1; padding-right: 10px;">
+                    <div style="font-weight: bold; margin-bottom: 2px;">${item.name}</div>
+                    <div style="color: #64748b; font-size: 11px;">${item.quantity} x ${formatCurrency(item.price)}</div>
+                </div>
+                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurrency(item.total)}</div>
+            </div>
+        `).join('');
+    }
+
+    const html = format === 'A4' ? `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
+                @page { size: A4; margin: 5mm; }
+                .page-break { page-break-before: always; break-before: page; }
+                .container { padding: 0; max-width: 100%; }
+                
+                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
+                .doc-title-wrapper { text-align: right; }
+                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
+                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } /* สีฟ้า */
+
+                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
+                
+                .info-box { display: flex; flex-direction: column; gap: 4px; }
+                .info-row { display: flex; align-items: baseline; }
+                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
+                .info-val { flex: 1; }
+                .font-bold { font-weight: 700; }
+
+                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
+                
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
+                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
+                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                
+                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 30px; margin-top: 20px; }
+                .summary-left { font-size: 13px; }
+                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+                .summary-right { display: flex; flex-direction: column; gap: 6px; }
+                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
+                .sum-row.grand-total { background-color: #f0f9ff; padding: 8px 10px; font-weight: 700; border-radius: 4px; font-size: 14px; align-items: center; border-bottom: 2px solid #bae6fd; }
+
+                .footer-info { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+                .footer-row { display: flex; gap: 10px; align-items: baseline; }
+                .footer-label { font-weight: 600; width: 60px; }
+                
+                .signature-area { margin-top: 50px; text-align: right; display: flex; justify-content: flex-end; }
+                .signature-box { text-align: center; width: 200px; }
+                .signature-line { border-bottom: 1px dashed #94a3b8; margin-bottom: 5px; height: 20px; }
+
+                @media print {
+                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+            </style>
+        </head>
+        <body>
+            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
+            <div class="container">
+                <div class="header-top">
+                    <div class="doc-title-wrapper">
+                        <div class="doc-type">${docType}</div>
+                        <div class="doc-title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
+                    </div>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
+                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} (สำนักงานใหญ่)</div></div>
+                        <div class="info-row" style="margin-top: 4px;">
+                            <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
+                        </div>
+                    </div>
+                    <div class="doc-info-box info-box">
+                        <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
+                        <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
+                        <div class="info-row"><div class="info-label">อ้างอิง:</div><div class="info-val">-</div></div>
+                    </div>
+                </div>
+
+                <div class="info-grid" style="margin-top: -10px;">
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">ลูกค้า:</div><div class="info-val">${customerName}</div></div>
+                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">-</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">-</div></div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">โทร:</div><div class="info-val">-</div></div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 50px;">ลำดับ</th>
+                            <th>คำอธิบาย</th>
+                            <th class="text-center" style="width: 80px;">จำนวน</th>
+                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
+                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
+                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <div class="summary-section">
+                    <div class="summary-left">
+                        <div class="summary-left-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            สรุป
+                        </div>
+                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrency(priceExcludingVat)} บาท</span></div>
+                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrency(vatAmount)} บาท</span></div>
+                        <div class="sum-row font-bold" style="margin-top: 15px;">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span>(${bahtText(grandTotal)})</span>
+                        </div>
+                    </div>
+                    <div class="summary-right">
+                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrency(subtotal)} บาท</span></div>
+                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrency(discountAmount)} บาท</span></div>
+                        <div class="sum-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrency(afterDiscount)} บาท</span></div>
+                        <div class="sum-row grand-total">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span style="color: #0ea5e9;">${formatCurrency(grandTotal)} บาท</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer-info">
+                    <div class="footer-row">
+                        <div class="footer-label">ชำระเงิน:</div>
+                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurrency(grandTotal)} บาท</div>
+                    </div>
+                    <div class="footer-row">
+                        <div class="footer-label">หมายเหตุ:</div>
+                        <div>${txn.note || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="signature-area">
+                    <div class="signature-box">
+                        <div class="signature-line"></div>
+                        <div>(....................................................)</div>
+                        <div style="margin-top: 4px;">ผู้รับเงิน</div>
+                    </div>
+                </div>
+            </div>
+            `).join('<div class="page-break"></div>')}
+        </body>
+        </html>
+    ` : `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>สลิปใบเสร็จ - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; font-size: 13px; color: #000; width: 72mm; }
+                @page { size: 80mm auto; margin: 0; }
+                .slip-container { padding: 4mm; padding-bottom: 15mm; }
+                .text-center { text-align: center; }
+                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+                .divider { border-bottom: 1px dashed #666; margin: 8px 0; }
+                .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
+                .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+                .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class="slip-container">
+                <div class="text-center">
+                    <div class="clinic-name">${clinicName}</div>
+                    <div style="line-height: 1.4;">${clinicAddress}</div>
+                    <div style="line-height: 1.4;">โทร: ${clinicPhone}</div>
+                    <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div style="line-height: 1.6;">
+                    <div><strong>เลขที่:</strong> ${receiptNo}</div>
+                    <div><strong>วันที่:</strong> ${dateStr}</div>
+                    <div><strong>ลูกค้า:</strong> ${customerName}</div>
+                    <div><strong>แคชเชียร์:</strong> ${cashierName}</div>
+                </div>
+                
+                <div class="divider-thick"></div>
+                
+                <div style="font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>รายการ</span>
+                    <span>รวม</span>
+                </div>
+                
+                ${itemsHtml}
+                
+                <div class="divider-thick"></div>
+                
+                <div class="summary-row"><span>รวมเป็นเงิน:</span><span>${formatCurrency(subtotal)}</span></div>
+                ${discountAmount > 0 ? `<div class="summary-row"><span>ส่วนลด:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}
+                ${taxMode !== 'none' && vatAmount > 0 ? `<div class="summary-row"><span>ภาษี (${vatRate}%):</span><span>${formatCurrency(vatAmount)}</span></div>` : ''}
+                
+                <div class="summary-row total"><span>ยอดสุทธิ:</span><span>${formatCurrency(grandTotal)}</span></div>
+                
+                <div class="divider"></div>
+                
+                <div class="text-center" style="line-height: 1.6;">
+                    <div>ชำระโดย: <strong>${paymentMethod === 'cash' ? 'เงินสด' : paymentMethod === 'transfer' ? 'โอนเงิน' : paymentMethod === 'credit' ? 'บัตรเครดิต' : paymentMethod}</strong></div>
+                    <div style="margin-top: 15px; font-size: 14px; font-weight: bold;">*** ขอบคุณที่ใช้บริการ ***</div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => { printWindow.print(); }, 800); // เผื่อเวลาโหลดฟอนต์
   };
 
   // --- ฟังก์ชันจัดการการเลื่อน (Scroll) เพื่อโหลดข้อมูลเพิ่ม (Infinite Scroll) ---
@@ -6478,54 +6828,84 @@ const POSSystem = ({
       {/* Checkout Modal */}
       {checkoutModal.isOpen && (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${checkoutModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col ${checkoutModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-              <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
-                <Banknote size={20} className="text-sky-500"/> ชำระเงิน
+          <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden ${checkoutModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                <Banknote size={18} className="text-sky-500"/> ชำระเงิน
               </h3>
-              <button onClick={closeCheckoutAndReset} className="text-slate-400 hover:bg-white p-1 rounded-full transition-colors"><X size={20}/></button>
+              <button onClick={closeCheckoutAndReset} className="text-slate-400 hover:bg-slate-100 p-1.5 rounded-full transition-colors"><X size={18}/></button>
             </div>
             
-            <div className="p-6">
-               <div className="text-center mb-6">
-                  <p className="text-sm text-slate-500 font-medium kanit-text mb-1">ยอดที่ต้องชำระ</p>
-                  <h2 className="text-4xl font-black text-sky-500 font-data tracking-tight">{formatCurrency(grandTotal)}</h2>
+            <div ref={checkoutScrollRef} className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex-1 flex flex-col gap-4 sm:gap-5 scroll-smooth">
+               <div className="bg-gradient-to-br from-sky-50 to-sky-100/50 p-4 sm:p-5 rounded-2xl text-center border border-sky-100 shadow-inner relative overflow-hidden shrink-0">
+                  <div className="absolute -top-4 -right-4 w-20 h-20 bg-sky-200/50 rounded-full blur-2xl pointer-events-none"></div>
+                  <p className="text-[11px] sm:text-xs text-sky-600 font-bold kanit-text mb-0.5 relative z-10 uppercase tracking-wider">ยอดสุทธิที่ต้องชำระ</p>
+                  <h2 className="text-3xl sm:text-4xl font-black text-sky-600 font-data tracking-tighter relative z-10 leading-none py-1">{formatCurrency(grandTotal)}</h2>
                </div>
 
-               <div className="space-y-4">
+               <div className="space-y-3 shrink-0">
                   <label className="block text-sm font-bold text-slate-700 kanit-text">เลือกวิธีชำระเงิน</label>
-                  <div className="grid grid-cols-2 gap-3">
-                     <button onClick={() => setPaymentMethod('cash')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all kanit-text font-medium ${paymentMethod === 'cash' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                        <Banknote size={24} /> เงินสด
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                     <button onClick={() => setPaymentMethod('cash')} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text ${paymentMethod === 'cash' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                        <Banknote size={24} /> <span className="text-xs sm:text-sm font-bold whitespace-nowrap">เงินสด</span>
                      </button>
-                     <button onClick={() => setPaymentMethod('transfer')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all kanit-text font-medium ${paymentMethod === 'transfer' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                        <QrCode size={24} /> โอนเงิน (QR)
+                     <button onClick={() => setPaymentMethod('transfer')} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text ${paymentMethod === 'transfer' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                        <QrCode size={24} /> <span className="text-xs sm:text-sm font-bold whitespace-nowrap">โอนเงิน (QR)</span>
                      </button>
-                     <button onClick={() => setPaymentMethod('credit')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all kanit-text font-medium col-span-2 ${paymentMethod === 'credit' ? 'border-sky-500 bg-sky-50 text-sky-600 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                        <CreditCard size={24} /> บัตรเครดิต
+                     <button onClick={() => setPaymentMethod('credit')} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text col-span-2 ${paymentMethod === 'credit' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                        <CreditCard size={24} /> <span className="text-xs sm:text-sm font-bold whitespace-nowrap">บัตรเครดิต</span>
                      </button>
                   </div>
+
+                  {paymentMethod === 'transfer' && (
+                     <div className="mt-4 border border-sky-100 bg-sky-50/50 p-4 sm:p-5 rounded-2xl flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
+                        <p className="text-xs sm:text-sm font-bold text-slate-500 kanit-text mb-3 sm:mb-4 text-center">สแกน QR Code พร้อมเพย์</p>
+                        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 shrink-0 relative mb-4">
+                            <div className="absolute inset-0 border-2 border-sky-400 rounded-xl animate-pulse opacity-40 pointer-events-none"></div>
+                            <img 
+                               src={`https://promptpay.io/0926321039/${grandTotal}.png`} 
+                               alt="PromptPay QR" 
+                               className="w-48 h-48 sm:w-56 sm:h-56 object-contain pointer-events-none select-none relative z-10" 
+                            />
+                        </div>
+                        <div className="text-center flex flex-col items-center w-full">
+                            <h4 className="text-lg sm:text-xl font-black text-sky-700 kanit-text leading-tight mb-1">นาย พงษ์สิทธิ์ แซ่อึ้ง</h4>
+                            <p className="text-xs sm:text-sm text-slate-500 font-data mb-3">เบอร์พร้อมเพย์: 092-632-1039</p>
+                            <div className="bg-white px-5 py-3 rounded-2xl border border-sky-100 shadow-sm w-full max-w-[240px]">
+                               <p className="text-[10px] sm:text-xs text-slate-400 font-bold kanit-text mb-0.5">ยอดชำระสุทธิ</p>
+                               <p className="text-xl sm:text-2xl font-black text-sky-600 font-data leading-none">{formatCurrency(grandTotal)}</p>
+                            </div>
+                        </div>
+                     </div>
+                  )}
                </div>
 
-               {checkoutSuccess ? (
-                  <div className="mt-8 flex flex-col items-center animate-in fade-in zoom-in slide-in-from-bottom-4">
-                      <div className="w-16 h-16 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-3">
-                          <CheckCircle2 size={32} />
-                      </div>
-                      <h4 className="font-bold text-slate-800 text-lg kanit-text">ทำรายการสำเร็จ</h4>
-                      <p className="text-slate-500 text-sm kanit-text">บันทึกข้อมูลการขายเรียบร้อยแล้ว</p>
-                      <button onClick={closeCheckoutAndReset} className="mt-4 w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors kanit-text">เสร็จสิ้น</button>
-                  </div>
-               ) : (
-                  <button 
-                     onClick={confirmPayment}
-                     disabled={isProcessingPayment}
-                     className="mt-8 w-full py-3.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 transition-all active:scale-95 flex justify-center items-center gap-2 kanit-text text-lg"
-                  >
-                     {isProcessingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : <Receipt size={20} />}
-                     {isProcessingPayment ? 'กำลังบันทึก...' : 'ยืนยันการรับเงิน'}
-                  </button>
-               )}
+               <div className="mt-auto pt-4 flex flex-col justify-end shrink-0">
+                 {checkoutSuccess ? (
+                    <div className="flex flex-col items-center py-2 animate-in fade-in zoom-in slide-in-from-bottom-4">
+                        <div className="w-12 h-12 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-3">
+                            <CheckCircle2 size={24} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-base kanit-text">ทำรายการสำเร็จ</h4>
+                        <p className="text-slate-500 text-xs kanit-text mb-4">บันทึกข้อมูลการขายเรียบร้อยแล้ว</p>
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full">
+                           <button onClick={() => handlePrintReceipt(posHistoryData[0], '80mm')} className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl font-bold transition-colors kanit-text text-xs sm:text-sm flex flex-col items-center justify-center gap-1 border border-indigo-100 shadow-sm active:scale-95"><Printer size={16}/> สลิป (80mm)</button>
+                           <button onClick={() => handlePrintReceipt(posHistoryData[0], 'A4')} className="py-2 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-xl font-bold transition-colors kanit-text text-xs sm:text-sm flex flex-col items-center justify-center gap-1 border border-sky-100 shadow-sm active:scale-95"><Printer size={16}/> ใบเสร็จ (A4)</button>
+                           <button onClick={closeCheckoutAndReset} className="col-span-2 sm:col-span-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors kanit-text text-sm flex items-center justify-center shadow-sm active:scale-95">เสร็จสิ้น</button>
+                        </div>
+                    </div>
+                 ) : (
+                    <button 
+                       onClick={confirmPayment}
+                       disabled={isProcessingPayment}
+                       className="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 transition-all active:scale-95 flex justify-center items-center gap-2 kanit-text text-base"
+                    >
+                       {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : <Receipt size={18} />}
+                       {isProcessingPayment ? 'กำลังบันทึก...' : 'ยืนยันการรับเงิน'}
+                    </button>
+                 )}
+               </div>
             </div>
           </div>
         </div>
@@ -6577,9 +6957,17 @@ const POSSystem = ({
                             </div>
                             <div>
                                 {!isEditingHistory ? (
-                                    <button onClick={handleEditTxn} className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all active:scale-95 shadow-sm text-[11px] sm:text-sm font-bold kanit-text">
-                                        <Pencil size={14} className="sm:w-[16px] sm:h-[16px]" /> แก้ไขข้อมูล
-                                    </button>
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                        <button onClick={() => handlePrintReceipt(selectedHistoryTxn, '80mm')} title="พิมพ์สลิป 80mm" className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all active:scale-95 shadow-sm text-[11px] sm:text-sm font-bold kanit-text">
+                                            <Printer size={14} className="sm:w-[16px] sm:h-[16px]" /> <span className="hidden sm:inline">สลิป (80mm)</span>
+                                        </button>
+                                        <button onClick={() => handlePrintReceipt(selectedHistoryTxn, 'A4')} title="พิมพ์ใบเสร็จ A4" className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all active:scale-95 shadow-sm text-[11px] sm:text-sm font-bold kanit-text">
+                                            <Printer size={14} className="sm:w-[16px] sm:h-[16px]" /> <span className="hidden sm:inline">A4</span>
+                                        </button>
+                                        <button onClick={handleEditTxn} className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-600 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all active:scale-95 shadow-sm text-[11px] sm:text-sm font-bold kanit-text">
+                                            <Pencil size={14} className="sm:w-[16px] sm:h-[16px]" /> <span className="hidden sm:inline">แก้ไขข้อมูล</span>
+                                        </button>
+                                    </div>
                                 ) : (
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setIsEditingHistory(false)} disabled={isSavingHistory} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors text-[11px] sm:text-sm font-bold kanit-text disabled:opacity-50">
@@ -9060,6 +9448,22 @@ const FinancePage = ({
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all'); 
   const [filterBranch, setFilterBranch] = useState('all');
+  
+  // --- [NEW/MODIFIED] State สำหรับ Filter รวมกลุ่มแบบใหม่ ---
+  const [timeFilterMode, setTimeFilterMode] = useState('all'); // 'all', 'month', 'year', 'range'
+  const [filterMonth, setFilterMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const [dateRange, setDateRange] = useState({ start: null, end: null });
+
+  // --- [NEW] State สำหรับ Modal ปฏิทินเลือกช่วงเวลา ---
+  const [showFinRangeCalendar, setShowFinRangeCalendar] = useState(false);
+  const [finRangeCalDate, setFinRangeCalDate] = useState(new Date());
+  const [finRangeCalView, setFinRangeCalView] = useState('days');
+  const [finRangeYearPageStart, setFinRangeYearPageStart] = useState(0);
+  const [tempStartDate, setTempStartDate] = useState(null);
+  const [tempEndDate, setTempEndDate] = useState(null);
+  const [isFinRangeClosing, setIsFinRangeClosing] = useState(false);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -9097,6 +9501,90 @@ const FinancePage = ({
 
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
   const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+  // --- [NEW] ฟังก์ชันสำหรับจัดการปฏิทินเลือกช่วงเวลา ---
+  const closeFinRangeCalendar = () => {
+      setIsFinRangeClosing(true);
+      setTimeout(() => { setShowFinRangeCalendar(false); setIsFinRangeClosing(false); }, 300);
+  };
+  const finRangeSwipeProps = useSwipeDown(closeFinRangeCalendar);
+
+  const handleOpenFinRange = () => {
+      setTempStartDate(dateRange.start);
+      setTempEndDate(dateRange.end);
+      if (dateRange.start) {
+          setFinRangeCalDate(new Date(dateRange.start));
+      } else {
+          setFinRangeCalDate(new Date());
+      }
+      setFinRangeCalView('days');
+      setShowFinRangeCalendar(true);
+  };
+
+  const handleSelectFinRangeDate = (day) => {
+      const selectedDate = new Date(finRangeCalDate.getFullYear(), finRangeCalDate.getMonth(), day);
+      selectedDate.setHours(0,0,0,0);
+
+      if (!tempStartDate || (tempStartDate && tempEndDate)) {
+          setTempStartDate(selectedDate);
+          setTempEndDate(null);
+      } else {
+          if (selectedDate >= tempStartDate) {
+              setTempEndDate(selectedDate);
+          } else {
+              setTempStartDate(selectedDate);
+              setTempEndDate(null);
+          }
+      }
+  };
+
+  const confirmFinRange = () => {
+      if (tempStartDate && tempEndDate) {
+          setDateRange({ start: tempStartDate, end: new Date(tempEndDate.getTime() + 86399999) }); // เซ็ตเวลา end ให้สุดวัน
+          setTimeFilterMode('range'); // บังคับโหมดเป็นช่วงเวลาเมื่อกดยืนยัน
+          closeFinRangeCalendar();
+      } else {
+          showToast('กรุณาเลือกวันเริ่มต้นและวันสิ้นสุด', 'warning');
+      }
+  };
+
+  const clearFinRange = () => {
+      setDateRange({ start: null, end: null });
+      // ถ้ายกเลิกช่วงเวลา ให้กลับไปเป็นโหมด "ทุกเวลา"
+      setTimeFilterMode('all');
+  };
+
+  const formatRangeStr = (dateObj) => {
+      if (!dateObj) return '';
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const y = dateObj.getFullYear() + 543;
+      return `${d}/${m}/${y}`;
+  };
+
+  useEffect(() => {
+      if (finRangeCalView === 'years') setFinRangeYearPageStart(Math.floor((finRangeCalDate.getFullYear() + 543) / 12) * 12);
+  }, [finRangeCalView, finRangeCalDate]);
+
+  const blankFinRangeDays = Array.from({ length: new Date(finRangeCalDate.getFullYear(), finRangeCalDate.getMonth(), 1).getDay() }, (_, i) => i);
+  const monthFinRangeDays = Array.from({ length: new Date(finRangeCalDate.getFullYear(), finRangeCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1);
+
+  // ข้อมูลสำหรับ Dropdown เดือนและปี
+  const monthOptions = [
+      {value: 'all', label: 'ทุกเดือน'},
+      ...thaiMonths.map((m, i) => ({ value: String(i + 1).padStart(2, '0'), label: m }))
+  ];
+  
+  const currentY = new Date().getFullYear();
+  // --- [MODIFIED] ปรับขยายปีให้มีล่วงหน้า 2 ปี และย้อนหลังไปอีก 12 ปี (รวม 15 ตัวเลือก) ---
+  const yearOptions = [
+      {value: 'all', label: 'ทุกปี'},
+      ...Array.from({length: 15}, (_, i) => {
+          const y = currentY + 2 - i; // เริ่มต้นที่ปีปัจจุบัน + 2 แล้วค่อยๆ ลบทีละ 1
+          return { value: String(y), label: String(y + 543) };
+      })
+  ];
+  // ---------------------------------------------------
 
   // ฟังก์ชันเปิดและตั้งค่าให้ปฏิทินแสดงผลตรงกับวันที่ที่กรอกไว้
   const handleOpenCalendar = () => {
@@ -9399,16 +9887,40 @@ const FinancePage = ({
 
       const matchBranch = filterBranch === 'all' || tx.branchId === filterBranch || tx.branchId === 'all';
 
-      return matchSearch && matchType && matchBranch;
+      // --- [MODIFIED] ตรวจสอบการกรองเวลาจากโหมดที่เลือก (Grouped Logic) ---
+      let txDateObj = new Date(tx.date);
+      if (isNaN(txDateObj.getTime()) && typeof tx.date === 'string' && tx.date.includes('/')) {
+          const parts = tx.date.split(' ')[0].split('/');
+          if (parts.length === 3) {
+              txDateObj = new Date(parseInt(parts[2])-543, parseInt(parts[1])-1, parseInt(parts[0]));
+          }
+      }
+
+      let matchTime = true;
+      if (timeFilterMode === 'month') {
+          matchTime = String(txDateObj.getMonth() + 1).padStart(2, '0') === filterMonth && String(txDateObj.getFullYear()) === filterYear;
+      } else if (timeFilterMode === 'year') {
+          matchTime = String(txDateObj.getFullYear()) === filterYear;
+      } else if (timeFilterMode === 'range' && dateRange.start && dateRange.end) {
+          matchTime = txDateObj >= dateRange.start && txDateObj <= dateRange.end;
+      }
+
+      return matchSearch && matchType && matchBranch && matchTime;
     });
-  }, [allTransactions, search, filterType, filterBranch]);
+  }, [allTransactions, search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
   const stats = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
+    let validTransactionsCount = 0;
+
     filteredTransactions.forEach(tx => {
-      if (tx.type === 'income') totalIncome += tx.amount;
-      if (tx.type === 'expense') totalExpense += tx.amount;
+      // ไม่นำบิลที่ถูกยกเลิก (cancelled) มารวมในยอดสรุปการเงิน
+      if (tx.status !== 'cancelled') {
+        validTransactionsCount++;
+        if (tx.type === 'income') totalIncome += tx.amount;
+        if (tx.type === 'expense') totalExpense += tx.amount;
+      }
     });
     
     // คำนวณเปอร์เซ็นต์ (ป้องกัน error หารด้วย 0 กรณีไม่มีรายรับ)
@@ -9419,7 +9931,7 @@ const FinancePage = ({
       balance: totalIncome - totalExpense,
       income: totalIncome,
       expense: totalExpense,
-      transactionsCount: filteredTransactions.length,
+      transactionsCount: validTransactionsCount,
       costPercent,
       marginPercent
     };
@@ -9757,14 +10269,14 @@ const FinancePage = ({
                  {/* ปุ่ม Filter สำหรับ Mobile */}
                  <button 
                    onClick={() => setShowMobileFilters(!showMobileFilters)} 
-                   className={`sm:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterBranch !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                   className={`sm:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                  >
                     <Filter size={18} />
                  </button>
 
                  {/* Filters สำหรับ Desktop */}
                  <div className="hidden sm:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
-                   <div className="w-[120px] relative">
+                   <div className="w-[100px] relative">
                      <CustomSelect 
                        value={filterType} 
                        onChange={(val) => setFilterType(val)} 
@@ -9779,7 +10291,7 @@ const FinancePage = ({
                      />
                    </div>
                    
-                   <div className="w-[130px] relative">
+                   <div className="w-[110px] relative">
                      <CustomSelect 
                        value={filterBranch} 
                        onChange={(val) => setFilterBranch(val)} 
@@ -9789,37 +10301,86 @@ const FinancePage = ({
                        ]}
                        compact fullWidth className="w-full"
                      />
+                   </div>
+
+                   {/* --- [NEW] Grouped Time Filter (Desktop) --- */}
+                   <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[36px] z-[45]">
+                      <div className="w-[110px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
+                          <CustomSelect 
+                              value={timeFilterMode} 
+                              onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
+                              options={[{value:'all',label:'✨ ทุกเวลา'},{value:'month',label:'📅 รายเดือน'},{value:'year',label:'📌 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
+                              compact fullWidth 
+                              className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-3" 
+                          />
+                      </div>
+                      <div className="flex items-center min-w-[170px] relative transition-all duration-200">
+                          {timeFilterMode === 'all' && <div className="w-full text-center text-[11px] font-bold text-slate-400 kanit-text px-3 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center">แสดงข้อมูลทั้งหมด</div>}
+                          {timeFilterMode === 'month' && (
+                              <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl">
+                                  <div className="flex-[3] relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
+                                  <div className="flex-[2] relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
+                              </div>
+                          )}
+                          {timeFilterMode === 'year' && (
+                              <div className="w-full relative h-full bg-white rounded-r-xl"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
+                          )}
+                          {timeFilterMode === 'range' && (
+                              <div className="flex items-center justify-between w-full h-full px-2 gap-1 bg-white rounded-r-xl relative z-[45]">
+                                  <button onClick={handleOpenFinRange} className={`text-xs font-bold kanit-text px-2 py-1 rounded-lg transition-colors truncate flex-1 text-left flex items-center gap-1.5 ${dateRange.start ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                      {dateRange.start && dateRange.end ? `${formatRangeStr(dateRange.start)} - ${formatRangeStr(dateRange.end)}` : 'คลิกเลือกวันที่'}
+                                  </button>
+                                  {dateRange.start ? <button onClick={clearFinRange} className="text-slate-300 hover:text-rose-500 p-1 shrink-0 transition-colors bg-white"><X size={14}/></button> : <CalendarIcon size={14} className="text-slate-300 shrink-0 mr-1" />}
+                              </div>
+                          )}
+                      </div>
                    </div>
                 </div>
               </div>
 
               {/* Filters แบบ Expandable สำหรับ Mobile */}
               {showMobileFilters && (
-                 <div className="sm:hidden flex gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 relative z-[60]">
-                   <div className="flex-1 relative">
-                     <CustomSelect 
-                       value={filterType} 
-                       onChange={(val) => setFilterType(val)} 
-                       options={[
-                         {value: 'all', label: 'ทั้งหมด'},
-                         {value: 'income', label: 'รายรับ'},
-                         {value: 'expense', label: 'รายจ่าย'},
-                         {value: 'pos', label: 'POS'},
-                         {value: 'manual', label: 'Manual'}
-                       ]}
-                       compact fullWidth className="w-full"
-                     />
+                 <div className="sm:hidden flex flex-col gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 relative z-[60]">
+                   <div className="flex gap-2">
+                     <div className="flex-1 relative">
+                       <CustomSelect value={filterType} onChange={(val) => setFilterType(val)} options={[{value: 'all', label: 'ทั้งหมด'}, {value: 'income', label: 'รายรับ'}, {value: 'expense', label: 'รายจ่าย'}, {value: 'pos', label: 'POS'}, {value: 'manual', label: 'Manual'}]} compact fullWidth className="w-full" />
+                     </div>
+                     <div className="flex-1 relative">
+                       <CustomSelect value={filterBranch} onChange={(val) => setFilterBranch(val)} options={[{value: 'all', label: 'ทุกสาขา'}, ...(branchesData || []).map(b => ({value: b.id, label: b.name}))]} compact fullWidth className="w-full" />
+                     </div>
                    </div>
-                   <div className="flex-1 relative">
-                     <CustomSelect 
-                       value={filterBranch} 
-                       onChange={(val) => setFilterBranch(val)} 
-                       options={[
-                         {value: 'all', label: 'ทุกสาขา'},
-                         ...(branchesData || []).map(b => ({value: b.id, label: b.name}))
-                       ]}
-                       compact fullWidth className="w-full"
-                     />
+                   
+                   {/* --- [NEW] Grouped Time Filter (Mobile) --- */}
+                   <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[40px] z-[45]">
+                      <div className="w-[110px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
+                          <CustomSelect 
+                              value={timeFilterMode} 
+                              onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
+                              options={[{value:'all',label:'✨ ทุกเวลา'},{value:'month',label:'📅 รายเดือน'},{value:'year',label:'📌 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
+                              compact fullWidth 
+                              className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-2" 
+                          />
+                      </div>
+                      <div className="flex items-center min-w-0 flex-1 relative transition-all duration-200">
+                          {timeFilterMode === 'all' && <div className="w-full text-center text-[10px] font-bold text-slate-400 kanit-text px-2 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center">แสดงข้อมูลทั้งหมด</div>}
+                          {timeFilterMode === 'month' && (
+                              <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl">
+                                  <div className="flex-[3] relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px]" /></div>
+                                  <div className="flex-[2] relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px]" /></div>
+                              </div>
+                          )}
+                          {timeFilterMode === 'year' && (
+                              <div className="w-full relative h-full bg-white rounded-r-xl"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px]" /></div>
+                          )}
+                          {timeFilterMode === 'range' && (
+                              <div className="flex items-center justify-between w-full h-full px-2 gap-1 bg-white rounded-r-xl relative z-[45]">
+                                  <button onClick={handleOpenFinRange} className={`text-[11px] sm:text-xs font-bold kanit-text px-2 py-1.5 rounded-lg transition-colors truncate flex-1 text-left flex items-center gap-1.5 ${dateRange.start ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                      {dateRange.start && dateRange.end ? `${formatRangeStr(dateRange.start)} - ${formatRangeStr(dateRange.end)}` : 'คลิกเลือกวันที่'}
+                                  </button>
+                                  {dateRange.start ? <button onClick={clearFinRange} className="text-slate-400 hover:text-rose-500 p-2 shrink-0 transition-colors bg-white"><X size={14}/></button> : <CalendarIcon size={14} className="text-slate-300 shrink-0 mr-1" />}
+                              </div>
+                          )}
+                      </div>
                    </div>
                  </div>
               )}
@@ -11070,7 +11631,7 @@ const FinancePage = ({
                   {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
                 </div>
                 <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
-                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>)}
+                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 h-8"></div>)}
                   {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
                     const isSelected = calDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === calDate.getMonth() && new Date().getFullYear() === calDate.getFullYear();
@@ -11085,9 +11646,9 @@ const FinancePage = ({
             {calView === 'months' && (
               <div className="w-full calendar-view-anim">
                 <div className="flex justify-between items-center mb-6">
-                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() - 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
                   <button type="button" onClick={() => setCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl text-base sm:text-sm font-data">{calDate.getFullYear() + 543}</button>
-                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
+                  <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear() + 1, calDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setCalDate(new Date(calDate.getFullYear(), i, 1)); setCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium kanit-text calendar-btn-anim ${calDate.getMonth() === i ? 'cal-selected' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
@@ -11098,9 +11659,9 @@ const FinancePage = ({
             {calView === 'years' && (
                 <div className="w-full calendar-view-anim">
                 <div className="flex justify-between items-center mb-6 px-1">
-                  <button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                  <button type="button" onClick={() => setYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
                   <span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{yearPageStart} - {yearPageStart + 11}</span>
-                  <button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
+                  <button type="button" onClick={() => setYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {Array.from({length: 12}, (_, i) => yearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setCalDate(new Date(y - 543, calDate.getMonth(), 1)); setCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium font-data calendar-btn-anim ${(calDate.getFullYear() + 543) === y ? 'cal-selected' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
@@ -11108,12 +11669,10 @@ const FinancePage = ({
               </div>
             )}
 
-            {/* --- แก้ไข: เปลี่ยน Layout ตรงนี้เป็นแนวตั้ง (flex-col) สำหรับหน้า Finance --- */}
-            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-3 w-full">
-                
-                {/* แถวที่ 1: กล่องเลือกเวลา (กว้างเต็ม) */}
-                <div className="flex items-center justify-center gap-1.5 bg-slate-50/50 px-3 py-2 rounded-xl border border-slate-200 shadow-sm w-full">
-                    <Clock size={16} className="text-sky-500 shrink-0 mr-1" />
+            {/* Time & Action Panel - ปรับเลย์เอาต์แนวนอนตามรูปภาพ (Mockup) */}
+            <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between w-full gap-2">
+                <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-50/50 px-2 py-1.5 rounded-xl border border-slate-200 shadow-sm shrink-0 w-full sm:w-auto justify-center">
+                    <Clock size={16} className="text-sky-500 shrink-0" />
                     
                     <CustomSelect 
                         compact dropUp
@@ -11121,46 +11680,36 @@ const FinancePage = ({
                         onChange={v => setCalTime({...calTime, h: v})} 
                         options={Array.from({length:24}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
                     />
-                    
                     <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
-                    
                     <CustomSelect 
                         compact dropUp
                         value={calTime.m} 
                         onChange={v => setCalTime({...calTime, m: v})} 
                         options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
                     />
-                    
                     <span className="text-slate-400 font-bold kanit-text pb-0.5 shrink-0">:</span>
-                    
                     <CustomSelect 
                         compact dropUp
-                        value={calTime.s} 
+                        value={calTime.s || '00'} 
                         onChange={v => setCalTime({...calTime, s: v})} 
                         options={Array.from({length:60}, (_,i)=>({value: String(i).padStart(2,'0'), label: String(i).padStart(2,'0')}))}
                     />
                 </div>
                 
-                {/* แถวที่ 2: ปุ่มกด ปัจจุบัน/ตกลง (จัดสัดส่วนใหม่ให้กดง่าย) */}
-                <div className="flex gap-2 w-full">
+                <div className="flex gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto">
                     <button type="button" onClick={() => {
                           const now = new Date();
                           setCalDate(now);
                           setCalTime({h: String(now.getHours()).padStart(2,'0'), m: String(now.getMinutes()).padStart(2,'0'), s: String(now.getSeconds()).padStart(2,'0')});
                           setCalView('days');
-                    }} className="flex-1 px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-colors kanit-text shadow-sm whitespace-nowrap">
-                        ปัจจุบัน
-                    </button>
-                    
+                    }} className="flex-1 sm:flex-none px-2.5 sm:px-3 py-2 text-[11px] sm:text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors kanit-text shadow-sm whitespace-nowrap">ปัจจุบัน</button>
                     <button type="button" onClick={() => {
                           const d = String(calDate.getDate()).padStart(2, '0');
                           const m = String(calDate.getMonth() + 1).padStart(2, '0');
                           const y = calDate.getFullYear() + 543;
-                          setFormData({...formData, date: `${d}/${m}/${y} ${calTime.h}:${calTime.m}:${calTime.s}`});
+                          setFormData({...formData, date: `${d}/${m}/${y} ${calTime.h}:${calTime.m}:${calTime.s || '00'}`});
                           calendarModal.close();
-                    }} className="flex-[2] px-4 py-2.5 text-xs font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md shadow-sky-500/20 transition-colors kanit-text whitespace-nowrap">
-                        ตกลง
-                    </button>
+                    }} className="flex-[2] sm:flex-none px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md shadow-sky-500/20 transition-colors kanit-text whitespace-nowrap">ตกลง</button>
                 </div>
             </div>
           </div>
@@ -11168,21 +11717,135 @@ const FinancePage = ({
         document.body
       )}
 
-      {/* Alert Modal */}
-      {sweetAlert.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${sweetAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${sweetAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+      {/* --- Sweet Alert --- */}
+      {sweetAlert.isOpen && (
+        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isAlertClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3>
-            <p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
-            <div className="flex gap-3 w-full">
-              <button onClick={sweetAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button>
-              <button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button>
+            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3><p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
+            <div className="flex gap-3 w-full"><button onClick={() => sweetAlert.close()} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* --- [NEW] Modal: Date Range Calendar สำหรับหน้าการเงิน --- */}
+      {showFinRangeCalendar && createPortal(
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isFinRangeClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeFinRangeCalendar}></div>
+          <div 
+            ref={finRangeSwipeProps.ref} 
+            style={finRangeSwipeProps.style}
+            className={`relative z-[210] w-full max-w-[360px] sm:max-w-[380px] bg-white sm:rounded-[1.5rem] border border-slate-100 shadow-2xl flex flex-col ${isFinRangeClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
+            <div className="w-full pt-3 pb-3 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
+            
+            <div className="p-4 sm:p-5 flex-1 overflow-y-auto custom-scrollbar">
+              {finRangeCalView === 'days' && (
+                <>
+                  <div className="flex justify-between items-center mb-4">
+                    <button type="button" onClick={() => setFinRangeCalDate(new Date(finRangeCalDate.getFullYear(), finRangeCalDate.getMonth() - 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronLeft size={20} /></button>
+                    <button type="button" onClick={() => setFinRangeCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[finRangeCalDate.getMonth()]} {finRangeCalDate.getFullYear() + 543}</button>
+                    <button type="button" onClick={() => setFinRangeCalDate(new Date(finRangeCalDate.getFullYear(), finRangeCalDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
+                  </div>
+
+                  <div className="mb-4 bg-sky-50 p-3 rounded-xl border border-sky-100 flex items-center justify-between">
+                      <div className="flex flex-col">
+                          <span className="text-[10px] text-sky-600 font-bold kanit-text uppercase">เริ่มต้น</span>
+                          <span className="text-sm font-black text-sky-800 font-data">{tempStartDate ? formatRangeStr(tempStartDate) : '-'}</span>
+                      </div>
+                      <div className="text-sky-300"><ChevronRight size={16} /></div>
+                      <div className="flex flex-col text-right">
+                          <span className="text-[10px] text-sky-600 font-bold kanit-text uppercase">สิ้นสุด</span>
+                          <span className="text-sm font-black text-sky-800 font-data">{tempEndDate ? formatRangeStr(tempEndDate) : '-'}</span>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-y-1 gap-x-0 text-center mb-2">
+                    {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-y-1 gap-x-0 text-center">
+                    {blankFinRangeDays.map(b => <div key={`blank-${b}`} className="w-full aspect-square"></div>)}
+                    {monthFinRangeDays.map(day => {
+                      const selectedDate = new Date(finRangeCalDate.getFullYear(), finRangeCalDate.getMonth(), day);
+                      selectedDate.setHours(0,0,0,0);
+                      
+                      const hasBothDates = tempStartDate && tempEndDate;
+                      const isSelectedStart = tempStartDate && selectedDate.getTime() === tempStartDate.getTime();
+                      const isSelectedEnd = tempEndDate && selectedDate.getTime() === tempEndDate.getTime();
+                      const isInRange = hasBothDates && selectedDate > tempStartDate && selectedDate < tempEndDate;
+                      const isToday = new Date().setHours(0,0,0,0) === selectedDate.getTime();
+
+                      return (
+                        <div key={day} className="w-full flex items-center justify-center relative my-0.5">
+                            {hasBothDates && isSelectedStart && tempStartDate.getTime() !== tempEndDate.getTime() && (
+                                <div className="absolute right-0 w-1/2 h-10 sm:h-8 bg-sky-100 my-auto"></div>
+                            )}
+                            {hasBothDates && isSelectedEnd && tempStartDate.getTime() !== tempEndDate.getTime() && (
+                                <div className="absolute left-0 w-1/2 h-10 sm:h-8 bg-sky-100 my-auto"></div>
+                            )}
+                            {isInRange && (
+                                <div className="absolute w-full h-10 sm:h-8 bg-sky-100 my-auto"></div>
+                            )}
+                            
+                            <button 
+                                type="button" 
+                                onClick={() => handleSelectFinRangeDate(day)} 
+                                className={`relative w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-xl flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data 
+                                ${isSelectedStart || isSelectedEnd ? 'bg-sky-500 text-white shadow-md z-10' : 
+                                  isInRange ? 'text-sky-800' : 
+                                  isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}
+                            >
+                                {day}
+                            </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {finRangeCalView === 'months' && (
+                <>
+                  <div className="flex justify-between items-center mb-6">
+                    <button type="button" onClick={() => setFinRangeCalDate(new Date(finRangeCalDate.getFullYear() - 1, finRangeCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                    <button type="button" onClick={() => setFinRangeCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm font-data">{finRangeCalDate.getFullYear() + 543}</button>
+                    <button type="button" onClick={() => setFinRangeCalDate(new Date(finRangeCalDate.getFullYear() + 1, finRangeCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {thaiMonthsShort.map((m, i) => (<button key={m} type="button" onClick={() => {setFinRangeCalDate(new Date(finRangeCalDate.getFullYear(), i, 1)); setFinRangeCalView('days');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all kanit-text ${finRangeCalDate.getMonth() === i ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{m}</button>))}
+                  </div>
+                </>
+              )}
+
+              {finRangeCalView === 'years' && (
+                <>
+                  <div className="flex justify-between items-center mb-6">
+                    <button type="button" onClick={() => setFinRangeYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
+                    <span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{finRangeYearPageStart} - {finRangeYearPageStart + 11}</span>
+                    <button type="button" onClick={() => setFinRangeYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({length: 12}, (_, i) => finRangeYearPageStart + i).map(y => (<button key={y} type="button" onClick={() => {setFinRangeCalDate(new Date(y - 543, finRangeCalDate.getMonth(), 1)); setFinRangeCalView('months');}} className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all font-data ${(finRangeCalDate.getFullYear() + 543) === y ? 'bg-sky-500 text-white shadow-md shadow-sky-500/30' : 'text-slate-700 hover:bg-slate-50'}`}>{y}</button>))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 w-full rounded-b-[1.5rem]">
+                <button type="button" onClick={closeFinRangeCalendar} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text transition-colors shadow-sm text-sm">
+                    ยกเลิก
+                </button>
+                <button type="button" onClick={confirmFinRange} className="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/20 kanit-text transition-colors text-sm">
+                    ยืนยันช่วงเวลา
+                </button>
             </div>
           </div>
         </div>,
         document.body
       )}
+
     </div>
   );
 };
