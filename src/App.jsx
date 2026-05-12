@@ -5381,7 +5381,8 @@ const POSSystem = ({
     currentBranch,
     branchesData = [],
     showToast, callAppScript, isGlobalLoading,
-    showMobileBars 
+    showMobileBars,
+    handlePrintReceipt // <--- เพิ่ม Props นี้
 }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -5455,6 +5456,36 @@ const POSSystem = ({
 
   // --- เพิ่ม State ควบคุมการเปิดปิดตะกร้าบนมือถือ ---
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+
+  // --- [NEW] State สำหรับระบบจับเวลา QR Code ---
+  const [qrCountdown, setQrCountdown] = useState(300); // 300 วินาที = 5 นาที
+  const [isQrExpired, setIsQrExpired] = useState(false);
+  const [qrKey, setQrKey] = useState(Date.now()); // ไว้ใช้รีเฟรชรูป QR ใหม่
+
+  // --- [NEW] ระบบจับเวลาถอยหลัง QR Code ---
+  useEffect(() => {
+    let timer;
+    if (paymentMethod === 'transfer' && checkoutModal.isOpen && !checkoutSuccess && !isQrExpired) {
+      timer = setInterval(() => {
+        setQrCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setIsQrExpired(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [paymentMethod, checkoutModal.isOpen, checkoutSuccess, isQrExpired]);
+
+  const formatCountdown = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+  // ------------------------------------------------
 
   // แก้ไข: เพิ่ม Effect สำหรับรีเซ็ตสถานะตะกร้ามือถือเมื่อขยายหน้าจอ (Resize Bug Fix)
   useEffect(() => {
@@ -5595,25 +5626,42 @@ const POSSystem = ({
     setIsMobileCartOpen(false); // ปิดตะกร้าบนมือถือกลับไปหน้าเลือกสินค้า
   };
 
-  // คำนวณยอดเงินและภาษีแบบละเอียด
+  // --- คำนวณยอดเงินและภาษีแบบละเอียด (แยก Vatable / Non-Vatable) ---
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const discountAmount = discountType === 'percent' ? (subtotal * (discount / 100)) : Number(discount);
   const afterDiscount = Math.max(0, subtotal - discountAmount);
+
+  let totalVatable = 0;
+  let totalNonVatable = 0;
+  cart.forEach(item => {
+      const itemTotal = item.product.price * item.quantity;
+      if (item.product.isVatable) {
+          totalVatable += itemTotal;
+      } else {
+          totalNonVatable += itemTotal;
+      }
+  });
+
+  const vatableRatio = subtotal > 0 ? (totalVatable / subtotal) : 0;
+  const vatableDiscount = discountAmount * vatableRatio;
+  const netVatable = Math.max(0, totalVatable - vatableDiscount);
 
   let vatAmount = 0;
   let priceExcludingVat = afterDiscount;
   let grandTotal = afterDiscount;
 
   if (taxMode === 'exclude') {
-    // แยก VAT (บวกเพิ่มจากยอด)
-    vatAmount = afterDiscount * (vatRate / 100);
+    // แยก VAT (บวกเพิ่มจากยอด Vatable หลังหักส่วนลด)
+    vatAmount = netVatable * (vatRate / 100);
     grandTotal = afterDiscount + vatAmount;
+    priceExcludingVat = afterDiscount;
   } else if (taxMode === 'include') {
-    // รวม VAT (ถอด VAT ออกจากยอด)
-    vatAmount = afterDiscount - (afterDiscount * 100 / (100 + vatRate));
+    // รวม VAT (ถอด VAT ออกจากยอด Vatable)
+    vatAmount = netVatable - (netVatable * 100 / (100 + vatRate));
     priceExcludingVat = afterDiscount - vatAmount;
     grandTotal = afterDiscount;
   }
+  // --------------------------------------------------------
 
   // Format ค่าเงิน
   const formatCurrency = (amount) => {
@@ -5646,12 +5694,15 @@ const POSSystem = ({
             name: item.product.name,
             price: item.product.price,
             quantity: item.quantity,
-            total: item.product.price * item.quantity
+            total: item.product.price * item.quantity,
+            isVatable: !!item.product.isVatable // เก็บประวัติไปด้วยว่ารายการนี้ตอนขายคิด VAT หรือไม่
         })),
         subtotal: subtotal,
         discountValue: discount,
         discountType: discountType,
         discountAmount: discountAmount,
+        totalVatable: totalVatable,
+        netVatable: netVatable,
         taxMode: taxMode,
         vatRate: vatRate,
         vatAmount: vatAmount,
@@ -5871,335 +5922,6 @@ const POSSystem = ({
     } finally {
         setIsSavingHistory(false);
     }
-  };
-
-  // --- เพิ่มฟังก์ชันพิมพ์ใบเสร็จ (รองรับ A4 และ 80mm) ---
-  const handlePrintReceipt = (txn, format) => {
-    if (!txn) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-        return;
-    }
-
-    const clinicName = branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
-    const clinicAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110";
-    const clinicPhone = "02-XXX-XXXX";
-    const taxId = "0123456789012";
-
-    const dateObj = new Date(txn.createdAt || txn.date || new Date());
-    const d = String(dateObj.getDate()).padStart(2, '0');
-    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const y = dateObj.getFullYear() + 543;
-    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
-
-    const receiptNo = txn.id;
-    let customerName = txn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)';
-    let customerHN = '-';
-    
-    if (customerName.includes(' - ')) {
-        const parts = customerName.split(' - ');
-        customerHN = parts[0];
-        customerName = parts.slice(1).join(' - ');
-    } else if (txn.patientId) {
-        customerHN = txn.patientId;
-    }
-    
-    const cashierName = "Admin User";
-    
-    // ดึงรายการจาก rawTx (ถ้ามี) หรือจาก items ปกติ
-    const itemsToPrint = txn.rawTx?.items || txn.items || [];
-    const subtotal = txn.rawTx?.subtotal || txn.subtotal || 0;
-    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
-    const discountType = txn.rawTx?.discountType || txn.discountType || 'amount';
-    const discountValue = txn.rawTx?.discountValue || txn.discountValue || 0;
-    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
-    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
-    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
-    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
-    const paymentMethod = txn.paymentMethod || txn.method || 'cash';
-    const afterDiscount = Math.max(0, subtotal - discountAmount);
-    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
-
-    let paymentMethodThai = 'เงินสด';
-    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
-    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
-
-    // ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย (Baht Text)
-    const bahtText = (amount) => {
-        if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
-        const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
-        const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
-        let numberStr = Math.abs(amount).toFixed(2).toString();
-        let [integerPart, fractionalPart] = numberStr.split('.');
-        const convertToText = (str) => {
-            let text = '';
-            for (let i = 0; i < str.length; i++) {
-                let n = parseInt(str[i]);
-                let pos = str.length - i - 1;
-                if (n === 0) continue;
-                if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
-                else if (n === 2 && pos === 1) text += 'ยี่สิบ';
-                else if (n === 1 && pos === 1) text += 'สิบ';
-                else text += numbers[n] + positions[pos];
-            }
-            return text;
-        };
-        let result = convertToText(integerPart) + 'บาท';
-        if (fractionalPart === '00') result += 'ถ้วน';
-        else result += convertToText(fractionalPart) + 'สตางค์';
-        return result;
-    };
-    
-    let itemsHtml = '';
-    if (format === 'A4') {
-        itemsHtml = itemsToPrint.map((item, index) => `
-            <tr>
-                <td class="text-center">${index + 1}</td>
-                <td>${item.name}</td>
-                <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
-                <td class="text-right">${formatCurrency(item.price)}</td>
-                <td class="text-right">0.00</td>
-                <td class="text-right font-bold">${formatCurrency(item.total)}</td>
-            </tr>
-        `).join('');
-    } else {
-        itemsHtml = itemsToPrint.map(item => `
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; page-break-inside: avoid;">
-                <div style="flex: 1; padding-right: 10px;">
-                    <div style="font-weight: bold; margin-bottom: 2px;">${item.name}</div>
-                    <div style="color: #64748b; font-size: 11px;">${item.quantity} x ${formatCurrency(item.price)}</div>
-                </div>
-                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurrency(item.total)}</div>
-            </div>
-        `).join('');
-    }
-
-    const html = format === 'A4' ? `
-        <!DOCTYPE html>
-        <html lang="th">
-        <head>
-            <meta charset="UTF-8">
-            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-            <style>
-                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
-                @page { size: A4; margin: 5mm; }
-                .page-break { page-break-before: always; break-before: page; }
-                .container { padding: 0; max-width: 100%; }
-                
-                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
-                .doc-title-wrapper { text-align: right; }
-                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
-                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } /* สีฟ้า */
-
-                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
-                
-                .info-box { display: flex; flex-direction: column; gap: 4px; }
-                .info-row { display: flex; align-items: baseline; }
-                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
-                .info-val { flex: 1; }
-                .font-bold { font-weight: 700; }
-
-                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
-                
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
-                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
-                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
-                .text-center { text-align: center; }
-                .text-right { text-align: right; }
-                
-                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 30px; margin-top: 20px; }
-                .summary-left { font-size: 13px; }
-                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-                .summary-right { display: flex; flex-direction: column; gap: 6px; }
-                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
-                .sum-row.grand-total { background-color: #f0f9ff; padding: 8px 10px; font-weight: 700; border-radius: 4px; font-size: 14px; align-items: center; border-bottom: 2px solid #bae6fd; }
-
-                .footer-info { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-                .footer-row { display: flex; gap: 10px; align-items: baseline; }
-                .footer-label { font-weight: 600; width: 60px; }
-                
-                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
-                .signature-box { text-align: center; width: 250px; }
-
-                @media print {
-                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                }
-            </style>
-        </head>
-        <body>
-            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
-            <div class="container">
-                <div class="header-top">
-                    <div class="doc-title-wrapper">
-                        <div class="doc-type">${docType}</div>
-                        <div class="doc-title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
-                    </div>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
-                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} (สำนักงานใหญ่)</div></div>
-                        <div class="info-row" style="margin-top: 4px;">
-                            <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
-                        </div>
-                    </div>
-                    <div class="doc-info-box info-box">
-                        <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
-                        <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
-                        <div class="info-row"><div class="info-label">อ้างอิง:</div><div class="info-val">${customerHN}</div></div>
-                    </div>
-                </div>
-
-                <div class="info-grid" style="margin-top: -10px;">
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">ลูกค้า:</div><div class="info-val">${customerName}</div></div>
-                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">-</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">-</div></div>
-                    </div>
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">โทร:</div><div class="info-val">-</div></div>
-                    </div>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="text-center" style="width: 50px;">ลำดับ</th>
-                            <th>คำอธิบาย</th>
-                            <th class="text-center" style="width: 80px;">จำนวน</th>
-                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
-                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
-                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHtml}
-                    </tbody>
-                </table>
-
-                <div class="summary-section">
-                    <div class="summary-left">
-                        <div class="summary-left-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                            สรุป
-                        </div>
-                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrency(priceExcludingVat)} บาท</span></div>
-                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrency(vatAmount)} บาท</span></div>
-                        <div class="sum-row font-bold" style="margin-top: 15px;">
-                            <span>จำนวนเงินทั้งสิ้น</span>
-                            <span>(${bahtText(grandTotal)})</span>
-                        </div>
-                    </div>
-                    <div class="summary-right">
-                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrency(subtotal)} บาท</span></div>
-                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrency(discountAmount)} บาท</span></div>
-                        <div class="sum-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrency(afterDiscount)} บาท</span></div>
-                        <div class="sum-row grand-total">
-                            <span>จำนวนเงินทั้งสิ้น</span>
-                            <span style="color: #0ea5e9;">${formatCurrency(grandTotal)} บาท</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="footer-info">
-                    <div class="footer-row">
-                        <div class="footer-label">ชำระเงิน:</div>
-                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurrency(grandTotal)} บาท</div>
-                    </div>
-                    <div class="footer-row">
-                        <div class="footer-label">หมายเหตุ:</div>
-                        <div>${txn.note || '-'}</div>
-                    </div>
-                </div>
-
-                <div class="signature-area">
-                    <div class="signature-box">
-                        <div>(ลงชื่อ)....................................................</div>
-                        <div style="margin-top: 6px;">ผู้รับบริการ</div>
-                    </div>
-                    <div class="signature-box">
-                        <div>(ลงชื่อ)....................................................</div>
-                        <div style="margin-top: 6px;">เจ้าหน้าที่</div>
-                    </div>
-                </div>
-            </div>
-            `).join('<div class="page-break"></div>')}
-        </body>
-        </html>
-    ` : `
-        <!DOCTYPE html>
-        <html lang="th">
-        <head>
-            <meta charset="UTF-8">
-            <title>สลิปใบเสร็จ - ${receiptNo}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-            <style>
-                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; font-size: 13px; color: #000; width: 72mm; }
-                @page { size: 80mm auto; margin: 0; }
-                .slip-container { padding: 4mm; padding-bottom: 15mm; }
-                .text-center { text-align: center; }
-                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-                .divider { border-bottom: 1px dashed #666; margin: 8px 0; }
-                .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
-                .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-                .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
-            </style>
-        </head>
-        <body>
-            <div class="slip-container">
-                <div class="text-center">
-                    <div class="clinic-name">${clinicName}</div>
-                    <div style="line-height: 1.4;">${clinicAddress}</div>
-                    <div style="line-height: 1.4;">โทร: ${clinicPhone}</div>
-                    <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
-                </div>
-                
-                <div class="divider"></div>
-                
-                <div style="line-height: 1.6;">
-                    <div><strong>เลขที่:</strong> ${receiptNo}</div>
-                    <div><strong>วันที่:</strong> ${dateStr}</div>
-                    ${customerHN !== '-' ? `<div><strong>HN:</strong> ${customerHN}</div>` : ''}
-                    <div><strong>ลูกค้า:</strong> ${customerName}</div>
-                    <div><strong>แคชเชียร์:</strong> ${cashierName}</div>
-                </div>
-                
-                <div class="divider-thick"></div>
-                
-                <div style="font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between;">
-                    <span>รายการ</span>
-                    <span>รวม</span>
-                </div>
-                
-                ${itemsHtml}
-                
-                <div class="divider-thick"></div>
-                
-                <div class="summary-row"><span>รวมเป็นเงิน:</span><span>${formatCurrency(subtotal)}</span></div>
-                ${discountAmount > 0 ? `<div class="summary-row"><span>ส่วนลด:</span><span>-${formatCurrency(discountAmount)}</span></div>` : ''}
-                ${taxMode !== 'none' && vatAmount > 0 ? `<div class="summary-row"><span>ภาษี (${vatRate}%):</span><span>${formatCurrency(vatAmount)}</span></div>` : ''}
-                
-                <div class="summary-row total"><span>ยอดสุทธิ:</span><span>${formatCurrency(grandTotal)}</span></div>
-                
-                <div class="divider"></div>
-                
-                <div class="text-center" style="line-height: 1.6;">
-                    <div>ชำระโดย: <strong>${paymentMethod === 'cash' ? 'เงินสด' : paymentMethod === 'transfer' ? 'โอนเงิน' : paymentMethod === 'credit' ? 'บัตรเครดิต' : paymentMethod}</strong></div>
-                    <div style="margin-top: 15px; font-size: 14px; font-weight: bold;">*** ขอบคุณที่ใช้บริการ ***</div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => { printWindow.print(); }, 800); // เผื่อเวลาโหลดฟอนต์
   };
 
   // --- ฟังก์ชันจัดการการเลื่อน (Scroll) เพื่อโหลดข้อมูลเพิ่ม (Infinite Scroll) ---
@@ -6524,7 +6246,7 @@ const POSSystem = ({
 
           {/* คอร์สคงเหลือของลูกค้า (แสดงเฉพาะเมื่อเลือกลูกค้า) */}
           {selectedPatientId && (
-            <div className="px-3 sm:px-4 py-2 bg-indigo-50/30 border-b border-indigo-100 shrink-0 overflow-x-auto custom-scrollbar no-drag-zone">
+            <div className="relative z-10 px-3 sm:px-4 py-2 bg-indigo-50/30 border-b border-indigo-100 shrink-0 overflow-x-auto custom-scrollbar no-drag-zone">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                 <span className="text-[10px] font-bold text-indigo-700 kanit-text uppercase tracking-wider">คอร์สคงเหลือ</span>
@@ -6583,226 +6305,248 @@ const POSSystem = ({
             </div>
           )}
 
-          {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-5 bg-slate-50/20">
-            {cart.length > 0 ? (
-              <div className="space-y-3">
-                {cart.map((item, idx) => {
-                  const CartItemIcon = typeof item.product.icon === 'string' ? (POS_ICONS[item.product.icon] || Package) : (item.product.icon || Package);
-                  return (
-                   <div key={item.product.id} className={`bg-white p-3.5 sm:p-4 rounded-[1.5rem] border ${item.product.isNote ? 'border-amber-200 bg-amber-50/50' : item.product.isRedeem ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-100'} shadow-sm flex items-start gap-4 space-row-animation`} style={{ animationDelay: `${idx * 40}ms` }}>
-                     <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 ${item.product.isNote ? 'bg-amber-100 text-amber-500' : item.product.isRedeem ? 'bg-indigo-100 text-indigo-500' : 'bg-slate-50 text-slate-400'}`}>
-                        <CartItemIcon size={20} className="sm:w-6 sm:h-6" />
-                     </div>
-                     <div className="flex-1 min-w-0 pt-0.5">
-                       <div className="flex justify-between items-start gap-3">
-                         <h4 className={`font-bold text-sm sm:text-base kanit-text leading-tight line-clamp-2 ${item.product.isNote ? 'text-amber-700' : item.product.isRedeem ? 'text-indigo-700' : 'text-slate-800'}`}>
-                           {item.product.isRedeem && <span className="mr-2 px-2 py-0.5 bg-indigo-500 text-white text-[10px] rounded-lg uppercase font-black tracking-tighter">ตัดคอร์ส</span>}
-                           {item.product.name}
-                         </h4>
-                         <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1.5 -mr-1.5 -mt-1.5"><X size={18} /></button>
-                       </div>
-
-                      {item.product.isTemp ? (
-                        <div className="text-rose-500 font-bold text-xs kanit-text mt-1.5">ยังไม่มีราคาในระบบ กรุณาตั้งค่า/เลือกรหัสใหม่</div>
-                      ) : !item.product.isNote ? (
-                        <div className={`font-bold text-xs sm:text-sm font-data mt-1.5 ${item.product.isRedeem ? 'text-indigo-500' : 'text-sky-600'}`}>
-                          {item.product.isRedeem ? 'FREE (REDEEM)' : formatCurrency(item.product.price)}
-                        </div>
-                      ) : null}
-
-                       {/* Qty Controls (ซ่อนเฉพาะรายการที่เป็นหมายเหตุ) */}
-                       {!item.product.isNote && (
-                         <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50/80">
-                           <div className="flex items-center gap-2 bg-slate-50 rounded-xl border border-slate-100 p-1">
-                             <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm hover:text-sky-500 hover:bg-sky-50 transition-all"><Minus size={14}/></button>
-                             <span className="font-bold text-sm sm:text-base text-slate-700 w-8 text-center font-data">{item.quantity}</span>
-                             <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm hover:text-sky-500 hover:bg-sky-50 transition-all"><Plus size={14}/></button>
-                           </div>
-                           <div className="font-bold text-slate-800 text-sm sm:text-base font-data">
-                             {formatCurrency(item.product.price * item.quantity)}
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                   );
-                })}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-300 py-20">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 opacity-50"><ShoppingCart size={32} /></div>
-                <p className="kanit-text font-bold text-sm sm:text-base italic">ยังไม่มีรายการในบิล</p>
-              </div>
-            )}
-          </div>
-          
-          {/* Cart Summary & Checkout */}
-          <div className="bg-white shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.04)] z-30 flex flex-col rounded-t-3xl xl:rounded-t-[2rem] relative border-t border-slate-100 transition-all duration-300">
+          {/* --- แก้ไข: Middle Area (รวมรายการบิล และ หน้าต่างตั้งค่าส่วนลดแบบ Overlay) --- */}
+          {/* แก้ไข 2: ถอด overflow-hidden ออก และเพิ่ม z-20 เพื่อให้แท็บยืดทะลุไปบังคอร์สคงเหลือได้แบบอิสระ */}
+          <div className="flex-1 min-h-0 relative flex flex-col bg-slate-50/20 z-20">
             
-            {/* Toggle Tab (รวมเป็นอันเดียว สลับไอคอนและข้อความ) */}
-            <div 
-              className="w-full flex justify-center items-center bg-white hover:bg-sky-50 text-slate-500 hover:text-sky-600 cursor-pointer rounded-t-3xl xl:rounded-t-[2rem] transition-colors py-2.5 z-10"
-              onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
-              title={isSummaryExpanded ? "ย่อรายละเอียด" : "ตั้งค่าส่วนลดและภาษี"}
-            >
-              <div className="flex items-center gap-1.5 kanit-text font-bold text-[11px] sm:text-xs tracking-wide select-none">
-                {isSummaryExpanded ? <ChevronDown size={14} className="sm:w-4 sm:h-4 text-sky-500" /> : <ChevronUp size={14} className="sm:w-4 sm:h-4 text-sky-500" />}
-                <span>{isSummaryExpanded ? 'ย่อรายละเอียดส่วนลดและภาษี' : 'ตั้งค่าส่วนลดและภาษี'}</span>
-                {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
-                   <span className="flex h-2 w-2 relative ml-0.5">
-                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                     <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                   </span>
-                )}
-              </div>
+            {/* 1. Cart Items List (อยู่ด้านหลังเสมอ) */}
+            {/* Spacer div ดันด้านล่าง 100px ป้องกันรายการสุดท้ายโดนบัง */}
+            <div className="absolute inset-0 overflow-y-auto custom-scrollbar p-4 sm:p-5">
+              {cart.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {cart.map((item, idx) => {
+                    const CartItemIcon = typeof item.product.icon === 'string' ? (POS_ICONS[item.product.icon] || Package) : (item.product.icon || Package);
+                    return (
+                      <div key={idx} className="flex flex-col gap-3 relative group p-3 sm:p-4 bg-white border border-slate-100 rounded-[1.5rem] hover:border-sky-200 transition-all shadow-sm">
+                         
+                         {/* ส่วนบน: ไอคอน + รายละเอียด + ปุ่มลบ */}
+                         <div className="flex gap-3 sm:gap-4 items-start">
+                             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 ${item.product.isNote ? 'bg-amber-50 text-amber-500' : item.product.isRedeem ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-50 text-slate-400'}`}>
+                                <CartItemIcon size={24} className="sm:w-7 sm:h-7 stroke-[1.5]" />
+                             </div>
+                             
+                             <div className="flex-1 min-w-0 pt-1">
+                               <div className="flex justify-between items-start gap-2">
+                                 <h4 className={`font-bold text-sm sm:text-base kanit-text leading-tight ${item.product.isNote ? 'text-amber-700' : item.product.isRedeem ? 'text-indigo-700' : 'text-slate-800'}`}>
+                                   {item.product.isRedeem && <span className="mr-1.5 px-1.5 py-0.5 bg-indigo-500 text-white text-[9px] rounded uppercase font-black tracking-tighter align-middle">ตัดคอร์ส</span>}
+                                   {item.product.name}
+                                   {item.product.isVatable && <span className="ml-1.5 px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[10px] rounded border border-sky-200 font-bold tracking-tighter align-middle">(V)</span>}
+                                 </h4>
+                                 <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 -mt-1 -mr-1 shrink-0"><X size={18} /></button>
+                               </div>
+
+                              {/* ข้อความสถานะเพิ่มเติม (ถ้ามี) */}
+                              {item.product.isTemp ? (
+                                <div className="text-rose-500 font-bold text-xs kanit-text mt-1.5">ไม่มีราคาในระบบ</div>
+                              ) : item.product.isNote ? null : (
+                                item.product.isRedeem ? <div className="text-indigo-500 font-bold text-xs font-data mt-1">FREE (REDEEM)</div> : null
+                              )}
+                             </div>
+                         </div>
+
+                         {/* ส่วนล่าง: ปุ่มปรับจำนวน + ราคารวม */}
+                         {!item.product.isNote && (
+                           <div className="flex items-center justify-between pt-1">
+                             
+                             {/* Qty Controls ชิดซ้าย */}
+                             <div className="flex items-center gap-1.5 bg-slate-50/80 rounded-xl border border-slate-200 p-1 w-fit">
+                               <button onClick={() => updateQuantity(item.product.id, -1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm border border-slate-100 hover:text-sky-500 transition-colors"><Minus size={14} strokeWidth={2.5}/></button>
+                               <span className="font-black text-sm sm:text-base text-slate-700 w-8 text-center font-data select-none">{item.quantity}</span>
+                               <button onClick={() => updateQuantity(item.product.id, 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm border border-slate-100 hover:text-sky-500 transition-colors"><Plus size={14} strokeWidth={2.5}/></button>
+                             </div>
+                             
+                             {/* ยอดเงินรวม ชิดขวา */}
+                             <div className="text-right flex flex-col justify-end">
+                               {item.quantity > 1 && !item.product.isRedeem && (
+                                   <span className="text-[10px] text-slate-400 font-data mb-0.5 tracking-tight">{formatCurrency(item.product.price)} / หน่วย</span>
+                               )}
+                               <span className={`font-black text-lg sm:text-xl font-data leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-500' : 'text-slate-800'}`}>
+                                 {item.product.isRedeem ? '0.00' : formatCurrency(item.product.price * item.quantity)}
+                               </span>
+                             </div>
+                           </div>
+                         )}
+                      </div>
+                     );
+                  })}
+                  
+                  {/* Spacer เผื่อพื้นที่ด้านล่าง 100px ให้มองเห็นรายการสุดท้ายได้เต็มที่ ไม่โดนแถบด้านล่างบังแน่นอน */}
+                  <div className="h-[100px] w-full shrink-0 pointer-events-none"></div>
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-300 py-20">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 opacity-50"><ShoppingCart size={32} /></div>
+                  <p className="kanit-text font-bold text-sm sm:text-base italic">ยังไม่มีรายการในบิล</p>
+                </div>
+              )}
             </div>
 
-            {/* Expandable Settings Content - Using Grid 0fr/1fr for smooth slide animation */}
-            <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out w-full bg-slate-50/50 ${isSummaryExpanded ? 'grid-rows-[1fr] border-b border-slate-100' : 'grid-rows-[0fr]'}`}>
-                <div className="overflow-hidden flex flex-col w-full">
-                  <div className="p-4 sm:p-5 max-h-[50vh] overflow-y-auto custom-scrollbar flex-1">
-                    <div className="space-y-2.5 sm:space-y-3 font-data text-xs sm:text-sm">
-                      {/* รวมเป็นเงิน */}
-                      <div className="flex justify-between items-center text-slate-700">
-                        <span className="kanit-text font-medium">รวมเป็นเงิน</span>
-                        <span className="font-bold">{formatCurrency(subtotal)}</span>
-                      </div>
+            {/* 2. Expandable Settings Overlay (ลอยขึ้นมาบังรายการบิล) */}
+            {/* แก้ไข 3: ปรับ z-index เป็น z-30 ให้อยู่เหนือกล่องตรงกลาง พร้อมเพิ่มเงาให้ลอยเด่นขึ้น */}
+            <div 
+              className={`absolute bottom-0 left-0 w-full flex flex-col bg-white rounded-t-[1.5rem] xl:rounded-t-[2rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] z-30 transition-transform duration-300 ease-in-out border-t border-slate-100 ${isSummaryExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-32px)]'}`}
+            >
+              {/* Toggle Tab (มองเห็นเสมอที่ความสูง 32px) */}
+              <div 
+                className="h-[32px] w-full flex justify-center items-center hover:bg-sky-50 text-slate-500 hover:text-sky-600 cursor-pointer rounded-t-[1.5rem] xl:rounded-t-[2rem] transition-colors shrink-0"
+                onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                title={isSummaryExpanded ? "ย่อรายละเอียด" : "ตั้งค่าส่วนลดและภาษี"}
+              >
+                <div className="flex items-center gap-1.5 kanit-text font-bold text-[10px] sm:text-[11px] tracking-wide select-none">
+                  {isSummaryExpanded ? <ChevronDown size={14} className="text-sky-500" /> : <ChevronUp size={14} className="text-sky-500" />}
+                  <span>{isSummaryExpanded ? 'ย่อรายละเอียดส่วนลดและภาษี' : 'ตั้งค่าส่วนลดและภาษี'}</span>
+                  {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
+                     <span className="flex h-1.5 w-1.5 relative ml-0.5">
+                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                     </span>
+                  )}
+                </div>
+              </div>
 
-                      {/* ส่วนลดเพิ่มเติม */}
-                      <div className="flex justify-between items-center">
-                        <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
-                          ส่วนลดเพิ่มเติม
-                          {discount > 0 && (
-                             <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
-                                {discountType === 'percent' 
-                                   ? `(${formatCurrency(discountAmount)} ฿)` 
-                                   : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
-                             </span>
-                          )}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            value={discount || ''}
-                            onChange={(e) => setDiscount(Number(e.target.value))}
-                            className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
-                            placeholder="0.00"
-                          />
-                          <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
-                            <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
-                            <div className="w-px bg-slate-200"></div>
-                            <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
-                          </div>
-                        </div>
-                      </div>
+              {/* Settings Content (แสดงผลเมื่อกางขึ้นมา) */}
+              <div className="overflow-y-auto custom-scrollbar p-4 sm:p-5 max-h-[40vh] sm:max-h-[350px] bg-slate-50/80 border-t border-slate-100/80">
+                <div className="space-y-2.5 sm:space-y-3 font-data text-xs sm:text-sm">
+                  {/* รวมเป็นเงิน */}
+                  <div className="flex justify-between items-center text-slate-700">
+                    <span className="kanit-text font-medium">รวมเป็นเงิน</span>
+                    <span className="font-bold">{formatCurrency(subtotal)}</span>
+                  </div>
 
-                      {/* ส่วนลดรวมทั้งหมด */}
-                      <div className="flex justify-between items-center text-rose-500 font-medium">
-                        <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
-                        <span className="font-bold">- {formatCurrency(discountAmount)}</span>
-                      </div>
-
-                      <div className="h-px w-full bg-slate-200/60 my-1.5"></div>
-
-                      {/* ยอดหลังหักส่วนลด */}
-                      <div className="flex justify-between items-center text-slate-700 font-medium">
-                        <span className="kanit-text">ยอดหลังหักส่วนลด</span>
-                        <span className="font-bold">{formatCurrency(afterDiscount)}</span>
-                      </div>
-
-                      {/* การคิดภาษี (Radio Buttons) */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
-                        <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
-                        <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
-                          <label className="flex items-center gap-1.5 cursor-pointer group">
-                            <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
-                            <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                              {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                            </div>
-                            <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer group">
-                            <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
-                            <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                              {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                            </div>
-                            <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer group">
-                            <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
-                            <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
-                              {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
-                            </div>
-                            <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
-                      <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity duration-300 ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
-                        <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
-                        <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
-                      </div>
-
-                      {/* ภาษีมูลค่าเพิ่ม + Input % */}
-                      <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity duration-300 ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
-                        <div className="flex items-center gap-2">
-                            <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
-                            <div className="flex items-center gap-1">
-                                <input
-                                    type="number"
-                                    value={vatRate}
-                                    onChange={(e) => setVatRate(Number(e.target.value))}
-                                    disabled={taxMode === 'none'}
-                                    className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
-                                />
-                                <span className="text-xs sm:text-sm">%</span>
-                            </div>
-                        </div>
-                        <span className="font-bold">{formatCurrency(vatAmount)}</span>
+                  {/* ส่วนลดเพิ่มเติม */}
+                  <div className="flex justify-between items-center">
+                    <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                      ส่วนลดเพิ่มเติม
+                      {discount > 0 && (
+                         <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
+                            {discountType === 'percent' 
+                               ? `(${formatCurrency(discountAmount)} ฿)` 
+                               : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
+                         </span>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={discount || ''}
+                        onChange={(e) => setDiscount(Number(e.target.value))}
+                        className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors"
+                        placeholder="0.00"
+                      />
+                      <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[26px] sm:h-[28px]">
+                        <button onClick={() => setDiscountType('amount')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
+                        <div className="w-px bg-slate-200"></div>
+                        <button onClick={() => setDiscountType('percent')} className={`px-2 text-[10px] sm:text-xs font-bold font-data transition-colors ${discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
                       </div>
                     </div>
                   </div>
-                </div>
-            </div>
 
-            {/* Always Visible Bottom Section (Totals & Buttons) */}
-            <div className="px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4 flex flex-col bg-white">
-                <div className="flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 mb-3 select-none">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="kanit-text">ยอดสุทธิ</span>
-                    {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
-                       <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md kanit-text border border-amber-100 animate-in fade-in">
-                          มีส่วนลด/ภาษี
-                       </span>
-                    )}
+                  {/* ส่วนลดรวมทั้งหมด */}
+                  <div className="flex justify-between items-center text-rose-500 font-medium">
+                    <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
+                    <span className="font-bold">- {formatCurrency(discountAmount)}</span>
                   </div>
-                  <span className="font-data text-sky-600">{formatCurrency(grandTotal)}</span>
-                </div>
 
-                <div className="flex gap-2">
-                  <button 
-                    onClick={clearCart} 
-                    disabled={cart.length === 0}
-                    className="px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 text-slate-500 font-semibold hover:bg-slate-50 hover:text-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title="ล้างตะกร้า"
-                  >
-                    <Trash2 size={18} className="sm:w-5 sm:h-5" />
-                  </button>
-                  <button 
-                    onClick={handleCheckout}
-                    disabled={cart.length === 0}
-                    className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-lg shadow-md transition-all active:scale-[0.98] kanit-text disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
-                      cart.length > 0 ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 shadow-none'
-                    }`}
-                  >
-                    ชำระเงิน {cart.length > 0 ? formatCurrency(grandTotal) : ''}
-                  </button>
+                  <div className="h-px w-full bg-slate-200/60 my-1.5"></div>
+
+                  {/* ยอดหลังหักส่วนลด */}
+                  <div className="flex justify-between items-center text-slate-700 font-medium">
+                    <span className="kanit-text">ยอดหลังหักส่วนลด</span>
+                    <span className="font-bold">{formatCurrency(afterDiscount)}</span>
+                  </div>
+
+                  {/* การคิดภาษี (Radio Buttons) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
+                    <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
+                    <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                      <label className="flex items-center gap-1.5 cursor-pointer group">
+                        <input type="radio" name="taxMode" value="include" checked={taxMode === 'include'} onChange={() => setTaxMode('include')} className="hidden" />
+                        <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                          {taxMode === 'include' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                        </div>
+                        <span className={`transition-colors ${taxMode === 'include' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>รวม VAT</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer group">
+                        <input type="radio" name="taxMode" value="exclude" checked={taxMode === 'exclude'} onChange={() => setTaxMode('exclude')} className="hidden" />
+                        <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'exclude' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                          {taxMode === 'exclude' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                        </div>
+                        <span className={`transition-colors ${taxMode === 'exclude' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>แยก VAT</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer group">
+                        <input type="radio" name="taxMode" value="none" checked={taxMode === 'none'} onChange={() => setTaxMode('none')} className="hidden" />
+                        <div className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${taxMode === 'none' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
+                          {taxMode === 'none' && <div className="w-2 h-2 sm:w-2 sm:h-2 rounded-full bg-sky-500" />}
+                        </div>
+                        <span className={`transition-colors ${taxMode === 'none' ? 'text-sky-600 font-bold' : 'text-slate-600 group-hover:text-sky-500'}`}>ไม่คิด VAT</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* ราคาไม่รวมภาษีมูลค่าเพิ่ม */}
+                  <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity duration-300 ${taxMode === 'none' ? 'opacity-40 select-none' : ''}`}>
+                    <span className="kanit-text">ราคาไม่รวมภาษีมูลค่าเพิ่ม</span>
+                    <span className="font-bold">{formatCurrency(priceExcludingVat)}</span>
+                  </div>
+
+                  {/* ภาษีมูลค่าเพิ่ม + Input % */}
+                  <div className={`flex justify-between items-center text-slate-700 font-medium transition-opacity duration-300 ${taxMode === 'none' ? 'opacity-40 select-none pointer-events-none' : ''}`}>
+                    <div className="flex items-center gap-2">
+                        <span className="kanit-text">ภาษีมูลค่าเพิ่ม</span>
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="number"
+                                value={vatRate}
+                                onChange={(e) => setVatRate(Number(e.target.value))}
+                                disabled={taxMode === 'none'}
+                                className="w-12 sm:w-14 px-1 py-0.5 text-center text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data disabled:bg-slate-50 transition-colors"
+                            />
+                            <span className="text-xs sm:text-sm">%</span>
+                        </div>
+                    </div>
+                    <span className="font-bold">{formatCurrency(vatAmount)}</span>
+                  </div>
                 </div>
+              </div>
             </div>
 
+          </div>
+
+          {/* --- Always Visible Bottom Section (Totals & Buttons - Fixed Footer) --- */}
+          {/* แก้ไข 4: เพิ่ม z-40 ให้ส่วนท้าย (Footer) ยึดอยู่บนสุดเหนือบิลเสมอ ไม่ว่าแท็บส่วนลดจะกางหรือหด */}
+          <div className="px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4 flex flex-col bg-white shrink-0 z-40 border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] relative">
+              <div className="flex justify-between items-center text-lg sm:text-xl font-black text-slate-800 mb-3 select-none">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="kanit-text">ยอดสุทธิ</span>
+                  {!isSummaryExpanded && (discountAmount > 0 || vatAmount > 0) && (
+                     <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md kanit-text border border-amber-100 animate-in fade-in">
+                        มีส่วนลด/ภาษี
+                     </span>
+                  )}
+                </div>
+                <span className="font-data text-sky-600">{formatCurrency(grandTotal)}</span>
+              </div>
+
+              <div className="flex gap-2">
+                <button 
+                  onClick={clearCart} 
+                  disabled={cart.length === 0}
+                  className="px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-200 text-slate-500 font-semibold hover:bg-slate-50 hover:text-rose-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="ล้างตะกร้า"
+                >
+                  <Trash2 size={18} className="sm:w-5 sm:h-5" />
+                </button>
+                <button 
+                  onClick={handleCheckout}
+                  disabled={cart.length === 0}
+                  className={`flex-1 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-lg shadow-md transition-all active:scale-[0.98] kanit-text disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                    cart.length > 0 ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 shadow-none'
+                  }`}
+                >
+                  ชำระเงิน {cart.length > 0 ? formatCurrency(grandTotal) : ''}
+                </button>
+              </div>
           </div>
           
           </div> {/* End of Right Column */}
@@ -7475,6 +7219,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black kanit-text truncate uppercase border border-slate-200/50">{prod.type}</span>
                         {prod.stockManaged && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : 5})</span>}
                         {prod.isCourse && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions})</span>}
+                        {prod.isVatable && <span className="px-2 py-0.5 bg-sky-50 text-sky-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-sky-100">+VAT</span>}
                     </div>
                     <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
@@ -7579,19 +7324,27 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        {/* แก้ไขเติม !! ด้านหน้า checked ทุกตัว */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                             <div onClick={() => setProductForm({...productForm, stockManaged: !productForm.stockManaged})} className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-colors ${productForm.stockManaged ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-indigo-500 rounded cursor-pointer pointer-events-none" checked={productForm.stockManaged} readOnly />
+                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-indigo-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.stockManaged} readOnly />
                                 <div>
                                     <label className="font-bold text-slate-800 kanit-text cursor-pointer block leading-tight">จัดการสต็อก (สินค้า)</label>
                                     <p className="text-xs text-slate-500 mt-1 kanit-text">รายการนี้เป็นสิ่งของที่ต้องนับจำนวน มีการรับเข้า และตัดจ่าย</p>
                                 </div>
                             </div>
                             <div onClick={() => setProductForm({...productForm, isCourse: !productForm.isCourse})} className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-colors ${productForm.isCourse ? 'bg-amber-50/50 border-amber-200 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-amber-500 rounded cursor-pointer pointer-events-none" checked={productForm.isCourse} readOnly />
+                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-amber-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.isCourse} readOnly />
                                 <div>
                                     <label className="font-bold text-slate-800 kanit-text cursor-pointer block leading-tight">คอร์ส / แพ็กเกจ</label>
                                     <p className="text-xs text-slate-500 mt-1 kanit-text">รายการนี้มีจำนวนครั้งที่ต้องตัดเมื่อมาใช้บริการ</p>
+                                </div>
+                            </div>
+                            <div onClick={() => setProductForm({...productForm, isVatable: !productForm.isVatable})} className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-colors ${productForm.isVatable ? 'bg-sky-50/50 border-sky-200 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-sky-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.isVatable} readOnly />
+                                <div>
+                                    <label className="font-bold text-slate-800 kanit-text cursor-pointer block leading-tight">คิดภาษี (VAT)</label>
+                                    <p className="text-xs text-slate-500 mt-1 kanit-text">นำมูลค่าของรายการนี้ไปรวมคำนวณภาษีในหน้า POS</p>
                                 </div>
                             </div>
                         </div>
@@ -9456,7 +9209,8 @@ const FinancePage = ({
   patientsData = [],
   posProducts = [],
   staffData = [],
-  setStaffData
+  setStaffData,
+  handlePrintReceipt // <-- เพิ่มบรรทัดนี้เพื่อรับค่าฟังก์ชันพิมพ์ใบเสร็จ
 }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all'); 
@@ -10009,324 +9763,6 @@ const FinancePage = ({
     if (len >= 18) return 'text-lg sm:text-xl lg:text-lg xl:text-xl tracking-tighter';
     if (len >= 14) return 'text-xl sm:text-2xl lg:text-xl xl:text-2xl tracking-tighter';
     return 'text-2xl sm:text-3xl lg:text-2xl xl:text-3xl tracking-tight';
-  };
-
-  const handlePrintReceipt = (txn, format = 'A4') => {
-    if (!txn) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-        return;
-    }
-
-    const clinicName = branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
-    const clinicAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110";
-    const clinicPhone = "02-XXX-XXXX";
-    const taxId = "0123456789012";
-
-    const dateObj = new Date(txn.date || txn.createdAt || new Date());
-    const d = String(dateObj.getDate()).padStart(2, '0');
-    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const y = dateObj.getFullYear() + 543;
-    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
-
-    const receiptNo = txn.id;
-    let customerName = txn.patientName || (txn.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)';
-    let customerHN = '-';
-    
-    if (customerName.includes(' - ')) {
-        const parts = customerName.split(' - ');
-        customerHN = parts[0];
-        customerName = parts.slice(1).join(' - ');
-    } else if (txn.patientId) {
-        customerHN = txn.patientId;
-    } else if (txn.rawTx?.patientId) {
-        customerHN = txn.rawTx.patientId;
-    }
-
-    // --- [NEW] ดึงข้อมูลที่อยู่และเลขบัตรประชาชนจากประวัติคนไข้ ---
-    let customerAddress = '-';
-    let customerTaxId = '-';
-    let customerPhone = '-';
-
-    if (customerHN !== '-' && patientsData) {
-        // แปลงเป็น String เพื่อป้องกันบั๊กการเปรียบเทียบข้อมูล
-        const patient = patientsData.find(p => String(p.hn) === String(customerHN) || String(p.id) === String(customerHN));
-        
-        if (patient) {
-            // ฟังก์ชันเติมคำนำหน้าให้สวยงาม
-            const formatSubDist = (sd) => sd ? (sd.includes('ตำบล') || sd.includes('แขวง') ? sd : `ต.${sd}`) : '';
-            const formatDist = (d) => d ? (d.includes('อำเภอ') || d.includes('เขต') ? d : `อ.${d}`) : '';
-            const formatProv = (p) => p ? (p.includes('กรุงเทพ') ? p : (p.includes('จังหวัด') || p.includes('จ.') ? p : `จ.${p}`)) : '';
-
-            // ประกอบร่างที่อยู่ปัจจุบัน
-            const curAddrParts = [
-                patient.curAddress, 
-                patient.curMoo ? `ม.${patient.curMoo}` : '', 
-                patient.curRoad ? `ถ.${patient.curRoad}` : '', 
-                formatSubDist(patient.curSubDistrict), 
-                formatDist(patient.curDistrict), 
-                formatProv(patient.curProvince), 
-                patient.curZipcode
-            ].filter(Boolean);
-            
-            // ประกอบร่างที่อยู่ตามบัตรประชาชน
-            const mainAddrParts = [
-                patient.address, 
-                patient.moo ? `ม.${patient.moo}` : '', 
-                patient.road ? `ถ.${patient.road}` : '', 
-                formatSubDist(patient.subDistrict), 
-                formatDist(patient.district), 
-                formatProv(patient.province), 
-                patient.zipcode
-            ].filter(Boolean);
-            
-            // เช็คว่ามีข้อมูลที่อยู่ปัจจุบันอย่างน้อย 1 ฟิลด์หรือไม่ (ป้องกันฟิลด์เป็นแค่ช่องว่าง)
-            const hasCurAddress = curAddrParts.length > 0 && (patient.curAddress || patient.curSubDistrict || patient.curProvince);
-            
-            // ถ้ามีที่อยู่ปัจจุบัน ให้ใช้ที่อยู่ปัจจุบัน, ถ้าว่างหรือไม่ได้ใส่ข้อมูล ให้ใช้ที่อยู่ตามบัตรประชาชน
-            if (hasCurAddress) {
-                customerAddress = curAddrParts.join(' ').trim();
-            } else if (mainAddrParts.length > 0) {
-                customerAddress = mainAddrParts.join(' ').trim();
-            }
-
-            // เลขที่ผู้เสียภาษีของลูกค้า ให้ใช้เลขบัตรประชาชนตามที่บันทึกบนเวชระเบียน
-            if (patient.idCard && patient.idCard.trim() !== '') {
-                customerTaxId = patient.idCard.trim();
-            }
-            
-            // จัดการเบอร์โทรศัพท์
-            if (patient.phones && Array.isArray(patient.phones) && patient.phones.length > 0 && patient.phones[0]) {
-               customerPhone = patient.phones[0];
-            } else if (patient.phone) {
-               customerPhone = Array.isArray(patient.phone) ? patient.phone[0] : patient.phone;
-            } else if (patient.phone1) {
-               customerPhone = patient.phone1;
-            }
-        }
-    }
-    // --------------------------------------------------------
-
-    const cashierName = "Admin User";
-    
-    // ดึงรายการจาก rawTx (ถ้ามี) หรือจาก items ปกติ
-    const itemsToPrint = txn.rawTx?.items || txn.items || [{name: txn.category || 'รายการ', quantity: 1, price: txn.amount, total: txn.amount}];
-    const subtotal = txn.rawTx?.subtotal || txn.subtotal || txn.amount || 0;
-    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
-    const discountType = txn.rawTx?.discountType || txn.discountType || 'amount';
-    const discountValue = txn.rawTx?.discountValue || txn.discountValue || 0;
-    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
-    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
-    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
-    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
-    const paymentMethod = txn.method || txn.rawTx?.paymentMethod || 'cash';
-    
-    const afterDiscount = Math.max(0, subtotal - discountAmount);
-    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
-
-    let paymentMethodThai = 'เงินสด';
-    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
-    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
-
-    // ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย (Baht Text)
-    const bahtText = (amount) => {
-        if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
-        const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
-        const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
-        let numberStr = Math.abs(amount).toFixed(2).toString();
-        let [integerPart, fractionalPart] = numberStr.split('.');
-        const convertToText = (str) => {
-            let text = '';
-            for (let i = 0; i < str.length; i++) {
-                let n = parseInt(str[i]);
-                let pos = str.length - i - 1;
-                if (n === 0) continue;
-                if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
-                else if (n === 2 && pos === 1) text += 'ยี่สิบ';
-                else if (n === 1 && pos === 1) text += 'สิบ';
-                else text += numbers[n] + positions[pos];
-            }
-            return text;
-        };
-        let result = convertToText(integerPart) + 'บาท';
-        if (fractionalPart === '00') result += 'ถ้วน';
-        else result += convertToText(fractionalPart) + 'สตางค์';
-        return result;
-    };
-    
-    let itemsHtml = itemsToPrint.map((item, index) => `
-        <tr>
-            <td class="text-center">${index + 1}</td>
-            <td>${item.name}</td>
-            <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
-            <td class="text-right">${formatCurrency(item.price)}</td>
-            <td class="text-right">0.00</td>
-            <td class="text-right font-bold">${formatCurrency(item.total)}</td>
-        </tr>
-    `).join('');
-
-    const html = `
-        <!DOCTYPE html>
-        <html lang="th">
-        <head>
-            <meta charset="UTF-8">
-            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-            <style>
-                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
-                @page { size: A4; margin: 5mm; }
-                .page-break { page-break-before: always; break-before: page; }
-                .container { padding: 0; max-width: 100%; }
-                
-                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
-                .doc-title-wrapper { text-align: right; }
-                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
-                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } /* สีฟ้า */
-
-                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
-                
-                .info-box { display: flex; flex-direction: column; gap: 4px; }
-                .info-row { display: flex; align-items: baseline; }
-                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
-                .info-val { flex: 1; }
-                .font-bold { font-weight: 700; }
-
-                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
-                
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
-                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
-                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
-                .text-center { text-align: center; }
-                .text-right { text-align: right; }
-                
-                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 30px; margin-top: 20px; }
-                .summary-left { font-size: 13px; }
-                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-                .summary-right { display: flex; flex-direction: column; gap: 6px; }
-                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
-                .sum-row.grand-total { background-color: #f0f9ff; padding: 8px 10px; font-weight: 700; border-radius: 4px; font-size: 14px; align-items: center; border-bottom: 2px solid #bae6fd; }
-
-                .footer-info { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-                .footer-row { display: flex; gap: 10px; align-items: baseline; }
-                .footer-label { font-weight: 600; width: 60px; }
-                
-                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
-                .signature-box { text-align: center; width: 250px; }
-
-                @media print {
-                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                }
-            </style>
-        </head>
-        <body>
-            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
-            <div class="container">
-                <div class="header-top">
-                    <div class="doc-title-wrapper">
-                        <div class="doc-type">${docType}</div>
-                        <div class="doc-title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
-                    </div>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
-                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} (สำนักงานใหญ่)</div></div>
-                        <div class="info-row" style="margin-top: 4px;">
-                            <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
-                        </div>
-                    </div>
-                    <div class="doc-info-box info-box">
-                        <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
-                        <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
-                        <div class="info-row"><div class="info-label">อ้างอิง (HN):</div><div class="info-val">${customerHN}</div></div>
-                    </div>
-                </div>
-
-                <div class="info-grid" style="margin-top: -10px;">
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">ลูกค้า:</div><div class="info-val">${customerName}</div></div>
-                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${customerAddress}</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${customerTaxId}</div></div>
-                    </div>
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">โทร:</div><div class="info-val">${customerPhone}</div></div>
-                    </div>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="text-center" style="width: 50px;">ลำดับ</th>
-                            <th>คำอธิบาย</th>
-                            <th class="text-center" style="width: 80px;">จำนวน</th>
-                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
-                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
-                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHtml}
-                    </tbody>
-                </table>
-
-                <div class="summary-section">
-                    <div class="summary-left">
-                        <div class="summary-left-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                            สรุป
-                        </div>
-                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrency(priceExcludingVat)} บาท</span></div>
-                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrency(vatAmount)} บาท</span></div>
-                        <div class="sum-row font-bold" style="margin-top: 15px;">
-                            <span>จำนวนเงินทั้งสิ้น</span>
-                            <span>(${bahtText(grandTotal)})</span>
-                        </div>
-                    </div>
-                    <div class="summary-right">
-                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrency(subtotal)} บาท</span></div>
-                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrency(discountAmount)} บาท</span></div>
-                        <div class="sum-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrency(afterDiscount)} บาท</span></div>
-                        <div class="sum-row grand-total">
-                            <span>จำนวนเงินทั้งสิ้น</span>
-                            <span style="color: #0ea5e9;">${formatCurrency(grandTotal)} บาท</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="footer-info">
-                    <div class="footer-row">
-                        <div class="footer-label">ชำระเงิน:</div>
-                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurrency(grandTotal)} บาท</div>
-                    </div>
-                    <div class="footer-row">
-                        <div class="footer-label">หมายเหตุ:</div>
-                        <div>${txn.note || '-'}</div>
-                    </div>
-                </div>
-
-                <div class="signature-area">
-                    <div class="signature-box">
-                        <div>(ลงชื่อ)....................................................</div>
-                        <div style="margin-top: 6px;">ผู้รับบริการ</div>
-                    </div>
-                    <div class="signature-box">
-                        <div>(ลงชื่อ)....................................................</div>
-                        <div style="margin-top: 6px;">เจ้าหน้าที่</div>
-                    </div>
-                </div>
-            </div>
-            `).join('<div class="page-break"></div>')}
-        </body>
-        </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => { printWindow.print(); }, 800);
   };
 
   const handleEditTransaction = (tx) => {
@@ -11462,16 +10898,33 @@ const FinancePage = ({
                           {/* Right Column: Summary */}
                           <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full">
                              {(() => {
-                                const financeSubtotal = (formData.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-                                const financeDiscountAmount = formData.discountType === 'percent' ? (financeSubtotal * ((Number(formData.discount) || 0) / 100)) : (Number(formData.discount) || 0);
+                                // --- แก้ไข: การคำนวณแบบ Prorate (Vatable / Non-Vatable) สำหรับหน้าจอแก้ไขบิล ---
+                                const financeSubtotal = (posEditForm.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                                const financeDiscountAmount = posEditForm.discountType === 'percent' ? (financeSubtotal * ((Number(posEditForm.discountValue) || 0) / 100)) : (Number(posEditForm.discountValue) || 0);
                                 const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
+                                
+                                let totalVatable = 0;
+                                let totalNonVatable = 0;
+                                (posEditForm.items || []).forEach(item => {
+                                     // ตรวจสอบจากฐานข้อมูลสินค้าว่ารายการนี้ Vatable หรือไม่
+                                     const prodInfo = posProducts.find(p => p.id === item.id || p.name === item.name);
+                                     const isVat = prodInfo ? !!prodInfo.isVatable : false;
+                                     if (isVat) totalVatable += (Number(item.total) || 0);
+                                     else totalNonVatable += (Number(item.total) || 0);
+                                });
+
+                                const vatableRatio = financeSubtotal > 0 ? (totalVatable / financeSubtotal) : 0;
+                                const vatableDiscount = financeDiscountAmount * vatableRatio;
+                                const netVatable = Math.max(0, totalVatable - vatableDiscount);
+
                                 let financeVatAmount = 0;
                                 let financeGrandTotal = financeAfterDiscount;
-                                if (formData.taxMode === 'exclude') {
-                                    financeVatAmount = financeAfterDiscount * ((Number(formData.vatRate) || 7) / 100);
+                                
+                                if (posEditForm.taxMode === 'exclude') {
+                                    financeVatAmount = netVatable * ((Number(posEditForm.vatRate) || 7) / 100);
                                     financeGrandTotal = financeAfterDiscount + financeVatAmount;
-                                } else if (formData.taxMode === 'include') {
-                                    financeVatAmount = financeAfterDiscount - (financeAfterDiscount * 100 / (100 + (Number(formData.vatRate) || 7)));
+                                } else if (posEditForm.taxMode === 'include') {
+                                    financeVatAmount = netVatable - (netVatable * 100 / (100 + (Number(posEditForm.vatRate) || 7)));
                                     financeGrandTotal = financeAfterDiscount;
                                 }
 
@@ -15472,6 +14925,369 @@ export default function App() {
     setIsScrolled(e.target.scrollTop > 20);
   };
 
+  // --- [NEW] รวมฟังก์ชันพิมพ์ใบเสร็จมาไว้ตรงกลาง เพื่อให้ทุกหน้าระบบเรียกใช้แบบเดียวกัน (DRY) ---
+  const handlePrintReceipt = (txn, format = 'A4') => {
+    if (!txn) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+    }
+
+    const clinicName = branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
+    const clinicAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110";
+    const clinicPhone = "02-XXX-XXXX";
+    const taxId = "0123456789012";
+
+    const dateObj = new Date(txn.createdAt || txn.date || new Date());
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const y = dateObj.getFullYear() + 543;
+    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
+
+    const receiptNo = txn.id || txn.receiptNo;
+    let customerName = txn.patientName || (txn.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)';
+    let customerHN = '-';
+    
+    if (customerName.includes(' - ')) {
+        const parts = customerName.split(' - ');
+        customerHN = parts[0];
+        customerName = parts.slice(1).join(' - ');
+    } else if (txn.patientId) {
+        customerHN = txn.patientId;
+    } else if (txn.rawTx?.patientId) {
+        customerHN = txn.rawTx.patientId;
+    } else if (txn.hn) {
+        customerHN = txn.hn;
+    }
+    
+    // ดึงข้อมูลที่อยู่, เลขบัตร ปชช., เบอร์โทร จากฐานข้อมูลผู้ป่วย
+    let customerAddress = '-';
+    let customerTaxId = '-';
+    let customerPhone = '-';
+
+    const pInfo = patientsData.find(p => (p.id || p.hn) === customerHN);
+    if (pInfo) {
+        customerAddress = `${pInfo.curAddress || pInfo.address || ''} ${pInfo.curMoo || pInfo.moo ? 'ม.'+(pInfo.curMoo || pInfo.moo) : ''} ${pInfo.curRoad || pInfo.road ? 'ถ.'+(pInfo.curRoad || pInfo.road) : ''} ${pInfo.curSubDistrict || pInfo.subDistrict || ''} ${pInfo.curDistrict || pInfo.district || ''} ${pInfo.curProvince || pInfo.province || ''} ${pInfo.curZipcode || pInfo.zipcode || ''}`.trim() || '-';
+        customerTaxId = pInfo.idCard || '-';
+        customerPhone = Array.isArray(pInfo.phones) && pInfo.phones.length > 0 ? pInfo.phones[0] : (pInfo.phone || pInfo.phone1 || '-');
+    }
+
+    const cashierName = "Admin User";
+    
+    // ดึงรายการและคำนวณยอด
+    const itemsToPrint = txn.rawTx?.items || txn.items || [{name: txn.category || 'รายการ', quantity: 1, price: txn.amount, total: txn.amount}];
+    const subtotal = txn.rawTx?.subtotal || txn.subtotal || txn.amount || 0;
+    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
+    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
+    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
+    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
+    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
+    const paymentMethod = txn.method || txn.paymentMethod || txn.rawTx?.paymentMethod || 'cash';
+    
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
+
+    let paymentMethodThai = 'เงินสด';
+    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
+    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
+
+    // ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย (Baht Text)
+    const bahtText = (amount) => {
+        if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
+        const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+        const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+        let numberStr = Math.abs(amount).toFixed(2).toString();
+        let [integerPart, fractionalPart] = numberStr.split('.');
+        const convertToText = (str) => {
+            let text = '';
+            for (let i = 0; i < str.length; i++) {
+                let n = parseInt(str[i]);
+                let pos = str.length - i - 1;
+                if (n === 0) continue;
+                if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
+                else if (n === 2 && pos === 1) text += 'ยี่สิบ';
+                else if (n === 1 && pos === 1) text += 'สิบ';
+                else text += numbers[n] + positions[pos];
+            }
+            return text;
+        };
+        let result = convertToText(integerPart) + 'บาท';
+        if (fractionalPart === '00') result += 'ถ้วน';
+        else result += convertToText(fractionalPart) + 'สตางค์';
+        return result;
+    };
+    
+    const formatCurrencyPrint = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0);
+
+    let hasVatableItems = false;
+    let itemsHtml = '';
+    if (format === 'A4') {
+        itemsHtml = itemsToPrint.map((item, index) => {
+            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
+            if (isVat) hasVatableItems = true;
+            const vatMark = isVat ? ' <span style="color:#0ea5e9; font-size:10px; font-weight:bold;">(V)</span>' : '';
+            return `
+            <tr>
+                <td class="text-center">${index + 1}</td>
+                <td>${item.name}${vatMark}</td>
+                <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
+                <td class="text-right">${formatCurrencyPrint(item.price)}</td>
+                <td class="text-right">0.00</td>
+                <td class="text-right font-bold">${formatCurrencyPrint(item.total)}</td>
+            </tr>
+        `}).join('');
+    } else {
+        itemsHtml = itemsToPrint.map(item => {
+            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
+            if (isVat) hasVatableItems = true;
+            const vatMark = isVat ? ' <span style="font-size:10px;">(V)</span>' : '';
+            return `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; page-break-inside: avoid;">
+                <div style="flex: 1; padding-right: 10px;">
+                    <div style="font-weight: bold; margin-bottom: 2px;">${item.name}${vatMark}</div>
+                    <div style="color: #64748b; font-size: 11px;">${item.quantity} x ${formatCurrencyPrint(item.price)}</div>
+                </div>
+                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurrencyPrint(item.total)}</div>
+            </div>
+        `}).join('');
+    }
+
+    const html = format === 'A4' ? `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
+                @page { size: A4; margin: 5mm; }
+                .page-break { page-break-before: always; break-before: page; }
+                .container { padding: 0; max-width: 100%; }
+                
+                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
+                .doc-title-wrapper { text-align: right; }
+                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
+                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } 
+
+                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
+                
+                .info-box { display: flex; flex-direction: column; gap: 4px; }
+                .info-row { display: flex; align-items: baseline; }
+                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
+                .info-val { flex: 1; }
+                .font-bold { font-weight: 700; }
+
+                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
+                
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
+                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
+                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                
+                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 20px; margin-top: 20px; }
+                .summary-left { font-size: 13px; }
+                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; font-size: 14px; }
+                .summary-right { display: flex; flex-direction: column; gap: 6px; }
+                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
+                .sum-row.grand-total { background-color: #f0f9ff; padding: 10px 15px; font-weight: 700; border-radius: 6px; font-size: 15px; align-items: center; border: 1px solid #bae6fd; color: #0f172a; margin-top: 4px; }
+
+                .footer-info { display: flex; flex-direction: column; gap: 10px; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+                .footer-row { display: flex; gap: 10px; align-items: baseline; }
+                .footer-label { font-weight: 600; width: 85px; display: flex; align-items: center; gap: 6px; }
+                
+                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
+                .signature-box { text-align: center; width: 250px; }
+
+                @media print {
+                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+            </style>
+        </head>
+        <body>
+            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
+            <div class="container">
+                <div class="header-top">
+                    <div class="doc-title-wrapper">
+                        <div class="doc-type">${docType}</div>
+                        <div class="doc-title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
+                    </div>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
+                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} (สำนักงานใหญ่)</div></div>
+                        <div class="info-row" style="margin-top: 4px;">
+                            <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
+                        </div>
+                    </div>
+                    <div class="doc-info-box info-box">
+                        <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
+                        <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
+                        <div class="info-row"><div class="info-label">อ้างอิง:</div><div class="info-val">${customerHN}</div></div>
+                    </div>
+                </div>
+
+                <div class="info-grid" style="margin-top: -10px;">
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">ลูกค้า:</div><div class="info-val">${customerName}</div></div>
+                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${customerAddress}</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${customerTaxId}</div></div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-row"><div class="info-label">โทร:</div><div class="info-val">${customerPhone}</div></div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 50px;">ลำดับ</th>
+                            <th>คำอธิบาย</th>
+                            <th class="text-center" style="width: 80px;">จำนวน</th>
+                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
+                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
+                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <div class="summary-section">
+                    <div class="summary-left">
+                        <div class="summary-left-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            สรุป
+                        </div>
+                        ${hasVatableItems ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 10px;">(V) = รายการที่นำไปคำนวณภาษีมูลค่าเพิ่ม</div>` : ''}
+                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrencyPrint(priceExcludingVat)} บาท</span></div>
+                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrencyPrint(vatAmount)} บาท</span></div>
+                        <div class="sum-row font-bold" style="margin-top: 15px;">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span>(${bahtText(grandTotal)})</span>
+                        </div>
+                    </div>
+                    <div class="summary-right">
+                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrencyPrint(subtotal)} บาท</span></div>
+                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrencyPrint(discountAmount)} บาท</span></div>
+                        <div class="sum-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrencyPrint(afterDiscount)} บาท</span></div>
+                        <div class="sum-row grand-total">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span style="color: #0ea5e9;">${formatCurrencyPrint(grandTotal)} บาท</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer-info">
+                    <div class="footer-row">
+                        <div class="footer-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                            ชำระเงิน:
+                        </div>
+                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurrencyPrint(grandTotal)} บาท</div>
+                    </div>
+                    <div class="footer-row" style="margin-top: 4px;">
+                        <div class="footer-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            หมายเหตุ:
+                        </div>
+                        <div>${txn.note || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="signature-area">
+                    <div class="signature-box">
+                        <div>(ลงชื่อ)....................................................</div>
+                        <div style="margin-top: 6px;">ผู้รับบริการ</div>
+                    </div>
+                    <div class="signature-box">
+                        <div>(ลงชื่อ)....................................................</div>
+                        <div style="margin-top: 6px;">เจ้าหน้าที่</div>
+                    </div>
+                </div>
+            </div>
+            `).join('<div class="page-break"></div>')}
+        </body>
+        </html>
+    ` : `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>สลิปใบเสร็จ - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; font-size: 13px; color: #000; width: 72mm; }
+                @page { size: 80mm auto; margin: 0; }
+                .slip-container { padding: 4mm; padding-bottom: 15mm; }
+                .text-center { text-align: center; }
+                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+                .divider { border-bottom: 1px dashed #666; margin: 8px 0; }
+                .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
+                .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+                .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class="slip-container">
+                <div class="text-center">
+                    <div class="clinic-name">${clinicName}</div>
+                    <div style="line-height: 1.4;">${clinicAddress}</div>
+                    <div style="line-height: 1.4;">โทร: ${clinicPhone}</div>
+                    <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div style="line-height: 1.6;">
+                    <div><strong>เลขที่:</strong> ${receiptNo}</div>
+                    <div><strong>วันที่:</strong> ${dateStr}</div>
+                    ${customerHN !== '-' ? `<div><strong>HN:</strong> ${customerHN}</div>` : ''}
+                    <div><strong>ลูกค้า:</strong> ${customerName}</div>
+                    <div><strong>แคชเชียร์:</strong> ${cashierName}</div>
+                </div>
+                
+                <div class="divider-thick"></div>
+                
+                <div style="font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>รายการ</span>
+                    <span>รวม</span>
+                </div>
+                
+                ${itemsHtml}
+                
+                <div class="divider-thick"></div>
+                
+                <div class="summary-row"><span>รวมเป็นเงิน:</span><span>${formatCurrencyPrint(subtotal)}</span></div>
+                ${discountAmount > 0 ? `<div class="summary-row"><span>ส่วนลด:</span><span>-${formatCurrencyPrint(discountAmount)}</span></div>` : ''}
+                ${taxMode !== 'none' && vatAmount > 0 ? `<div class="summary-row"><span>ภาษี (${vatRate}%):</span><span>${formatCurrencyPrint(vatAmount)}</span></div>` : ''}
+                
+                <div class="summary-row total"><span>ยอดสุทธิ:</span><span>${formatCurrencyPrint(grandTotal)}</span></div>
+                
+                <div class="divider"></div>
+                
+                ${hasVatableItems ? `<div style="font-size: 11px; color: #666; margin-bottom: 8px;">(V) = รายการที่คิดภาษีมูลค่าเพิ่ม</div>` : ''}
+                <div class="text-center" style="line-height: 1.6;">
+                    <div>ชำระโดย: <strong>${paymentMethodThai}</strong></div>
+                    <div style="margin-top: 15px; font-size: 14px; font-weight: bold;">*** ขอบคุณที่ใช้บริการ ***</div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => { printWindow.print(); }, 800); // เผื่อเวลาโหลดฟอนต์
+  };
+
   // --- ปรับปรุงฟังก์ชันป้องกัน Error HTML แบบ 100% ---
   const callAppScript = async (action, sheetName, data = null) => {
     try {
@@ -15823,6 +15639,7 @@ export default function App() {
                     callAppScript={callAppScript} 
                     isGlobalLoading={isGlobalLoading}
                     showMobileBars={showMobileBars}
+                    handlePrintReceipt={handlePrintReceipt}
                 />
             </div>
             <div style={{ display: currentTab === 'finance' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
@@ -15840,6 +15657,7 @@ export default function App() {
                  posProducts={posProducts}
                  staffData={staffData}
                  setStaffData={setStaffData}
+                 handlePrintReceipt={handlePrintReceipt}
                />
             </div>            <div style={{ display: currentTab === 'inventory' ? 'block' : 'none' }} className="w-full">
                 <InventoryManager 
