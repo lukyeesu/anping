@@ -6972,7 +6972,7 @@ const POSSystem = ({
 };
 
 // --- ระบบฐานข้อมูลรายการ (Catalog Manager) ---
-const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading }) => {
+const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading, posHistoryData = [] }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all'); // เพิ่ม State สำหรับจัดการการกรอง
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
@@ -6984,6 +6984,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
 
   const headerRef = React.useRef(null);
+  const filterRef = React.useRef(null);
 
   // --- ระบบ Sticky เลียนแบบหน้าอื่นๆ ---
   useEffect(() => {
@@ -6994,8 +6995,21 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       if (!headerRef.current) return;
       const { scrollTop } = e.target;
       
-      if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-      else headerRef.current.classList.remove('is-scrolled');
+      if (scrollTop > 20) {
+          headerRef.current.classList.add('is-scrolled');
+      } else {
+          headerRef.current.classList.remove('is-scrolled');
+      }
+
+      if (filterRef.current && headerRef.current) {
+          const headerRect = headerRef.current.getBoundingClientRect();
+          const filterRect = filterRef.current.getBoundingClientRect();
+          if (filterRect.top <= headerRect.bottom + 1) {
+              filterRef.current.classList.add('is-scrolled');
+          } else {
+              filterRef.current.classList.remove('is-scrolled');
+          }
+      }
     };
 
     setTimeout(() => {
@@ -7118,11 +7132,49 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
     return Array.from(new Set(products.map(p => p.type)));
   }, [products]);
 
+  // --- [NEW] คำนวณ Ranking สินค้า/บริการขายดีจาก posHistoryData ---
+  const rankings = useMemo(() => {
+      const itemCounts = {}; 
+
+      const productTypeMap = {};
+      products.forEach(p => {
+          productTypeMap[p.name] = !!p.stockManaged; // true = Product, false = Service/Course
+      });
+
+      (posHistoryData || []).forEach(tx => {
+          if (tx.status !== 'cancelled' && tx.items) {
+              tx.items.forEach(item => {
+                  // ข้ามรายการที่เป็นการตัดคอร์ส (ฟรี) หรือหมายเหตุแพทย์
+                  if (item.price === 0 && (item.name.includes('ตัดรอบ') || item.name.includes('หมายเหตุ'))) return;
+
+                  if (!itemCounts[item.name]) {
+                      const isProd = productTypeMap[item.name] === true;
+                      itemCounts[item.name] = { name: item.name, qty: 0, revenue: 0, isProduct: isProd };
+                  }
+                  itemCounts[item.name].qty += Number(item.quantity) || 0;
+                  itemCounts[item.name].revenue += Number(item.total) || 0;
+              });
+          }
+      });
+
+      const allRanked = Object.values(itemCounts);
+      // จัดเรียงและตัดมาเฉพาะ 5 อันดับแรก
+      const topProducts = allRanked.filter(i => i.isProduct).sort((a, b) => b.qty - a.qty).slice(0, 5);
+      const topServices = allRanked.filter(i => !i.isProduct).sort((a, b) => b.qty - a.qty).slice(0, 5);
+
+      // หาค่า Max เพื่อเอาไปทำเป้ากราฟแท่ง (Progress Bar)
+      const maxProdQty = Math.max(...topProducts.map(p => p.qty), 1);
+      const maxServQty = Math.max(...topServices.map(s => s.qty), 1);
+
+      return { topProducts, topServices, maxProdQty, maxServQty };
+  }, [posHistoryData, products]);
+
+  const formatCurrency = (amount) => new Intl.NumberFormat('th-TH').format(amount);
+
   return (
     <div className="fade-in pb-10 relative flex flex-col h-full">
       
-      {/* --- 1. Sticky Header & Filter รวมเป็นก้อนเดียวกัน --- */}
-      {/* แก้ไข: เปลี่ยนจาก transform เป็น top */}
+      {/* --- 1. Sticky Header --- */}
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -7141,43 +7193,123 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="w-full pointer-events-none transition-all duration-300 ease-in-out header-spacer shrink-0"></div>
+      {/* --- 2. Ranking Cards Section (Non-sticky, จะเลื่อนหายไปตามการ Scroll) --- */}
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 sm:mt-5 mb-0 relative z-20 pointer-events-auto">
+        {!isGlobalLoading && (rankings.topProducts.length > 0 || rankings.topServices.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                
+                {/* Card 1: สินค้าขายดี */}
+                <div className="bg-white rounded-[2rem] p-6 sm:p-7 border border-slate-100 shadow-sm flex flex-col">
+                    <div className="flex items-center gap-3 sm:gap-4 mb-6">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-500 text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
+                            <Package size={24} className="sm:w-6 sm:h-6" />
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text">5 อันดับสินค้าขายดี</h3>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4 sm:gap-5 flex-1">
+                        {rankings.topProducts.length > 0 ? rankings.topProducts.map((item, i) => (
+                            <div key={i} className="relative flex flex-col justify-center">
+                                <div className="flex justify-between items-end mb-1.5 z-10 relative px-1">
+                                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
+                                        <span className="text-amber-500 font-black text-sm sm:text-base w-4 text-center shrink-0">{i + 1}</span>
+                                        <span className="font-bold text-slate-700 kanit-text text-sm sm:text-base truncate">{item.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                        <span className="text-slate-400 font-data text-[10px] sm:text-xs">฿{formatCurrency(item.revenue)}</span>
+                                        <div className="text-indigo-600 font-black font-data text-sm sm:text-base w-16 text-right">
+                                            {item.qty} <span className="text-xs sm:text-sm font-bold kanit-text">ชิ้น</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="w-full bg-slate-100 h-1.5 sm:h-2 rounded-full overflow-hidden">
+                                    <div className="bg-indigo-500 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${(item.qty / rankings.maxProdQty) * 100}%` }}></div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="flex-1 flex items-center justify-center text-slate-400 kanit-text text-sm italic py-4">ยังไม่มีข้อมูลการขายสินค้า</div>
+                        )}
+                    </div>
+                </div>
 
-        <div className="w-full pointer-events-none z-20 shrink-0">
-          <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
-            <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4">
-              <div className="relative flex-1 min-w-0 w-full">
-                <input 
-                  type="text" 
-                  placeholder="ค้นหาชื่อ หรือหมวดหมู่..." 
-                  className="w-full pl-9 pr-3 sm:pl-11 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <Search className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
-              </div>
-              <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[140px] sm:w-[180px]">
-                <CustomSelect 
-                  value={filterType}
-                  onChange={(val) => setFilterType(val)}
-                  options={[
-                    {value: 'all', label: `ทั้งหมด (${products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase())).length})`},
-                    {value: 'service', label: 'เฉพาะบริการ'},
-                    {value: 'product', label: 'เฉพาะสินค้า'},
-                    {value: 'course', label: 'เฉพาะคอร์ส'}
-                  ]}
-                  className="w-full"
-                  compact
-                />
-              </div>
+                {/* Card 2: บริการ/คอร์สยอดนิยม */}
+                <div className="bg-white rounded-[2rem] p-6 sm:p-7 border border-slate-100 shadow-sm flex flex-col">
+                    <div className="flex items-center gap-3 sm:gap-4 mb-6">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-500 rounded-xl sm:rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm shrink-0">
+                            <Stethoscope size={24} className="sm:w-6 sm:h-6" />
+                        </div>
+                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text">5 อันดับบริการ / คอร์สยอดนิยม</h3>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4 sm:gap-5 flex-1">
+                        {rankings.topServices.length > 0 ? rankings.topServices.map((item, i) => (
+                            <div key={i} className="relative flex flex-col justify-center">
+                                <div className="flex justify-between items-end mb-1.5 z-10 relative px-1">
+                                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
+                                        <span className="text-amber-500 font-black text-sm sm:text-base w-4 text-center shrink-0">{i + 1}</span>
+                                        <span className="font-bold text-slate-700 kanit-text text-sm sm:text-base truncate">{item.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                        <span className="text-slate-400 font-data text-[10px] sm:text-xs">฿{formatCurrency(item.revenue)}</span>
+                                        <div className="text-emerald-600 font-black font-data text-sm sm:text-base w-16 text-right">
+                                            {item.qty} <span className="text-xs sm:text-sm font-bold kanit-text">ครั้ง</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="w-full bg-slate-100 h-1.5 sm:h-2 rounded-full overflow-hidden">
+                                    <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${(item.qty / rankings.maxServQty) * 100}%` }}></div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="flex-1 flex items-center justify-center text-slate-400 kanit-text text-sm italic py-4">ยังไม่มีข้อมูลการขายบริการ/คอร์ส</div>
+                        )}
+                    </div>
+                </div>
+
+            </div>
+        )}
+      </div>
+
+      {/* --- 3. Filter Component (เมื่อเลื่อนชน Header จะเกาะติด Sticky อัตโนมัติ) --- */}
+      <div 
+         ref={filterRef}
+         className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt" 
+      >
+        <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
+          <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row justify-between items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
+            <div className="relative flex-1 min-w-0 w-full">
+              <input 
+                type="text" 
+                placeholder="ค้นหาชื่อ หรือหมวดหมู่..." 
+                className="w-full pl-9 pr-3 sm:pl-11 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Search className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+            </div>
+            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[140px] sm:w-[180px]">
+              <CustomSelect 
+                value={filterType}
+                onChange={(val) => setFilterType(val)}
+                options={[
+                  {value: 'all', label: `ทั้งหมด (${products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase())).length})`},
+                  {value: 'service', label: 'เฉพาะบริการ'},
+                  {value: 'product', label: 'เฉพาะสินค้า'},
+                  {value: 'course', label: 'เฉพาะคอร์ส'}
+                ]}
+                className="w-full"
+                compact
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* --- 4. ตาราง/เนื้อหา (เพิ่มระยะห่างจาก Header ให้สมดุล) --- */}
-      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-5 sm:mt-6 mb-12 flex-1 flex flex-col">
+      {/* --- 4. ตาราง/เนื้อหา (Content Area) --- */}
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
+
         {isGlobalLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {Array.from({ length: 10 }).map((_, i) => (
@@ -9437,10 +9569,15 @@ const FinancePage = ({
           if (field === 'name') {
               // Try to find product and autofill price if not set
               const matchedProduct = posProducts.find(p => p.name === value);
-              if (matchedProduct && (!newItems[index].price || newItems[index].price === 0)) {
-                  newItems[index].price = matchedProduct.price;
-                  const qty = Number(newItems[index].quantity) || 1;
-                  newItems[index].total = qty * matchedProduct.price;
+              if (matchedProduct) {
+                  newItems[index].isVatable = !!matchedProduct.isVatable;
+                  if (!newItems[index].price || newItems[index].price === 0) {
+                      newItems[index].price = matchedProduct.price;
+                      const qty = Number(newItems[index].quantity) || 1;
+                      newItems[index].total = qty * matchedProduct.price;
+                  }
+              } else {
+                  newItems[index].isVatable = false;
               }
           }
           const newAmount = newItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
@@ -9510,19 +9647,48 @@ const FinancePage = ({
     if (!posEditForm) return;
     setIsSavingPos(true);
     try {
-      const calculatedAmount = posEditForm.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      
+      // --- [MODIFIED] คำนวณยอดเงินรวมใหม่ทั้งหมด (รวมส่วนลดและภาษี) ก่อนบันทึก ---
+      const financeSubtotal = posEditForm.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const financeDiscountAmount = posEditForm.discountType === 'percent' ? (financeSubtotal * ((Number(posEditForm.discountValue) || 0) / 100)) : (Number(posEditForm.discountValue) || 0);
+      const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
+
+      let totalVatable = 0;
+      posEditForm.items.forEach(item => {
+           // ใช้ค่า isVatable ที่ฝังมากับรายการ หรือค้นหาจาก posProducts ถ้าไม่มี
+           const isVat = item.isVatable !== undefined ? item.isVatable : (posProducts.find(p => p.id === item.id || p.name === item.name)?.isVatable || false);
+           if (isVat) totalVatable += (item.price * item.quantity);
+      });
+
+      // กระจายส่วนลดเข้าก้อน Vatable (Prorate)
+      const vatableRatio = financeSubtotal > 0 ? (totalVatable / financeSubtotal) : 0;
+      const vatableDiscount = financeDiscountAmount * vatableRatio;
+      const netVatable = Math.max(0, totalVatable - vatableDiscount);
+
+      let financeVatAmount = 0;
+      let financeGrandTotal = financeAfterDiscount;
+
+      if (posEditForm.taxMode === 'exclude') {
+          financeVatAmount = netVatable * ((Number(posEditForm.vatRate) || 7) / 100);
+          financeGrandTotal = financeAfterDiscount + financeVatAmount;
+      } else if (posEditForm.taxMode === 'include') {
+          financeVatAmount = netVatable - (netVatable * 100 / (100 + (Number(posEditForm.vatRate) || 7)));
+          financeGrandTotal = financeAfterDiscount;
+      }
+
       const updatedTx = {
         ...posEditForm,
-        // อัปเดตทุกฟิลด์ที่อาจถูกนำไปใช้คำนวณยอดรวมในหน้าการเงิน (allTransactions)
-        amount: calculatedAmount,
-        total: calculatedAmount,
-        netTotal: calculatedAmount,
-        grandTotal: calculatedAmount,
+        subtotal: financeSubtotal,
+        discountAmount: financeDiscountAmount,
+        vatAmount: financeVatAmount,
+        // อัปเดตยอดสุทธิลงทุกฟิลด์ที่อาจถูกใช้ในระบบ
+        amount: financeGrandTotal,
+        total: financeGrandTotal,
+        netTotal: financeGrandTotal,
+        grandTotal: financeGrandTotal,
         items: posEditForm.items,
-        // บันทึกชื่อในรูปแบบ HN - Name ลงในฐานข้อมูลเลยตามคำขอ
         patientName: patientSearchQuery 
       };
+      // ----------------------------------------------------------------------
       
       const res = await callAppScript('SAVE_DATA', 'POS_Transactions', updatedTx);
       if (res.status === 'success') {
@@ -9551,7 +9717,8 @@ const FinancePage = ({
             id: product.id, 
             name: product.name, 
             price: product.price,
-            total: product.price * newItems[index].quantity
+            total: product.price * newItems[index].quantity,
+            isVatable: !!product.isVatable
           };
         }
       } else {
@@ -9562,6 +9729,10 @@ const FinancePage = ({
                  field === 'quantity' ? newItems[index].price * value : 
                  newItems[index].total
         };
+        if (field === 'name') {
+           const product = posProducts.find(p => p.name === value);
+           newItems[index].isVatable = product ? !!product.isVatable : false;
+        }
       }
       return { ...prev, items: newItems };
     });
@@ -9576,7 +9747,7 @@ const FinancePage = ({
 
   const handleAddPosItem = () => {
     setPosEditForm(prev => {
-      const newItem = { id: '', name: '', price: 0, quantity: 1, total: 0 };
+      const newItem = { id: '', name: '', price: 0, quantity: 1, total: 0, isVatable: false };
       return { ...prev, items: [...prev.items, newItem] };
     });
   };
@@ -9922,14 +10093,24 @@ const FinancePage = ({
     const financeDiscountAmount = formData.discountType === 'percent' ? (financeSubtotal * ((Number(formData.discount) || 0) / 100)) : (Number(formData.discount) || 0);
     const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
 
+    let totalVatable = 0;
+    formData.items.forEach(item => {
+        const isVat = item.isVatable !== undefined ? item.isVatable : (posProducts.find(p => p.name === item.name)?.isVatable || false);
+        if (isVat) totalVatable += (Number(item.total) || 0);
+    });
+
+    const vatableRatio = financeSubtotal > 0 ? (totalVatable / financeSubtotal) : 0;
+    const vatableDiscount = financeDiscountAmount * vatableRatio;
+    const netVatable = Math.max(0, totalVatable - vatableDiscount);
+
     let financeVatAmount = 0;
     let financeGrandTotal = financeAfterDiscount;
 
     if (formData.taxMode === 'exclude') {
-        financeVatAmount = financeAfterDiscount * ((Number(formData.vatRate) || 7) / 100);
+        financeVatAmount = netVatable * ((Number(formData.vatRate) || 7) / 100);
         financeGrandTotal = financeAfterDiscount + financeVatAmount;
     } else if (formData.taxMode === 'include') {
-        financeVatAmount = financeAfterDiscount - (financeAfterDiscount * 100 / (100 + (Number(formData.vatRate) || 7)));
+        financeVatAmount = netVatable - (netVatable * 100 / (100 + (Number(formData.vatRate) || 7)));
         financeGrandTotal = financeAfterDiscount;
     }
 
@@ -10790,10 +10971,15 @@ const FinancePage = ({
                        </div>
 
                        <div className="space-y-3">
-                          {(formData.items || []).map((item, idx) => (
+                          {(formData.items || []).map((item, idx) => {
+                             const isVat = item.isVatable !== undefined ? item.isVatable : posProducts?.find(p => p.name === item.name)?.isVatable;
+                             return (
                              <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group">
                                 <div className="flex-1 w-full relative">
-                                   <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest">รายละเอียด</label>
+                                   <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1.5">
+                                      รายละเอียด
+                                      {isVat && <span className="text-[9px] px-1 py-0.5 bg-sky-50 text-sky-600 rounded font-bold border border-sky-200 tracking-tight leading-none">(V) คิดภาษี</span>}
+                                   </label>
                                    <input
                                       type="text"
                                       required
@@ -10816,7 +11002,10 @@ const FinancePage = ({
                                                }}
                                                className="w-full p-3 flex items-center justify-between hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
                                             >
-                                               <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2">{p.name}</div>
+                                               <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2 flex items-center gap-1.5">
+                                                  {p.name}
+                                                  {p.isVatable && <span className="px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[9px] rounded border border-sky-100 font-bold uppercase tracking-tighter shrink-0 leading-none">+VAT</span>}
+                                               </div>
                                                <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
                                             </button>
                                          ))}
@@ -10828,7 +11017,8 @@ const FinancePage = ({
                                       </div>
                                    </div>
                                 </div>
-                                <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">                                   <div className="w-20">
+                                <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">
+                                   <div className="w-20">
                                       <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
                                       <input
                                          type="number"
@@ -10866,12 +11056,11 @@ const FinancePage = ({
                                    </button>
                                 )}
                              </div>
-                          ))}
+                          )})}
                        </div>
+                    </div>
 
-                       </div>
-
-                       {/* Section Bottom: Payment, Note, Summary */}
+                    {/* Section Bottom: Payment, Note, Summary */}
                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4 items-stretch">
                           {/* Left Column: Payment & Note */}
                           <div className="flex flex-col space-y-4">
@@ -10898,19 +11087,15 @@ const FinancePage = ({
                           {/* Right Column: Summary */}
                           <div className="bg-slate-50/50 p-5 rounded-3xl border border-slate-100 shadow-sm flex flex-col h-full">
                              {(() => {
-                                // --- แก้ไข: การคำนวณแบบ Prorate (Vatable / Non-Vatable) สำหรับหน้าจอแก้ไขบิล ---
-                                const financeSubtotal = (posEditForm.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-                                const financeDiscountAmount = posEditForm.discountType === 'percent' ? (financeSubtotal * ((Number(posEditForm.discountValue) || 0) / 100)) : (Number(posEditForm.discountValue) || 0);
+                                // --- แก้ไข: การคำนวณแบบ Prorate (Vatable / Non-Vatable) สำหรับหน้าจอแก้ไขบิล Manual ---
+                                const financeSubtotal = (formData.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                                const financeDiscountAmount = formData.discountType === 'percent' ? (financeSubtotal * ((Number(formData.discount) || 0) / 100)) : (Number(formData.discount) || 0);
                                 const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
                                 
                                 let totalVatable = 0;
-                                let totalNonVatable = 0;
-                                (posEditForm.items || []).forEach(item => {
-                                     // ตรวจสอบจากฐานข้อมูลสินค้าว่ารายการนี้ Vatable หรือไม่
-                                     const prodInfo = posProducts.find(p => p.id === item.id || p.name === item.name);
-                                     const isVat = prodInfo ? !!prodInfo.isVatable : false;
+                                (formData.items || []).forEach(item => {
+                                     const isVat = item.isVatable !== undefined ? item.isVatable : (posProducts.find(p => p.name === item.name)?.isVatable || false);
                                      if (isVat) totalVatable += (Number(item.total) || 0);
-                                     else totalNonVatable += (Number(item.total) || 0);
                                 });
 
                                 const vatableRatio = financeSubtotal > 0 ? (totalVatable / financeSubtotal) : 0;
@@ -10920,11 +11105,11 @@ const FinancePage = ({
                                 let financeVatAmount = 0;
                                 let financeGrandTotal = financeAfterDiscount;
                                 
-                                if (posEditForm.taxMode === 'exclude') {
-                                    financeVatAmount = netVatable * ((Number(posEditForm.vatRate) || 7) / 100);
+                                if (formData.taxMode === 'exclude') {
+                                    financeVatAmount = netVatable * ((Number(formData.vatRate) || 7) / 100);
                                     financeGrandTotal = financeAfterDiscount + financeVatAmount;
-                                } else if (posEditForm.taxMode === 'include') {
-                                    financeVatAmount = netVatable - (netVatable * 100 / (100 + (Number(posEditForm.vatRate) || 7)));
+                                } else if (formData.taxMode === 'include') {
+                                    financeVatAmount = netVatable - (netVatable * 100 / (100 + (Number(formData.vatRate) || 7)));
                                     financeGrandTotal = financeAfterDiscount;
                                 }
 
@@ -11153,10 +11338,15 @@ const FinancePage = ({
                    </div>
 
                    <div className="space-y-3">
-                      {posEditForm.items.map((item, idx) => (
+                      {posEditForm.items.map((item, idx) => {
+                         const isVat = item.isVatable !== undefined ? item.isVatable : posProducts?.find(p => p.id === item.id || p.name === item.name)?.isVatable;
+                         return (
                          <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group" style={{ zIndex: 50 - idx }}>
                             <div className="flex-1 w-full relative">
-                               <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest">รายละเอียด</label>
+                               <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1.5">
+                                  รายละเอียด
+                                  {isVat && <span className="text-[9px] px-1 py-0.5 bg-sky-50 text-sky-600 rounded font-bold border border-sky-200 tracking-tight leading-none">(V) คิดภาษี</span>}
+                               </label>
                                <input
                                   type="text"
                                   required
@@ -11177,7 +11367,10 @@ const FinancePage = ({
                                            }}
                                            className="w-full p-3 flex items-center justify-between hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
                                         >
-                                           <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2">{p.name}</div>
+                                           <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2 flex items-center gap-1.5">
+                                              {p.name}
+                                              {p.isVatable && <span className="px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[9px] rounded border border-sky-100 font-bold uppercase tracking-tighter shrink-0 leading-none">+VAT</span>}
+                                           </div>
                                            <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
                                         </button>
                                      ))}
@@ -11189,7 +11382,7 @@ const FinancePage = ({
                                   </div>
                                </div>
                             </div>
-                            <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">                                   
+                            <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">
                                <div className="w-20">
                                   <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
                                   <input 
@@ -11224,7 +11417,7 @@ const FinancePage = ({
                                </button>
                             )}
                          </div>
-                      ))}
+                      )})}
                       
                       {posEditForm.items.length === 0 && (
                         <div className="text-center py-12 border-2 border-dashed border-slate-100 rounded-[2.5rem] text-slate-400 kanit-text text-sm flex flex-col items-center gap-3">
@@ -11269,13 +11462,24 @@ const FinancePage = ({
                           const financeSubtotal = (posEditForm.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
                           const financeDiscountAmount = posEditForm.discountType === 'percent' ? (financeSubtotal * ((Number(posEditForm.discountValue) || 0) / 100)) : (Number(posEditForm.discountValue) || 0);
                           const financeAfterDiscount = Math.max(0, financeSubtotal - financeDiscountAmount);
+                          
+                          let totalVatable = 0;
+                          (posEditForm.items || []).forEach(item => {
+                               const isVat = item.isVatable !== undefined ? item.isVatable : (posProducts.find(p => p.id === item.id || p.name === item.name)?.isVatable || false);
+                               if (isVat) totalVatable += (Number(item.total) || 0);
+                          });
+
+                          const vatableRatio = financeSubtotal > 0 ? (totalVatable / financeSubtotal) : 0;
+                          const vatableDiscount = financeDiscountAmount * vatableRatio;
+                          const netVatable = Math.max(0, totalVatable - vatableDiscount);
+
                           let financeVatAmount = 0;
                           let financeGrandTotal = financeAfterDiscount;
                           if (posEditForm.taxMode === 'exclude') {
-                              financeVatAmount = financeAfterDiscount * ((Number(posEditForm.vatRate) || 7) / 100);
+                              financeVatAmount = netVatable * ((Number(posEditForm.vatRate) || 7) / 100);
                               financeGrandTotal = financeAfterDiscount + financeVatAmount;
                           } else if (posEditForm.taxMode === 'include') {
-                              financeVatAmount = financeAfterDiscount - (financeAfterDiscount * 100 / (100 + (Number(posEditForm.vatRate) || 7)));
+                              financeVatAmount = netVatable - (netVatable * 100 / (100 + (Number(posEditForm.vatRate) || 7)));
                               financeGrandTotal = financeAfterDiscount;
                           }
 
@@ -15166,10 +15370,12 @@ export default function App() {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                             สรุป
                         </div>
-                        ${hasVatableItems ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 10px;">(V) = รายการที่นำไปคำนวณภาษีมูลค่าเพิ่ม</div>` : ''}
                         <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrencyPrint(priceExcludingVat)} บาท</span></div>
                         <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrencyPrint(vatAmount)} บาท</span></div>
-                        <div class="sum-row font-bold" style="margin-top: 15px;">
+                        
+                        <div style="border-top: 1px solid #cbd5e1; margin: 10px 20px 10px 0;"></div>
+                        
+                        <div class="sum-row font-bold" style="margin-top: 5px; padding-right: 20px;">
                             <span>จำนวนเงินทั้งสิ้น</span>
                             <span>(${bahtText(grandTotal)})</span>
                         </div>
@@ -15177,8 +15383,9 @@ export default function App() {
                     <div class="summary-right">
                         <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrencyPrint(subtotal)} บาท</span></div>
                         <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrencyPrint(discountAmount)} บาท</span></div>
-                        <div class="sum-row"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrencyPrint(afterDiscount)} บาท</span></div>
-                        <div class="sum-row grand-total">
+                        <div class="sum-row" style="margin-bottom: 8px;"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrencyPrint(afterDiscount)} บาท</span></div>
+                        
+                        <div class="sum-row grand-total" style="margin-top: 5px;">
                             <span>จำนวนเงินทั้งสิ้น</span>
                             <span style="color: #0ea5e9;">${formatCurrencyPrint(grandTotal)} บาท</span>
                         </div>
@@ -15204,12 +15411,14 @@ export default function App() {
 
                 <div class="signature-area">
                     <div class="signature-box">
-                        <div>(ลงชื่อ)....................................................</div>
-                        <div style="margin-top: 6px;">ผู้รับบริการ</div>
+                        <div class="signature-line"></div>
+                        <div>(....................................................)</div>
+                        <div style="margin-top: 4px;">ผู้รับบริการ</div>
                     </div>
                     <div class="signature-box">
-                        <div>(ลงชื่อ)....................................................</div>
-                        <div style="margin-top: 6px;">เจ้าหน้าที่</div>
+                        <div class="signature-line"></div>
+                        <div>(....................................................)</div>
+                        <div style="margin-top: 4px;">เจ้าหน้าที่</div>
                     </div>
                 </div>
             </div>
@@ -15619,7 +15828,7 @@ export default function App() {
                 <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full">
-                <CatalogManager products={posProducts} setProducts={setPosProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+                <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
             </div>
             <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative min-h-0">
                 <POSSystem 
