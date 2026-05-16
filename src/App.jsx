@@ -15352,7 +15352,7 @@ export default function App() {
                     <thead>
                         <tr>
                             <th class="text-center" style="width: 50px;">ลำดับ</th>
-                            <th>คำอธิบาย</th>
+                            <th>รายการสินค้า / บริการ</th>
                             <th class="text-center" style="width: 80px;">จำนวน</th>
                             <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
                             <th class="text-right" style="width: 80px;">ส่วนลด</th>
