@@ -6739,7 +6739,7 @@ const POSSystem = ({
                          </div>
 
                          {/* Body ของหน้ารายละเอียด */}
-                         <div className="p-4 sm:p-6 flex-1 flex flex-col">
+                         <div className="p-4 sm:p-6 flex-1 bg-white">
                             {/* Info Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                                 <div className={`p-4 rounded-xl border ${isEditingHistory ? 'bg-sky-50/30 border-sky-100' : 'bg-slate-50 border-slate-100'}`}>
@@ -6810,9 +6810,9 @@ const POSSystem = ({
 
                             {/* Items List */}
                             <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedHistoryTxn.items?.length || 0})</h5>
-                            <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 flex-1 min-h-[200px]">
+                            <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 w-full">
                                 {/* Desktop Table */}
-                                <div className="hidden sm:block overflow-x-auto h-full">
+                                <div className="hidden sm:block overflow-x-auto w-full">
                                     <table className="w-full text-left border-collapse min-w-[500px]">
                                         <thead>
                                             <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0">
@@ -6837,7 +6837,7 @@ const POSSystem = ({
                                     </table>
                                 </div>
                                 {/* Mobile List */}
-                                <div className="sm:hidden flex flex-col divide-y divide-slate-50 overflow-y-auto max-h-[300px] custom-scrollbar bg-slate-50/30">
+                                <div className="sm:hidden flex flex-col divide-y divide-slate-50 bg-slate-50/30">
                                     {(selectedHistoryTxn.items || []).map((item, idx) => (
                                         <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
                                             <div className="flex justify-between items-start gap-2">
@@ -6854,7 +6854,7 @@ const POSSystem = ({
                             </div>
 
                             {/* Summary */}
-                            <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 shrink-0">
+                            <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100">
                                 <div className="w-full sm:w-auto">
                                     <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedHistoryTxn.id}</div>
                                 </div>
@@ -10602,7 +10602,7 @@ const FinancePage = ({
               </div>
 
               {selectedTxn.isAuto ? (
-                 <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-white">
+                 <div className="p-4 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-white">
                       {/* Info Grid for POS */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                           <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
@@ -10639,9 +10639,9 @@ const FinancePage = ({
 
                       {/* Items List */}
                       <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedTxn.rawTx.items?.length || 0})</h5>
-                      <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 flex-1 min-h-[200px]">
+                      <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 w-full">
                           {/* Desktop Table */}
-                          <div className="hidden sm:block overflow-x-auto h-full">
+                          <div className="hidden sm:block overflow-x-auto w-full">
                               <table className="w-full text-left border-collapse min-w-[500px]">
                                   <thead>
                                       <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0">
@@ -10666,7 +10666,7 @@ const FinancePage = ({
                               </table>
                           </div>
                           {/* Mobile List */}
-                          <div className="sm:hidden flex flex-col divide-y divide-slate-50 overflow-y-auto max-h-[300px] custom-scrollbar bg-slate-50/30">
+                          <div className="sm:hidden flex flex-col divide-y divide-slate-50 bg-slate-50/30">
                               {(selectedTxn.rawTx.items || []).map((item, idx) => (
                                   <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
                                       <div className="flex justify-between items-start gap-2">
@@ -10683,7 +10683,7 @@ const FinancePage = ({
                       </div>
 
                       {/* Summary */}
-                      <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 shrink-0">
+                      <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100">
                           <div className="w-full sm:w-auto">
                               <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedTxn.id}</div>
                           </div>
@@ -10701,7 +10701,7 @@ const FinancePage = ({
                       </div>
                  </div>
               ) : (
-                 <div className="p-4 sm:p-6 flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-white">
+                 <div className="p-4 sm:p-6 flex-1 overflow-y-auto custom-scrollbar bg-white">
                       {/* Info Grid for Manual */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                           <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
@@ -10738,9 +10738,9 @@ const FinancePage = ({
 
                       {/* Items List */}
                       <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedTxn.items?.length || 1})</h5>
-                      <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 flex-1 min-h-[200px]">
+                      <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 w-full">
                           {/* Desktop Table */}
-                          <div className="hidden sm:block overflow-x-auto h-full">
+                          <div className="hidden sm:block overflow-x-auto w-full">
                               <table className="w-full text-left border-collapse min-w-[500px]">
                                   <thead>
                                       <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0">
@@ -10765,7 +10765,7 @@ const FinancePage = ({
                               </table>
                           </div>
                           {/* Mobile List */}
-                          <div className="sm:hidden flex flex-col divide-y divide-slate-50 overflow-y-auto max-h-[300px] custom-scrollbar bg-slate-50/30">
+                          <div className="sm:hidden flex flex-col divide-y divide-slate-50 bg-slate-50/30">
                               {(selectedTxn.items && selectedTxn.items.length > 0 ? selectedTxn.items : [{name: selectedTxn.category || 'รายการเดิม', quantity: 1, price: selectedTxn.amount, total: selectedTxn.amount}]).map((item, idx) => (
                                   <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
                                       <div className="flex justify-between items-start gap-2">
@@ -10792,7 +10792,7 @@ const FinancePage = ({
                       )}
 
                       {/* Summary */}
-                      <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100 shrink-0">
+                      <div className="flex flex-col sm:flex-row justify-between items-end sm:items-start gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100">
                           <div className="w-full sm:w-auto">
                               <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedTxn.id}</div>
                               <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><MapPin size={12}/> สาขา: {selectedTxn.branchId === 'all' ? 'ทุกสาขา (ส่วนกลาง)' : branchesData.find(b => b.id === selectedTxn.branchId)?.name || selectedTxn.branchId}</div>
