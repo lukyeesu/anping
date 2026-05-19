@@ -15138,10 +15138,10 @@ export default function App() {
         return;
     }
 
-    const clinicName = branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
-    const clinicAddress = "123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110";
-    const clinicPhone = "02-XXX-XXXX";
-    const taxId = "0123456789012";
+    const clinicName = "อันผิงคลินิกการประกอบโรคศิลปะสาขาการแพทย์แผนจีน"; //branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
+    const clinicAddress = "39/712 เขต แสมดำ แขวง บางขุนเทียน จ.กรุงเทพ 10150";
+    const clinicPhone = "063-143-4927";
+    const taxId = "1119700021821";
 
     const dateObj = new Date(txn.createdAt || txn.date || new Date());
     const d = String(dateObj.getDate()).padStart(2, '0');
@@ -15325,7 +15325,7 @@ export default function App() {
                     <div class="info-box">
                         <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
                         <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} (สำนักงานใหญ่)</div></div>
+                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} </div></div>
                         <div class="info-row" style="margin-top: 4px;">
                             <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
                         </div>
