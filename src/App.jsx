@@ -9635,6 +9635,10 @@ const FinancePage = ({
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [dateRange, setDateRange] = useState({ start: null, end: null });
 
+  // --- [NEW] State สำหรับ Infinite Scroll ---
+  const [visibleCount, setVisibleCount] = useState(25);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // --- [NEW] State สำหรับ Modal ปฏิทินเลือกช่วงเวลา ---
   const [showFinRangeCalendar, setShowFinRangeCalendar] = useState(false);
   const [finRangeCalDate, setFinRangeCalDate] = useState(new Date());
@@ -10128,6 +10132,12 @@ const FinancePage = ({
     });
   }, [allTransactions, search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
+  // --- [NEW] Reset จำนวนเมื่อ Filter เปลี่ยน ---
+  useEffect(() => {
+    setVisibleCount(25);
+    setIsLoadingMore(false);
+  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+
   const stats = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
@@ -10161,10 +10171,21 @@ const FinancePage = ({
     if (!mainElement) return;
 
     const handleScroll = (e) => {
-      const { scrollTop } = e.target;
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
       if (headerRef.current) {
           if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
           else headerRef.current.classList.remove('is-scrolled');
+      }
+
+      // --- [NEW] Infinite Scroll Logic ---
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        if (visibleCount < filteredTransactions.length && !isLoadingMore) {
+           setIsLoadingMore(true);
+           setTimeout(() => {
+              setVisibleCount(prev => prev + 25);
+              setIsLoadingMore(false);
+           }, 300);
+        }
       }
     };
 
@@ -10177,7 +10198,7 @@ const FinancePage = ({
 
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [visibleCount, filteredTransactions.length, isLoadingMore]); // --- [NEW] เพิ่ม Dependencies
   
   // Set default branch when opening modal
   useEffect(() => {
@@ -10713,7 +10734,7 @@ const FinancePage = ({
                         </tr>
                       ))
                     ) : filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((tx, i) => (
+                      filteredTransactions.slice(0, visibleCount).map((tx, i) => (
                         <tr key={i} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
                           <td className="p-4 text-center">
                             <div className="flex flex-col items-center">
@@ -10780,6 +10801,14 @@ const FinancePage = ({
                         </td>
                       </tr>
                     )}
+                    {/* --- [NEW] Loading Spinner ต่อท้ายตาราง --- */}
+                    {isLoadingMore && (
+                        <tr>
+                            <td colSpan="8" className="p-4 text-center">
+                                <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                            </td>
+                        </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -10797,7 +10826,7 @@ const FinancePage = ({
                     </div>
                   ))
                 ) : filteredTransactions.length > 0 ? (
-                  filteredTransactions.map((tx, i) => (
+                  filteredTransactions.slice(0, visibleCount).map((tx, i) => (
                     <div key={i} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(i % 25) * 30}ms` }}>
                         <div className="flex justify-between items-start mb-2.5">
                             <div className="flex flex-col gap-1">
@@ -10857,6 +10886,12 @@ const FinancePage = ({
                     <Receipt size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="kanit-text font-bold text-sm">ไม่มีรายการในระบบ</p>
                   </div>
+                )}
+                {/* --- [NEW] Loading Spinner ต่อท้ายบนมือถือ --- */}
+                {isLoadingMore && (
+                    <div className="p-4 text-center bg-white rounded-2xl shadow-sm border border-slate-100 mt-2">
+                        <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                    </div>
                 )}
               </div>
           </div>
@@ -15173,6 +15208,10 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // --- [NEW] States สำหรับ Infinite Scroll แก้ปัญหา Checkbox ดีเลย์ ---
+  const [visibleCount, setVisibleCount] = useState(25);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const headerRef = useRef(null);
   const filterRef = useRef(null);
 
@@ -15276,6 +15315,12 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
   const isAllSelected = filteredDocs.length > 0 && selectedDocs.length === filteredDocs.length;
 
+  // --- [NEW] Reset จำนวนเมื่อค้นหา ---
+  useEffect(() => {
+      setVisibleCount(25);
+      setIsLoadingMore(false);
+  }, [search, filterType]);
+
   // --- Scroll & Sticky Logic ---
   useEffect(() => {
     const mainElement = document.getElementById('main-scroll-container');
@@ -15283,7 +15328,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
     const handleScroll = (e) => {
       if (!headerRef.current) return;
-      const { scrollTop } = e.target;
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
       if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
       else headerRef.current.classList.remove('is-scrolled');
 
@@ -15293,12 +15338,23 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           if (filterRect.top <= headerRect.bottom + 1) filterRef.current.classList.add('is-scrolled');
           else filterRef.current.classList.remove('is-scrolled');
       }
+
+      // --- [NEW] Infinite Scroll Logic ---
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        if (visibleCount < filteredDocs.length && !isLoadingMore) {
+           setIsLoadingMore(true);
+           setTimeout(() => {
+              setVisibleCount(prev => prev + 25);
+              setIsLoadingMore(false);
+           }, 300);
+        }
+      }
     };
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [visibleCount, filteredDocs.length, isLoadingMore]);
 
-  // 5. ฟังก์ชันสำหรับพิมพ์ (Bulk Print)
+  // 5. ฟังก์ชันสำหรับพิมพ์ (Bulk Print) - อัปเกรดระบบจัดหน้าและป้องกัน CSS ตีกัน
   const handleBulkPrint = () => {
       if (selectedDocs.length === 0) {
           showToast('กรุณาเลือกเอกสารที่ต้องการพิมพ์อย่างน้อย 1 รายการ', 'warning');
@@ -15307,12 +15363,80 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       setIsPrinting(true);
 
       const docsToPrint = filteredDocs.filter(d => selectedDocs.includes(d.id));
-      let combinedHtml = '';
+      
+      // ฟังก์ชันช่วยสกัดและทำ CSS Scoping สำหรับแต่ละชุดเอกสาร
+      const scopeCss = (cssText, prefix) => {
+          if (!cssText) return '';
+          let cleanCss = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
+          return cleanCss.replace(/([^\r\n,{}]+)(?=\s*\{)/g, (match) => {
+              const selector = match.trim();
+              // ข้ามกฎ @media, @page, @keyframes และการเปลี่ยนผ่านแอนิเมชัน
+              if (selector.startsWith('@') || selector.includes('from') || selector.includes('to')) {
+                  return match; 
+              }
+              return selector.split(',')
+                  .map(sel => {
+                      const trimmed = sel.trim();
+                      if (trimmed === 'body' || trimmed === 'html') {
+                          return prefix;
+                      }
+                      return `${prefix} ${trimmed}`;
+                  })
+                  .join(', ');
+          });
+      };
 
-      docsToPrint.forEach(doc => {
-          if (doc.type === 'record') combinedHtml += globalGenerateRecordHtml(doc.rawData);
-          else if (doc.type === 'opd') combinedHtml += globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber);
-          else if (doc.type === 'receipt') combinedHtml += globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts);
+      const parser = new DOMParser();
+      let combinedStyles = `
+          /* CSS หลักควบคุมการจัดหน้าพิมพ์สะสม */
+          @media print {
+              .print-job-wrapper {
+                  page-break-after: always !important;
+                  break-after: page !important;
+                  display: block !important;
+                  width: 100% !important;
+                  box-sizing: border-box !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+              }
+              .print-job-wrapper:last-child {
+                  page-break-after: avoid !important;
+                  break-after: avoid !important;
+              }
+          }
+          body { 
+              margin: 0; 
+              padding: 0; 
+              background: #fff; 
+          }
+      `;
+      let combinedBodies = '';
+
+      docsToPrint.forEach((doc, idx) => {
+          let rawHtml = '';
+          if (doc.type === 'record') {
+              rawHtml = globalGenerateRecordHtml(doc.rawData);
+          } else if (doc.type === 'opd') {
+              rawHtml = globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber);
+          } else if (doc.type === 'receipt') {
+              rawHtml = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts);
+          }
+
+          const docDom = parser.parseFromString(rawHtml, 'text/html');
+          
+          // สกัดและขอบเขต (Scope) CSS ของเอกสารใบนี้
+          const styleTags = docDom.querySelectorAll('style');
+          styleTags.forEach((styleTag) => {
+              combinedStyles += scopeCss(styleTag.textContent, `.print-job-${idx}`) + '\n';
+          });
+
+          // ดึงข้อมูลใน body แล้วมาห่อหุ้มด้วยคลาสพิมพ์เฉพาะตัว
+          const bodyContent = docDom.body.innerHTML;
+          combinedBodies += `
+              <div class="print-job-wrapper print-job-${idx}">
+                  ${bodyContent}
+              </div>
+          `;
       });
 
       const finalHtml = `
@@ -15320,17 +15444,14 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       <html lang="th">
       <head>
           <meta charset="UTF-8">
-          <title>พิมพ์เอกสาร (${selectedDocs.length} รายการ)</title>
+          <title>พิมพ์เอกสารแบบกลุ่ม (${selectedDocs.length} รายการ)</title>
           <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
           <style>
-              body { margin: 0; padding: 0; background: #fff; }
-              @media print {
-                  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              }
+              ${combinedStyles}
           </style>
       </head>
       <body>
-          ${combinedHtml}
+          ${combinedBodies}
       </body>
       </html>`;
 
@@ -15347,9 +15468,9 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       setTimeout(() => {
           printWindow.print();
           setIsPrinting(false);
-          setSelectedDocs([]); // เคลียร์การเลือกหลังสั่งพิมพ์เสร็จ
-          showToast(`สั่งพิมพ์ ${docsToPrint.length} รายการสำเร็จ`, 'success');
-      }, 800);
+          setSelectedDocs([]); // เคลียร์รายการที่ติ๊กเลือกหลังสั่งพิมพ์เรียบร้อย
+          showToast(`สั่งพิมพ์กลุ่ม ${docsToPrint.length} รายการสำเร็จ`, 'success');
+      }, 850);
   };
 
   const getDocIcon = (type) => {
@@ -15386,7 +15507,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             >
               {isPrinting ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />} 
               <span className="hidden sm:inline">พิมพ์ที่เลือก ({selectedDocs.length})</span>
-              <span className="sm:hidden">พิมพ์ ({selectedDocs.length})</span>
+              <span className="sm:hidden whitespace-nowrap">พิมพ์ <span className={selectedDocs.length >= 1000 ? 'text-[0.7rem]' : ''}>({selectedDocs.length})</span></span>
             </button>
           </div>
         </div>
@@ -15475,9 +15596,18 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {isGlobalLoading ? (
-                  <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /> กำลังโหลดข้อมูล...</td></tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={`skel-rep-desk-${i}`} className="border-b border-slate-50">
+                      <td className="p-4 text-center"><Skeleton width="20px" height="20px" rounded="rounded-md" className="mx-auto" /></td>
+                      <td className="p-4"><Skeleton width="100px" height="16px" className="mb-1" /><Skeleton width="60px" height="12px" /></td>
+                      <td className="p-4"><div className="flex items-center gap-2"><Skeleton width="32px" height="32px" rounded="rounded-lg" /><Skeleton width="80px" height="20px" rounded="rounded-md" /></div></td>
+                      <td className="p-4"><Skeleton width="120px" height="16px" /></td>
+                      <td className="p-4"><Skeleton width="160px" height="16px" /></td>
+                      <td className="p-4"><Skeleton width="32px" height="32px" rounded="rounded-lg" className="mx-auto" /></td>
+                    </tr>
+                  ))
                 ) : filteredDocs.length > 0 ? (
-                  filteredDocs.map((doc) => {
+                  filteredDocs.slice(0, visibleCount).map((doc) => {
                     const isSelected = selectedDocs.includes(doc.id);
                     
                     // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
@@ -15533,6 +15663,13 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                 ) : (
                   <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text italic">ไม่พบเอกสารที่ค้นหา</td></tr>
                 )}
+                {isLoadingMore && (
+                    <tr>
+                        <td colSpan="6" className="p-4 text-center">
+                            <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                        </td>
+                    </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -15550,9 +15687,32 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             )}
 
             {isGlobalLoading ? (
-               <div className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /></div>
+               Array.from({ length: 4 }).map((_, i) => (
+                 <div key={`skel-rep-mob-${i}`} className="p-4 bg-white flex gap-3 border-b border-slate-50">
+                   <div className="pt-1 shrink-0"><Skeleton width="20px" height="20px" rounded="rounded-md" /></div>
+                   <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1.5">
+                         <div className="flex items-center gap-2 w-full pr-4">
+                            <Skeleton width="24px" height="24px" rounded="rounded-md" />
+                            <Skeleton width="60%" height="16px" />
+                         </div>
+                         <Skeleton width="28px" height="28px" rounded="rounded-md" className="shrink-0" />
+                      </div>
+                      <div className="flex items-center justify-between mt-3">
+                         <div className="flex flex-col gap-1.5">
+                            <Skeleton width="80px" height="18px" rounded="rounded-md" />
+                            <Skeleton width="100px" height="12px" />
+                         </div>
+                         <div className="flex flex-col items-end gap-1.5">
+                            <Skeleton width="70px" height="14px" />
+                            <Skeleton width="50px" height="12px" />
+                         </div>
+                      </div>
+                   </div>
+                 </div>
+               ))
             ) : filteredDocs.length > 0 ? (
-               filteredDocs.map((doc, idx) => {
+               filteredDocs.slice(0, visibleCount).map((doc, idx) => {
                   const isSelected = selectedDocs.includes(doc.id);
                   
                   // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
@@ -15601,6 +15761,11 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                })
             ) : (
                <div className="p-10 text-center text-slate-400 kanit-text italic bg-white">ไม่พบเอกสารที่ค้นหา</div>
+            )}
+            {isLoadingMore && (
+                <div className="p-4 text-center bg-white">
+                    <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                </div>
             )}
           </div>
         </div>
@@ -16544,20 +16709,23 @@ export default function App() {
 
         .sticky-header-inner { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1rem; padding-bottom: 1rem; will-change: padding; }
         @media (min-width: 768px) { .sticky-header-inner { padding-top: 2rem; } }
-        .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.5rem; }
-        @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-bottom: 0.75rem; } }
+        .is-scrolled .sticky-header-inner { padding-top: 0.75rem; padding-bottom: 0.5rem; }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.75rem; } }
 
         .sticky-header-title { transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), line-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1.5rem; line-height: 2rem; margin: 0; will-change: font-size, line-height; }
         @media (min-width: 640px) { .sticky-header-title { font-size: 1.875rem; line-height: 2.25rem; } }
-        .is-scrolled .sticky-header-title { font-size: 1.25rem; line-height: 1.75rem; }
+        .is-scrolled .sticky-header-title { font-size: 1.125rem; line-height: 1.5rem; }
+        @media (max-width: 400px) { .is-scrolled .sticky-header-title { font-size: 1rem; } }
         @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.5rem; line-height: 2rem; } }
 
         .sticky-header-desc { transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease; opacity: 1; max-height: 50px; margin-top: 0.25rem; overflow: hidden; will-change: opacity, max-height, margin-top; }
         .is-scrolled .sticky-header-desc { opacity: 0; max-height: 0; margin-top: 0; }
 
-        .sticky-header-btn { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; will-change: padding, font-size; }
+        .sticky-header-btn { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; will-change: padding, font-size; }
         @media (min-width: 640px) { .sticky-header-btn { padding: 0.75rem 1.5rem; font-size: 1rem; } }
-        .is-scrolled .sticky-header-btn { padding: 0.625rem; font-size: 0.875rem; }
+        .is-scrolled .sticky-header-btn { padding: 0.45rem 0.65rem !important; font-size: 0.8125rem !important; gap: 0.35rem !important; }
+        @media (max-width: 400px) { .is-scrolled .sticky-header-btn { padding: 0.4rem 0.5rem !important; font-size: 0.75rem !important; } }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-btn { padding: 0.625rem !important; font-size: 0.875rem !important; gap: 0.5rem !important; } }
         .sticky-header-btn svg { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 20px; height: 20px; will-change: width, height; }
         .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; }
 
