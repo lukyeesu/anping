@@ -9,7 +9,7 @@ import {
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
-  UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus
+  UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -400,32 +400,625 @@ const getPatientLastVisitStr = (p) => {
     return `${year}${month}${day}${hour}${minute}`;
 };
 
-// --- [แก้ไข] ปรับ Layout การ์ดในแดชบอร์ดให้เป็นแนวตั้งและดูพรีเมียม ---
-const StatCard = ({ title, value, icon: Icon, color }) => {
-  const colorStyles = { 
-      sky: 'text-sky-500 bg-sky-50 border-sky-100', 
-      emerald: 'text-emerald-500 bg-emerald-50 border-emerald-100', 
-      amber: 'text-amber-500 bg-amber-50 border-amber-100',
-      rose: 'text-rose-500 bg-rose-50 border-rose-100', 
-      slate: 'text-slate-500 bg-slate-50 border-slate-100' 
-  };
-  // จัดฟอร์แมตตัวเลขและใส่คอมม่า
-  const formattedVal = formatStatNumber(value);
-  return (
-    <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all h-full min-h-[120px] sm:min-h-[140px]">
-      <div className="flex items-center gap-3 mb-4 relative z-10">
-        <div className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shrink-0 border shadow-sm flex items-center justify-center ${colorStyles[color] || colorStyles.slate}`}>
-          <Icon size={20} className="sm:w-6 sm:h-6" />
+// --- GLOBAL PRINT TEMPLATES (แม่แบบการพิมพ์เอกสารสากล) ---
+const formatCurPrint = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0);
+
+const bahtTextPrint = (amount) => {
+    if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
+    const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+    const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
+    let numberStr = Math.abs(amount).toFixed(2).toString();
+    let [integerPart, fractionalPart] = numberStr.split('.');
+    const convertToText = (str) => {
+        let text = '';
+        for (let i = 0; i < str.length; i++) {
+            let n = parseInt(str[i]);
+            let pos = str.length - i - 1;
+            if (n === 0) continue;
+            if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
+            else if (n === 2 && pos === 1) text += 'ยี่สิบ';
+            else if (n === 1 && pos === 1) text += 'สิบ';
+            else text += numbers[n] + positions[pos];
+        }
+        return text;
+    };
+    let result = convertToText(integerPart) + 'บาท';
+    if (fractionalPart === '00') result += 'ถ้วน';
+    else result += convertToText(fractionalPart) + 'สตางค์';
+    return result;
+};
+
+const globalGenerateRecordHtml = (patient) => {
+    let regDateStr = '-';
+    if (patient.createdAt) {
+        const cd = new Date(patient.createdAt);
+        if (!isNaN(cd.getTime())) {
+            const cdDay = String(cd.getDate()).padStart(2, '0');
+            const cdMonth = String(cd.getMonth() + 1).padStart(2, '0');
+            const cdYear = cd.getFullYear() + 543;
+            regDateStr = `${cdDay}/${cdMonth}/${cdYear}`;
+        }
+    } else {
+        const today = new Date();
+        const d = String(today.getDate()).padStart(2, '0');
+        const m = String(today.getMonth() + 1).padStart(2, '0');
+        const y = today.getFullYear() + 543;
+        regDateStr = `${d}/${m}/${y}`;
+    }
+
+    const ageStr = patient.dob ? getAgeString(patient.dob) : '';
+    const phone = Array.isArray(patient.phones) ? patient.phones[0] : (patient.phone || patient.phone1 || '');
+    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
+
+    return `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบเวชระเบียน - ${patient.hn}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Sarabun', sans-serif; font-size: 14px; color: #000; margin: 0; padding: 0; }
+            @page { size: A5 landscape; margin: 10mm; }
+            .container { width: 100%; box-sizing: border-box; }
+            .header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+            .clinic-info { line-height: 1.5; font-size: 12px; }
+            .clinic-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+            .doc-info { text-align: right; line-height: 1.5; font-size: 14px; }
+            .doc-info-row { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 8px; }
+            .title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 12px; }
+            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
+            .label { white-space: nowrap; margin-right: 5px; }
+            .value { 
+              flex-grow: 1; 
+              border: none;
+              border-bottom: 1px solid transparent;
+              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+              text-align: center; 
+              padding-bottom: 2px;
+              min-width: 40px; 
+              margin-right: 10px; 
+            }
+            .value:last-child { margin-right: 0; }
+            .w-auto { flex-grow: 0; }
+            @media print {
+               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+               .value { border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="clinic-info">
+                    <div class="clinic-name">อันผิงคลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร.062-826-1696</div>
+                </div>
+                <div class="doc-info">
+                    <div class="doc-info-row">
+                        <span style="width: 45px; text-align: right; margin-right: 5px; font-size: 16px;">HN</span>
+                        <span class="value w-auto" style="width: 140px; margin-right: 0; font-size: 16px; text-align: left; padding-left: 8px;">${hnNumberOnly}</span>
+                    </div>
+                    <div class="doc-info-row">
+                        <span style="width: 45px; text-align: right; margin-right: 5px;">วันที่</span>
+                        <span class="value w-auto" style="width: 140px; margin-right: 0; text-align: left; padding-left: 8px;">${regDateStr}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="title">ใบเวชระเบียน</div>
+            <div class="row">
+                <span class="label">ชื่อ</span><span class="value">${patient.prefix ? patient.prefix + ' ' : ''}${patient.firstName || ''}</span>
+                <span class="label">นามสกุล</span><span class="value">${patient.lastName || ''}</span>
+                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 100px;">${patient.nickname || ''}</span>
+                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 120px;">${patient.dob || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">อายุ</span><span class="value w-auto" style="width: 140px;">${ageStr}</span>
+                <span class="label">หมายเลขบัตรประชาชน</span><span class="value">${patient.idCard || ''}</span>
+                <span class="label">ที่อยู่บ้านเลขที่</span><span class="value w-auto" style="width: 100px;">${patient.address || ''}</span>
+                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 50px;">${patient.moo || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ถนน</span><span class="value">${patient.road || ''}</span>
+                <span class="label">ตำบล</span><span class="value">${patient.subDistrict || ''}</span>
+                <span class="label">อำเภอ</span><span class="value">${patient.district || ''}</span>
+                <span class="label">จังหวัด</span><span class="value">${patient.province || ''}</span>
+                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 80px;">${patient.zipcode || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">เบอร์โทรศัพท์</span><span class="value">${phone}</span>
+                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 120px;">${patient.nationality || ''}</span>
+                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 120px;">${patient.ethnicity || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ศาสนา</span><span class="value w-auto" style="width: 150px;">${patient.religion || ''}</span>
+                <span class="label">อาชีพ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.occupation || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ชื่อผู้ติดต่อได้กรณีฉุกเฉิน</span><span class="value">${patient.emName || ''}</span>
+                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 180px;">${patient.emRelation || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">ที่อยู่ที่ติดต่อได้</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.emAddress || ''}</span>
+                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${patient.emPhone || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">อาการที่จะตรวจ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.chiefComplaint || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 100px;">${patient.bloodGroup || ''}</span>
+                <span class="label">การแพ้ยา</span><span class="value">${patient.allergies || ''}</span>
+                <span class="label">โรคประจำตัว</span><span class="value">${patient.underlyingDisease || ''}</span>
+            </div>
         </div>
-        <p className="text-[11px] sm:text-xs font-black text-slate-400 kanit-text uppercase tracking-wider leading-tight line-clamp-2">{title}</p>
-      </div>
-      <div className="relative z-10 mt-auto w-full">
-        {/* เอา truncate ออก และใช้ getDynamicTextSize ควบคุมขนาดอักษร */}
-        <p className={`font-black text-slate-800 font-data whitespace-nowrap overflow-hidden ${getDynamicTextSize(formattedVal)}`}>{formattedVal}</p>
-      </div>
-      <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-slate-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
-    </div>
-  );
+    </body>
+    </html>
+    `;
+};
+
+const globalGenerateOpdHtml = (patient, record, visitNumber) => {
+    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
+    const fullName = `${patient.prefix || ''}${patient.firstName || ''} ${patient.lastName || ''}`.trim();
+    const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
+    const ageStr = patient.dob ? getAgeString(patient.dob) : '';
+    const txText = Array.isArray(record.tx) ? record.tx.filter(t => t).join(', ') : (record.tx || '-');
+
+    return `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบ OPD - ${patient.hn}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
+            html, body { width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
+            @page { size: A5 landscape; margin: 10mm; }
+            .container { width: 100%; height: 128mm; max-height: 128mm; box-sizing: border-box; display: flex; flex-direction: column; padding-bottom: 2px; overflow: hidden; page-break-after: avoid; page-break-inside: avoid; }
+            .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+            .clinic-info { line-height: 1.4; font-size: 12px; }
+            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+            .doc-info { text-align: right; }
+            .doc-info-row { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 6px; font-weight: bold; }
+            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
+            .label { white-space: nowrap; margin-right: 5px; font-weight: bold; }
+            .value {
+              flex-grow: 1;
+              border: none;
+              border-bottom: 1px solid transparent;
+              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+              text-align: center;
+              padding-bottom: 1px;
+              min-width: 20px;
+              margin-right: 10px;
+            }
+            .value.left { text-align: left; padding-left: 5px; }
+            .value:last-child { margin-right: 0; }
+            .w-auto { flex-grow: 0; }
+            .vitals { display: flex; align-items: baseline; margin-bottom: 12px; font-weight: bold; }
+            .vitals .val-box {
+                border: none; border-bottom: 1px solid transparent;
+                border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
+                min-width: 40px; text-align: center; margin: 0 4px; padding-bottom: 1px; font-weight: normal; display: inline-block;
+            }
+            .main-content { display: flex; flex-direction: row; gap: 20px; flex-grow: 1; margin-bottom: 10px; }
+            .left-column { flex-grow: 1; display: flex; flex-direction: column; }
+            .right-column { width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-top: -35px; padding-top: 0.5cm; }
+            .cc-section { flex: 1; display: flex; flex-direction: column; margin-bottom: 0px; }
+            .cc-title { font-weight: bold; margin-bottom: 4px; }
+            .cc-content { flex: 1; min-height: 30px; padding-left: 10px; }
+            .tx-section { flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0px; }
+            .tx-title { font-weight: bold; margin-bottom: 4px; }
+            .tx-content { flex: 1; min-height: 40px; padding-left: 10px; }
+            .signature { text-align: center; font-size: 12px; width: 100%; margin-top: 25px; margin-bottom: 0px; padding-bottom: 2px; }
+            .body-diagram { width: 100%; height: auto; max-height: 210px; object-fit: contain; }            
+            @media print {
+               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+               .value, .val-box { border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="clinic-info">
+                    <div class="clinic-name">ฟู่ ซิน ไถ คลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร. 062-826-1696</div>
+                </div>
+                <div class="doc-info" style="width: 300px;">
+                    <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
+                        <span style="margin-right: 15px;">HN</span>
+                        <span>${hnNumberOnly}</span>
+                    </div>
+                    <div class="doc-info-row" style="font-size: 14px;">
+                        <span>วันที่:</span>
+                        <span class="value w-auto" style="width: 100px; text-align: center;">${dateStr}</span>
+                        <span style="margin-left: 10px;">ครั้งที่:</span>
+                        <span class="value w-auto" style="width: 40px; text-align: center;">${visitNumber}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${fullName}</span>
+                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${patient.nickname || '-'}</span>
+                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${patient.gender || '-'}</span>
+            </div>
+            <div class="row">
+                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${patient.idCard || '-'}</span>
+                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${ageStr}</span>
+                <span class="label">โทร:</span><span class="value">${patient.phones && patient.phones[0] ? patient.phones[0] : (patient.phone || patient.phone1 || '-')}</span>
+            </div>
+            <div class="row">
+                <span class="label">ที่อยู่:</span><span class="value left">${patient.address || ''} ม.${patient.moo || '-'} ถ.${patient.road || '-'} ต.${patient.subDistrict || '-'} อ.${patient.district || '-'} จ.${patient.province || ''} ${patient.zipcode || ''}</span>
+            </div>
+            <div class="row">
+                <span class="label">โรคประจำตัว:</span><span class="value left">${patient.underlyingDisease || 'ไม่มี'}</span>
+                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${patient.allergies || 'ไม่มี'}</span>
+            </div>
+            <div class="vitals">
+                T: <span class="val-box">${record.temp || ''}</span> °C &nbsp;&nbsp;&nbsp;
+                P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
+                BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
+                น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
+                ส่วนสูง: <span class="val-box">${record.height || ''}</span> cm
+            </div>
+            <div class="main-content">
+                <div class="left-column">
+                    <div class="cc-section">
+                        <div class="cc-title">อาการสำคัญ:</div>
+                        <div class="cc-content">${(record.cc || '').replace(/\n/g, '<br/>')}</div>
+                    </div>
+                    <div class="tx-section">
+                        <div class="tx-title">การรักษาที่ให้:</div>
+                        <div class="tx-content">${txText}</div>
+                    </div>
+                </div>
+                <div class="right-column">
+                    <img src="${window.location.origin}/Body Diagram.svg" class="body-diagram" alt="Body Diagram" />
+                    <div class="signature">
+                        <div class="value" style="width: 100%; margin: 0 auto 5px auto;"></div>
+                        (พจ. พงษ์สิทธิ์ แซ่อึ้ง)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+};
+
+const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posProducts) => {
+    const targetBranch = branchesData.find(b => b.id === txn.branchId) || branchesData[0] || {};
+    const clinicName = targetBranch.clinicName || targetBranch.name || "ยังไม่ได้ระบุชื่อคลินิก";
+    const clinicAddress = targetBranch.address ?? "ยังไม่ได้ระบุที่อยู่";
+    const clinicPhone = targetBranch.phone ?? "ยังไม่ได้ระบุเบอร์โทร";
+    const taxId = targetBranch.taxId ?? "ยังไม่ได้ระบุเลขประจำตัวผู้เสียภาษี";
+    const logoUrl = targetBranch.logo || '';
+
+    const dateObj = new Date(txn.createdAt || txn.date || new Date());
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const y = dateObj.getFullYear() + 543;
+    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
+
+    const receiptNo = txn.id || txn.receiptNo;
+    let customerName = txn.patientName || (txn.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)';
+    let customerHN = '-';
+    
+    if (customerName.includes(' - ')) {
+        const parts = customerName.split(' - ');
+        customerHN = parts[0];
+        customerName = parts.slice(1).join(' - ');
+    } else if (txn.patientId) {
+        customerHN = txn.patientId;
+    } else if (txn.rawTx?.patientId) {
+        customerHN = txn.rawTx.patientId;
+    } else if (txn.hn) {
+        customerHN = txn.hn;
+    }
+    
+    let customerAddress = '-';
+    let customerTaxId = '-';
+    let customerPhone = '-';
+
+    const pInfo = patientsData.find(p => (p.id || p.hn) === customerHN);
+    if (pInfo) {
+        customerAddress = `${pInfo.curAddress || pInfo.address || ''} ${pInfo.curMoo || pInfo.moo ? 'ม.'+(pInfo.curMoo || pInfo.moo) : ''} ${pInfo.curRoad || pInfo.road ? 'ถ.'+(pInfo.curRoad || pInfo.road) : ''} ${pInfo.curSubDistrict || pInfo.subDistrict || ''} ${pInfo.curDistrict || pInfo.district || ''} ${pInfo.curProvince || pInfo.province || ''} ${pInfo.curZipcode || pInfo.zipcode || ''}`.trim() || '-';
+        customerTaxId = pInfo.idCard || '-';
+        customerPhone = Array.isArray(pInfo.phones) && pInfo.phones.length > 0 ? pInfo.phones[0] : (pInfo.phone || pInfo.phone1 || '-');
+    }
+
+    const cashierName = "Admin User";
+    
+    const itemsToPrint = txn.rawTx?.items || txn.items || [{name: txn.category || 'รายการ', quantity: 1, price: txn.amount, total: txn.amount}];
+    const subtotal = txn.rawTx?.subtotal || txn.subtotal || txn.amount || 0;
+    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
+    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
+    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
+    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
+    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
+    const paymentMethod = txn.method || txn.paymentMethod || txn.rawTx?.paymentMethod || 'cash';
+    
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
+
+    let paymentMethodThai = 'เงินสด';
+    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
+    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
+
+    let hasVatableItems = false;
+    let itemsHtml = '';
+    if (format === 'A4') {
+        itemsHtml = itemsToPrint.map((item, index) => {
+            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
+            if (isVat) hasVatableItems = true;
+            const vatMark = isVat ? ' <span style="color:#0ea5e9; font-size:10px; font-weight:bold;">(V)</span>' : '';
+            return `
+            <tr>
+                <td class="text-center">${index + 1}</td>
+                <td>${item.name}${vatMark}</td>
+                <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
+                <td class="text-right">${formatCurPrint(item.price)}</td>
+                <td class="text-right">0.00</td>
+                <td class="text-right font-bold">${formatCurPrint(item.total)}</td>
+            </tr>
+        `}).join('');
+    } else {
+        itemsHtml = itemsToPrint.map(item => {
+            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
+            if (isVat) hasVatableItems = true;
+            const vatMark = isVat ? ' <span style="font-size:10px;">(V)</span>' : '';
+            return `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; page-break-inside: avoid;">
+                <div style="flex: 1; padding-right: 10px;">
+                    <div style="font-weight: bold; margin-bottom: 2px;">${item.name}${vatMark}</div>
+                    <div style="color: #64748b; font-size: 11px;">${item.quantity} x ${formatCurPrint(item.price)}</div>
+                </div>
+                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurPrint(item.total)}</div>
+            </div>
+        `}).join('');
+    }
+
+    const html = format === 'A4' ? `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
+                @page { size: A4; margin: 5mm; }
+                .page-break { page-break-before: always; break-before: page; }
+                .container { padding: 0; max-width: 100%; }
+                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
+                .doc-title-wrapper { text-align: right; }
+                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
+                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } 
+                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
+                .info-box { display: flex; flex-direction: column; gap: 4px; }
+                .info-row { display: flex; align-items: baseline; }
+                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
+                .info-val { flex: 1; }
+                .font-bold { font-weight: 700; }
+                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
+                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
+                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 20px; margin-top: 20px; }
+                .summary-left { font-size: 13px; }
+                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; font-size: 14px; }
+                .summary-right { display: flex; flex-direction: column; gap: 6px; }
+                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
+                .sum-row.grand-total { background-color: #f0f9ff; padding: 10px 15px; font-weight: 700; border-radius: 6px; font-size: 15px; align-items: center; border: 1px solid #bae6fd; color: #0f172a; margin-top: 4px; }
+                .footer-info { display: flex; flex-direction: column; gap: 10px; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+                .footer-row { display: flex; gap: 10px; align-items: baseline; }
+                .footer-label { font-weight: 600; width: 85px; display: flex; align-items: center; gap: 6px; }
+                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
+                .signature-box { text-align: center; width: 250px; }
+                @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+            </style>
+        </head>
+        <body>
+            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
+            <div class="container">
+                <div style="display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 15px;">
+                    <div style="display: flex; flex-direction: column; flex: 1; padding-right: 20px;">
+                        <div style="display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px;">
+                            ${logoUrl ? `<div style="width: 90px; height: 90px; flex-shrink: 0;"><img src="${logoUrl}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 50%;" /></div>` : ''}
+                            <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 8px;">
+                                <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${clinicName}</div>
+                                <div style="color: #475569; font-size: 13px;">${clinicAddress}</div>
+                                <div style="color: #475569; font-size: 13px; display: flex; gap: 10px; margin-top: 2px;">
+                                    <span><b>เลขที่ภาษี:</b> ${taxId}</span>
+                                    <span><b>โทร:</b> ${clinicPhone}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size: 13px; line-height: 1.6; color: #0f172a; display: flex; flex-direction: column; justify-content: flex-end; flex: 1;">
+                            <div style="display: flex;">
+                                <div style="width: 85px; font-weight: 700; color: #1e293b;">ลูกค้า:</div>
+                                <div>${customerName}</div>
+                            </div>
+                            <div style="display: flex;">
+                                <div style="width: 85px; font-weight: 700; color: #1e293b;">ที่อยู่:</div>
+                                <div>${customerAddress}</div>
+                            </div>
+                            <div style="display: flex;">
+                                <div style="width: 85px; font-weight: 700; color: #1e293b;">เลขที่ภาษี:</div>
+                                <div>${customerTaxId}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="doc-title-wrapper" style="width: 320px; text-align: right; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div class="doc-type">${docType}</div>
+                            <div class="doc-title" style="margin-bottom: 12px; font-size: 20px; color: #0284c7;">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
+                        </div>
+                        <div class="doc-info-box info-box" style="text-align: left; padding: 12px 15px; width: 100%; box-sizing: border-box; margin-top: auto;">
+                            <div class="info-row"><div class="info-label" style="width: 85px;">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
+                            <div class="info-row"><div class="info-label" style="width: 85px;">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
+                            <div class="info-row"><div class="info-label" style="width: 85px;">อ้างอิง:</div><div class="info-val">${customerHN}</div></div>
+                        </div>
+                        <div style="font-size: 13px; line-height: 1.6; color: #0f172a; display: flex; padding-left: 15px; box-sizing: border-box; margin-top: auto;">
+                            <div style="width: 85px; font-weight: 700; color: #1e293b; text-align: left;">โทร:</div>
+                            <div style="text-align: left;">${customerPhone}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 50px;">ลำดับ</th>
+                            <th>รายการสินค้า / บริการ</th>
+                            <th class="text-center" style="width: 80px;">จำนวน</th>
+                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
+                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
+                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+
+                <div class="summary-section">
+                    <div class="summary-left">
+                        <div class="summary-left-title">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            สรุป
+                        </div>
+                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurPrint(priceExcludingVat)} บาท</span></div>
+                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurPrint(vatAmount)} บาท</span></div>
+                        
+                        <div style="border-top: 1px solid #cbd5e1; margin: 10px 20px 10px 0;"></div>
+                        
+                        <div class="sum-row font-bold" style="margin-top: 5px; padding-right: 20px;">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span>(${bahtTextPrint(grandTotal)})</span>
+                        </div>
+                    </div>
+                    <div class="summary-right">
+                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurPrint(subtotal)} บาท</span></div>
+                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurPrint(discountAmount)} บาท</span></div>
+                        <div class="sum-row" style="margin-bottom: 8px;"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurPrint(afterDiscount)} บาท</span></div>
+                        
+                        <div class="sum-row grand-total" style="margin-top: 5px;">
+                            <span>จำนวนเงินทั้งสิ้น</span>
+                            <span style="color: #0ea5e9;">${formatCurPrint(grandTotal)} บาท</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer-info">
+                    <div class="footer-row">
+                        <div class="footer-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                            ชำระเงิน:
+                        </div>
+                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurPrint(grandTotal)} บาท</div>
+                    </div>
+                    <div class="footer-row" style="margin-top: 4px;">
+                        <div class="footer-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            หมายเหตุ:
+                        </div>
+                        <div>${txn.note || '-'}</div>
+                    </div>
+                </div>
+
+                <div class="signature-area">
+                    <div class="signature-box">
+                        <div class="signature-line" style="border-bottom: 1px dotted #94a3b8; width: 100%; margin-bottom: 8px;"></div>
+                        <div>(....................................................)</div>
+                        <div style="margin-top: 4px;">ผู้รับบริการ</div>
+                    </div>
+                    <div class="signature-box">
+                        <div class="signature-line" style="border-bottom: 1px dotted #94a3b8; width: 100%; margin-bottom: 8px;"></div>
+                        <div>(....................................................)</div>
+                        <div style="margin-top: 4px;">เจ้าหน้าที่</div>
+                    </div>
+                </div>
+            </div>
+            `).join('<div class="page-break"></div>')}
+        </body>
+        </html>
+    ` : `
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+            <meta charset="UTF-8">
+            <title>สลิปใบเสร็จ - ${receiptNo}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; font-size: 13px; color: #000; width: 72mm; }
+                @page { size: 80mm auto; margin: 0; }
+                .slip-container { padding: 4mm; padding-bottom: 15mm; }
+                .text-center { text-align: center; }
+                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+                .divider { border-bottom: 1px dashed #666; margin: 8px 0; }
+                .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
+                .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+                .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
+            </style>
+        </head>
+        <body>
+            <div class="slip-container">
+                <div class="text-center">
+                    <div class="clinic-name">${clinicName}</div>
+                    <div style="line-height: 1.4;">${clinicAddress}</div>
+                    <div style="line-height: 1.4;">โทร: ${clinicPhone}</div>
+                    <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div style="line-height: 1.6;">
+                    <div><strong>เลขที่:</strong> ${receiptNo}</div>
+                    <div><strong>วันที่:</strong> ${dateStr}</div>
+                    ${customerHN !== '-' ? `<div><strong>HN:</strong> ${customerHN}</div>` : ''}
+                    <div><strong>ลูกค้า:</strong> ${customerName}</div>
+                    <div><strong>แคชเชียร์:</strong> ${cashierName}</div>
+                </div>
+                
+                <div class="divider-thick"></div>
+                
+                <div style="font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>รายการ</span>
+                    <span>รวม</span>
+                </div>
+                
+                ${itemsHtml}
+                
+                <div class="divider-thick"></div>
+                
+                <div class="summary-row"><span>รวมเป็นเงิน:</span><span>${formatCurPrint(subtotal)}</span></div>
+                ${discountAmount > 0 ? `<div class="summary-row"><span>ส่วนลด:</span><span>-${formatCurPrint(discountAmount)}</span></div>` : ''}
+                ${taxMode !== 'none' && vatAmount > 0 ? `<div class="summary-row"><span>ภาษี (${vatRate}%):</span><span>${formatCurPrint(vatAmount)}</span></div>` : ''}
+                
+                <div class="summary-row total"><span>ยอดสุทธิ:</span><span>${formatCurPrint(grandTotal)}</span></div>
+                
+                <div class="divider"></div>
+                
+                ${hasVatableItems ? `<div style="font-size: 11px; color: #666; margin-bottom: 8px;">(V) = รายการที่คิดภาษีมูลค่าเพิ่ม</div>` : ''}
+                <div class="text-center" style="line-height: 1.6;">
+                    <div>ชำระโดย: <strong>${paymentMethodThai}</strong></div>
+                    <div style="margin-top: 15px; font-size: 14px; font-weight: bold;">*** ขอบคุณที่ใช้บริการ ***</div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+    return html;
 };
 
 const PlaceholderPage = ({ title, desc, icon: Icon }) => (
@@ -2461,6 +3054,55 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   );
 };
 
+// --- เพิ่ม Component StatCard ที่หายไปสำหรับหน้า Dashboard ---
+const StatCard = ({ title, value, icon: Icon, color }) => {
+  const styles = {
+    sky: {
+      iconBg: 'bg-sky-50 text-sky-500 border-sky-100',
+      text: 'text-sky-600',
+      hoverBorder: 'hover:border-sky-200',
+      blob: 'bg-sky-50/50'
+    },
+    emerald: {
+      iconBg: 'bg-emerald-50 text-emerald-500 border-emerald-100',
+      text: 'text-emerald-600',
+      hoverBorder: 'hover:border-emerald-200',
+      blob: 'bg-emerald-50/50'
+    },
+    amber: {
+      iconBg: 'bg-amber-50 text-amber-500 border-amber-100',
+      text: 'text-amber-600',
+      hoverBorder: 'hover:border-amber-200',
+      blob: 'bg-amber-50/50'
+    },
+    slate: {
+      iconBg: 'bg-slate-50 text-slate-500 border-slate-100',
+      text: 'text-slate-600',
+      hoverBorder: 'hover:border-slate-200',
+      blob: 'bg-slate-50/50'
+    }
+  };
+  
+  const st = styles[color] || styles.slate;
+
+  return (
+    <div className={`bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group ${st.hoverBorder} hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]`}>
+      <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
+        <div className={`w-10 h-10 sm:w-12 sm:h-12 ${st.iconBg} rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm`}>
+          <Icon size={20} className="sm:w-6 sm:h-6" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title={title}>{title}</p>
+        </div>
+      </div>
+      <div className="relative z-10 mt-auto w-full">
+        <p className={`font-black ${st.text} font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(value))}`}>{formatStatNumber(value)}</p>
+      </div>
+      <div className={`absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 ${st.blob} rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150`}></div>
+    </div>
+  );
+};
+
 // เพิ่ม Props รับข้อมูลคิวและข้อมูลคนไข้เข้ามาคำนวณ
 const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -2631,166 +3273,8 @@ const PatientModal = React.memo(({
         return;
     }
 
-    // คำนวณครั้งที่เข้ารับการรักษา (สมมติว่ารายการล่าสุดอยู่บนสุด)
     const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-    const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
-    
-    // ตัดคำว่า HN ออกเพื่อความสวยงามตามแบบฟอร์ม
-    const hnNumberOnly = (formData.hn || '').replace(/^HN/i, '');
-    const fullName = `${formData.prefix ? formData.prefix + ' ' : ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim();
-    
-    // ดึงที่อยู่ปัจจุบัน ถ้าไม่มีให้ใช้ตามบัตร ปชช.
-    const addressStr = `${formData.curAddress || formData.address || ''} ${formData.curMoo || formData.moo ? 'ม.'+(formData.curMoo || formData.moo) : ''} ${formData.curRoad || formData.road ? 'ถ.'+(formData.curRoad || formData.road) : ''} ${formData.curSubDistrict || formData.subDistrict || ''} ${formData.curDistrict || formData.district || ''} ${formData.curProvince || formData.province || ''} ${formData.curZipcode || formData.zipcode || ''}`.trim();
-    const phoneStr = formData.phones && formData.phones.length > 0 ? formData.phones[0] : '';
-
-    // จัดการช่อง Checkbox ตามแบบฟอร์ม (ใช้การค้นหาคำในรายการการรักษา tx)
-    const tcmItemsRow1 = ['ฝังเข็ม', 'ครอบแก้ว', 'อบโคม', 'รมยา', 'กัวซา'];
-    const tcmItemsRow2 = ['มังกรไฟ', 'ทุนหนา', 'ยาจีน', 'แมะ', 'ฝังเข็มกระตุ้นไฟฟ้า'];
-    
-    const renderCheckbox = (name) => {
-        const isChecked = Array.isArray(record.tx) ? record.tx.some(t => t && t.includes(name)) : (record.tx && record.tx.includes(name));
-        const checkMark = isChecked ? '&#10003;' : '&nbsp;&nbsp;&nbsp;'; 
-        if(name === 'ฝังเข็มกระตุ้นไฟฟ้า') {
-             return `<div class="checkbox-item" style="align-items: flex-start;"><span class="box" style="margin-top: 2px;">${checkMark}</span> <div>ฝังเข็ม<br/>กระตุ้นไฟฟ้า</div></div>`;
-        }
-        return `<div class="checkbox-item"><span class="box">${checkMark}</span> ${name}</div>`;
-    };
-
-    const html = `
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <title>ใบ OPD - ${formData.hn}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
-            @page { size: A5 landscape; margin: 10mm; }
-            .container { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; }
-            
-            .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
-            .clinic-info { line-height: 1.4; font-size: 12px; }
-            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-            
-            .doc-info { text-align: left; }
-            .doc-info-row { display: flex; align-items: baseline; margin-bottom: 6px; font-weight: bold; }
-            
-            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
-            .label { white-space: nowrap; margin-right: 5px; font-weight: bold; }
-            
-            /* เทคนิคเส้นประแบบ Gradient ตามที่ผู้ใช้งานต้องการ */
-            .value { 
-              flex-grow: 1; 
-              border: none;
-              border-bottom: 1px solid transparent;
-              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
-              text-align: center; 
-              padding-bottom: 1px; 
-              min-width: 20px; 
-              margin-right: 10px; 
-            }
-            .value.left { text-align: left; padding-left: 5px; }
-            .value:last-child { margin-right: 0; }
-            .w-auto { flex-grow: 0; }
-            
-            .vitals { display: flex; align-items: baseline; margin-bottom: 12px; font-weight: bold; }
-            .vitals .val-box { 
-                border: none; border-bottom: 1px solid transparent;
-                border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
-                min-width: 40px; text-align: center; margin: 0 4px; padding-bottom: 1px; font-weight: normal; display: inline-block;
-            }
-            
-            .cc-section { margin-bottom: 10px; flex-grow: 1; }
-            .cc-title { font-weight: bold; margin-bottom: 4px; }
-            .cc-content { min-height: 40px; padding-left: 10px; }
-            
-            .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding-top: 10px; border-top: 1px dotted #ccc; }
-            .checkbox-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px 15px; font-size: 12px; flex-grow: 1; }
-            .checkbox-item { display: flex; align-items: center; gap: 6px; }
-            .box { display: inline-block; width: 12px; height: 12px; border: 1px solid #000; text-align: center; line-height: 10px; font-size: 10px; font-weight: bold; flex-shrink: 0; }
-            
-            .signature { text-align: center; font-size: 12px; width: 180px; margin-left: 20px; }
-            
-            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */
-            @media print {
-               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-               .value, .val-box {
-                 border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
-               }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="clinic-info">
-                    <div class="clinic-name">ฟู่ ซิน ไถ คลินิก</div>
-                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
-                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
-                    <div>โทร. 062-826-1696</div>
-                </div>
-                <div class="doc-info" style="width: 300px;">
-                    <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
-                        <span style="margin-right: 15px;">HN</span>
-                        <span>${hnNumberOnly}</span>
-                    </div>
-                    <div class="doc-info-row" style="font-size: 14px;">
-                        <span>วันที่:</span>
-                        <span class="value w-auto" style="width: 100px;">${dateStr}</span>
-                        <span style="margin-left: 10px;">ครั้งที่:</span>
-                        <span class="value w-auto" style="width: 40px;">${visitNumber}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row">
-                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${fullName}</span>
-                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${formData.nickname || '-'}</span>
-                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${formData.gender || '-'}</span>
-            </div>
-            
-            <div class="row">
-                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${formData.idCard || '-'}</span>
-                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${calculatedAge}</span>
-                <span class="label">โทร:</span><span class="value">${phoneStr}</span>
-            </div>
-            
-            <div class="row">
-                <span class="label">ที่อยู่:</span><span class="value left">${addressStr}</span>
-            </div>
-            
-            <div class="row">
-                <span class="label">โรคประจำตัว:</span><span class="value left">${formData.underlyingDisease || 'ไม่มี'}</span>
-                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${formData.allergies || 'ไม่มี'}</span>
-            </div>
-            
-            <div class="vitals">
-                T: <span class="val-box">${record.temp || ''}</span> °C &nbsp;&nbsp;&nbsp;
-                P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
-                BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
-                น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
-                ส่วนสูง: <span class="val-box">${record.height || ''}</span> cm
-            </div>
-            
-            <div class="cc-section">
-                <div class="cc-title">อาการสำคัญ:</div>
-                <div class="cc-content">${(record.cc || '').replace(/\\n/g, '<br/>')}</div>
-            </div>
-            
-            <div class="footer">
-                <div class="checkbox-grid">
-                    ${tcmItemsRow1.map(renderCheckbox).join('')}
-                    ${tcmItemsRow2.map(renderCheckbox).join('')}
-                </div>
-                <div class="signature">
-                    <div class="value" style="width: 100%; margin: 0 auto 5px auto;"></div>
-                    (พจ. พงษ์สิทธิ์ แซ่อึ้ง)
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
+    const html = globalGenerateOpdHtml(formData, record, visitNumber);
 
     printWindow.document.write(html);
     printWindow.document.close();
@@ -3725,149 +4209,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         return;
     }
 
-    // ใช้วันที่ลงทะเบียนแทนวันที่ล่าสุด
-    let regDateStr = '-';
-    if (patient.createdAt) {
-        const cd = new Date(patient.createdAt);
-        if (!isNaN(cd.getTime())) {
-            const cdDay = String(cd.getDate()).padStart(2, '0');
-            const cdMonth = String(cd.getMonth() + 1).padStart(2, '0');
-            const cdYear = cd.getFullYear() + 543;
-            regDateStr = `${cdDay}/${cdMonth}/${cdYear}`;
-        }
-    } else {
-        // สำรองหากไม่มี createdAt
-        const today = new Date();
-        const d = String(today.getDate()).padStart(2, '0');
-        const m = String(today.getMonth() + 1).padStart(2, '0');
-        const y = today.getFullYear() + 543;
-        regDateStr = `${d}/${m}/${y}`;
-    }
-
-    const ageStr = patient.dob ? getAgeString(patient.dob) : '';
-    const phone = Array.isArray(patient.phones) ? patient.phones[0] : (patient.phone || patient.phone1 || '');
-    
-    // ตัดคำว่า HN ออก เหลือแต่ตัวเลข
-    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
-
-    const html = `
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <title>ใบเวชระเบียน - ${patient.hn}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Sarabun', sans-serif; font-size: 14px; color: #000; margin: 0; padding: 0; }
-            @page { size: A5 landscape; margin: 10mm; }
-            .container { width: 100%; box-sizing: border-box; }
-            
-            /* ลด margin-bottom เพื่อไม่ให้ล้นหน้ากระดาษ A5 */
-            .header { display: flex; justify-content: space-between; margin-bottom: 10px; }
-            .clinic-info { line-height: 1.5; font-size: 12px; }
-            .clinic-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
-            .doc-info { text-align: right; line-height: 1.5; font-size: 14px; }
-            .doc-info-row { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 8px; }
-            .title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 12px; }
-            
-            /* หัวใจสำคัญ: ใช้ align-items: baseline เพื่อให้ฐานของตัวอักษรข้อความและข้อมูลอยู่เส้นเดียวกันเป๊ะ */
-            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
-            
-            /* ถอด padding ที่ดันตัวหนังสือออก ให้ไหลตาม Baseline ธรรมชาติ */
-            .label { white-space: nowrap; margin-right: 5px; }
-            
-            /* เส้นประให้อยู่ใต้ข้อมูลพอดีเป๊ะ */
-            .value { 
-              flex-grow: 1; 
-              border: none;
-              border-bottom: 1px solid transparent;
-              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
-              text-align: center; 
-              padding-bottom: 2px; /* ให้เส้นประห่างจากฐานตัวอักษรลงมา 2px */
-              min-width: 40px; 
-              margin-right: 10px; 
-            }
-            .value:last-child { margin-right: 0; }
-            .w-auto { flex-grow: 0; }
-            
-            /* บังคับพิมพ์สี และกำหนดให้เส้นประเป็นสีดำสนิทตอนพิมพ์ */
-            @media print {
-               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-               .value {
-                 border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
-               }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="clinic-info">
-                    <div class="clinic-name">อันผิงคลินิก</div>
-                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
-                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
-                    <div>โทร.062-826-1696</div>
-                </div>
-                <div class="doc-info">
-                    <div class="doc-info-row">
-                        <span style="width: 45px; text-align: right; margin-right: 5px; font-size: 16px;">HN</span>
-                        <span class="value w-auto" style="width: 140px; margin-right: 0; font-size: 16px; text-align: left; padding-left: 8px;">${hnNumberOnly}</span>
-                    </div>
-                    <div class="doc-info-row">
-                        <span style="width: 45px; text-align: right; margin-right: 5px;">วันที่</span>
-                        <span class="value w-auto" style="width: 140px; margin-right: 0; text-align: left; padding-left: 8px;">${regDateStr}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="title">ใบเวชระเบียน</div>
-            <div class="row">
-                <span class="label">ชื่อ</span><span class="value">${patient.prefix ? patient.prefix + ' ' : ''}${patient.firstName || ''}</span>
-                <span class="label">นามสกุล</span><span class="value">${patient.lastName || ''}</span>
-                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 100px;">${patient.nickname || ''}</span>
-                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 120px;">${patient.dob || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">อายุ</span><span class="value w-auto" style="width: 140px;">${ageStr}</span>
-                <span class="label">หมายเลขบัตรประชาชน</span><span class="value">${patient.idCard || ''}</span>
-                <span class="label">ที่อยู่บ้านเลขที่</span><span class="value w-auto" style="width: 100px;">${patient.address || ''}</span>
-                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 50px;">${patient.moo || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">ถนน</span><span class="value">${patient.road || ''}</span>
-                <span class="label">ตำบล</span><span class="value">${patient.subDistrict || ''}</span>
-                <span class="label">อำเภอ</span><span class="value">${patient.district || ''}</span>
-                <span class="label">จังหวัด</span><span class="value">${patient.province || ''}</span>
-                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 80px;">${patient.zipcode || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">เบอร์โทรศัพท์</span><span class="value">${phone}</span>
-                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 120px;">${patient.nationality || ''}</span>
-                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 120px;">${patient.ethnicity || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">ศาสนา</span><span class="value w-auto" style="width: 150px;">${patient.religion || ''}</span>
-                <span class="label">อาชีพ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.occupation || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">ชื่อผู้ติดต่อได้กรณีฉุกเฉิน</span><span class="value">${patient.emName || ''}</span>
-                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 180px;">${patient.emRelation || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">ที่อยู่ที่ติดต่อได้</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.emAddress || ''}</span>
-                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${patient.emPhone || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">อาการที่จะตรวจ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.chiefComplaint || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 100px;">${patient.bloodGroup || ''}</span>
-                <span class="label">การแพ้ยา</span><span class="value">${patient.allergies || ''}</span>
-                <span class="label">โรคประจำตัว</span><span class="value">${patient.underlyingDisease || ''}</span>
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
+    const html = globalGenerateRecordHtml(patient);
 
     printWindow.document.write(html);
     printWindow.document.close();
@@ -4061,163 +4403,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         return;
     }
 
-    // คำนวณครั้งที่เข้ารับการรักษา (สมมติว่ารายการล่าสุดอยู่บนสุด)
     const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-    const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
-
-    // ตัดคำว่า HN ออกเพื่อความสวยงามตามแบบฟอร์ม
-    const hnNumberOnly = (formData.hn || '').replace(/^HN/i, '');
-    const fullName = `${formData.prefix ? formData.prefix + ' ' : ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim();
-
-    // ดึงที่อยู่ปัจจุบัน ถ้าไม่มีให้ใช้ตามบัตร ปชช.
-    const addressStr = `${formData.curAddress || formData.address || ''} ${formData.curMoo || formData.moo ? 'ม.'+(formData.curMoo || formData.moo) : ''} ${formData.curRoad || formData.road ? 'ถ.'+(formData.curRoad || formData.road) : ''} ${formData.curSubDistrict || formData.subDistrict || ''} ${formData.curDistrict || formData.district || ''} ${formData.curProvince || formData.province || ''} ${formData.curZipcode || formData.zipcode || ''}`.trim();
-    const phoneStr = formData.phones && formData.phones.length > 0 ? formData.phones[0] : '';
-
-    const txText = Array.isArray(record.tx) ? record.tx.filter(t => t).join(', ') : (record.tx || '-');
-
-    const html = `
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <title>ใบ OPD - ${formData.hn}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
-            html, body { width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
-            @page { size: A5 landscape; margin: 10mm; }
-            .container { width: 100%; height: 128mm; max-height: 128mm; box-sizing: border-box; display: flex; flex-direction: column; padding-bottom: 2px; overflow: hidden; page-break-after: avoid; page-break-inside: avoid; }
-
-            .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
-            .clinic-info { line-height: 1.4; font-size: 12px; }
-            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-
-            .doc-info { text-align: right; }
-            .doc-info-row { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 6px; font-weight: bold; }
-
-            .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
-            .label { white-space: nowrap; margin-right: 5px; font-weight: bold; }
-
-            /* เทคนิคเส้นประแบบ Gradient ตามที่ผู้ใช้งานต้องการ */
-            .value {
-              flex-grow: 1;
-              border: none;
-              border-bottom: 1px solid transparent;
-              border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
-              text-align: center;
-              padding-bottom: 1px;
-              min-width: 20px;
-              margin-right: 10px;
-            }
-            .value.left { text-align: left; padding-left: 5px; }
-            .value:last-child { margin-right: 0; }
-            .w-auto { flex-grow: 0; }
-
-            .vitals { display: flex; align-items: baseline; margin-bottom: 12px; font-weight: bold; }
-            .vitals .val-box {
-                border: none; border-bottom: 1px solid transparent;
-                border-image: repeating-linear-gradient(to right, #4b5563 0, #4b5563 1px, transparent 1px, transparent 4px) 1;
-                min-width: 40px; text-align: center; margin: 0 4px; padding-bottom: 1px; font-weight: normal; display: inline-block;
-            }
-
-            .main-content { display: flex; flex-direction: row; gap: 20px; flex-grow: 1; margin-bottom: 10px; }
-            .left-column { flex-grow: 1; display: flex; flex-direction: column; }
-            .right-column { width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; margin-top: -35px; padding-top: 0.5cm; }
-
-            .cc-section { flex: 1; display: flex; flex-direction: column; margin-bottom: 0px; }
-            .cc-title { font-weight: bold; margin-bottom: 4px; }
-            .cc-content { flex: 1; min-height: 30px; padding-left: 10px; }
-
-            .tx-section { flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0px; }
-            .tx-title { font-weight: bold; margin-bottom: 4px; }
-            .tx-content { flex: 1; min-height: 40px; padding-left: 10px; }
-
-            .footer { display: flex; justify-content: flex-end; align-items: flex-end; padding-top: 10px; border-top: 1px dotted #ccc; }
-            .signature { text-align: center; font-size: 12px; width: 100%; margin-top: 25px; margin-bottom: 0px; padding-bottom: 2px; }
-            .body-diagram { width: 100%; height: auto; max-height: 210px; object-fit: contain; }            /* บังคับให้พิมพ์เส้นประออก 100% เป็นสีดำ */            @media print {
-               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-               .value, .val-box {
-                 border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important;
-               }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="clinic-info">
-                    <div class="clinic-name">ฟู่ ซิน ไถ คลินิก</div>
-                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
-                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
-                    <div>โทร. 062-826-1696</div>
-                </div>
-                <div class="doc-info" style="width: 300px;">
-                    <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
-                        <span style="margin-right: 15px;">HN</span>
-                        <span>${hnNumberOnly}</span>
-                    </div>
-                    <div class="doc-info-row" style="font-size: 14px;">
-                        <span>วันที่:</span>
-                        <span class="value w-auto" style="width: 100px; text-align: center;">${dateStr}</span>
-                        <span style="margin-left: 10px;">ครั้งที่:</span>
-                        <span class="value w-auto" style="width: 40px; text-align: center;">${visitNumber}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row">
-                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${fullName}</span>
-                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${formData.nickname || '-'}</span>
-                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${formData.gender || '-'}</span>
-            </div>
-
-            <div class="row">
-                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${formData.idCard || '-'}</span>
-                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${calculatedAge}</span>
-                <span class="label">โทร:</span><span class="value">${phoneStr}</span>
-            </div>
-
-            <div class="row">
-                <span class="label">ที่อยู่:</span><span class="value left">${addressStr}</span>
-            </div>
-
-            <div class="row">
-                <span class="label">โรคประจำตัว:</span><span class="value left">${formData.underlyingDisease || 'ไม่มี'}</span>
-                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${formData.allergies || 'ไม่มี'}</span>
-            </div>
-
-            <div class="vitals">
-                T: <span class="val-box">${record.temp || ''}</span> °C &nbsp;&nbsp;&nbsp;
-                P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
-                BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
-                น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
-                ส่วนสูง: <span class="val-box">${record.height || ''}</span> cm
-            </div>
-
-            <div class="main-content">
-                <div class="left-column">
-                    <div class="cc-section">
-                        <div class="cc-title">อาการสำคัญ:</div>
-                        <div class="cc-content">${(record.cc || '').replace(/\n/g, '<br/>')}</div>
-                    </div>
-                    
-                    <div class="tx-section">
-                        <div class="tx-title">การรักษาที่ให้:</div>
-                        <div class="tx-content">${txText}</div>
-                    </div>
-                </div>
-                <div class="right-column">
-                    <img src="${window.location.origin}/Body Diagram.svg" class="body-diagram" alt="Body Diagram" />
-                    <div class="signature">
-                        <div class="value" style="width: 100%; margin: 0 auto 5px auto;"></div>
-                        (พจ. พงษ์สิทธิ์ แซ่อึ้ง)
-                    </div>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    `;
+    const html = globalGenerateOpdHtml(formData, record, visitNumber);
 
     printWindow.document.write(html);
     printWindow.document.close();
@@ -4226,6 +4413,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppS
         printWindow.print();
     }, 500);
   };
+
   const handleOpenOpdForm = (index = null, record = null) => {
     if (index !== null && record) { 
       setEditingOpdIndex(index); 
@@ -7536,7 +7724,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
   const [editingBranch, setEditingBranch] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const initialForm = { id: '', name: '', address: '', phone: '', manager: '', status: 'active' };
+  const initialForm = { id: '', name: '', clinicName: '', licenseNumber: '', logo: '', taxId: '', address: '', phone: '', email: '', manager: '', status: 'active' };
   const [formData, setFormData] = useState(initialForm);
 
   const closeModal = () => {
@@ -7552,8 +7740,47 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
 
   const handleOpenEdit = (branch) => {
     setEditingBranch(branch);
-    setFormData({ ...branch });
+    setFormData({ ...initialForm, ...branch });
     setIsModalOpen(true);
+  };
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { 
+        showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB', 'warning');
+        return;
+      }
+      setIsProcessing(true);
+      showToast('กำลังอัปโหลดโลโก้...', 'success');
+      
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result.split(',')[1]; 
+        
+        try {
+            const response = await callAppScript('UPLOAD_FILE', 'Branches', {
+                fileName: `LOGO_${Date.now()}_${file.name}`,
+                mimeType: file.type,
+                data: base64Data,
+                folderId: '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+            });
+
+            if (response.status === 'success' && response.fileUrl) {
+                setFormData(prev => ({ ...prev, logo: response.fileUrl }));
+                showToast('อัปโหลดโลโก้สำเร็จ', 'success');
+            } else {
+                throw new Error(response.message || 'ไม่สามารถรับ URL ของรูปภาพได้');
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            showToast('เกิดข้อผิดพลาดในการอัปโหลด: ' + error.message, 'danger');
+        } finally {
+            setIsProcessing(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = async (e) => {
@@ -7602,8 +7829,12 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                
                <div className="relative z-10">
                  <div className="flex justify-between items-start mb-4">
-                   <div className="w-12 h-12 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shadow-inner">
-                     <Building2 size={24} />
+                   <div className="w-12 h-12 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shadow-inner overflow-hidden shrink-0 bg-white border border-sky-100">
+                     {branch.logo ? (
+                       <img src={branch.logo} alt="logo" className="w-full h-full object-contain" />
+                     ) : (
+                       <Building2 size={24} />
+                     )}
                    </div>
                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${branch.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400'}`}>
                      {branch.status === 'active' ? 'เปิดบริการ' : 'ปิดชั่วคราว'}
@@ -7611,7 +7842,14 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                  </div>
                  
                  <h3 className="text-lg font-bold text-slate-800 kanit-text mb-1">{branch.name}</h3>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">ID: {branch.id}</p>
+                 {branch.clinicName && <p className="text-xs font-bold text-sky-600 kanit-text mb-1 truncate">{branch.clinicName}</p>}
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex flex-wrap gap-1 items-center">
+                    <span>ID: {branch.id}</span>
+                    {branch.licenseNumber && <span className="text-slate-300">|</span>}
+                    {branch.licenseNumber && <span>ใบอนุญาต: {branch.licenseNumber}</span>}
+                    {branch.taxId && <span className="text-slate-300">|</span>}
+                    {branch.taxId && <span>TAX: {branch.taxId}</span>}
+                 </p>
                  
                  <div className="space-y-2.5 mb-6">
                     <div className="flex items-center gap-2.5 text-slate-500">
@@ -7621,6 +7859,10 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                     <div className="flex items-center gap-2.5 text-slate-500">
                        <Phone size={14} className="shrink-0" />
                        <p className="text-xs font-data">{branch.phone || 'ไม่ระบุเบอร์โทร'}</p>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-slate-500">
+                       <Mail size={14} className="shrink-0" />
+                       <p className="text-xs font-data truncate">{branch.email || 'ไม่ระบุอีเมล'}</p>
                     </div>
                     <div className="flex items-center gap-2.5 text-slate-500">
                        <User size={14} className="shrink-0" />
@@ -7651,8 +7893,8 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
       {isModalOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeModal}></div>
-          <div className={`bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+          <div className={`bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden max-h-[90dvh] ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+             <div className="p-6 sm:p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30 shrink-0 z-10">
                 <div className="flex items-center gap-4">
                    <div className="w-12 h-12 bg-sky-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20">
                       <Building2 size={24} />
@@ -7665,44 +7907,83 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                 <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:text-slate-600 rounded-full shadow-sm border border-slate-100 transition-colors"><X size={20} /></button>
              </div>
              
-             <form onSubmit={handleSave} className="p-8 space-y-5">
-                <div className="grid grid-cols-3 gap-4">
-                   <div className="col-span-1">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">รหัสสาขา</label>
-                      <input required type="text" className={`${theme.input} !py-2.5 font-data uppercase`} value={formData.id} onChange={e => setFormData({...formData, id: e.target.value.toLowerCase()})} disabled={!!editingBranch} />
-                   </div>
-                   <div className="col-span-2">
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ชื่อสาขา <span className="text-rose-500">*</span></label>
-                      <input required type="text" className={`${theme.input} !py-2.5 font-data`} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="เช่น สาขาสุขุมวิท" />
-                   </div>
+             <form onSubmit={handleSave} className="p-0 space-y-0 flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 sm:p-8 space-y-5 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+                    <div className="flex flex-col sm:flex-row gap-6 mb-2 items-center sm:items-start bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                        <div className="flex flex-col items-center gap-2 shrink-0">
+                            <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden group">
+                                {formData.logo ? (
+                                    <img src={formData.logo} alt="Logo" className="w-full h-full object-contain bg-white p-2" />
+                                ) : (
+                                    <Building2 size={32} className="text-slate-300" />
+                                )}
+                                <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                    <Upload size={20} className="mb-1" />
+                                    <span className="text-[10px] font-bold kanit-text">อัปโหลดโลโก้</span>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                                </label>
+                            </div>
+                            <span className="text-[10px] text-slate-400 kanit-text">ขนาดไม่เกิน 5MB</span>
+                        </div>
+
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                           <div className="col-span-1 sm:col-span-2">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ชื่อสาขา <span className="text-rose-500">*</span></label>
+                              <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="เช่น สาขาสุขุมวิท" />
+                           </div>
+                           <div className="col-span-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">รหัสสาขา <span className="text-rose-500">*</span></label>
+                              <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data uppercase" value={formData.id} onChange={e => setFormData({...formData, id: e.target.value.toLowerCase()})} disabled={!!editingBranch} />
+                           </div>
+                           <div className="col-span-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ผู้จัดการสาขา</label>
+                              <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.manager} onChange={e => setFormData({...formData, manager: e.target.value})} placeholder="ชื่อ-นามสกุล" />
+                           </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                           <div className="col-span-1 sm:col-span-2">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ชื่อจดทะเบียน / นิติบุคคล</label>
+                              <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.clinicName} onChange={e => setFormData({...formData, clinicName: e.target.value})} placeholder="ชื่อบริษัทที่จดทะเบียน" />
+                           </div>
+                           <div className="col-span-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">เลขที่ใบอนุญาต</label>
+                              <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.licenseNumber} onChange={e => setFormData({...formData, licenseNumber: e.target.value})} placeholder="เลขที่ใบอนุญาตสถานพยาบาล" />
+                           </div>
+                           <div className="col-span-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">เลขประจำตัวผู้เสียภาษี (Tax ID)</label>
+                              <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.taxId} onChange={e => setFormData({...formData, taxId: e.target.value})} placeholder="เลข 13 หลัก" maxLength="13" />
+                           </div>
+                        </div>                        <div>
+                           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ที่อยู่สาขา / สำนักงาน</label>
+                           <textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data min-h-[80px] resize-none" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="เลขที่, ถนน, ตำบล, อำเภอ..." />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์</label>
+                              <input type="tel" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="02-XXX-XXXX" />
+                           </div>
+                           <div>
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">อีเมล</label>
+                              <input type="email" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="example@email.com" />
+                           </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                       <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 kanit-text">สถานะการให้บริการ</label>
+                       <div className="flex bg-slate-50 p-1.5 rounded-2xl gap-2 border border-slate-100">
+                          <button type="button" onClick={() => setFormData({...formData, status: 'active'})} className={`flex-1 py-3 rounded-xl text-sm font-bold kanit-text transition-all ${formData.status === 'active' ? 'bg-white text-emerald-600 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}>เปิดบริการ</button>
+                          <button type="button" onClick={() => setFormData({...formData, status: 'inactive'})} className={`flex-1 py-3 rounded-xl text-sm font-bold kanit-text transition-all ${formData.status === 'inactive' ? 'bg-white text-rose-500 shadow-sm border border-rose-100' : 'text-slate-400 hover:text-slate-600'}`}>ปิดชั่วคราว</button>
+                       </div>
+                    </div>
                 </div>
 
-                <div>
-                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ที่อยู่สาขา</label>
-                   <textarea className={`${theme.input} !py-2.5 font-data min-h-[80px] resize-none`} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="เลขที่, ถนน, ตำบล, อำเภอ..." />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์</label>
-                      <input type="tel" className={`${theme.input} !py-2.5 font-data`} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="02-XXX-XXXX" />
-                   </div>
-                   <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ผู้จัดการสาขา</label>
-                      <input type="text" className={`${theme.input} !py-2.5 font-data`} value={formData.manager} onChange={e => setFormData({...formData, manager: e.target.value})} placeholder="ชื่อ-นามสกุล" />
-                   </div>
-                </div>
-
-                <div>
-                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">สถานะการให้บริการ</label>
-                   <div className="flex bg-slate-50 p-1.5 rounded-2xl gap-2 border border-slate-100">
-                      <button type="button" onClick={() => setFormData({...formData, status: 'active'})} className={`flex-1 py-2 rounded-xl text-xs font-bold kanit-text transition-all ${formData.status === 'active' ? 'bg-white text-emerald-600 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}>เปิดบริการ</button>
-                      <button type="button" onClick={() => setFormData({...formData, status: 'inactive'})} className={`flex-1 py-2 rounded-xl text-xs font-bold kanit-text transition-all ${formData.status === 'inactive' ? 'bg-white text-rose-500 shadow-sm border border-rose-100' : 'text-slate-400 hover:text-slate-600'}`}>ปิดชั่วคราว</button>
-                   </div>
-                </div>
-
-                <div className="pt-4">
-                   <button type="submit" disabled={isProcessing} className="w-full py-4 bg-sky-500 text-white rounded-[1.5rem] font-bold shadow-xl shadow-sky-500/20 hover:bg-sky-600 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 kanit-text text-lg">
+                <div className="p-6 border-t border-slate-100 bg-white shrink-0 z-10">
+                   <button type="submit" disabled={isProcessing} className="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold shadow-xl shadow-sky-500/20 hover:bg-sky-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 kanit-text text-base sm:text-lg">
                       {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 size={24} />} 
                       {editingBranch ? 'ยืนยันการแก้ไข' : 'บันทึกข้อมูลสาขา'}
                    </button>
@@ -14885,6 +15166,449 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   );
 };
 
+// --- [NEW] ระบบรายงานและศูนย์รวมเอกสาร (Reports & Documents Manager) ---
+const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData = [], posProducts = [], isGlobalLoading, showToast }) => {
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [selectedDocs, setSelectedDocs] = useState([]);
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  const headerRef = useRef(null);
+  const filterRef = useRef(null);
+
+  // 1. รวบรวมและจัดเตรียมข้อมูลเอกสารทั้งหมด (Normalize Data)
+  const allDocuments = useMemo(() => {
+    let docs = [];
+
+    // 1.1 เวชระเบียน (Medical Records) และ ประวัติการรักษา (OPD)
+    patientsData.forEach(p => {
+        const patientName = `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`.trim();
+        
+        // เพิ่มเวชระเบียน
+        docs.push({
+            id: `REC-${p.hn || p.id}`,
+            type: 'record',
+            typeLabel: 'เวชระเบียนผู้ป่วย',
+            date: p.createdAt || new Date().toISOString(),
+            patientName: patientName || 'ไม่ระบุชื่อ',
+            refNo: p.hn || p.id,
+            rawData: p
+        });
+
+        // เพิ่มประวัติการรักษา (OPD)
+        if (p.opdRecords && p.opdRecords.length > 0) {
+            p.opdRecords.forEach((opd, idx) => {
+                // แปลงวันที่ OPD (เช่น 25/10/2566 10:00 น.) กลับเป็น ISO เพื่อใช้ในการ Sort
+                let opdIsoDate = new Date().toISOString();
+                if (opd.datetime) {
+                    try {
+                        const parts = opd.datetime.split(' ');
+                        const dParts = parts[0].split('/');
+                        if (dParts.length === 3) {
+                            opdIsoDate = new Date(parseInt(dParts[2])-543, parseInt(dParts[1])-1, parseInt(dParts[0])).toISOString();
+                        }
+                    } catch(e) {}
+                }
+
+                docs.push({
+                    id: `OPD-${p.hn || p.id}-${idx}`,
+                    type: 'opd',
+                    typeLabel: 'ประวัติการรักษา (OPD)',
+                    date: opdIsoDate,
+                    patientName: patientName || 'ไม่ระบุชื่อ',
+                    refNo: `${p.hn || p.id} (ครั้งที่ ${p.opdRecords.length - idx})`,
+                    rawData: { opd, patient: p, index: idx, visitNumber: p.opdRecords.length - idx }
+                });
+            });
+        }
+    });
+
+    // 1.2 ใบเสร็จรับเงิน (Receipts)
+    posHistoryData.forEach(tx => {
+        if (tx.status !== 'cancelled') {
+            docs.push({
+                id: `POS-${tx.id}`,
+                type: 'receipt',
+                typeLabel: 'ใบเสร็จรับเงิน',
+                date: tx.createdAt || tx.date,
+                patientName: tx.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)',
+                refNo: tx.id,
+                rawData: tx
+            });
+        }
+    });
+
+    // เรียงลำดับจากใหม่ไปเก่า
+    return docs.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [patientsData, posHistoryData]);
+
+  // 2. กรองข้อมูลตามการค้นหาและประเภท
+  const filteredDocs = useMemo(() => {
+      return allDocuments.filter(doc => {
+          const matchSearch = doc.patientName.toLowerCase().includes(search.toLowerCase()) || doc.refNo.toLowerCase().includes(search.toLowerCase());
+          const matchType = filterType === 'all' || doc.type === filterType;
+          return matchSearch && matchType;
+      });
+  }, [allDocuments, search, filterType]);
+
+  // 3. สถิติสรุปเอกสาร
+  const stats = useMemo(() => {
+      return {
+          total: allDocuments.length,
+          records: allDocuments.filter(d => d.type === 'record').length,
+          opds: allDocuments.filter(d => d.type === 'opd').length,
+          receipts: allDocuments.filter(d => d.type === 'receipt').length
+      };
+  }, [allDocuments]);
+
+  // 4. การจัดการเลือกเอกสาร (Checkbox)
+  const toggleSelection = (id) => {
+      setSelectedDocs(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedDocs.length === filteredDocs.length && filteredDocs.length > 0) {
+          setSelectedDocs([]);
+      } else {
+          setSelectedDocs(filteredDocs.map(d => d.id));
+      }
+  };
+
+  const isAllSelected = filteredDocs.length > 0 && selectedDocs.length === filteredDocs.length;
+
+  // --- Scroll & Sticky Logic ---
+  useEffect(() => {
+    const mainElement = document.getElementById('main-scroll-container');
+    if (!mainElement) return;
+
+    const handleScroll = (e) => {
+      if (!headerRef.current) return;
+      const { scrollTop } = e.target;
+      if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+      else headerRef.current.classList.remove('is-scrolled');
+
+      if (filterRef.current && headerRef.current) {
+          const headerRect = headerRef.current.getBoundingClientRect();
+          const filterRect = filterRef.current.getBoundingClientRect();
+          if (filterRect.top <= headerRect.bottom + 1) filterRef.current.classList.add('is-scrolled');
+          else filterRef.current.classList.remove('is-scrolled');
+      }
+    };
+    mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainElement.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // 5. ฟังก์ชันสำหรับพิมพ์ (Bulk Print)
+  const handleBulkPrint = () => {
+      if (selectedDocs.length === 0) {
+          showToast('กรุณาเลือกเอกสารที่ต้องการพิมพ์อย่างน้อย 1 รายการ', 'warning');
+          return;
+      }
+      setIsPrinting(true);
+
+      const docsToPrint = filteredDocs.filter(d => selectedDocs.includes(d.id));
+      let combinedHtml = '';
+
+      docsToPrint.forEach(doc => {
+          if (doc.type === 'record') combinedHtml += globalGenerateRecordHtml(doc.rawData);
+          else if (doc.type === 'opd') combinedHtml += globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber);
+          else if (doc.type === 'receipt') combinedHtml += globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts);
+      });
+
+      const finalHtml = `
+      <!DOCTYPE html>
+      <html lang="th">
+      <head>
+          <meta charset="UTF-8">
+          <title>พิมพ์เอกสาร (${selectedDocs.length} รายการ)</title>
+          <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+          <style>
+              body { margin: 0; padding: 0; background: #fff; }
+              @media print {
+                  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              }
+          </style>
+      </head>
+      <body>
+          ${combinedHtml}
+      </body>
+      </html>`;
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+          showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'danger');
+          setIsPrinting(false);
+          return;
+      }
+
+      printWindow.document.write(finalHtml);
+      printWindow.document.close();
+      
+      setTimeout(() => {
+          printWindow.print();
+          setIsPrinting(false);
+          setSelectedDocs([]); // เคลียร์การเลือกหลังสั่งพิมพ์เสร็จ
+          showToast(`สั่งพิมพ์ ${docsToPrint.length} รายการสำเร็จ`, 'success');
+      }, 800);
+  };
+
+  const getDocIcon = (type) => {
+      if (type === 'record') return <Users className="text-indigo-500" />;
+      if (type === 'opd') return <Stethoscope className="text-emerald-500" />;
+      return <Receipt className="text-sky-500" />;
+  };
+
+  const getDocBadge = (type, label) => {
+      let colorClass = 'bg-slate-100 text-slate-600 border-slate-200';
+      if (type === 'record') colorClass = 'bg-indigo-50 text-indigo-600 border-indigo-100';
+      if (type === 'opd') colorClass = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      if (type === 'receipt') colorClass = 'bg-sky-50 text-sky-600 border-sky-100';
+      
+      return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold kanit-text border ${colorClass}`}>{label}</span>;
+  };
+
+  return (
+    <div className="fade-in pb-10 flex flex-col h-full w-full">
+      {/* --- 1. Sticky Header --- */}
+      <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
+        <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
+          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
+            <div>
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2">
+                <FileText className="text-sky-500" /> ศูนย์รวมเอกสาร (Reports)
+              </h1>
+              <p className="text-slate-500 kanit-text sticky-header-desc">พิมพ์เวชระเบียน, ใบ OPD และใบเสร็จย้อนหลัง</p>
+            </div>
+            <button 
+              onClick={handleBulkPrint} 
+              disabled={selectedDocs.length === 0 || isPrinting}
+              className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3 ${selectedDocs.length > 0 ? 'bg-sky-500 text-white hover:bg-sky-600 shadow-sky-500/30' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+            >
+              {isPrinting ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />} 
+              <span className="hidden sm:inline">พิมพ์ที่เลือก ({selectedDocs.length})</span>
+              <span className="sm:hidden">พิมพ์ ({selectedDocs.length})</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* --- 2. Stats Section --- */}
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 sm:mt-5 mb-0 relative z-20 pointer-events-auto">
+         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-slate-300 transition-all h-full min-h-[110px] sm:min-h-[140px]">
+              <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0"><LayoutList size={20} /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate">เอกสารทั้งหมด</p></div>
+              </div>
+              <div className="relative z-10 mt-auto"><p className="font-black text-slate-800 font-data text-2xl sm:text-3xl">{stats.total}</p></div>
+            </div>
+            
+            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-indigo-200 transition-all h-full min-h-[110px] sm:min-h-[140px]">
+              <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0"><Users size={20} /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate">เวชระเบียน</p></div>
+              </div>
+              <div className="relative z-10 mt-auto"><p className="font-black text-indigo-600 font-data text-2xl sm:text-3xl">{stats.records}</p></div>
+            </div>
+
+            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-emerald-200 transition-all h-full min-h-[110px] sm:min-h-[140px]">
+              <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0"><Stethoscope size={20} /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate">ใบ OPD</p></div>
+              </div>
+              <div className="relative z-10 mt-auto"><p className="font-black text-emerald-600 font-data text-2xl sm:text-3xl">{stats.opds}</p></div>
+            </div>
+
+            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-sky-200 transition-all h-full min-h-[110px] sm:min-h-[140px]">
+              <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0"><Receipt size={20} /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate">ใบเสร็จรับเงิน</p></div>
+              </div>
+              <div className="relative z-10 mt-auto"><p className="font-black text-sky-600 font-data text-2xl sm:text-3xl">{stats.receipts}</p></div>
+            </div>
+         </div>
+      </div>
+
+      {/* --- 3. Filter Component --- */}
+      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt">
+        <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
+          <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
+            <div className="relative flex-1 min-w-0">
+              <input type="text" placeholder="ค้นหาชื่อลูกค้า, รหัสเอกสาร, HN..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-3 sm:pl-11 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" />
+              <Search className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+            </div>
+            <div className="w-[120px] sm:w-[160px] shrink-0">
+               <div className="relative w-full">
+                 <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full px-3 py-2 sm:py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 transition-colors font-data appearance-none cursor-pointer">
+                    <option value="all">ทั้งหมด</option>
+                    <option value="record">เวชระเบียน</option>
+                    <option value="opd">ใบ OPD</option>
+                    <option value="receipt">ใบเสร็จ</option>
+                 </select>
+                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- 4. Content Area (Table / Cards) --- */}
+      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
+        <div className="flex-1 bg-white rounded-[1.5rem] sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+          
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto overflow-y-hidden">
+            <table className="w-full text-left border-collapse min-w-[800px]">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-sm kanit-text">
+                  <th className="p-4 w-16 text-center">
+                    <button onClick={toggleSelectAll} className="flex items-center justify-center w-full h-full text-slate-400 hover:text-sky-500 transition-colors">
+                        {isAllSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded hover:border-sky-400 transition-colors"></div>}
+                    </button>
+                  </th>
+                  <th className="p-4 font-medium">วันที่ / เวลา</th>
+                  <th className="p-4 font-medium">ประเภทเอกสาร</th>
+                  <th className="p-4 font-medium">รหัสอ้างอิง / HN</th>
+                  <th className="p-4 font-medium">ชื่อลูกค้า / คนไข้</th>
+                  <th className="p-4 font-medium text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {isGlobalLoading ? (
+                  <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /> กำลังโหลดข้อมูล...</td></tr>
+                ) : filteredDocs.length > 0 ? (
+                  filteredDocs.map((doc) => {
+                    const isSelected = selectedDocs.includes(doc.id);
+                    
+                    // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
+                    let dateStr = '-';
+                    let timeStr = '-';
+                    if (doc.date) {
+                        try {
+                            const d = new Date(doc.date);
+                            if (!isNaN(d.getTime())) {
+                                dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+                                timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                            }
+                        } catch(e){}
+                    }
+
+                    return (
+                      <tr key={doc.id} className={`transition-colors font-data text-sm cursor-pointer hover:bg-sky-50/30 ${isSelected ? 'bg-sky-50/50' : ''}`} onClick={() => toggleSelection(doc.id)}>
+                        <td className="p-4 text-center">
+                            <div className="flex items-center justify-center w-full h-full">
+                                {isSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded transition-colors"></div>}
+                            </div>
+                        </td>
+                        <td className="p-4 text-slate-600">
+                          <span className="font-medium">{dateStr}</span>
+                          <span className="text-xs text-slate-400 block mt-0.5">{timeStr} น.</span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                             <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                                {getDocIcon(doc.type)}
+                             </div>
+                             {getDocBadge(doc.type, doc.typeLabel)}
+                          </div>
+                        </td>
+                        <td className="p-4 font-bold text-slate-700 kanit-text">{String(doc.refNo || '-')}</td>
+                        <td className="p-4 text-slate-800 kanit-text font-medium">{String(doc.patientName || '-')}</td>
+                        <td className="p-4 text-center">
+                          <button 
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setSelectedDocs([doc.id]);
+                                setTimeout(() => document.querySelector('.sticky-header-btn')?.click(), 50); 
+                            }} 
+                            className="p-2 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 border border-slate-200 hover:border-sky-200 rounded-lg shadow-sm transition-colors mx-auto flex items-center justify-center"
+                            title="พิมพ์เอกสารนี้"
+                          >
+                            <Printer size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text italic">ไม่พบเอกสารที่ค้นหา</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards View */}
+          <div className="md:hidden flex flex-col divide-y divide-slate-100 bg-slate-50/50">
+            {/* ปุ่มเลือกทั้งหมดสำหรับมือถือ */}
+            {filteredDocs.length > 0 && !isGlobalLoading && (
+               <div className="p-3 bg-white flex items-center justify-between border-b border-slate-100 sticky top-0 z-10">
+                   <span className="text-xs font-bold text-slate-500 kanit-text">เลือกเอกสาร ({selectedDocs.length}/{filteredDocs.length})</span>
+                   <button onClick={toggleSelectAll} className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border kanit-text transition-colors flex items-center gap-1.5 ${isAllSelected ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-white text-slate-600 border-slate-200'}`}>
+                      {isAllSelected ? <CheckSquare size={14} /> : <div className="w-3.5 h-3.5 border-2 border-slate-400 rounded-sm"></div>} {isAllSelected ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+                   </button>
+               </div>
+            )}
+
+            {isGlobalLoading ? (
+               <div className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /></div>
+            ) : filteredDocs.length > 0 ? (
+               filteredDocs.map((doc, idx) => {
+                  const isSelected = selectedDocs.includes(doc.id);
+                  
+                  // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
+                  let dateStr = '-';
+                  let timeStr = '-';
+                  if (doc.date) {
+                      try {
+                          const d = new Date(doc.date);
+                          if (!isNaN(d.getTime())) {
+                              dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+                              timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                          }
+                      } catch(e){}
+                  }
+
+                  return (
+                    <div key={doc.id} onClick={() => toggleSelection(doc.id)} className={`p-4 bg-white cursor-pointer transition-colors flex gap-3 ${isSelected ? 'bg-sky-50/50' : ''}`}>
+                       <div className="pt-1 shrink-0">
+                           {isSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded transition-colors"></div>}
+                       </div>
+                       <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start mb-1.5">
+                             <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-md bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                                   {React.cloneElement(getDocIcon(doc.type), { size: 14 })}
+                                </div>
+                                <span className="font-bold text-slate-700 text-sm kanit-text truncate leading-tight">{String(doc.patientName || '-')}</span>
+                             </div>
+                             <button onClick={(e) => { e.stopPropagation(); setSelectedDocs([doc.id]); setTimeout(() => document.querySelector('.sticky-header-btn')?.click(), 50); }} className="p-1.5 text-slate-400 hover:text-sky-600 bg-slate-50 rounded-md border border-slate-200 shrink-0">
+                                <Printer size={14} />
+                             </button>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                             <div className="flex flex-col gap-1">
+                                {getDocBadge(doc.type, doc.typeLabel)}
+                                <span className="text-[11px] text-slate-500 font-data font-bold mt-0.5">{String(doc.refNo || '-')}</span>
+                             </div>
+                             <div className="text-right">
+                                <span className="text-xs font-bold text-slate-600 font-data block">{dateStr}</span>
+                                <span className="text-[10px] text-slate-400 font-data">{timeStr} น.</span>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                  );
+               })
+            ) : (
+               <div className="p-10 text-center text-slate-400 kanit-text italic bg-white">ไม่พบเอกสารที่ค้นหา</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   // --- แก้ไข: จดจำหน้าปัจจุบันใน LocalStorage (รีเฟรชแล้วอยู่หน้าเดิม ยกเว้นตั้งค่า) ---
   const [currentTab, setCurrentTab] = useState(() => {
@@ -15138,359 +15862,7 @@ export default function App() {
         return;
     }
 
-    const clinicName = "อันผิงคลินิกการประกอบโรคศิลปะสาขาการแพทย์แผนจีน"; //branchesData.find(b => b.id === txn.branchId)?.name || "คลินิกฮับ (ClinicHub)";
-    const clinicAddress = "39/712 เขต แสมดำ แขวง บางขุนเทียน จ.กรุงเทพ 10150";
-    const clinicPhone = "063-143-4927";
-    const taxId = "1119700021821";
-
-    const dateObj = new Date(txn.createdAt || txn.date || new Date());
-    const d = String(dateObj.getDate()).padStart(2, '0');
-    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const y = dateObj.getFullYear() + 543;
-    const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
-
-    const receiptNo = txn.id || txn.receiptNo;
-    let customerName = txn.patientName || (txn.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)';
-    let customerHN = '-';
-    
-    if (customerName.includes(' - ')) {
-        const parts = customerName.split(' - ');
-        customerHN = parts[0];
-        customerName = parts.slice(1).join(' - ');
-    } else if (txn.patientId) {
-        customerHN = txn.patientId;
-    } else if (txn.rawTx?.patientId) {
-        customerHN = txn.rawTx.patientId;
-    } else if (txn.hn) {
-        customerHN = txn.hn;
-    }
-    
-    // ดึงข้อมูลที่อยู่, เลขบัตร ปชช., เบอร์โทร จากฐานข้อมูลผู้ป่วย
-    let customerAddress = '-';
-    let customerTaxId = '-';
-    let customerPhone = '-';
-
-    const pInfo = patientsData.find(p => (p.id || p.hn) === customerHN);
-    if (pInfo) {
-        customerAddress = `${pInfo.curAddress || pInfo.address || ''} ${pInfo.curMoo || pInfo.moo ? 'ม.'+(pInfo.curMoo || pInfo.moo) : ''} ${pInfo.curRoad || pInfo.road ? 'ถ.'+(pInfo.curRoad || pInfo.road) : ''} ${pInfo.curSubDistrict || pInfo.subDistrict || ''} ${pInfo.curDistrict || pInfo.district || ''} ${pInfo.curProvince || pInfo.province || ''} ${pInfo.curZipcode || pInfo.zipcode || ''}`.trim() || '-';
-        customerTaxId = pInfo.idCard || '-';
-        customerPhone = Array.isArray(pInfo.phones) && pInfo.phones.length > 0 ? pInfo.phones[0] : (pInfo.phone || pInfo.phone1 || '-');
-    }
-
-    const cashierName = "Admin User";
-    
-    // ดึงรายการและคำนวณยอด
-    const itemsToPrint = txn.rawTx?.items || txn.items || [{name: txn.category || 'รายการ', quantity: 1, price: txn.amount, total: txn.amount}];
-    const subtotal = txn.rawTx?.subtotal || txn.subtotal || txn.amount || 0;
-    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
-    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
-    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
-    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
-    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
-    const paymentMethod = txn.method || txn.paymentMethod || txn.rawTx?.paymentMethod || 'cash';
-    
-    const afterDiscount = Math.max(0, subtotal - discountAmount);
-    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
-
-    let paymentMethodThai = 'เงินสด';
-    if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
-    if (paymentMethod === 'credit' || paymentMethod === 'credit_card') paymentMethodThai = 'บัตรเครดิต';
-
-    // ฟังก์ชันแปลงตัวเลขเป็นคำอ่านภาษาไทย (Baht Text)
-    const bahtText = (amount) => {
-        if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
-        const numbers = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
-        const positions = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน'];
-        let numberStr = Math.abs(amount).toFixed(2).toString();
-        let [integerPart, fractionalPart] = numberStr.split('.');
-        const convertToText = (str) => {
-            let text = '';
-            for (let i = 0; i < str.length; i++) {
-                let n = parseInt(str[i]);
-                let pos = str.length - i - 1;
-                if (n === 0) continue;
-                if (n === 1 && pos === 0 && str.length > 1 && str[i-1] !== '0') text += 'เอ็ด';
-                else if (n === 2 && pos === 1) text += 'ยี่สิบ';
-                else if (n === 1 && pos === 1) text += 'สิบ';
-                else text += numbers[n] + positions[pos];
-            }
-            return text;
-        };
-        let result = convertToText(integerPart) + 'บาท';
-        if (fractionalPart === '00') result += 'ถ้วน';
-        else result += convertToText(fractionalPart) + 'สตางค์';
-        return result;
-    };
-    
-    const formatCurrencyPrint = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0);
-
-    let hasVatableItems = false;
-    let itemsHtml = '';
-    if (format === 'A4') {
-        itemsHtml = itemsToPrint.map((item, index) => {
-            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
-            if (isVat) hasVatableItems = true;
-            const vatMark = isVat ? ' <span style="color:#0ea5e9; font-size:10px; font-weight:bold;">(V)</span>' : '';
-            return `
-            <tr>
-                <td class="text-center">${index + 1}</td>
-                <td>${item.name}${vatMark}</td>
-                <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
-                <td class="text-right">${formatCurrencyPrint(item.price)}</td>
-                <td class="text-right">0.00</td>
-                <td class="text-right font-bold">${formatCurrencyPrint(item.total)}</td>
-            </tr>
-        `}).join('');
-    } else {
-        itemsHtml = itemsToPrint.map(item => {
-            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
-            if (isVat) hasVatableItems = true;
-            const vatMark = isVat ? ' <span style="font-size:10px;">(V)</span>' : '';
-            return `
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; page-break-inside: avoid;">
-                <div style="flex: 1; padding-right: 10px;">
-                    <div style="font-weight: bold; margin-bottom: 2px;">${item.name}${vatMark}</div>
-                    <div style="color: #64748b; font-size: 11px;">${item.quantity} x ${formatCurrencyPrint(item.price)}</div>
-                </div>
-                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurrencyPrint(item.total)}</div>
-            </div>
-        `}).join('');
-    }
-
-    const html = format === 'A4' ? `
-        <!DOCTYPE html>
-        <html lang="th">
-        <head>
-            <meta charset="UTF-8">
-            <title>ใบเสร็จรับเงิน - ${receiptNo}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-            <style>
-                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 15px 20px; font-size: 13px; color: #1e293b; line-height: 1.5; }
-                @page { size: A4; margin: 5mm; }
-                .page-break { page-break-before: always; break-before: page; }
-                .container { padding: 0; max-width: 100%; }
-                
-                .header-top { display: flex; justify-content: flex-end; align-items: flex-end; margin-bottom: 20px; }
-                .doc-title-wrapper { text-align: right; }
-                .doc-type { font-size: 12px; color: #64748b; margin-bottom: 2px; }
-                .doc-title { font-size: 24px; font-weight: 700; color: #0ea5e9; } 
-
-                .info-grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; margin-bottom: 20px; }
-                
-                .info-box { display: flex; flex-direction: column; gap: 4px; }
-                .info-row { display: flex; align-items: baseline; }
-                .info-label { width: 80px; font-weight: 600; color: #000; flex-shrink: 0; }
-                .info-val { flex: 1; }
-                .font-bold { font-weight: 700; }
-
-                .doc-info-box { background-color: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 15px; border-radius: 6px; }
-                
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 13px; }
-                th { background-color: #f0f9ff; color: #0369a1; padding: 8px; text-align: left; border-top: 2px solid #bae6fd; border-bottom: 2px solid #bae6fd; font-weight: 600; }
-                td { padding: 8px; border-bottom: 1px dashed #e2e8f0; vertical-align: top; }
-                .text-center { text-align: center; }
-                .text-right { text-align: right; }
-                
-                .summary-section { display: grid; grid-template-columns: 1fr 300px; gap: 20px; margin-bottom: 20px; margin-top: 20px; }
-                .summary-left { font-size: 13px; }
-                .summary-left-title { font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; font-size: 14px; }
-                .summary-right { display: flex; flex-direction: column; gap: 6px; }
-                .sum-row { display: flex; justify-content: space-between; align-items: baseline; }
-                .sum-row.grand-total { background-color: #f0f9ff; padding: 10px 15px; font-weight: 700; border-radius: 6px; font-size: 15px; align-items: center; border: 1px solid #bae6fd; color: #0f172a; margin-top: 4px; }
-
-                .footer-info { display: flex; flex-direction: column; gap: 10px; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
-                .footer-row { display: flex; gap: 10px; align-items: baseline; }
-                .footer-label { font-weight: 600; width: 85px; display: flex; align-items: center; gap: 6px; }
-                
-                .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
-                .signature-box { text-align: center; width: 250px; }
-
-                @media print {
-                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                }
-            </style>
-        </head>
-        <body>
-            ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
-            <div class="container">
-                <div class="header-top">
-                    <div class="doc-title-wrapper">
-                        <div class="doc-type">${docType}</div>
-                        <div class="doc-title">ใบเสร็จรับเงิน/ใบกำกับภาษี</div>
-                    </div>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">ผู้ขาย:</div><div class="info-val font-bold">${clinicName}</div></div>
-                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${clinicAddress}</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${taxId} </div></div>
-                        <div class="info-row" style="margin-top: 4px;">
-                            <div class="info-label">โทร:</div><div class="info-val">${clinicPhone}</div>
-                        </div>
-                    </div>
-                    <div class="doc-info-box info-box">
-                        <div class="info-row"><div class="info-label">เลขที่เอกสาร:</div><div class="info-val font-bold">${receiptNo}</div></div>
-                        <div class="info-row"><div class="info-label">วันที่ออก:</div><div class="info-val">${dateStr.split(' ')[0]}</div></div>
-                        <div class="info-row"><div class="info-label">อ้างอิง:</div><div class="info-val">${customerHN}</div></div>
-                    </div>
-                </div>
-
-                <div class="info-grid" style="margin-top: -10px;">
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">ลูกค้า:</div><div class="info-val">${customerName}</div></div>
-                        <div class="info-row"><div class="info-label">ที่อยู่:</div><div class="info-val">${customerAddress}</div></div>
-                        <div class="info-row"><div class="info-label">เลขที่ภาษี:</div><div class="info-val">${customerTaxId}</div></div>
-                    </div>
-                    <div class="info-box">
-                        <div class="info-row"><div class="info-label">โทร:</div><div class="info-val">${customerPhone}</div></div>
-                    </div>
-                </div>
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="text-center" style="width: 50px;">ลำดับ</th>
-                            <th>รายการสินค้า / บริการ</th>
-                            <th class="text-center" style="width: 80px;">จำนวน</th>
-                            <th class="text-right" style="width: 100px;">ราคาต่อหน่วย</th>
-                            <th class="text-right" style="width: 80px;">ส่วนลด</th>
-                            <th class="text-right" style="width: 120px;">จำนวนเงิน</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHtml}
-                    </tbody>
-                </table>
-
-                <div class="summary-section">
-                    <div class="summary-left">
-                        <div class="summary-left-title">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                            สรุป
-                        </div>
-                        <div class="sum-row" style="margin-bottom: 4px; padding-right: 20px;"><span>มูลค่าก่อนภาษี</span><span>${formatCurrencyPrint(priceExcludingVat)} บาท</span></div>
-                        <div class="sum-row" style="margin-bottom: 8px; padding-right: 20px;"><span>ภาษีมูลค่าเพิ่ม ${taxMode !== 'none' ? vatRate : '0'}%</span><span>${formatCurrencyPrint(vatAmount)} บาท</span></div>
-                        
-                        <div style="border-top: 1px solid #cbd5e1; margin: 10px 20px 10px 0;"></div>
-                        
-                        <div class="sum-row font-bold" style="margin-top: 5px; padding-right: 20px;">
-                            <span>จำนวนเงินทั้งสิ้น</span>
-                            <span>(${bahtText(grandTotal)})</span>
-                        </div>
-                    </div>
-                    <div class="summary-right">
-                        <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurrencyPrint(subtotal)} บาท</span></div>
-                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurrencyPrint(discountAmount)} บาท</span></div>
-                        <div class="sum-row" style="margin-bottom: 8px;"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurrencyPrint(afterDiscount)} บาท</span></div>
-                        
-                        <div class="sum-row grand-total" style="margin-top: 5px;">
-                            <span>จำนวนเงินทั้งสิ้น</span>
-                            <span style="color: #0ea5e9;">${formatCurrencyPrint(grandTotal)} บาท</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="footer-info">
-                    <div class="footer-row">
-                        <div class="footer-label">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
-                            ชำระเงิน:
-                        </div>
-                        <div>วันที่ชำระ: ${dateStr.split(' ')[0]} &nbsp;&nbsp;&nbsp; ${paymentMethodThai} &nbsp;&nbsp;&nbsp; จำนวนเงินรวม: ${formatCurrencyPrint(grandTotal)} บาท</div>
-                    </div>
-                    <div class="footer-row" style="margin-top: 4px;">
-                        <div class="footer-label">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                            หมายเหตุ:
-                        </div>
-                        <div>${txn.note || '-'}</div>
-                    </div>
-                </div>
-
-                <div class="signature-area">
-                    <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div>(....................................................)</div>
-                        <div style="margin-top: 4px;">ผู้รับบริการ</div>
-                    </div>
-                    <div class="signature-box">
-                        <div class="signature-line"></div>
-                        <div>(....................................................)</div>
-                        <div style="margin-top: 4px;">เจ้าหน้าที่</div>
-                    </div>
-                </div>
-            </div>
-            `).join('<div class="page-break"></div>')}
-        </body>
-        </html>
-    ` : `
-        <!DOCTYPE html>
-        <html lang="th">
-        <head>
-            <meta charset="UTF-8">
-            <title>สลิปใบเสร็จ - ${receiptNo}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
-            <style>
-                body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 0; font-size: 13px; color: #000; width: 72mm; }
-                @page { size: 80mm auto; margin: 0; }
-                .slip-container { padding: 4mm; padding-bottom: 15mm; }
-                .text-center { text-align: center; }
-                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-                .divider { border-bottom: 1px dashed #666; margin: 8px 0; }
-                .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
-                .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-                .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
-            </style>
-        </head>
-        <body>
-            <div class="slip-container">
-                <div class="text-center">
-                    <div class="clinic-name">${clinicName}</div>
-                    <div style="line-height: 1.4;">${clinicAddress}</div>
-                    <div style="line-height: 1.4;">โทร: ${clinicPhone}</div>
-                    <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
-                </div>
-                
-                <div class="divider"></div>
-                
-                <div style="line-height: 1.6;">
-                    <div><strong>เลขที่:</strong> ${receiptNo}</div>
-                    <div><strong>วันที่:</strong> ${dateStr}</div>
-                    ${customerHN !== '-' ? `<div><strong>HN:</strong> ${customerHN}</div>` : ''}
-                    <div><strong>ลูกค้า:</strong> ${customerName}</div>
-                    <div><strong>แคชเชียร์:</strong> ${cashierName}</div>
-                </div>
-                
-                <div class="divider-thick"></div>
-                
-                <div style="font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between;">
-                    <span>รายการ</span>
-                    <span>รวม</span>
-                </div>
-                
-                ${itemsHtml}
-                
-                <div class="divider-thick"></div>
-                
-                <div class="summary-row"><span>รวมเป็นเงิน:</span><span>${formatCurrencyPrint(subtotal)}</span></div>
-                ${discountAmount > 0 ? `<div class="summary-row"><span>ส่วนลด:</span><span>-${formatCurrencyPrint(discountAmount)}</span></div>` : ''}
-                ${taxMode !== 'none' && vatAmount > 0 ? `<div class="summary-row"><span>ภาษี (${vatRate}%):</span><span>${formatCurrencyPrint(vatAmount)}</span></div>` : ''}
-                
-                <div class="summary-row total"><span>ยอดสุทธิ:</span><span>${formatCurrencyPrint(grandTotal)}</span></div>
-                
-                <div class="divider"></div>
-                
-                ${hasVatableItems ? `<div style="font-size: 11px; color: #666; margin-bottom: 8px;">(V) = รายการที่คิดภาษีมูลค่าเพิ่ม</div>` : ''}
-                <div class="text-center" style="line-height: 1.6;">
-                    <div>ชำระโดย: <strong>${paymentMethodThai}</strong></div>
-                    <div style="margin-top: 15px; font-size: 14px; font-weight: bold;">*** ขอบคุณที่ใช้บริการ ***</div>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
+    const html = globalGenerateReceiptHtml(txn, format, branchesData, patientsData, posProducts);
 
     printWindow.document.write(html);
     printWindow.document.close();
@@ -15553,46 +15925,47 @@ export default function App() {
           callAppScript('GET_DATA', 'Staff') // ดึงข้อมูล Staff
         ]);
 
+        // --- แก้ไข: ตรวจสอบข้อมูลให้แน่ใจว่าเป็น Array ก่อนใช้งาน (ป้องกันจอขาว) ---
         if (resPatients?.status === 'success') { 
-          setPatientsData(resPatients.data && resPatients.data.length > 0 ? resPatients.data.reverse() : []); 
+          setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
         }
 
         if (resBranches?.status === 'success') {
-          setBranchesData(resBranches.data && resBranches.data.length > 0 ? resBranches.data : mockBranches);
+          setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
         }
         
         if (resQueue?.status === 'success') {
-          setQueueData(resQueue.data && resQueue.data.length > 0 ? resQueue.data.reverse() : []);
+          setQueueData(Array.isArray(resQueue.data) && resQueue.data.length > 0 ? [...resQueue.data].reverse() : []);
         }
 
         if (resPos?.status === 'success') {
-          setPosHistoryData(resPos.data && resPos.data.length > 0 ? resPos.data.reverse() : []);
+          setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
         }
 
         if (resInventory?.status === 'success') {
-          setInventoryData(resInventory.data || []);
+          setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
         }
 
         if (resInvLogs?.status === 'success') {
-          setInventoryLogsData(resInvLogs.data && resInvLogs.data.length > 0 ? resInvLogs.data.reverse() : []);
+          setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
         }
 
-        if (resPosItems?.status === 'success' && resPosItems.data?.length > 0) {
-          setPosProducts(resPosItems.data);
+        if (resPosItems?.status === 'success') {
+          setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
         }
 
         const combinedFinanceData = [];
-        if (resFinanceRevenue?.status === 'success' && resFinanceRevenue.data) {
+        if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
            combinedFinanceData.push(...resFinanceRevenue.data);
         }
-        if (resFinanceExpenses?.status === 'success' && resFinanceExpenses.data) {
+        if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
            combinedFinanceData.push(...resFinanceExpenses.data);
         }
         setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
 
         // รับข้อมูลพนักงาน
-        if (resStaff?.status === 'success' && resStaff.data) {
-           setStaffData(resStaff.data.reverse());
+        if (resStaff?.status === 'success') {
+           setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
         }
 
       } catch (error) { 
@@ -15906,8 +16279,15 @@ export default function App() {
                 />
             </div>
 
-            <div style={{ display: currentTab === 'reports' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8 h-[80vh]">
-                <PlaceholderPage title="รายงานระดับองค์กร" desc="ดูสถิติ รายได้ และประสิทธิภาพการทำงานของคลินิก" icon={BarChart3} />
+            <div style={{ display: currentTab === 'reports' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
+                <ReportsManager 
+                    patientsData={patientsData}
+                    posHistoryData={posHistoryData}
+                    branchesData={branchesData}
+                    posProducts={posProducts}
+                    isGlobalLoading={isGlobalLoading}
+                    showToast={showToast}
+                />
             </div>
             
             <div style={{ display: currentTab === 'settings' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8 h-[80vh]">
