@@ -16009,6 +16009,10 @@ export default function App() {
     const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=th`;
     const audio = new Audio(audioUrl);
     
+    // ตั้งค่าความเร็วในการอ่าน (1.35x)
+    audio.playbackRate = 1.35;
+    audio.preservesPitch = true; // คงระดับเสียงไว้ไม่ให้แหลมเกินไป
+    
     // ตั้งค่า callback เมื่อจบหรือพัง
     audio.onended = () => { if (onEnd) onEnd(); };
     audio.onerror = () => {
@@ -16028,7 +16032,7 @@ export default function App() {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'th-TH';
-      utterance.rate = 1.0;
+      utterance.rate = 1.35; // ปรับความเร็ว 1.35x
       utterance.onend = () => { if (onEnd) onEnd(); };
       utterance.onerror = () => { if (onEnd) onEnd(); };
       window.speechSynthesis.speak(utterance);
