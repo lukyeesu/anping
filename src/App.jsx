@@ -7415,8 +7415,6 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
     return () => mainElement.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const closeAlert = () => setSweetAlert(prev => ({...prev, isOpen: false}));
-
   const closeEditForm = () => {
     setIsEditFormClosing(true);
     setTimeout(() => {
@@ -9873,7 +9871,12 @@ const FinancePage = ({
   const sweetAlert = useModal();
   const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
   const [isAlertClosing, setIsAlertClosing] = useState(false);
-  const closeFinAlert = () => { setIsAlertClosing(true); setTimeout(() => { sweetAlert.close(); setIsAlertClosing(false); }, 300); };
+  const closeFinAlert = () => {
+      setIsAlertClosing(true);
+      setTimeout(() => {
+          sweetAlert.setIsOpen(false);
+      }, 300);
+  };
 
   const calendarModal = useModal();
   const finCalSwipeProps = useSwipeDown(calendarModal.close);
@@ -10481,6 +10484,7 @@ const FinancePage = ({
   };
 
   const handleDeleteTransaction = async (tx) => {
+      setIsAlertClosing(false);
       if (tx.isAuto) {
         showToast('รายการจากระบบ POS ไม่สามารถลบได้ กรุณากด "แก้ไข" และเปลี่ยนสถานะบิลเป็น "ยกเลิก (Void)" แทน', 'warning');
         return;
@@ -10490,7 +10494,7 @@ const FinancePage = ({
         title: 'ยืนยันการลบรายการ?',
         text: `คุณต้องการลบรายการ "${tx.category}" จำนวน ${formatCurrency(tx.amount)} ใช่หรือไม่?`,
         onConfirm: async () => {
-            sweetAlert.close();
+            closeFinAlert();
             setIsProcessing(true);
             try {
                 const sheetName = tx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
@@ -12210,7 +12214,7 @@ const FinancePage = ({
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
             <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3><p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={closeFinAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={() => { alertConfig.onConfirm(); closeFinAlert(); }} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
+            <div className="flex gap-3 w-full"><button onClick={closeFinAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
           </div>
         </div>
       )}
@@ -16025,6 +16029,24 @@ export default function App() {
   const [inventoryLogsData, setInventoryLogsData] = useState([]); 
   const [posHistoryData, setPosHistoryData] = useState([]); 
   const [financeData, setFinanceData] = useState([]); 
+
+  // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy ---
+  const speak = (text) => {
+    if (!text) return;
+    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=th`;
+    const audio = new Audio(audioUrl);
+    audio.play().catch(err => {
+      console.warn("TTS Proxy failed, falling back to Web Speech API:", err);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'th-TH';
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    });
+  };
+
   const [posProducts, setPosProducts] = useState([]); 
   const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
   const [isDataFetched, setIsDataFetched] = useState(false);
