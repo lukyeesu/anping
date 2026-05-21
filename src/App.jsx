@@ -3126,34 +3126,14 @@ const StatCard = ({ title, value, icon: Icon, color }) => {
 };
 
 // เพิ่ม Props รับข้อมูลคิวและข้อมูลคนไข้เข้ามาคำนวณ
-const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
+const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const headerRef = React.useRef(null);
   const [completedQueues, setCompletedQueues] = useState(new Set());
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingId, setSpeakingId] = useState(null);
 
-  const fallbackTTS = (text, onEnd) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'th-TH';
-      utterance.rate = 1.35;
-      utterance.pitch = 1.0;
-      utterance.onend = onEnd;
-      utterance.onerror = onEnd;
-      window.speechSynthesis.speak(utterance);
-    } else {
-      if (onEnd) onEnd();
-    }
-  };
-
-  const handleCompleteQueue = (appt, e) => {
-    e.stopPropagation();
-    const idToUse = appt.id || appt.datetime;
-    setCompletedQueues(prev => new Set(prev).add(idToUse));
-  };
-
-  const handleSpeakQueue = async (appt, e) => {
+  const handleSpeakQueue = (appt, e) => {
     e.stopPropagation();
     if (isSpeaking) return;
     
@@ -3170,19 +3150,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
       setSpeakingId(null);
     };
 
-    try {
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=th&q=${encodeURIComponent(textToSpeak)}`;
-      const audio = new Audio(url);
-      audio.playbackRate = 1.35;
-      audio.preservesPitch = true;
-      
-      audio.onended = onEnd;
-      audio.onerror = () => fallbackTTS(textToSpeak, onEnd);
-      
-      await audio.play();
-    } catch (error) {
-      fallbackTTS(textToSpeak, onEnd);
-    }
+    speak(textToSpeak, onEnd);
   };
 
   useEffect(() => {
@@ -16031,20 +15999,42 @@ export default function App() {
   const [financeData, setFinanceData] = useState([]); 
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy ---
-  const speak = (text) => {
-    if (!text) return;
+  const speak = (text, onEnd) => {
+    if (!text) {
+        if (onEnd) onEnd();
+        return;
+    }
+    
+    // 1. ลองใช้ Google TTS ผ่าน Proxy (api/tts.js)
     const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=th`;
     const audio = new Audio(audioUrl);
+    
+    // ตั้งค่า callback เมื่อจบหรือพัง
+    audio.onended = () => { if (onEnd) onEnd(); };
+    audio.onerror = () => {
+      console.warn("Audio load failed (likely 404), falling back to Web Speech API");
+      useNativeTTS(text, onEnd);
+    };
+
     audio.play().catch(err => {
-      console.warn("TTS Proxy failed, falling back to Web Speech API:", err);
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'th-TH';
-        utterance.rate = 1.0;
-        window.speechSynthesis.speak(utterance);
-      }
+      console.warn("Audio play failed, falling back to Web Speech API:", err);
+      useNativeTTS(text, onEnd);
     });
+  };
+
+  // Helper สำหรับเรียกใช้ Native Browser TTS
+  const useNativeTTS = (text, onEnd) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'th-TH';
+      utterance.rate = 1.0;
+      utterance.onend = () => { if (onEnd) onEnd(); };
+      utterance.onerror = () => { if (onEnd) onEnd(); };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      if (onEnd) onEnd();
+    }
   };
 
   const [posProducts, setPosProducts] = useState([]); 
@@ -16426,7 +16416,7 @@ export default function App() {
           <div className="flex-1 flex flex-col w-full min-h-full">
             {/* Fix: Render all tabs with display:none to preserve scroll and states (fixes unmount memory leak & scroll jump) */}
             <div style={{ display: currentTab === 'dashboard' ? 'block' : 'none' }} className="w-full">
-                <Dashboard queueData={queueData} patientsData={patientsData} isGlobalLoading={isGlobalLoading} />
+                <Dashboard queueData={queueData} patientsData={patientsData} isGlobalLoading={isGlobalLoading} speak={speak} />
             </div>
             <div style={{ display: currentTab === 'records' ? 'block' : 'none' }} className="w-full">
                 {/* ส่ง posProducts เข้าไปให้ MedicalRecords ใช้งาน */}
