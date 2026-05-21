@@ -3126,24 +3126,58 @@ const StatCard = ({ title, value, icon: Icon, color }) => {
 };
 
 // เพิ่ม Props รับข้อมูลคิวและข้อมูลคนไข้เข้ามาคำนวณ
-const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak }) => {
+const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, currentBranch, branchesData = [] }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const headerRef = React.useRef(null);
   const [completedQueues, setCompletedQueues] = useState(new Set());
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingId, setSpeakingId] = useState(null);
+  const [roomSelectorTarget, setRoomSelectorTarget] = useState(null);
+  const [isRoomModalClosing, setIsRoomModalClosing] = useState(false);
+
+  const activeBranch = branchesData.find(b => b.id === currentBranch);
+  const availableRooms = activeBranch ? (activeBranch.rooms || []) : [];
+
+  const closeRoomModal = () => {
+    setIsRoomModalClosing(true);
+    setTimeout(() => {
+        setRoomSelectorTarget(null);
+        setIsRoomModalClosing(false);
+    }, 300);
+  };
 
   const handleSpeakQueue = (appt, e) => {
     e.stopPropagation();
     if (isSpeaking) return;
     
+    if (!currentBranch || currentBranch === 'all') {
+        alert("กรุณาเลือกสาขาที่แถบข้างก่อน เพื่อระบุห้องตรวจ");
+        return;
+    }
+
+    if (availableRooms.length === 0) {
+        callPatient(appt, "");
+        return;
+    }
+
+    setIsRoomModalClosing(false);
+    setRoomSelectorTarget(appt);
+  };
+
+  const callPatient = (appt, roomName) => {
     setIsSpeaking(true);
     const idToUse = appt.id || appt.datetime;
     setSpeakingId(idToUse);
     
+    // ปิด Modal ทันทีหรือจะใช้ closeRoomModal ก็ได้
+    setRoomSelectorTarget(null);
+    
     const rawName = appt.patientName || appt.name || '';
     const cleanName = rawName.replace(/^(นาย|นางสาว|นาง|นพ\.|พญ\.|เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.)\s*/g, '').trim();
-    const textToSpeak = `ขอเชิญคุณ ${cleanName} ที่ห้องตรวจค่ะ`;
+    
+    let textToSpeak = `ขอเชิญคุณ ${cleanName}`;
+    if (roomName) textToSpeak += ` ที่ ${roomName} ค่ะ`;
+    else textToSpeak += ` ที่ห้องตรวจค่ะ`;
     
     const onEnd = () => {
       setIsSpeaking(false);
@@ -3353,6 +3387,57 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak }
           </div>
         </div>
       </div>
+
+      {/* --- [NEW] Room Selection Modal --- */}
+      {roomSelectorTarget && (
+        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isRoomModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-0 max-w-sm w-full shadow-2xl flex flex-col overflow-hidden ${isRoomModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner">
+                  <MapPin size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">เลือกห้องตรวจ</h3>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black kanit-text">ระบุห้องเรียกคิว</p>
+                </div>
+              </div>
+              <button onClick={closeRoomModal} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-3 max-h-[60dvh] overflow-y-auto custom-scrollbar grid grid-cols-1 gap-1.5">
+              {availableRooms.map((room, ridx) => (
+                <button 
+                  key={ridx}
+                  onClick={() => callPatient(roomSelectorTarget, room)}
+                  className="w-full text-left p-4 rounded-2xl hover:bg-sky-50 text-base font-bold text-slate-700 hover:text-sky-700 transition-all border border-transparent hover:border-sky-100 flex items-center gap-3 group active:scale-[0.98]"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-sky-100 group-hover:text-sky-500 transition-colors">
+                    <MapPin size={18} />
+                  </div>
+                  <span className="flex-1 truncate kanit-text">{room}</span>
+                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ChevronRight size={14} className="text-sky-500" />
+                  </div>
+                </button>
+              ))}
+              
+              <button 
+                onClick={() => callPatient(roomSelectorTarget, "")}
+                className="w-full text-center py-4 rounded-2xl hover:bg-slate-50 text-sm font-medium text-slate-400 italic transition-colors kanit-text border border-dashed border-slate-200 mt-2"
+              >
+                ไม่ระบุห้อง (เรียกปกติ)
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50/30 border-t border-slate-50">
+              <p className="text-[10px] text-center text-slate-400 kanit-text">คนไข้: {roomSelectorTarget.patientName || roomSelectorTarget.name}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -7894,8 +7979,18 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
   const [editingBranch, setEditingBranch] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const initialForm = { id: '', name: '', clinicName: '', licenseNumber: '', logo: '', taxId: '', address: '', phone: '', email: '', manager: '', status: 'active' };
+  const initialForm = { id: '', name: '', clinicName: '', licenseNumber: '', logo: '', taxId: '', address: '', phone: '', email: '', manager: '', status: 'active', rooms: [] };
   const [formData, setFormData] = useState(initialForm);
+
+  const addRoom = () => setFormData(prev => ({ ...prev, rooms: [...(prev.rooms || []), ''] }));
+  const removeRoom = (index) => setFormData(prev => ({ ...prev, rooms: (prev.rooms || []).filter((_, i) => i !== index) }));
+  const handleRoomChange = (index, value) => {
+    setFormData(prev => {
+      const newRooms = [...(prev.rooms || [])];
+      newRooms[index] = value;
+      return { ...prev, rooms: newRooms };
+    });
+  };
 
   const closeModal = () => {
     setIsClosing(true);
@@ -7910,7 +8005,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
 
   const handleOpenEdit = (branch) => {
     setEditingBranch(branch);
-    setFormData({ ...initialForm, ...branch });
+    setFormData({ ...initialForm, ...branch, rooms: branch.rooms || [] });
     setIsModalOpen(true);
   };
 
@@ -8039,6 +8134,21 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                        <p className="text-xs kanit-text">ผู้จัดการ: {branch.manager || 'ไม่ระบุ'}</p>
                     </div>
                  </div>
+
+                 {branch.rooms && branch.rooms.length > 0 && (
+                    <div className="mb-6 pt-4 border-t border-slate-50">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                          <Briefcase size={12} className="text-sky-500" /> ห้องตรวจ / พื้นที่ ({branch.rooms.length})
+                       </p>
+                       <div className="flex flex-wrap gap-1.5">
+                          {branch.rooms.map((r, i) => (
+                             <span key={i} className="px-2.5 py-1 bg-sky-50/50 text-sky-700 rounded-lg text-[10px] font-bold kanit-text border border-sky-100/50 shadow-sm">
+                                {r}
+                             </span>
+                          ))}
+                       </div>
+                    </div>
+                 )}
                  
                  <div className="flex gap-2">
                     <button onClick={() => handleOpenEdit(branch)} className="flex-1 py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold kanit-text hover:bg-sky-50 hover:text-sky-600 transition-colors border border-slate-100">
@@ -8139,6 +8249,39 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                            <div>
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">อีเมล</label>
                               <input type="email" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="example@email.com" />
+                           </div>
+                        </div>
+
+                        {/* --- [NEW] ระบบจัดการห้องตรวจ (Dynamic Rooms) --- */}
+                        <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-3">
+                           <div className="flex justify-between items-center mb-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 kanit-text flex items-center gap-1.5">
+                                 <Briefcase size={12} className="text-sky-500" /> รายชื่อห้องตรวจ / พื้นที่ให้บริการ
+                              </label>
+                              <button type="button" onClick={addRoom} className="text-[10px] font-bold text-sky-500 hover:text-sky-600 flex items-center gap-1 kanit-text bg-white px-2 py-1 rounded-lg border border-sky-100 shadow-sm transition-all active:scale-95">
+                                 <Plus size={12} /> เพิ่มห้อง
+                              </button>
+                           </div>
+                           <div className="space-y-2">
+                              {(formData.rooms || []).map((room, idx) => (
+                                 <div key={idx} className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <input 
+                                       type="text" 
+                                       className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/10 transition-all font-data text-sm shadow-sm" 
+                                       value={room} 
+                                       onChange={e => handleRoomChange(idx, e.target.value)} 
+                                       placeholder={`เช่น ห้องตรวจ ${idx + 1}, ห้องทำฟัน 1`} 
+                                    />
+                                    <button type="button" onClick={() => removeRoom(idx)} className="p-2.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 border border-transparent hover:border-rose-100 shadow-sm bg-white">
+                                       <Trash2 size={18} />
+                                    </button>
+                                 </div>
+                              ))}
+                              {(formData.rooms || []).length === 0 && (
+                                 <div className="text-center py-4 bg-white/50 rounded-xl border border-dashed border-slate-200">
+                                    <p className="text-[11px] text-slate-400 italic kanit-text">ยังไม่ได้ระบุรายชื่อห้องในสาขานี้</p>
+                                 </div>
+                              )}
                            </div>
                         </div>
                     </div>
@@ -16420,7 +16563,14 @@ export default function App() {
           <div className="flex-1 flex flex-col w-full min-h-full">
             {/* Fix: Render all tabs with display:none to preserve scroll and states (fixes unmount memory leak & scroll jump) */}
             <div style={{ display: currentTab === 'dashboard' ? 'block' : 'none' }} className="w-full">
-                <Dashboard queueData={queueData} patientsData={patientsData} isGlobalLoading={isGlobalLoading} speak={speak} />
+                <Dashboard 
+                    queueData={queueData} 
+                    patientsData={patientsData} 
+                    isGlobalLoading={isGlobalLoading} 
+                    speak={speak}
+                    currentBranch={currentBranch}
+                    branchesData={branchesData}
+                />
             </div>
             <div style={{ display: currentTab === 'records' ? 'block' : 'none' }} className="w-full">
                 {/* ส่ง posProducts เข้าไปให้ MedicalRecords ใช้งาน */}
