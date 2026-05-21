@@ -16141,41 +16141,48 @@ export default function App() {
   const [posHistoryData, setPosHistoryData] = useState([]); 
   const [financeData, setFinanceData] = useState([]); 
 
-  // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy ---
+  // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
   const speak = (text, onEnd) => {
     if (!text) {
         if (onEnd) onEnd();
         return;
     }
     
+    // ตรวจสอบภาษาเบื้องต้น (Smart Language Detection)
+    // ถ้ามีภาษาไทยปนอยู่ ให้ใช้สำเนียงไทย (Google th จะอ่านคำอังกฤษในประโยคไทยได้ดี)
+    // แต่ถ้ามีแต่อังกฤษล้วน ให้ใช้ en เพื่อสำเนียงที่เป๊ะกว่า
+    const hasThai = /[ก-ฮ]/.test(text);
+    const lang = hasThai ? 'th' : 'en';
+
     // 1. ลองใช้ Google TTS ผ่าน Proxy (api/tts.js)
-    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=th`;
+    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
     const audio = new Audio(audioUrl);
     
-    // ตั้งค่าความเร็วในการอ่าน (1.35x)
     audio.playbackRate = 1.35;
-    audio.preservesPitch = true; // คงระดับเสียงไว้ไม่ให้แหลมเกินไป
+    audio.preservesPitch = true;
     
-    // ตั้งค่า callback เมื่อจบหรือพัง
     audio.onended = () => { if (onEnd) onEnd(); };
     audio.onerror = () => {
-      console.warn("Audio load failed (likely 404), falling back to Web Speech API");
-      useNativeTTS(text, onEnd);
+      console.warn("Audio load failed, falling back to Web Speech API");
+      useNativeTTS(text, onEnd, lang);
     };
 
     audio.play().catch(err => {
       console.warn("Audio play failed, falling back to Web Speech API:", err);
-      useNativeTTS(text, onEnd);
+      useNativeTTS(text, onEnd, lang);
     });
   };
 
-  // Helper สำหรับเรียกใช้ Native Browser TTS
-  const useNativeTTS = (text, onEnd) => {
+  // Helper สำหรับเรียกใช้ Native Browser TTS (รองรับระบุภาษา)
+  const useNativeTTS = (text, onEnd, lang = 'th') => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'th-TH';
-      utterance.rate = 1.35; // ปรับความเร็ว 1.35x
+      
+      // กำหนดรหัสภาษาให้ตรงกับ Browser
+      utterance.lang = lang === 'th' ? 'th-TH' : 'en-US';
+      utterance.rate = 1.35;
+      
       utterance.onend = () => { if (onEnd) onEnd(); };
       utterance.onerror = () => { if (onEnd) onEnd(); };
       window.speechSynthesis.speak(utterance);
