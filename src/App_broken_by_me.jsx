@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  LayoutDashboard, Users, CalendarRange, Calculator, 
-  Package, BarChart3, Settings, Building2, Search, 
+import {
+  LayoutDashboard, Users, CalendarRange, Calculator,
+  Package, BarChart3, Settings, Building2, Search,
   Plus, X, CheckCircle2, AlertCircle, MapPin, Phone,
   Clock, Stethoscope, FileText, Pill, CreditCard, ShieldCheck, AlertOctagon,
   Pencil, Trash2, AlertTriangle, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowUpDown, Loader2,
@@ -11,7 +11,6 @@ import {
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone
 } from 'lucide-react';
-
 // --- สไตล์พื้นฐาน (Design Tokens) ---
 const theme = {
   primary: 'bg-sky-500 text-white hover:bg-sky-600',
@@ -428,14 +427,7 @@ const bahtTextPrint = (amount) => {
     return result;
 };
 
-const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = '') => {
-    const branchIdToUse = currentBranch && currentBranch !== 'all' ? currentBranch : '';
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
-    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
-    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
-    const logoUrl = targetBranch.logo || '';
-
+const globalGenerateRecordHtml = (patient) => {
     let regDateStr = '-';
     if (patient.createdAt) {
         const cd = new Date(patient.createdAt);
@@ -468,9 +460,9 @@ const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = ''
             body { font-family: 'Sarabun', sans-serif; font-size: 14px; color: #000; margin: 0; padding: 0; }
             @page { size: A5 landscape; margin: 10mm; }
             .container { width: 100%; box-sizing: border-box; }
-            .header { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
-            .clinic-info { line-height: 1.2; font-size: 12px; }
-            .clinic-name { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+            .header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+            .clinic-info { line-height: 1.5; font-size: 12px; }
+            .clinic-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
             .doc-info { text-align: right; line-height: 1.5; font-size: 14px; }
             .doc-info-row { display: flex; justify-content: flex-end; align-items: baseline; margin-bottom: 8px; }
             .title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 12px; }
@@ -497,13 +489,11 @@ const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = ''
     <body>
         <div class="container">
             <div class="header">
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    ${logoUrl ? `<div style="width: 60px; height: 60px; flex-shrink: 0;"><img src="${logoUrl}" style="width: 100%; height: 100%; object-fit: contain;" /></div>` : ''}
-                    <div class="clinic-info">
-                        <div class="clinic-name">${clinicName}</div>
-                        <div style="max-width: 350px;">${clinicAddress}</div>
-                        <div>โทร. ${clinicPhone}</div>
-                    </div>
+                <div class="clinic-info">
+                    <div class="clinic-name">อันผิงคลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร.062-826-1696</div>
                 </div>
                 <div class="doc-info">
                     <div class="doc-info-row">
@@ -567,14 +557,7 @@ const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = ''
     `;
 };
 
-const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], currentBranch = '') => {
-    const branchIdToUse = currentBranch && currentBranch !== 'all' ? currentBranch : '';
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
-    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
-    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
-    const logoUrl = targetBranch.logo || '';
-
+const globalGenerateOpdHtml = (patient, record, visitNumber) => {
     const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
     const fullName = `${patient.prefix || ''}${patient.firstName || ''} ${patient.lastName || ''}`.trim();
     const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
@@ -593,9 +576,9 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
             html, body { width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
             @page { size: A5 landscape; margin: 10mm; }
             .container { width: 100%; height: 128mm; max-height: 128mm; box-sizing: border-box; display: flex; flex-direction: column; padding-bottom: 2px; overflow: hidden; page-break-after: avoid; page-break-inside: avoid; }
-            .header { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
-            .clinic-info { line-height: 1.2; font-size: 12px; }
-            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 2px; }
+            .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+            .clinic-info { line-height: 1.4; font-size: 12px; }
+            .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
             .doc-info { text-align: right; }
             .doc-info-row { display: flex; align-items: baseline; justify-content: flex-end; margin-bottom: 6px; font-weight: bold; }
             .row { display: flex; align-items: baseline; margin-bottom: 10px; width: 100%; }
@@ -639,13 +622,11 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
     <body>
         <div class="container">
             <div class="header">
-                <div style="display: flex; gap: 15px; align-items: center;">
-                    ${logoUrl ? `<div style="width: 60px; height: 60px; flex-shrink: 0;"><img src="${logoUrl}" style="width: 100%; height: 100%; object-fit: contain;" /></div>` : ''}
-                    <div class="clinic-info">
-                        <div class="clinic-name">${clinicName}</div>
-                        <div style="max-width: 350px;">${clinicAddress}</div>
-                        <div>โทร. ${clinicPhone}</div>
-                    </div>
+                <div class="clinic-info">
+                    <div class="clinic-name">ฟู่ ซิน ไถ คลินิก</div>
+                    <div>79/47 ปากทางเข้าหมู่บ้านพรธิสาร 5 คลอง 7</div>
+                    <div>ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110</div>
+                    <div>โทร. 062-826-1696</div>
                 </div>
                 <div class="doc-info" style="width: 300px;">
                     <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
@@ -709,9 +690,8 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
     `;
 };
 
-const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posProducts, currentBranch = '') => {
-    const branchIdToUse = (txn.branchId && txn.branchId !== 'all') ? txn.branchId : (currentBranch !== 'all' ? currentBranch : '');
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
+const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posProducts) => {
+    const targetBranch = branchesData.find(b => b.id === txn.branchId) || branchesData[0] || {};
     const clinicName = targetBranch.clinicName || targetBranch.name || "ยังไม่ได้ระบุชื่อคลินิก";
     const clinicAddress = targetBranch.address ?? "ยังไม่ได้ระบุที่อยู่";
     const clinicPhone = targetBranch.phone ?? "ยังไม่ได้ระบุเบอร์โทร";
@@ -850,12 +830,12 @@ const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posP
             <div class="container">
                 <div style="display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 15px;">
                     <div style="display: flex; flex-direction: column; flex: 1; padding-right: 20px;">
-                        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="display: flex; align-items: flex-start; gap: 15px; margin-bottom: 15px;">
                             ${logoUrl ? `<div style="width: 90px; height: 90px; flex-shrink: 0;"><img src="${logoUrl}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 50%;" /></div>` : ''}
-                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 8px;">
                                 <div style="font-size: 16px; font-weight: 700; color: #1e293b;">${clinicName}</div>
                                 <div style="color: #475569; font-size: 13px;">${clinicAddress}</div>
-                                <div style="color: #475569; font-size: 13px; display: flex; gap: 10px; margin-top: 1px;">
+                                <div style="color: #475569; font-size: 13px; display: flex; gap: 10px; margin-top: 2px;">
                                     <span><b>เลขที่ภาษี:</b> ${taxId}</span>
                                     <span><b>โทร:</b> ${clinicPhone}</span>
                                 </div>
@@ -983,7 +963,7 @@ const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posP
                 @page { size: 80mm auto; margin: 0; }
                 .slip-container { padding: 4mm; padding-bottom: 15mm; }
                 .text-center { text-align: center; }
-                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 2px; }
+                .clinic-name { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
                 .divider { border-bottom: 1px dashed #666; margin: 8px 0; }
                 .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
                 .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
@@ -992,15 +972,12 @@ const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posP
         </head>
         <body>
             <div class="slip-container">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
-                    ${logoUrl ? `<img src="${logoUrl}" style="width: 45px; height: 45px; flex-shrink: 0; object-fit: contain; border-radius: 50%;" />` : ''}
-                    <div style="${logoUrl ? 'text-align: left;' : 'text-align: center;'}">
-                        <div class="clinic-name" style="margin-bottom: 0;">${clinicName}</div>
-                        <div style="line-height: 1.2; font-size: 11px;">${clinicAddress}</div>
-                        <div style="line-height: 1.2; font-size: 11px;">โทร: ${clinicPhone}</div>
-                    </div>
+                <div class="text-center">
+                    <div class="clinic-name">${clinicName}</div>
+                    <div style="line-height: 1.4;">${clinicAddress}</div>
+                    <div style="line-height: 1.4;">โทร: ${clinicPhone}</div>
+                    <div style="margin-top: 8px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
                 </div>
-                <div class="text-center" style="margin-bottom: 4px; font-weight: bold; font-size: 14px;">ใบเสร็จรับเงิน</div>
                 
                 <div class="divider"></div>
                 
@@ -2025,7 +2002,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 };
 
 // เพิ่ม prop setPatientsData เพื่อให้สามารถเพิ่มคนไข้ใหม่จากหน้านัดหมายได้
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading }) => {
+const AppointmentManager = ({ queueData, setQueueData, loadQueueForMonth, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -3237,6 +3214,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
     <div className="fade-in pb-10 w-full">
       
       {/* Sticky Header ย่อขนาดได้แบบ Glassmorphism (ควบคุมผ่าน CSS ล้วน) */}
+      {/* แก้ไข: เปลี่ยนจาก transform เป็น top */}
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -3272,6 +3250,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
                         date.setDate(date.getDate() - offset);
                         const loopDateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear() + 543}`;
                         const count = queueData.filter(q => q.datetime && q.datetime.split(' ')[0] === loopDateStr).length;
+                        // คำนวณความสูงขั้นต่ำ 10% ถ้ามีคิวจะขยับขึ้นตามสัดส่วน
                         const height = count === 0 ? '10%' : `${Math.min(100, Math.max(15, count * 20))}%`;
                         return (
                             <div key={offset} className="flex flex-col items-center gap-2 flex-1 max-w-[48px] group">
@@ -3309,6 +3288,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
                  }
                  return finishedTodaysQueue.map((appt, i) => {
                    const time = appt.datetime.split(' ')[1] ? appt.datetime.split(' ')[1].replace('น.', '').trim() : '-';
+                   
                    return (
                   <div key={appt.id || i} className="flex items-center gap-3 p-3 rounded-2xl transition-all border bg-emerald-50/30 border-emerald-100/50 cursor-default opacity-80">
                     <div className="w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold font-data shrink-0 bg-emerald-100 text-emerald-600">
@@ -3349,7 +3329,9 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading }) => {
                  }
                  return activeTodaysQueue.map((appt, i) => {
                    const time = appt.datetime.split(' ')[1] ? appt.datetime.split(' ')[1].replace('น.', '').trim() : '-';
+                   const statusType = appt.status || appt.dealStatus;
                    const isThisSpeaking = speakingId === (appt.id || appt.datetime);
+                   
                    return (
                   <div key={appt.id || i} className={`flex items-center gap-3 p-3 rounded-2xl transition-all border ${isThisSpeaking ? 'bg-sky-50 border-sky-300 shadow-md transform scale-[1.02]' : 'hover:bg-slate-50 border-slate-100/50 hover:border-sky-200'} group cursor-default`}>
                     <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold font-data shrink-0 shadow-inner transition-colors ${isThisSpeaking ? 'bg-sky-500 text-white' : 'bg-sky-50 text-sky-600 group-hover:bg-sky-100'}`}>
@@ -3406,9 +3388,7 @@ const PatientModal = React.memo(({
     blankDays, monthDays, opdCalDate, setOpdCalDate, opdCalView, setOpdCalView,
     opdYearPageStart, setOpdYearPageStart, opdTime, setOpdTime, isCalendarClosing,
     closeMedCalendar, isOpdCalendarClosing, closeMedOpdCalendar, sweetAlert, 
-    isAlertClosing, closeMedAlert, editingOpdIndex, yearPageStart, setYearPageStart, 
-    branchesData = [], currentBranch = '',
-    CheckCircle2, Loader2, ScanText, X, FileText, Pencil, Plus, Users, CreditCard, Clock, MapPin, Package, Stethoscope, Phone, Trash2, CalendarIcon, User, UserPlus, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle
+    isAlertClosing, closeMedAlert, editingOpdIndex, yearPageStart, setYearPageStart, CheckCircle2, Loader2, ScanText, X, FileText, Pencil, Plus, Users, CreditCard, Clock, MapPin, Package, Stethoscope, Phone, Trash2, CalendarIcon, User, UserPlus, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle
 }) => {
 
   // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
@@ -3775,18 +3755,13 @@ const PatientModal = React.memo(({
                     <table className="w-full text-left border-collapse min-w-[800px] text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 kanit-text">
-                          <th className="p-3 font-medium">วันที่/เวลา</th><th className="p-3 font-medium">สาขา</th><th className="p-3 font-medium">Vitals</th><th className="p-3 font-medium">อาการ/วินิจฉัย</th><th className="p-3 font-medium">การรักษา</th><th className="p-3 font-medium">แพทย์</th><th className="p-3 font-medium text-right">จัดการ</th>
+                          <th className="p-3 font-medium">วันที่/เวลา</th><th className="p-3 font-medium">Vitals</th><th className="p-3 font-medium">อาการ/วินิจฉัย</th><th className="p-3 font-medium">การรักษา</th><th className="p-3 font-medium">แพทย์</th><th className="p-3 font-medium text-right">จัดการ</th>
                         </tr>
                       </thead>
                       <tbody>
                         {formData.opdRecords.map((record, index) => (
                           <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top font-data">
                             <td className="p-3 text-slate-700 whitespace-nowrap"><div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div><div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div></td>
-                            <td className="p-3 text-slate-700 whitespace-nowrap">
-                              <div className="text-xs font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100 w-fit">
-                                {branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}
-                              </div>
-                            </td>
                             <td className="p-3 text-slate-500 text-[11px] whitespace-nowrap">
                               T: <span className="font-data font-semibold text-slate-700">{record.temp || '-'}</span> | PR: <span className="font-data font-semibold text-slate-700">{record.pulse || '-'}</span> | BP: <span className="font-data font-semibold text-slate-700">{record.bp || '-'}</span><br/>
                               W: <span className="font-data font-semibold text-slate-700">{record.weight || '-'}</span> | H: <span className="font-data font-semibold text-slate-700">{record.height || '-'}</span>
@@ -3862,11 +3837,8 @@ const PatientModal = React.memo(({
                                       {record.note && <div className="mt-1 text-slate-400 italic">* {record.note}</div>}
                                   </div>
                                   <div className="pt-2 mt-1 border-t border-slate-200/60 flex items-center justify-between">
-                                      <span className="text-[10px] font-semibold text-slate-400">สาขา / แพทย์</span>
-                                      <div className="flex flex-col items-end">
-                                          <span className="text-[10px] font-bold text-sky-600 uppercase">{branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}</span>
-                                          <span className="font-medium text-slate-600 font-data flex items-center gap-1 text-[11px]"><User size={10}/> {record.doctor || '-'}</span>
-                                      </div>
+                                      <span className="text-[10px] font-semibold text-slate-400">แพทย์ผู้รักษา</span>
+                                      <span className="font-medium text-sky-600 font-data flex items-center gap-1"><User size={12}/> {record.doctor || '-'}</span>
                                   </div>
                               </div>
                               <div className="grid grid-cols-3 gap-2 pt-1">
@@ -3912,7 +3884,7 @@ const PatientModal = React.memo(({
   );
 });
 
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], callAppScript, showToast, isGlobalLoading, posProducts = [] }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, callAppScript, showToast, isGlobalLoading, posProducts = [] }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -4043,7 +4015,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   
   const [formData, setFormData] = useState(initialFormState);
   
-  const initialOpdState = { datetime: '', doctor: '', branchId: '', temp: '', pulse: '', bp: '', weight: '', height: '', cc: '', dx: '', tx: [''], note: '' };
+  const initialOpdState = { datetime: '', doctor: '', temp: '', pulse: '', bp: '', weight: '', height: '', cc: '', dx: '', tx: [''], note: '' };
   const [showOpdForm, setShowOpdForm] = useState(false);
   const [isClosingOpdForm, setIsClosingOpdForm] = useState(false);
   const [newOpdRecord, setNewOpdRecord] = useState(initialOpdState);
@@ -4357,28 +4329,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // เพิ่มฟังก์ชันพิมพ์เวชระเบียนเพื่อให้สามารถเรียกใช้งานได้ทั้งบน Desktop และ Mobile
   const handlePrintRecord = (patient) => {
-    if (!currentBranch || currentBranch === 'all') {
-        showToast('กรุณาเลือกสาขาที่จะทำรายการก่อนพิมพ์เอกสาร', 'warning');
-        return;
-    }
-
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
         return;
     }
 
-    try {
-        const html = globalGenerateRecordHtml(patient, branchesData, currentBranch);
-        printWindow.document.write(html);
-        printWindow.document.close();
-        setTimeout(() => {
-            if (printWindow.print) printWindow.print();
-        }, 500);
-    } catch (e) {
-        console.error("Print Error:", e);
-        showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
-    }
+    const html = globalGenerateRecordHtml(patient);
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
   };
 
   // --- 3. Derived State (Memos & Filtering) ---
@@ -4559,31 +4523,21 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
   const handlePrintOpdRecord = (record, index) => {
-    if (!currentBranch || currentBranch === 'all') {
-        showToast('กรุณาเลือกสาขาที่จะทำรายการก่อนพิมพ์เอกสาร', 'warning');
-        return;
-    }
-
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
         return;
     }
 
-    try {
-        const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-        const html = globalGenerateOpdHtml(formData, record, visitNumber, branchesData, currentBranch);
+    const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
+    const html = globalGenerateOpdHtml(formData, record, visitNumber);
 
-        printWindow.document.write(html);
-        printWindow.document.close();
+    printWindow.document.write(html);
+    printWindow.document.close();
 
-        setTimeout(() => {
-            if (printWindow.print) printWindow.print();
-        }, 500);
-    } catch (e) {
-        console.error("Print Error:", e);
-        showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
-    }
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
   };
 
   const handleOpenOpdForm = (index = null, record = null) => {
@@ -4591,13 +4545,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       setEditingOpdIndex(index); 
       setNewOpdRecord({
         ...record,
-        tx: Array.isArray(record.tx) ? record.tx : (record.tx ? [record.tx] : ['']),
-        branchId: record.branchId || (currentBranch !== 'all' ? currentBranch : '')
+        tx: Array.isArray(record.tx) ? record.tx : (record.tx ? [record.tx] : [''])
       }); 
     } 
     else { 
       setEditingOpdIndex(null); 
-      setNewOpdRecord({ ...initialOpdState, datetime: formatDateTime(new Date().toISOString()), tx: [''], branchId: currentBranch !== 'all' ? currentBranch : '' }); 
+      setNewOpdRecord({ ...initialOpdState, datetime: formatDateTime(new Date().toISOString()), tx: [''] }); 
     }
     setShowOpdForm(true);
 
@@ -4624,10 +4577,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   };
 
   const handleSaveOpdRecord = async () => {
-    if (!newOpdRecord.branchId) {
-        showToast('กรุณาเลือกสาขาที่รับบริการ', 'warning');
-        return;
-    }
     let newRecords = [...(formData.opdRecords || [])];
     if (editingOpdIndex !== null) newRecords[editingOpdIndex] = newOpdRecord;
     else newRecords = [newOpdRecord, ...newRecords];
@@ -5328,7 +5277,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                       
                       <div className="flex flex-col gap-4">
                         {/* แถวที่ 1: วันที่/เวลา, แพทย์ */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="relative">
                             <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">วันที่/เวลา</label>
                             <div ref={opdWrapperRef} className="relative group">
@@ -5339,19 +5288,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">แพทย์ผู้รักษา</label>
                             <input type="text" className={`${theme.input} bg-white py-2 text-sm font-data`} value={newOpdRecord.doctor} onChange={(e) => setNewOpdRecord({...newOpdRecord, doctor: e.target.value})} placeholder="ระบุชื่อแพทย์" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">สาขาที่รับบริการ</label>
-                            <select 
-                              className={`${theme.input} bg-white py-2 text-sm font-data appearance-none cursor-pointer`}
-                              value={newOpdRecord.branchId}
-                              onChange={(e) => setNewOpdRecord({...newOpdRecord, branchId: e.target.value})}
-                            >
-                              <option value="">เลือกสาขา</option>
-                              {branchesData.map(b => (
-                                <option key={b.id} value={b.id}>{b.clinicName || b.name}</option>
-                              ))}
-                            </select>
                           </div>
                         </div>
 
@@ -5461,19 +5397,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                         <table className="w-full text-left border-collapse min-w-[800px] text-sm">
                           <thead>
                             <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 kanit-text">
-                              <th className="p-3 font-medium">วันที่/เวลา</th><th className="p-3 font-medium">สาขา</th><th className="p-3 font-medium">Vitals</th><th className="p-3 font-medium">อาการ/วินิจฉัย</th><th className="p-3 font-medium">การรักษา</th><th className="p-3 font-medium">แพทย์</th><th className="p-3 font-medium text-right">จัดการ</th>
+                              <th className="p-3 font-medium">วันที่/เวลา</th><th className="p-3 font-medium">Vitals</th><th className="p-3 font-medium">อาการ/วินิจฉัย</th><th className="p-3 font-medium">การรักษา</th><th className="p-3 font-medium">แพทย์</th><th className="p-3 font-medium text-right">จัดการ</th>
                             </tr>
-                            </thead>
-                            <tbody>
+                          </thead>
+                          <tbody>
                             {formData.opdRecords.map((record, index) => (
                               <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top font-data">
                                 <td className="p-3 text-slate-700 whitespace-nowrap"><div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div><div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div></td>
-                                <td className="p-3 text-slate-700 whitespace-nowrap">
-                                  <div className="text-xs font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100 w-fit">
-                                    {branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}
-                                  </div>
-                                </td>
-                                <td className="p-3 text-slate-500 text-[11px] whitespace-nowrap">                                  T: <span className="font-data font-semibold text-slate-700">{record.temp || '-'}</span> | PR: <span className="font-data font-semibold text-slate-700">{record.pulse || '-'}</span> | BP: <span className="font-data font-semibold text-slate-700">{record.bp || '-'}</span><br/>
+                                <td className="p-3 text-slate-500 text-[11px] whitespace-nowrap">
+                                  T: <span className="font-data font-semibold text-slate-700">{record.temp || '-'}</span> | PR: <span className="font-data font-semibold text-slate-700">{record.pulse || '-'}</span> | BP: <span className="font-data font-semibold text-slate-700">{record.bp || '-'}</span><br/>
                                   W: <span className="font-data font-semibold text-slate-700">{record.weight || '-'}</span> | H: <span className="font-data font-semibold text-slate-700">{record.height || '-'}</span>
                                 </td>
                                 <td className="p-3 text-slate-700 max-w-[150px]">
@@ -5553,11 +5485,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                           {record.note && <div className="mt-1 text-slate-400 italic">* {record.note}</div>}
                                       </div>
                                       <div className="pt-2 mt-1 border-t border-slate-200/60 flex items-center justify-between">
-                                          <span className="text-[10px] font-semibold text-slate-400">สาขา / แพทย์</span>
-                                          <div className="flex flex-col items-end">
-                                              <span className="text-[10px] font-bold text-sky-600 uppercase">{branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}</span>
-                                              <span className="font-medium text-slate-600 font-data flex items-center gap-1 text-[11px]"><User size={10}/> {record.doctor || '-'}</span>
-                                          </div>
+                                          <span className="text-[10px] font-semibold text-slate-400">แพทย์ผู้รักษา</span>
+                                          <span className="font-medium text-sky-600 font-data flex items-center gap-1"><User size={12}/> {record.doctor || '-'}</span>
                                       </div>
                                   </div>
                                   <div className="grid grid-cols-3 gap-2 pt-1">
@@ -5892,14 +5821,7 @@ const POSSystem = ({
   const [productForm, setProductForm] = useState(initialProductForm);
   const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
 
-  const [isAlertClosing, setIsAlertClosing] = useState(false);
-  const closeAlert = () => {
-    setIsAlertClosing(true);
-    setTimeout(() => {
-        setSweetAlert(prev => ({ ...prev, isOpen: false }));
-        setIsAlertClosing(false);
-    }, 300);
-  };
+  const closeAlert = () => { setSweetAlert(prev => ({...prev, isOpen: false})); };
 
   // --- ฟังก์ชันเมื่อเลือกคนไข้ ให้ดึงประวัติล่าสุดมาใส่ตะกร้า ---
   const handleSelectPatient = (patientId, patientLabel) => {
@@ -9839,6 +9761,10 @@ const FinancePage = ({
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [dateRange, setDateRange] = useState({ start: null, end: null });
 
+  // --- [NEW] State สำหรับ Infinite Scroll ---
+  const [visibleCount, setVisibleCount] = useState(25);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // --- [NEW] State สำหรับ Modal ปฏิทินเลือกช่วงเวลา ---
   const [showFinRangeCalendar, setShowFinRangeCalendar] = useState(false);
   const [finRangeCalDate, setFinRangeCalDate] = useState(new Date());
@@ -9872,8 +9798,6 @@ const FinancePage = ({
 
   const sweetAlert = useModal();
   const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
-  const [isAlertClosing, setIsAlertClosing] = useState(false);
-  const closeFinAlert = () => { setIsAlertClosing(true); setTimeout(() => { sweetAlert.close(); setIsAlertClosing(false); }, 300); };
 
   const calendarModal = useModal();
   const finCalSwipeProps = useSwipeDown(calendarModal.close);
@@ -10334,6 +10258,12 @@ const FinancePage = ({
     });
   }, [allTransactions, search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
+  // --- [NEW] Reset จำนวนเมื่อ Filter เปลี่ยน ---
+  useEffect(() => {
+    setVisibleCount(25);
+    setIsLoadingMore(false);
+  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+
   const stats = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
@@ -10367,10 +10297,21 @@ const FinancePage = ({
     if (!mainElement) return;
 
     const handleScroll = (e) => {
-      const { scrollTop } = e.target;
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
       if (headerRef.current) {
           if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
           else headerRef.current.classList.remove('is-scrolled');
+      }
+
+      // --- [NEW] Infinite Scroll Logic ---
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        if (visibleCount < filteredTransactions.length && !isLoadingMore) {
+           setIsLoadingMore(true);
+           setTimeout(() => {
+              setVisibleCount(prev => prev + 25);
+              setIsLoadingMore(false);
+           }, 300);
+        }
       }
     };
 
@@ -10383,7 +10324,7 @@ const FinancePage = ({
 
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [visibleCount, filteredTransactions.length, isLoadingMore]); // --- [NEW] เพิ่ม Dependencies
   
   // Set default branch when opening modal
   useEffect(() => {
@@ -10919,8 +10860,8 @@ const FinancePage = ({
                         </tr>
                       ))
                     ) : filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((tx) => (
-                        <tr key={tx.id} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
+                      filteredTransactions.slice(0, visibleCount).map((tx, i) => (
+                        <tr key={i} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
                           <td className="p-4 text-center">
                             <div className="flex flex-col items-center">
                               <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
@@ -10986,6 +10927,14 @@ const FinancePage = ({
                         </td>
                       </tr>
                     )}
+                    {/* --- [NEW] Loading Spinner ต่อท้ายตาราง --- */}
+                    {isLoadingMore && (
+                        <tr>
+                            <td colSpan="8" className="p-4 text-center">
+                                <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                            </td>
+                        </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -11003,8 +10952,8 @@ const FinancePage = ({
                     </div>
                   ))
                 ) : filteredTransactions.length > 0 ? (
-                  filteredTransactions.map((tx) => (
-                    <div key={tx.id} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]">
+                  filteredTransactions.slice(0, visibleCount).map((tx, i) => (
+                    <div key={i} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(i % 25) * 30}ms` }}>
                         <div className="flex justify-between items-start mb-2.5">
                             <div className="flex flex-col gap-1">
                                 <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
@@ -11063,6 +11012,12 @@ const FinancePage = ({
                     <Receipt size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="kanit-text font-bold text-sm">ไม่มีรายการในระบบ</p>
                   </div>
+                )}
+                {/* --- [NEW] Loading Spinner ต่อท้ายบนมือถือ --- */}
+                {isLoadingMore && (
+                    <div className="p-4 text-center bg-white rounded-2xl shadow-sm border border-slate-100 mt-2">
+                        <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                    </div>
                 )}
               </div>
           </div>
@@ -11141,7 +11096,7 @@ const FinancePage = ({
                                   </thead>
                                   <tbody className="divide-y divide-slate-50">
                                       {(selectedTxn.rawTx.items || []).map((item, idx) => (
-                                          <tr key={`pos-item-${idx}`} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
+                                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
                                               <td className="p-3 text-center text-slate-400 text-xs">{idx + 1}</td>
                                               <td className="p-3 text-slate-700 font-bold kanit-text">{item.name}</td>
                                               <td className="p-3 text-center font-semibold">{item.quantity}</td>
@@ -11155,7 +11110,7 @@ const FinancePage = ({
                           {/* Mobile List */}
                           <div className="sm:hidden flex flex-col divide-y divide-slate-50 bg-slate-50/30">
                               {(selectedTxn.rawTx.items || []).map((item, idx) => (
-                                  <div key={`pos-mob-item-${idx}`} className="p-3 flex flex-col gap-1 bg-white">
+                                  <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
                                       <div className="flex justify-between items-start gap-2">
                                           <div className="font-bold text-slate-800 text-sm kanit-text leading-tight">{item.name}</div>
                                           <div className="font-bold text-sky-600 text-sm font-data shrink-0">{formatCurrency(item.total)}</div>
@@ -11240,7 +11195,7 @@ const FinancePage = ({
                                   </thead>
                                   <tbody className="divide-y divide-slate-50">
                                       {(selectedTxn.items && selectedTxn.items.length > 0 ? selectedTxn.items : [{name: selectedTxn.category || 'รายการเดิม', quantity: 1, price: selectedTxn.amount, total: selectedTxn.amount}]).map((item, idx) => (
-                                          <tr key={`txn-item-${idx}`} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
+                                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
                                               <td className="p-3 text-center text-slate-400 text-xs">{idx + 1}</td>
                                               <td className="p-3 text-slate-700 font-bold kanit-text">{item.name}</td>
                                               <td className="p-3 text-center font-semibold">{item.quantity}</td>
@@ -11254,7 +11209,7 @@ const FinancePage = ({
                           {/* Mobile List */}
                           <div className="sm:hidden flex flex-col divide-y divide-slate-50 bg-slate-50/30">
                               {(selectedTxn.items && selectedTxn.items.length > 0 ? selectedTxn.items : [{name: selectedTxn.category || 'รายการเดิม', quantity: 1, price: selectedTxn.amount, total: selectedTxn.amount}]).map((item, idx) => (
-                                  <div key={`txn-mob-item-${idx}`} className="p-3 flex flex-col gap-1 bg-white">
+                                  <div key={idx} className="p-3 flex flex-col gap-1 bg-white">
                                       <div className="flex justify-between items-start gap-2">
                                           <div className="font-bold text-slate-800 text-sm kanit-text leading-tight">{item.name}</div>
                                           <div className="font-bold text-sky-600 text-sm font-data shrink-0">{formatCurrency(item.total)}</div>
@@ -11407,9 +11362,9 @@ const FinancePage = ({
                              {showPatientResults && (
                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
                                    <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
-                                      {filteredPatients.map((p, pidx) => (
+                                      {filteredPatients.map(p => (
                                          <button
-                                            key={p.id || `p-${pidx}`}
+                                            key={p.id}
                                             type="button"
                                             onMouseDown={(e) => {
                                                e.preventDefault(); // Prevent onBlur from firing before click
@@ -12099,11 +12054,12 @@ const FinancePage = ({
       {calendarModal.isOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${calendarModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={calendarModal.close}></div>
-          <div
-            ref={finCalSwipeProps.ref}
+          <div 
+            ref={finCalSwipeProps.ref} 
             style={finCalSwipeProps.style}
-            className={`relative z-[165] w-full max-w-[420px] sm:max-w-[400px] bg-white sm:rounded-[2rem] border border-slate-100 p-6 sm:p-7 mobile-bottom-sheet shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
-          >            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
             </div>
             
@@ -12210,7 +12166,7 @@ const FinancePage = ({
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${isAlertClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
             <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3><p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={closeFinAlert} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={() => { alertConfig.onConfirm(); closeFinAlert(); }} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
+            <div className="flex gap-3 w-full"><button onClick={() => sweetAlert.close()} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
           </div>
         </div>
       )}
@@ -15378,6 +15334,10 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // --- [NEW] States สำหรับ Infinite Scroll แก้ปัญหา Checkbox ดีเลย์ ---
+  const [visibleCount, setVisibleCount] = useState(25);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const headerRef = useRef(null);
   const filterRef = useRef(null);
 
@@ -15481,6 +15441,12 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
   const isAllSelected = filteredDocs.length > 0 && selectedDocs.length === filteredDocs.length;
 
+  // --- [NEW] Reset จำนวนเมื่อค้นหา ---
+  useEffect(() => {
+      setVisibleCount(25);
+      setIsLoadingMore(false);
+  }, [search, filterType]);
+
   // --- Scroll & Sticky Logic ---
   useEffect(() => {
     const mainElement = document.getElementById('main-scroll-container');
@@ -15488,7 +15454,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
     const handleScroll = (e) => {
       if (!headerRef.current) return;
-      const { scrollTop } = e.target;
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
       if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
       else headerRef.current.classList.remove('is-scrolled');
 
@@ -15498,12 +15464,23 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           if (filterRect.top <= headerRect.bottom + 1) filterRef.current.classList.add('is-scrolled');
           else filterRef.current.classList.remove('is-scrolled');
       }
+
+      // --- [NEW] Infinite Scroll Logic ---
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        if (visibleCount < filteredDocs.length && !isLoadingMore) {
+           setIsLoadingMore(true);
+           setTimeout(() => {
+              setVisibleCount(prev => prev + 25);
+              setIsLoadingMore(false);
+           }, 300);
+        }
+      }
     };
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [visibleCount, filteredDocs.length, isLoadingMore]);
 
-  // 5. ฟังก์ชันสำหรับพิมพ์ (Bulk Print)
+  // 5. ฟังก์ชันสำหรับพิมพ์ (Bulk Print) - อัปเกรดระบบจัดหน้าและป้องกัน CSS ตีกัน
   const handleBulkPrint = () => {
       if (selectedDocs.length === 0) {
           showToast('กรุณาเลือกเอกสารที่ต้องการพิมพ์อย่างน้อย 1 รายการ', 'warning');
@@ -15512,12 +15489,80 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       setIsPrinting(true);
 
       const docsToPrint = filteredDocs.filter(d => selectedDocs.includes(d.id));
-      let combinedHtml = '';
+      
+      // ฟังก์ชันช่วยสกัดและทำ CSS Scoping สำหรับแต่ละชุดเอกสาร
+      const scopeCss = (cssText, prefix) => {
+          if (!cssText) return '';
+          let cleanCss = cssText.replace(/\/\*[\s\S]*?\*\//g, '');
+          return cleanCss.replace(/([^\r\n,{}]+)(?=\s*\{)/g, (match) => {
+              const selector = match.trim();
+              // ข้ามกฎ @media, @page, @keyframes และการเปลี่ยนผ่านแอนิเมชัน
+              if (selector.startsWith('@') || selector.includes('from') || selector.includes('to')) {
+                  return match; 
+              }
+              return selector.split(',')
+                  .map(sel => {
+                      const trimmed = sel.trim();
+                      if (trimmed === 'body' || trimmed === 'html') {
+                          return prefix;
+                      }
+                      return `${prefix} ${trimmed}`;
+                  })
+                  .join(', ');
+          });
+      };
 
-      docsToPrint.forEach(doc => {
-          if (doc.type === 'record') combinedHtml += globalGenerateRecordHtml(doc.rawData);
-          else if (doc.type === 'opd') combinedHtml += globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber);
-          else if (doc.type === 'receipt') combinedHtml += globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts);
+      const parser = new DOMParser();
+      let combinedStyles = `
+          /* CSS หลักควบคุมการจัดหน้าพิมพ์สะสม */
+          @media print {
+              .print-job-wrapper {
+                  page-break-after: always !important;
+                  break-after: page !important;
+                  display: block !important;
+                  width: 100% !important;
+                  box-sizing: border-box !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+              }
+              .print-job-wrapper:last-child {
+                  page-break-after: avoid !important;
+                  break-after: avoid !important;
+              }
+          }
+          body { 
+              margin: 0; 
+              padding: 0; 
+              background: #fff; 
+          }
+      `;
+      let combinedBodies = '';
+
+      docsToPrint.forEach((doc, idx) => {
+          let rawHtml = '';
+          if (doc.type === 'record') {
+              rawHtml = globalGenerateRecordHtml(doc.rawData);
+          } else if (doc.type === 'opd') {
+              rawHtml = globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber);
+          } else if (doc.type === 'receipt') {
+              rawHtml = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts);
+          }
+
+          const docDom = parser.parseFromString(rawHtml, 'text/html');
+          
+          // สกัดและขอบเขต (Scope) CSS ของเอกสารใบนี้
+          const styleTags = docDom.querySelectorAll('style');
+          styleTags.forEach((styleTag) => {
+              combinedStyles += scopeCss(styleTag.textContent, `.print-job-${idx}`) + '\n';
+          });
+
+          // ดึงข้อมูลใน body แล้วมาห่อหุ้มด้วยคลาสพิมพ์เฉพาะตัว
+          const bodyContent = docDom.body.innerHTML;
+          combinedBodies += `
+              <div class="print-job-wrapper print-job-${idx}">
+                  ${bodyContent}
+              </div>
+          `;
       });
 
       const finalHtml = `
@@ -15525,17 +15570,14 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       <html lang="th">
       <head>
           <meta charset="UTF-8">
-          <title>พิมพ์เอกสาร (${selectedDocs.length} รายการ)</title>
+          <title>พิมพ์เอกสารแบบกลุ่ม (${selectedDocs.length} รายการ)</title>
           <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
           <style>
-              body { margin: 0; padding: 0; background: #fff; }
-              @media print {
-                  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              }
+              ${combinedStyles}
           </style>
       </head>
       <body>
-          ${combinedHtml}
+          ${combinedBodies}
       </body>
       </html>`;
 
@@ -15552,9 +15594,9 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       setTimeout(() => {
           printWindow.print();
           setIsPrinting(false);
-          setSelectedDocs([]); // เคลียร์การเลือกหลังสั่งพิมพ์เสร็จ
-          showToast(`สั่งพิมพ์ ${docsToPrint.length} รายการสำเร็จ`, 'success');
-      }, 800);
+          setSelectedDocs([]); // เคลียร์รายการที่ติ๊กเลือกหลังสั่งพิมพ์เรียบร้อย
+          showToast(`สั่งพิมพ์กลุ่ม ${docsToPrint.length} รายการสำเร็จ`, 'success');
+      }, 850);
   };
 
   const getDocIcon = (type) => {
@@ -15591,7 +15633,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             >
               {isPrinting ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />} 
               <span className="hidden sm:inline">พิมพ์ที่เลือก ({selectedDocs.length})</span>
-              <span className="sm:hidden">พิมพ์ ({selectedDocs.length})</span>
+              <span className="sm:hidden whitespace-nowrap">พิมพ์ <span className={selectedDocs.length >= 1000 ? 'text-[0.7rem]' : ''}>({selectedDocs.length})</span></span>
             </button>
           </div>
         </div>
@@ -15680,9 +15722,18 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {isGlobalLoading ? (
-                  <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /> กำลังโหลดข้อมูล...</td></tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={`skel-rep-desk-${i}`} className="border-b border-slate-50">
+                      <td className="p-4 text-center"><Skeleton width="20px" height="20px" rounded="rounded-md" className="mx-auto" /></td>
+                      <td className="p-4"><Skeleton width="100px" height="16px" className="mb-1" /><Skeleton width="60px" height="12px" /></td>
+                      <td className="p-4"><div className="flex items-center gap-2"><Skeleton width="32px" height="32px" rounded="rounded-lg" /><Skeleton width="80px" height="20px" rounded="rounded-md" /></div></td>
+                      <td className="p-4"><Skeleton width="120px" height="16px" /></td>
+                      <td className="p-4"><Skeleton width="160px" height="16px" /></td>
+                      <td className="p-4"><Skeleton width="32px" height="32px" rounded="rounded-lg" className="mx-auto" /></td>
+                    </tr>
+                  ))
                 ) : filteredDocs.length > 0 ? (
-                  filteredDocs.map((doc) => {
+                  filteredDocs.slice(0, visibleCount).map((doc) => {
                     const isSelected = selectedDocs.includes(doc.id);
                     
                     // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
@@ -15738,6 +15789,13 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                 ) : (
                   <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text italic">ไม่พบเอกสารที่ค้นหา</td></tr>
                 )}
+                {isLoadingMore && (
+                    <tr>
+                        <td colSpan="6" className="p-4 text-center">
+                            <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                        </td>
+                    </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -15755,9 +15813,32 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             )}
 
             {isGlobalLoading ? (
-               <div className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /></div>
+               Array.from({ length: 4 }).map((_, i) => (
+                 <div key={`skel-rep-mob-${i}`} className="p-4 bg-white flex gap-3 border-b border-slate-50">
+                   <div className="pt-1 shrink-0"><Skeleton width="20px" height="20px" rounded="rounded-md" /></div>
+                   <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1.5">
+                         <div className="flex items-center gap-2 w-full pr-4">
+                            <Skeleton width="24px" height="24px" rounded="rounded-md" />
+                            <Skeleton width="60%" height="16px" />
+                         </div>
+                         <Skeleton width="28px" height="28px" rounded="rounded-md" className="shrink-0" />
+                      </div>
+                      <div className="flex items-center justify-between mt-3">
+                         <div className="flex flex-col gap-1.5">
+                            <Skeleton width="80px" height="18px" rounded="rounded-md" />
+                            <Skeleton width="100px" height="12px" />
+                         </div>
+                         <div className="flex flex-col items-end gap-1.5">
+                            <Skeleton width="70px" height="14px" />
+                            <Skeleton width="50px" height="12px" />
+                         </div>
+                      </div>
+                   </div>
+                 </div>
+               ))
             ) : filteredDocs.length > 0 ? (
-               filteredDocs.map((doc, idx) => {
+               filteredDocs.slice(0, visibleCount).map((doc, idx) => {
                   const isSelected = selectedDocs.includes(doc.id);
                   
                   // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
@@ -15806,6 +15887,11 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                })
             ) : (
                <div className="p-10 text-center text-slate-400 kanit-text italic bg-white">ไม่พบเอกสารที่ค้นหา</div>
+            )}
+            {isLoadingMore && (
+                <div className="p-4 text-center bg-white">
+                    <Loader2 size={24} className="animate-spin text-sky-500 mx-auto" />
+                </div>
             )}
           </div>
         </div>
@@ -16019,10 +16105,49 @@ export default function App() {
   }, [currentTab]);
 
   const [patientsData, setPatientsData] = useState(GOOGLE_SCRIPT_URL ? [] : mockPatients);
-  const [branchesData, setBranchesData] = useState(GOOGLE_SCRIPT_URL ? [] : mockBranches); 
+  const [branchesData, setBranchesData] = useState(GOOGLE_SCRIPT_URL ? [] : mockBranches);
   const [queueData, setQueueData] = useState([]);
-  const [inventoryData, setInventoryData] = useState([]);
-  const [inventoryLogsData, setInventoryLogsData] = useState([]); 
+  const [fetchedQueueKeys, setFetchedQueueKeys] = useState(new Set()); // สำหรับเก็บประวัติการโหลดเดือนของคิว
+
+  const loadQueueForMonth = async (year, month) => {
+    if (!GOOGLE_SCRIPT_URL) return;
+    const key = `${year}-${month}`;
+    if (fetchedQueueKeys.has(key)) return;
+
+    // อัปเดต state ทันทีว่ากำลังโหลด เพื่อป้องกันการเรียกซ้ำ
+    setFetchedQueueKeys(prev => new Set(prev).add(key));
+
+    const startDate = new Date(year, month, 1).toISOString().split('T')[0];
+    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+    try {
+      const response = await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Queue', payload: { startDate, endDate } }),
+        redirect: 'follow'
+      });
+      const result = await response.json();
+
+      if (result?.status === 'success' && Array.isArray(result.data)) {
+        setQueueData(prev => {
+           const existingIds = new Set(prev.map(q => q.id));
+           const newRecords = result.data.filter(q => !existingIds.has(q.id));
+           return [...newRecords, ...prev].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+        });
+      }
+    } catch(e) {
+      console.error('Failed to load queue data for month:', e);
+      // ถ้าโหลดพลาด ให้เอาคีย์ออก เพื่อให้ครั้งหน้าพยายามโหลดใหม่
+      setFetchedQueueKeys(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const [inventoryData, setInventoryData] = useState([]);  const [inventoryLogsData, setInventoryLogsData] = useState([]); 
   const [posHistoryData, setPosHistoryData] = useState([]); 
   const [financeData, setFinanceData] = useState([]); 
   const [posProducts, setPosProducts] = useState([]); 
@@ -16061,22 +16186,13 @@ export default function App() {
   // --- [NEW] รวมฟังก์ชันพิมพ์ใบเสร็จมาไว้ตรงกลาง เพื่อให้ทุกหน้าระบบเรียกใช้แบบเดียวกัน (DRY) ---
   const handlePrintReceipt = (txn, format = 'A4') => {
     if (!txn) return;
-    
-    // Determine which branch to use: prioritize transaction's branch (POS branch) over sidebar selection
-    const branchToUse = (txn.branchId && txn.branchId !== 'all') ? txn.branchId : (currentBranch !== 'all' ? currentBranch : '');
-
-    if (!branchToUse || branchToUse === 'all') {
-        showToast('กรุณาเลือกสาขาที่จะทำรายการก่อนพิมพ์เอกสาร', 'warning');
-        return;
-    }
-
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
         return;
     }
 
-    const html = globalGenerateReceiptHtml(txn, format, branchesData, patientsData, posProducts, currentBranch);
+    const html = globalGenerateReceiptHtml(txn, format, branchesData, patientsData, posProducts);
 
     printWindow.document.write(html);
     printWindow.document.close();
@@ -16117,7 +16233,6 @@ export default function App() {
         // ใช้ Promise.all เพื่อดึงข้อมูลทุกอย่างขนานกัน
         const [
           resPatients,
-          resQueue,
           resPos,
           resInventory,
           resInvLogs,
@@ -16128,7 +16243,6 @@ export default function App() {
           resStaff // เพิ่มการดึงพนักงาน
         ] = await Promise.all([
           callAppScript('GET_DATA', 'Patients'),
-          callAppScript('GET_DATA', 'Queue'),
           callAppScript('GET_DATA', 'POS_Transactions'),
           callAppScript('GET_DATA', 'Inventory'),
           callAppScript('GET_DATA', 'InventoryLogs'),
@@ -16139,6 +16253,16 @@ export default function App() {
           callAppScript('GET_DATA', 'Staff') // ดึงข้อมูล Staff
         ]);
 
+        // โหลดข้อมูลคิวแยก (Lazy load ของเดือนปัจจุบัน และเดือนที่แล้วเผื่อกราฟ 7 วัน)
+        const now = new Date();
+        loadQueueForMonth(now.getFullYear(), now.getMonth());
+        
+        // ถ้าเป็นช่วงต้นเดือน (วันที่ 1-7) ให้โหลดเดือนก่อนหน้ามาด้วย เพื่อให้กราฟ 7 วันทำงานได้สมบูรณ์
+        if (now.getDate() <= 7) {
+          const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          loadQueueForMonth(prevMonth.getFullYear(), prevMonth.getMonth());
+        }
+
         // --- แก้ไข: ตรวจสอบข้อมูลให้แน่ใจว่าเป็น Array ก่อนใช้งาน (ป้องกันจอขาว) ---
         if (resPatients?.status === 'success') { 
           setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
@@ -16146,10 +16270,6 @@ export default function App() {
 
         if (resBranches?.status === 'success') {
           setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
-        }
-        
-        if (resQueue?.status === 'success') {
-          setQueueData(Array.isArray(resQueue.data) && resQueue.data.length > 0 ? [...resQueue.data].reverse() : []);
         }
 
         if (resPos?.status === 'success') {
@@ -16408,7 +16528,7 @@ export default function App() {
             </div>
             <div style={{ display: currentTab === 'records' ? 'block' : 'none' }} className="w-full">
                 {/* ส่ง posProducts เข้าไปให้ MedicalRecords ใช้งาน */}
-                <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
+                <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
             </div>
             <div style={{ display: currentTab === 'queue' ? 'block' : 'none' }} className="w-full">
                 {/* เพิ่มการส่ง props staffData ให้ AppointmentManager เพื่อนำไปเข้า Calendar */}
@@ -16758,20 +16878,23 @@ export default function App() {
 
         .sticky-header-inner { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1rem; padding-bottom: 1rem; will-change: padding; }
         @media (min-width: 768px) { .sticky-header-inner { padding-top: 2rem; } }
-        .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.5rem; }
-        @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-bottom: 0.75rem; } }
+        .is-scrolled .sticky-header-inner { padding-top: 0.75rem; padding-bottom: 0.5rem; }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.75rem; } }
 
         .sticky-header-title { transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), line-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1.5rem; line-height: 2rem; margin: 0; will-change: font-size, line-height; }
         @media (min-width: 640px) { .sticky-header-title { font-size: 1.875rem; line-height: 2.25rem; } }
-        .is-scrolled .sticky-header-title { font-size: 1.25rem; line-height: 1.75rem; }
+        .is-scrolled .sticky-header-title { font-size: 1.125rem; line-height: 1.5rem; }
+        @media (max-width: 400px) { .is-scrolled .sticky-header-title { font-size: 1rem; } }
         @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.5rem; line-height: 2rem; } }
 
         .sticky-header-desc { transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease; opacity: 1; max-height: 50px; margin-top: 0.25rem; overflow: hidden; will-change: opacity, max-height, margin-top; }
         .is-scrolled .sticky-header-desc { opacity: 0; max-height: 0; margin-top: 0; }
 
-        .sticky-header-btn { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; will-change: padding, font-size; }
+        .sticky-header-btn { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; will-change: padding, font-size; }
         @media (min-width: 640px) { .sticky-header-btn { padding: 0.75rem 1.5rem; font-size: 1rem; } }
-        .is-scrolled .sticky-header-btn { padding: 0.625rem; font-size: 0.875rem; }
+        .is-scrolled .sticky-header-btn { padding: 0.45rem 0.65rem !important; font-size: 0.8125rem !important; gap: 0.35rem !important; }
+        @media (max-width: 400px) { .is-scrolled .sticky-header-btn { padding: 0.4rem 0.5rem !important; font-size: 0.75rem !important; } }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-btn { padding: 0.625rem !important; font-size: 0.875rem !important; gap: 0.5rem !important; } }
         .sticky-header-btn svg { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 20px; height: 20px; will-change: width, height; }
         .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; }
 

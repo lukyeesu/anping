@@ -26,6 +26,9 @@ function doPost(e) {
       case 'DELETE_DATA':
         response = deleteData(sheetName, payload.id);
         break;
+      case 'UPLOAD_FILE': // <--- เพิ่มเคสใหม่ สำหรับอัปโหลดไฟล์
+        response = uploadFile(payload);
+        break;
       default:
         response = { status: 'error', message: 'Action not found' };
     }
@@ -117,4 +120,45 @@ function deleteData(sheetName, id) {
     }
   }
   return { status: 'error', message: 'ID not found' };
+}
+
+// ==========================================
+// ฟังก์ชันจัดการไฟล์อัปโหลดเข้า Google Drive
+// ==========================================
+
+function uploadFile(payload) {
+  try {
+    const { folderId, fileName, mimeType, data } = payload;
+
+    if (!folderId || !data) {
+      return { status: 'error', message: 'Missing folderId or Base64 data' };
+    }
+
+    // 1. เข้าถึงโฟลเดอร์ใน Google Drive ตาม ID ที่ส่งมา
+    const folder = DriveApp.getFolderById(folderId);
+    
+    // 2. แปลงข้อมูล Base64 ให้กลับเป็นไฟล์ (Blob)
+    const decodedData = Utilities.base64Decode(data);
+    const blob = Utilities.newBlob(decodedData, mimeType, fileName);
+    
+    // 3. สร้างไฟล์ลงในโฟลเดอร์
+    const file = folder.createFile(blob);
+
+    // ลบบรรทัด file.setSharing ออกไปแล้ว เพราะเราไปตั้งค่า Public ที่โฟลเดอร์แม่แทน 
+    // เพื่อหลีกเลี่ยง Error: "ไม่ได้รับอนุญาตให้เข้าถึง"
+
+    // 4. ดึง ID ของไฟล์ และสร้าง Direct Link สำหรับโหลดรูปภาพแบบรวดเร็ว
+    const fileId = file.getId();
+    const directUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+
+    return { 
+      status: 'success', 
+      message: 'File uploaded successfully',
+      fileUrl: directUrl, 
+      fileId: fileId 
+    };
+
+  } catch (error) {
+    return { status: 'error', message: 'Upload failed: ' + error.toString() };
+  }
 }
