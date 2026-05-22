@@ -429,7 +429,7 @@ const bahtTextPrint = (amount) => {
 };
 
 const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = '') => {
-    const branchIdToUse = currentBranch && currentBranch !== 'all' ? currentBranch : '';
+    const branchIdToUse = (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
     const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
     const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
     const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
@@ -568,7 +568,8 @@ const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = ''
 };
 
 const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], currentBranch = '') => {
-    const branchIdToUse = currentBranch && currentBranch !== 'all' ? currentBranch : '';
+    // ลำดับความสำคัญ: 1. สาขาที่บันทึกในประวัติ (record), 2. สาขาปัจจุบันที่เลือกในเมนู, 3. สาขาที่คนไข้ลงทะเบียน
+    const branchIdToUse = (record && record.branchId) || (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
     const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
     const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
     const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
@@ -3473,7 +3474,7 @@ const PatientModal = React.memo(({
     }
 
     const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-    const html = globalGenerateOpdHtml(formData, record, visitNumber);
+    const html = globalGenerateOpdHtml(formData, record, visitNumber, branchesData, currentBranch);
 
     printWindow.document.write(html);
     printWindow.document.close();
@@ -4027,13 +4028,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   const filteredPatients = useMemo(() => {
     return patientsData.filter(p => {
-      const pBranchId = p.branchId || 'b1';
       const s = search.toLowerCase();
       // ค้นหาให้ครอบคลุม (Case-insensitive)
-      return ((p.firstName && p.firstName.toLowerCase().includes(s)) || (p.lastName && p.lastName.toLowerCase().includes(s)) || (p.id && p.id.toLowerCase().includes(s)) || (p.hn && p.hn.toLowerCase().includes(s)) || (p.idCard && p.idCard.includes(s)) || (p.phone && p.phone.includes(s))) &&
-             (currentBranch === 'all' || pBranchId === currentBranch);
+      return ((p.firstName && p.firstName.toLowerCase().includes(s)) || (p.lastName && p.lastName.toLowerCase().includes(s)) || (p.id && p.id.toLowerCase().includes(s)) || (p.hn && p.hn.toLowerCase().includes(s)) || (p.idCard && p.idCard.includes(s)) || (p.phone && p.phone.includes(s)));
     });
-  }, [patientsData, search, currentBranch]);
+  }, [patientsData, search]);
 
   const sortedPatients = useMemo(() => {
     let sortableItems = [...filteredPatients];
@@ -4410,11 +4409,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // เพิ่มฟังก์ชันพิมพ์เวชระเบียนเพื่อให้สามารถเรียกใช้งานได้ทั้งบน Desktop และ Mobile
   const handlePrintRecord = (patient) => {
-    if (!currentBranch || currentBranch === 'all') {
-        showToast('กรุณาเลือกสาขาที่จะทำรายการก่อนพิมพ์เอกสาร', 'warning');
-        return;
-    }
-
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
@@ -4612,11 +4606,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
   const handlePrintOpdRecord = (record, index) => {
-    if (!currentBranch || currentBranch === 'all') {
-        showToast('กรุณาเลือกสาขาที่จะทำรายการก่อนพิมพ์เอกสาร', 'warning');
-        return;
-    }
-
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
@@ -10781,6 +10770,30 @@ const FinancePage = ({
       setIsDetailModalOpen(true);
   };
 
+  // --- Infinite Scroll Logic ---
+  const [visibleCount, setVisibleCount] = useState(30);
+  const loaderRef = useRef(null);
+
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  const visibleTransactions = useMemo(() => {
+    return filteredTransactions.slice(0, visibleCount);
+  }, [filteredTransactions, visibleCount]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && visibleCount < filteredTransactions.length) {
+        setVisibleCount(prev => prev + 30);
+      }
+    }, { threshold: 0.1, rootMargin: '100px' });
+
+    if (loaderRef.current) observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [visibleCount, filteredTransactions.length]);
+  // -----------------------------
+
   return (
     <div className="fade-in pb-10 w-full">
       {/* 1. Sticky Header & Filter รวมเป็นก้อนเดียวกัน */}
@@ -11033,8 +11046,8 @@ const FinancePage = ({
                           <td className="p-4"><div className="flex gap-2 justify-center"><Skeleton width="24px" height="24px" rounded="rounded-lg"/><Skeleton width="24px" height="24px" rounded="rounded-lg"/></div></td>
                         </tr>
                       ))
-                    ) : filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((tx) => (
+                    ) : visibleTransactions.length > 0 ? (
+                      visibleTransactions.map((tx) => (
                         <tr key={tx.id} onClick={() => openDetailModal(tx)} className="hover:bg-sky-50/50 transition-colors group cursor-pointer">
                           <td className="p-4 text-center">
                             <div className="flex flex-col items-center">
@@ -11117,8 +11130,8 @@ const FinancePage = ({
                         </div>
                     </div>
                   ))
-                ) : filteredTransactions.length > 0 ? (
-                  filteredTransactions.map((tx) => (
+                ) : visibleTransactions.length > 0 ? (
+                  visibleTransactions.map((tx) => (
                     <div key={tx.id} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]">
                         <div className="flex justify-between items-start mb-2.5">
                             <div className="flex flex-col gap-1">
@@ -11179,6 +11192,16 @@ const FinancePage = ({
                     <p className="kanit-text font-bold text-sm">ไม่มีรายการในระบบ</p>
                   </div>
                 )}
+
+                {/* --- [NEW] Infinite Scroll Sentinel --- */}
+                <div ref={loaderRef} className="h-20 w-full flex items-center justify-center py-6">
+                  {visibleCount < filteredTransactions.length && (
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+                      <p className="text-xs font-bold text-slate-400 kanit-text animate-pulse">กำลังโหลดข้อมูลเพิ่มเติม...</p>
+                    </div>
+                  )}
+                </div>
               </div>
           </div>
         </div>
@@ -15487,7 +15510,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 };
 
 // --- [NEW] ระบบรายงานและศูนย์รวมเอกสาร (Reports & Documents Manager) ---
-const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData = [], posProducts = [], isGlobalLoading, showToast }) => {
+const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData = [], posProducts = [], isGlobalLoading, showToast, currentBranch }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [selectedDocs, setSelectedDocs] = useState([]);
@@ -15630,9 +15653,13 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       let combinedHtml = '';
 
       docsToPrint.forEach(doc => {
-          if (doc.type === 'record') combinedHtml += globalGenerateRecordHtml(doc.rawData);
-          else if (doc.type === 'opd') combinedHtml += globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber);
-          else if (doc.type === 'receipt') combinedHtml += globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts);
+          let html = '';
+          if (doc.type === 'record') html = globalGenerateRecordHtml(doc.rawData, branchesData, currentBranch);
+          else if (doc.type === 'opd') html = globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber, branchesData, currentBranch);
+          else if (doc.type === 'receipt') html = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts, currentBranch);
+          
+          // Wrap in a div with page-break class
+          combinedHtml += `<div class="print-page">${html}</div>`;
       });
 
       const finalHtml = `
@@ -15646,6 +15673,8 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               body { margin: 0; padding: 0; background: #fff; }
               @media print {
                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                  .print-page { page-break-after: always; }
+                  .print-page:last-child { page-break-after: auto; }
               }
           </style>
       </head>
@@ -15667,7 +15696,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       setTimeout(() => {
           printWindow.print();
           setIsPrinting(false);
-          setSelectedDocs([]); // เคลียร์การเลือกหลังสั่งพิมพ์เสร็จ
+          setSelectedDocs([]); 
           showToast(`สั่งพิมพ์ ${docsToPrint.length} รายการสำเร็จ`, 'success');
       }, 800);
   };
@@ -15686,6 +15715,30 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       
       return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold kanit-text border ${colorClass}`}>{label}</span>;
   };
+
+  // --- Infinite Scroll Logic ---
+  const [visibleCount, setVisibleCount] = useState(30);
+  const loaderRef = useRef(null);
+
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [search, filterType]);
+
+  const visibleDocs = useMemo(() => {
+    return filteredDocs.slice(0, visibleCount);
+  }, [filteredDocs, visibleCount]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && visibleCount < filteredDocs.length) {
+        setVisibleCount(prev => prev + 30);
+      }
+    }, { threshold: 0.1, rootMargin: '100px' });
+
+    if (loaderRef.current) observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [visibleCount, filteredDocs.length]);
+  // -----------------------------
 
   return (
     <div className="fade-in pb-10 flex flex-col h-full w-full">
@@ -15797,58 +15850,26 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                 {isGlobalLoading ? (
                   <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /> กำลังโหลดข้อมูล...</td></tr>
                 ) : filteredDocs.length > 0 ? (
-                  filteredDocs.map((doc) => {
+                  visibleDocs.map((doc) => {
                     const isSelected = selectedDocs.includes(doc.id);
-                    
-                    // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
-                    let dateStr = '-';
-                    let timeStr = '-';
+                    let dStr = '-', tStr = '-';
                     if (doc.date) {
-                        try {
-                            const d = new Date(doc.date);
-                            if (!isNaN(d.getTime())) {
-                                dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
-                                timeStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
-                            }
-                        } catch(e){}
+                      const d = new Date(doc.date);
+                      if (!isNaN(d.getTime())) {
+                        dStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+                        tStr = d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                      }
                     }
-
                     return (
                       <tr key={doc.id} className={`transition-colors font-data text-sm cursor-pointer hover:bg-sky-50/30 ${isSelected ? 'bg-sky-50/50' : ''}`} onClick={() => toggleSelection(doc.id)}>
-                        <td className="p-4 text-center">
-                            <div className="flex items-center justify-center w-full h-full">
-                                {isSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded transition-colors"></div>}
-                            </div>
-                        </td>
-                        <td className="p-4 text-slate-600">
-                          <span className="font-medium">{dateStr}</span>
-                          <span className="text-xs text-slate-400 block mt-0.5">{timeStr} น.</span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                             <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                                {getDocIcon(doc.type)}
-                             </div>
-                             {getDocBadge(doc.type, doc.typeLabel)}
-                          </div>
-                        </td>
+                        <td className="p-4 text-center"><div className="flex items-center justify-center">{isSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded"></div>}</div></td>
+                        <td className="p-4 text-slate-600"><span className="font-medium">{dStr}</span><span className="text-xs text-slate-400 block mt-0.5">{tStr} น.</span></td>
+                        <td className="p-4"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">{doc.type === 'record' ? <Users size={16} className="text-indigo-500"/> : doc.type === 'opd' ? <Stethoscope size={16} className="text-emerald-500"/> : <Receipt size={16} className="text-sky-500"/>}</div>{getDocBadge(doc.type, doc.typeLabel)}</div></td>
                         <td className="p-4 font-bold text-slate-700 kanit-text">{String(doc.refNo || '-')}</td>
                         <td className="p-4 text-slate-800 kanit-text font-medium">{String(doc.patientName || '-')}</td>
-                        <td className="p-4 text-center">
-                          <button 
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                setSelectedDocs([doc.id]);
-                                setTimeout(() => document.querySelector('.sticky-header-btn')?.click(), 50); 
-                            }} 
-                            className="p-2 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 border border-slate-200 hover:border-sky-200 rounded-lg shadow-sm transition-colors mx-auto flex items-center justify-center"
-                            title="พิมพ์เอกสารนี้"
-                          >
-                            <Printer size={16} />
-                          </button>
-                        </td>
+                        <td className="p-4 text-center"><button onClick={(e) => { e.stopPropagation(); setSelectedDocs([doc.id]); setTimeout(() => document.querySelector('.sticky-header-btn')?.click(), 50); }} className="p-2 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 border border-slate-200 hover:border-sky-200 rounded-lg shadow-sm transition-colors mx-auto flex items-center justify-center"><Printer size={16} /></button></td>
                       </tr>
-                    )
+                    );
                   })
                 ) : (
                   <tr><td colSpan="6" className="p-10 text-center text-slate-400 kanit-text italic">ไม่พบเอกสารที่ค้นหา</td></tr>
@@ -15871,8 +15892,8 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
             {isGlobalLoading ? (
                <div className="p-10 text-center text-slate-400 kanit-text"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-sky-500" /></div>
-            ) : filteredDocs.length > 0 ? (
-               filteredDocs.map((doc, idx) => {
+            ) : visibleDocs.length > 0 ? (
+               visibleDocs.map((doc, idx) => {
                   const isSelected = selectedDocs.includes(doc.id);
                   
                   // ป้องกัน Error การแปลงวันที่และรูปแบบตัวแปร
@@ -15921,6 +15942,16 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                })
             ) : (
                <div className="p-10 text-center text-slate-400 kanit-text italic bg-white">ไม่พบเอกสารที่ค้นหา</div>
+            )}
+          </div>
+
+          {/* --- [NEW] Infinite Scroll Sentinel for Reports --- */}
+          <div ref={loaderRef} className="h-20 w-full flex items-center justify-center py-6">
+            {visibleCount < filteredDocs.length && (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+                <p className="text-xs font-bold text-slate-400 kanit-text animate-pulse">กำลังโหลดข้อมูลเพิ่มเติม...</p>
+              </div>
             )}
           </div>
         </div>
@@ -16674,6 +16705,7 @@ export default function App() {
                     posProducts={posProducts}
                     isGlobalLoading={isGlobalLoading}
                     showToast={showToast}
+                    currentBranch={currentBranch}
                 />
             </div>
             
