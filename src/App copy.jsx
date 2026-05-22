@@ -1104,79 +1104,8 @@ const systemStatusTypes = [
 const colorPresets = [];
 
 // [UPDATED COMPONENT] Calendar View Implementation - HIGH PERFORMANCE OPTIMIZED
-// --- [PERFORMANCE OPTIMIZATION] คอมโพเนนต์ช่องวันที่ในปฏิทิน (แยกออกมาเพื่อใช้ React.memo) ---
-const CalendarDay = React.memo(({ 
-    day, currentDate, events, isCurrent, dateStr, cornerClass, docsOnThisDay, 
-    onDayClick, renderEventItem, isLoading 
-}) => {
-    const hasDoctor = docsOnThisDay.length > 0;
-
-    return (
-        <div 
-            data-date={dateStr}
-            onClick={() => !isLoading && onDayClick({ date: currentDate, events })}
-            className={`calendar-dropzone border-b border-r border-slate-100 p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1.5 transition-colors group aspect-[1/2] sm:aspect-square overflow-hidden relative cursor-pointer ${isCurrent ? 'bg-sky-50/40' : 'bg-white hover:bg-slate-50'} ${cornerClass} ${isLoading ? 'pointer-events-none' : ''}`}
-        >
-            <div className="flex justify-between items-center p-0.5 sm:p-1 xl:p-1.5 shrink-0 w-full min-w-0 gap-1">
-                <div className="shrink-0 flex items-center justify-start w-5 sm:w-8 xl:w-10">
-                    <span className={`text-[10px] sm:text-sm xl:text-base 2xl:text-lg font-bold w-4 h-4 sm:w-8 sm:h-8 xl:w-10 xl:h-10 flex items-center justify-center rounded-full ${isCurrent ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700'}`}>
-                        {day}
-                    </span>
-                </div>
-                
-                <div className="flex flex-wrap items-center justify-center gap-0.5 sm:gap-1 xl:gap-1.5 flex-1 min-w-0 text-center">
-                   {isLoading ? (
-                       <div className="w-16 h-4 bg-slate-100 animate-pulse rounded-full"></div>
-                   ) : hasDoctor ? (
-                      docsOnThisDay.map((d, idx) => {
-                         const shortName = d.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
-                         return (
-                            <span key={idx} className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-emerald-100 truncate max-w-full font-medium" title={`แพทย์เข้ากะ: ${d.name}`}>
-                               <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                               <span className="truncate">{shortName || 'แพทย์'}</span>
-                            </span>
-                         )
-                      })
-                   ) : (
-                      <span className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-rose-50 text-rose-500 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-rose-100 max-w-full font-medium truncate" title="ไม่มีแพทย์เข้ากะ">
-                          <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-rose-500 shrink-0"></div>
-                          <span className="truncate">หยุด</span>
-                      </span>
-                   )}
-                </div>
-
-                <div className="shrink-0 flex items-center justify-end w-5 sm:w-8 xl:w-10">
-                    {isLoading ? (
-                        <div className="w-6 h-4 bg-sky-100 animate-pulse rounded-full"></div>
-                    ) : (
-                        events.length > 0 && <span className="text-[7px] sm:text-[10px] xl:text-xs 2xl:text-sm font-bold text-sky-500 bg-sky-50 px-1 sm:px-2 py-0.5 xl:py-1 rounded-full border border-sky-100">+{events.length}</span>
-                    )}
-                </div>
-            </div>
-            <div className="flex-1 flex flex-col gap-[1px] sm:gap-0.5 overflow-y-auto custom-scrollbar px-0 pr-0.5 mt-0.5 sm:mt-0 no-drag-zone">
-                {isLoading ? (
-                    <div className="flex flex-col gap-1 w-full">
-                        <div className="h-6 w-full bg-slate-50 animate-pulse rounded-md"></div>
-                        <div className="h-6 w-4/5 bg-slate-50 animate-pulse rounded-md"></div>
-                        <div className="h-6 w-full bg-slate-50 animate-pulse rounded-md"></div>
-                    </div>
-                ) : (
-                    events.map((ev, idx) => renderEventItem(ev, idx, true))
-                )}
-            </div>
-        </div>
-    );
-});
-
-const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading }) => {
+const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop }) => {
   const [viewDate, setViewDate] = useState(new Date());
-
-  // --- [LAZY LOADING] เมื่อเปลี่ยนเดือน ให้แจ้งคอมโพเนนต์แม่เพื่อโหลดข้อมูลเพิ่ม ---
-  useEffect(() => {
-    if (onMonthChange) {
-      onMonthChange(viewDate.getFullYear(), viewDate.getMonth());
-    }
-  }, [viewDate.getFullYear(), viewDate.getMonth(), onMonthChange]);
   const [viewMode, setViewMode] = useState('month'); 
   const [selectedDayDetails, setSelectedDayDetails] = useState(null); 
   const [isDayModalClosing, setIsDayModalClosing] = useState(false); 
@@ -1375,28 +1304,9 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
     return dateObj.getDate() === today.getDate() && dateObj.getMonth() === today.getMonth() && dateObj.getFullYear() === today.getFullYear();
   };
 
-  // --- [PERFORMANCE OPTIMIZATION] กรองข้อมูลให้เหลือเฉพาะเดือนที่กำลังดูอยู่ ---
-  const filteredActivitiesForMonth = useMemo(() => {
-    const startOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
-    const endOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
-    
-    // ขยายขอบเขตออกไปเล็กน้อย (เผื่อวันต้นเดือน/ปลายเดือนที่ติดมาใน Grid)
-    const paddingStart = new Date(startOfMonth);
-    paddingStart.setDate(paddingStart.getDate() - 7);
-    const paddingEnd = new Date(endOfMonth);
-    paddingEnd.setDate(paddingEnd.getDate() + 7);
-
-    return activities.filter(item => {
-        const dateStr = item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
-        if (!dateStr) return false;
-        const d = new Date(dateStr);
-        return d >= paddingStart && d <= paddingEnd;
-    });
-  }, [activities, viewDate]);
-
   const eventsMap = useMemo(() => {
     const map = {};
-    filteredActivitiesForMonth.forEach(item => {
+    activities.forEach(item => {
         const dateStr = item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
         if(!dateStr) return;
         const d = new Date(dateStr);
@@ -1409,7 +1319,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
         map[key].sort((a, b) => new Date(a.rawDeliveryStart || a.rawDateTime) - new Date(b.rawDeliveryStart || b.rawDateTime));
     });
     return map;
-  }, [filteredActivitiesForMonth]);
+  }, [activities]);
 
   const getEventsForDate = (dateObj) => {
     const key = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}`;
@@ -1793,7 +1703,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
                         const day = cell.day;
                         const currentDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-                        const events = eventsMap[`${currentDate.getFullYear()}-${currentDate.getMonth()}-${currentDate.getDate()}`] || [];
+                        const events = getEventsForDate(currentDate);
                         const isCurrent = isToday(currentDate);
                         const dateStr = `${String(day).padStart(2,'0')}/${String(viewDate.getMonth()+1).padStart(2,'0')}/${viewDate.getFullYear()+543}`;
                         
@@ -1805,28 +1715,56 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                             if (Array.isArray(s.schedule)) return s.schedule.includes(currentDate.getDay());
                             return false;
                         });
+                        const hasDoctor = docsOnThisDay.length > 0;
                         
                         return (
-                            <CalendarDay 
+                            <div 
                                 key={day} 
-                                day={day}
-                                currentDate={currentDate}
-                                events={events}
-                                isCurrent={isCurrent}
-                                dateStr={dateStr}
-                                cornerClass={cornerClass}
-                                docsOnThisDay={docsOnThisDay}
-                                onDayClick={onDayClick}
-                                renderEventItem={renderEventItem}
-                                isLoading={isLoading}
-                            />
+                                data-date={dateStr}
+                                onClick={() => setSelectedDayDetails({ date: currentDate, events })}
+                                className={`calendar-dropzone border-b border-r border-slate-100 p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1.5 transition-colors group aspect-[1/2] sm:aspect-square overflow-hidden relative cursor-pointer ${isCurrent ? 'bg-sky-50/40' : 'bg-white hover:bg-slate-50'} ${cornerClass}`}
+                            >
+                                <div className="flex justify-between items-center p-0.5 sm:p-1 xl:p-1.5 shrink-0 w-full min-w-0 gap-1">
+                                    <div className="shrink-0 flex items-center justify-start w-5 sm:w-8 xl:w-10">
+                                        <span className={`text-[10px] sm:text-sm xl:text-base 2xl:text-lg font-bold w-4 h-4 sm:w-8 sm:h-8 xl:w-10 xl:h-10 flex items-center justify-center rounded-full ${isCurrent ? 'bg-sky-500 text-white shadow-md' : 'text-slate-700'}`}>
+                                            {day}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap items-center justify-center gap-0.5 sm:gap-1 xl:gap-1.5 flex-1 min-w-0 text-center">
+                                       {hasDoctor ? (
+                                          docsOnThisDay.map((d, idx) => {
+                                             const shortName = d.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
+                                             return (
+                                                <span key={idx} className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-emerald-100 truncate max-w-full font-medium" title={`แพทย์เข้ากะ: ${d.name}`}>
+                                                   <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                                                   <span className="truncate">{shortName || 'แพทย์'}</span>
+                                                </span>
+                                             )
+                                          })
+                                       ) : (
+                                          <span className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-rose-50 text-rose-500 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-rose-100 max-w-full font-medium truncate" title="ไม่มีแพทย์เข้ากะ">
+                                              <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-rose-500 shrink-0"></div>
+                                              <span className="truncate">หยุด</span>
+                                          </span>
+                                       )}
+                                    </div>
+
+                                    <div className="shrink-0 flex items-center justify-end w-5 sm:w-8 xl:w-10">
+                                        {events.length > 0 && <span className="text-[7px] sm:text-[10px] xl:text-xs 2xl:text-sm font-bold text-sky-500 bg-sky-50 px-1 sm:px-2 py-0.5 xl:py-1 rounded-full border border-sky-100">+{events.length}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex-1 flex flex-col gap-[1px] sm:gap-0.5 overflow-y-auto custom-scrollbar px-0 pr-0.5 mt-0.5 sm:mt-0">
+                                    {events.map((ev, idx) => renderEventItem(ev, idx, true))}
+                                </div>
+                            </div>
                         );
                     });
                 })()}
             </div>
         </div>
       );
-  }, [viewDate, eventsMap, staffData, onDayClick, renderEventItem, isLoading]);
+  }, [viewDate, eventsMap, staffData, renderEventItem]);
 
   const weekViewContent = useMemo(() => {
       const startOfWeek = new Date(viewDate);
@@ -2088,7 +2026,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 };
 
 // เพิ่ม prop setPatientsData เพื่อให้สามารถเพิ่มคนไข้ใหม่จากหน้านัดหมายได้
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching }) => {
+const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -2568,11 +2506,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             dealStatuses={systemStatusTypes} 
             staffData={staffData}
             onEventDrop={handleEventDrop}
-            onMonthChange={fetchQueueForMonth}
-            isLoading={isQueueFetching}
          />
       );
-  }, [augmentedQueueData, staffData, fetchQueueForMonth, isQueueFetching]); // อัปเดตปฏิทินเมื่อข้อมูลหรือสถานะการโหลดเปลี่ยน
+  }, [augmentedQueueData, staffData]); // อัปเดตปฏิทินเมื่อข้อมูลคิวหรือข้อมูลคนไข้มีการเปลี่ยนแปลง
 
   return (
     <>
@@ -16290,37 +16226,6 @@ export default function App() {
   const [posProducts, setPosProducts] = useState([]); 
   const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
   const [isDataFetched, setIsDataFetched] = useState(false);
-  const [loadedMonths, setLoadedMonths] = useState(new Set()); // ติดตามเดือนที่โหลดแล้ว (YYYY-MM)
-  const [isQueueFetching, setIsQueueFetching] = useState(false); // <--- ใหม่: สถานะการโหลดข้อมูลนัดหมายรายเดือน
-
-  const fetchQueueForMonth = async (year, month) => {
-    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-    if (loadedMonths.has(monthKey)) return;
-
-    setIsQueueFetching(true); // เริ่มโหลด
-    try {
-        // ขอข้อมูลจาก Backend โดยระบุเดือนและปี
-        const res = await callAppScript('GET_DATA_BY_MONTH', 'Queue', { year, month: month + 1 });
-        if (res?.status === 'success' && Array.isArray(res.data)) {
-            setQueueData(prev => {
-                // ป้องกันข้อมูลซ้ำโดยใช้ ID
-                const existingIds = new Set(prev.map(item => item.id));
-                const newData = res.data.filter(item => !existingIds.has(item.id));
-                return [...prev, ...newData];
-            });
-            setLoadedMonths(prev => {
-                const newSet = new Set(prev);
-                newSet.add(monthKey);
-                return newSet;
-            });
-        }
-    } catch (error) {
-        console.error("Fetch Month Error:", error);
-    } finally {
-        setIsQueueFetching(false); // โหลดเสร็จสิ้น
-    }
-  };
-
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
 
   // แจ้งเตือนแบบ State ปลอดภัยที่สุด แสดงบนสุดและไม่ทำให้จอโหลดใหม่ซ้อน
@@ -16410,6 +16315,7 @@ export default function App() {
         // ใช้ Promise.all เพื่อดึงข้อมูลทุกอย่างขนานกัน
         const [
           resPatients,
+          resQueue,
           resPos,
           resInventory,
           resInvLogs,
@@ -16417,9 +16323,10 @@ export default function App() {
           resBranches,
           resFinanceRevenue,
           resFinanceExpenses,
-          resStaff
+          resStaff // เพิ่มการดึงพนักงาน
         ] = await Promise.all([
           callAppScript('GET_DATA', 'Patients'),
+          callAppScript('GET_DATA', 'Queue'),
           callAppScript('GET_DATA', 'POS_Transactions'),
           callAppScript('GET_DATA', 'Inventory'),
           callAppScript('GET_DATA', 'InventoryLogs'),
@@ -16427,15 +16334,20 @@ export default function App() {
           callAppScript('GET_DATA', 'Branches'),
           callAppScript('GET_DATA', 'Finance_Revenue'),
           callAppScript('GET_DATA', 'Finance_Expenses'),
-          callAppScript('GET_DATA', 'Staff')
+          callAppScript('GET_DATA', 'Staff') // ดึงข้อมูล Staff
         ]);
 
+        // --- แก้ไข: ตรวจสอบข้อมูลให้แน่ใจว่าเป็น Array ก่อนใช้งาน (ป้องกันจอขาว) ---
         if (resPatients?.status === 'success') { 
           setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
         }
 
         if (resBranches?.status === 'success') {
           setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
+        }
+        
+        if (resQueue?.status === 'success') {
+          setQueueData(Array.isArray(resQueue.data) && resQueue.data.length > 0 ? [...resQueue.data].reverse() : []);
         }
 
         if (resPos?.status === 'success') {
@@ -16463,13 +16375,10 @@ export default function App() {
         }
         setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
 
+        // รับข้อมูลพนักงาน
         if (resStaff?.status === 'success') {
            setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
         }
-
-        // โหลดข้อมูล Queue ของเดือนปัจจุบันเริ่มต้น
-        const now = new Date();
-        await fetchQueueForMonth(now.getFullYear(), now.getMonth());
 
       } catch (error) { 
         console.error("Initial Fetch Error:", error);
@@ -16691,146 +16600,119 @@ export default function App() {
           <div className="md:hidden shrink-0 w-full h-[61px] pointer-events-none"></div>
 
           <div className="flex-1 flex flex-col w-full min-h-full">
-            {currentTab === 'dashboard' && (
-                <div className="w-full">
-                    <Dashboard 
-                        queueData={queueData} 
-                        patientsData={patientsData} 
-                        isGlobalLoading={isGlobalLoading} 
-                        speak={speak}
-                        currentBranch={currentBranch}
-                        branchesData={branchesData}
-                    />
-                </div>
-            )}
-
-            {currentTab === 'records' && (
-                <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
-                </div>
-            )}
-
-            {currentTab === 'queue' && (
-                <div className="w-full">
-                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} />
-                </div>
-            )}
-
-            {currentTab === 'catalog' && (
-                <div className="w-full">
-                    <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
-                </div>
-            )}
-
-            {currentTab === 'pos' && (
-                <div className="flex-1 w-full relative min-h-0 flex flex-col">
-                    <POSSystem 
-                        products={posProducts} 
-                        setProducts={setPosProducts} 
-                        patientsData={patientsData} 
-                        setPatientsData={setPatientsData} 
-                        posHistoryData={posHistoryData} 
-                        setPosHistoryData={setPosHistoryData} 
-                        inventoryData={inventoryData}
-                        setInventoryData={setInventoryData}
-                        setInventoryLogsData={setInventoryLogsData}
-                        staffData={staffData} 
-                        currentBranch={currentBranch}
-                        branchesData={branchesData}
-                        showToast={showToast} 
-                        callAppScript={callAppScript} 
-                        isGlobalLoading={isGlobalLoading}
-                        showMobileBars={showMobileBars}
-                        handlePrintReceipt={handlePrintReceipt}
-                    />
-                </div>
-            )}
-
-            {currentTab === 'finance' && (
-                <div className="w-full mx-auto px-0 py-0">
-                   <FinancePage 
-                     currentBranch={currentBranch} 
-                     financeData={financeData} 
-                     setFinanceData={setFinanceData} 
-                     posHistoryData={posHistoryData} 
-                     branchesData={branchesData} 
-                     isGlobalLoading={isGlobalLoading} 
-                     callAppScript={callAppScript} 
-                     showToast={showToast} 
-                     setPosHistoryData={setPosHistoryData}
-                     patientsData={patientsData}
-                     posProducts={posProducts}
-                     staffData={staffData}
-                     setStaffData={setStaffData}
-                     handlePrintReceipt={handlePrintReceipt}
-                   />
-                </div>
-            )}
-
-            {currentTab === 'inventory' && (
-                <div className="w-full">
-                    <InventoryManager 
-                        inventoryData={inventoryData} 
-                        setInventoryData={setInventoryData} 
-                        inventoryLogsData={inventoryLogsData}
-                        setInventoryLogsData={setInventoryLogsData}
-                        posProducts={posProducts} 
-                        branchesData={branchesData}
-                        showToast={showToast} 
-                        callAppScript={callAppScript} 
-                        isGlobalLoading={isGlobalLoading} 
-                        currentBranch={currentBranch}
-                    />
-                </div>
-            )}
-
-            {currentTab === 'staff' && (
-                <div className="w-full mx-auto px-0 py-0">
-                    <StaffManager 
-                       staffData={staffData} 
-                       setStaffData={setStaffData} 
-                       financeData={financeData} 
-                       setFinanceData={setFinanceData} 
-                       posHistoryData={posHistoryData} 
-                       branchesData={branchesData}
-                       callAppScript={callAppScript} 
-                       showToast={showToast} 
-                       isGlobalLoading={isGlobalLoading} 
-                    />
-                </div>
-            )}
+            {/* Fix: Render all tabs with display:none to preserve scroll and states (fixes unmount memory leak & scroll jump) */}
+            <div style={{ display: currentTab === 'dashboard' ? 'block' : 'none' }} className="w-full">
+                <Dashboard 
+                    queueData={queueData} 
+                    patientsData={patientsData} 
+                    isGlobalLoading={isGlobalLoading} 
+                    speak={speak}
+                    currentBranch={currentBranch}
+                    branchesData={branchesData}
+                />
+            </div>
+            <div style={{ display: currentTab === 'records' ? 'block' : 'none' }} className="w-full">
+                {/* ส่ง posProducts เข้าไปให้ MedicalRecords ใช้งาน */}
+                <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
+            </div>
+            <div style={{ display: currentTab === 'queue' ? 'block' : 'none' }} className="w-full">
+                {/* เพิ่มการส่ง props staffData ให้ AppointmentManager เพื่อนำไปเข้า Calendar */}
+                <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+            </div>
+            <div style={{ display: currentTab === 'catalog' ? 'block' : 'none' }} className="w-full">
+                <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+            </div>
+            <div style={{ display: currentTab === 'pos' ? 'flex' : 'none' }} className="flex-1 w-full relative min-h-0">
+                <POSSystem 
+                    products={posProducts} 
+                    setProducts={setPosProducts} 
+                    patientsData={patientsData} 
+                    setPatientsData={setPatientsData} 
+                    posHistoryData={posHistoryData} 
+                    setPosHistoryData={setPosHistoryData} 
+                    inventoryData={inventoryData}
+                    setInventoryData={setInventoryData}
+                    setInventoryLogsData={setInventoryLogsData}
+                    staffData={staffData} // ส่งข้อมูลพนักงานไปที่ POS เพื่อเลือกเซลส์
+                    currentBranch={currentBranch}
+                    branchesData={branchesData}
+                    showToast={showToast} 
+                    callAppScript={callAppScript} 
+                    isGlobalLoading={isGlobalLoading}
+                    showMobileBars={showMobileBars}
+                    handlePrintReceipt={handlePrintReceipt}
+                />
+            </div>
+            <div style={{ display: currentTab === 'finance' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
+               <FinancePage 
+                 currentBranch={currentBranch} 
+                 financeData={financeData} 
+                 setFinanceData={setFinanceData} 
+                 posHistoryData={posHistoryData} 
+                 branchesData={branchesData} 
+                 isGlobalLoading={isGlobalLoading} 
+                 callAppScript={callAppScript} 
+                 showToast={showToast} 
+                 setPosHistoryData={setPosHistoryData}
+                 patientsData={patientsData}
+                 posProducts={posProducts}
+                 staffData={staffData}
+                 setStaffData={setStaffData}
+                 handlePrintReceipt={handlePrintReceipt}
+               />
+            </div>            <div style={{ display: currentTab === 'inventory' ? 'block' : 'none' }} className="w-full">
+                <InventoryManager 
+                    inventoryData={inventoryData} 
+                    setInventoryData={setInventoryData} 
+                    inventoryLogsData={inventoryLogsData}
+                    setInventoryLogsData={setInventoryLogsData}
+                    posProducts={posProducts} 
+                    branchesData={branchesData}
+                    showToast={showToast} 
+                    callAppScript={callAppScript} 
+                    isGlobalLoading={isGlobalLoading} 
+                    currentBranch={currentBranch}
+                />
+            </div>
+            <div style={{ display: currentTab === 'staff' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
+                <StaffManager 
+                   staffData={staffData} 
+                   setStaffData={setStaffData} 
+                   financeData={financeData} 
+                   setFinanceData={setFinanceData} 
+                   posHistoryData={posHistoryData} 
+                   branchesData={branchesData}
+                   callAppScript={callAppScript} 
+                   showToast={showToast} 
+                   isGlobalLoading={isGlobalLoading} 
+                />
+            </div>
             
-            {currentTab === 'branch' && (
-                <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
-                    <BranchManager 
-                        branchesData={branchesData} 
-                        setBranchesData={setBranchesData} 
-                        showToast={showToast} 
-                        callAppScript={callAppScript} 
-                        isGlobalLoading={isGlobalLoading} 
-                    />
-                </div>
-            )}
+            <div style={{ display: currentTab === 'branch' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
+                <BranchManager 
+                    branchesData={branchesData} 
+                    setBranchesData={setBranchesData} 
+                    showToast={showToast} 
+                    callAppScript={callAppScript} 
+                    isGlobalLoading={isGlobalLoading} 
+                />
+            </div>
 
-            {currentTab === 'reports' && (
-                <div className="w-full mx-auto px-0 py-0">
-                    <ReportsManager 
-                        patientsData={patientsData}
-                        posHistoryData={posHistoryData}
-                        branchesData={branchesData}
-                        posProducts={posProducts}
-                        isGlobalLoading={isGlobalLoading}
-                        showToast={showToast}
-                        currentBranch={currentBranch}
-                    />
-                </div>
-            )}
+            <div style={{ display: currentTab === 'reports' ? 'block' : 'none' }} className="w-full mx-auto px-0 py-0">
+                <ReportsManager 
+                    patientsData={patientsData}
+                    posHistoryData={posHistoryData}
+                    branchesData={branchesData}
+                    posProducts={posProducts}
+                    isGlobalLoading={isGlobalLoading}
+                    showToast={showToast}
+                    currentBranch={currentBranch}
+                />
+            </div>
             
-            {currentTab === 'settings' && (
-                <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8 h-[80vh]">
-                    <PlaceholderPage title="ตั้งค่าระบบ" desc="ตั้งค่าข้อมูลคลินิก ผู้ใช้งาน และสิทธิ์การเข้าถึง" icon={Settings} />
-                </div>
-            )}
+            <div style={{ display: currentTab === 'settings' ? 'block' : 'none' }} className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8 h-[80vh]">
+                <PlaceholderPage title="ตั้งค่าระบบ" desc="ตั้งค่าข้อมูลคลินิก ผู้ใช้งาน และสิทธิ์การเข้าถึง" icon={Settings} />
+            </div>
           </div>
 
           {/* ปรับแก้ Navbar มือถือ: Liquid Tab Bar Animation (Sliding Bubble) เพิ่มขอบมนด้านบน */}
