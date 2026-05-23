@@ -1110,7 +1110,7 @@ const colorPresets = [];
 // --- [PERFORMANCE OPTIMIZATION] คอมโพเนนต์ช่องวันที่ในปฏิทิน (แยกออกมาเพื่อใช้ React.memo) ---
 const CalendarDay = React.memo(({ 
     day, currentDate, events, isCurrent, dateStr, cornerClass, docsOnThisDay, 
-    onDayClick, renderEventItem, isLoading 
+    onDayClick, onShowStaff, renderEventItem, isLoading 
 }) => {
     const hasDoctor = docsOnThisDay.length > 0;
 
@@ -1131,15 +1131,15 @@ const CalendarDay = React.memo(({
                    {isLoading ? (
                        <div className="w-16 h-4 bg-slate-100 animate-pulse rounded-full"></div>
                    ) : hasDoctor ? (
-                      docsOnThisDay.map((d, idx) => {
-                         const shortName = d.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
-                         return (
-                            <span key={idx} className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-emerald-100 truncate max-w-full font-medium" title={`แพทย์เข้ากะ: ${d.name}`}>
-                               <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-emerald-500 shrink-0"></div>
-                               <span className="truncate">{shortName || 'แพทย์'}</span>
-                            </span>
-                         )
-                      })
+                      <button 
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); if(onShowStaff) onShowStaff(currentDate); }}
+                        className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-emerald-100 truncate max-w-full font-bold hover:bg-emerald-100 active:scale-95 transition-all" 
+                        title={`แพทย์เข้ากะ: ${docsOnThisDay.map(d => d.name).join(', ')} (คลิกเพื่อดูบุคลากรทั้งหมด)`}
+                      >
+                         <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                         <span className="truncate">แพทย์ {docsOnThisDay.length} ท่าน</span>
+                      </button>
                    ) : (
                       <span className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-rose-50 text-rose-500 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-rose-100 max-w-full font-medium truncate" title="ไม่มีแพทย์เข้ากะ">
                           <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2 rounded-full bg-rose-500 shrink-0"></div>
@@ -1820,6 +1820,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                 cornerClass={cornerClass}
                                 docsOnThisDay={docsOnThisDay}
                                 onDayClick={() => setSelectedDayDetails({ date: currentDate, events })}
+                                onShowStaff={() => { setStaffModalDate(currentDate); setShowStaffModal(true); }}
                                 renderEventItem={renderEventItem}
                                 isLoading={isLoading}
                             />
@@ -16578,11 +16579,14 @@ export default function App() {
   const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
   const [isDataFetched, setIsDataFetched] = useState(false);
   const [loadedMonths, setLoadedMonths] = useState(new Set()); // ติดตามเดือนที่โหลดแล้ว (YYYY-MM)
-  const [isQueueFetching, setIsQueueFetching] = useState(false); // <--- ใหม่: สถานะการโหลดข้อมูลนัดหมายรายเดือน
+  const [isQueueFetching, setIsQueueFetching] = useState(false);
+  const fetchingMonthsRef = useRef(new Set()); // ใช้ Ref ติดตามการโหลดที่กำลังดำเนินอยู่เพื่อป้องกันโหลดซ้ำซ้อน
 
   const fetchQueueForMonth = async (year, month) => {
     const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-    if (loadedMonths.has(monthKey)) return;
+    if (loadedMonths.has(monthKey) || fetchingMonthsRef.current.has(monthKey)) return;
+
+    fetchingMonthsRef.current.add(monthKey);
 
     setIsQueueFetching(true); // เริ่มโหลด
     try {
@@ -16608,7 +16612,7 @@ export default function App() {
     }
   };
 
-  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [isGlobalLoading, setIsGlobalLoading] = useState(true);
 
   // แจ้งเตือนแบบ State ปลอดภัยที่สุด แสดงบนสุดและไม่ทำให้จอโหลดใหม่ซ้อน
   const [toast, setToast] = useState(null);
