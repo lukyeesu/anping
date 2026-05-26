@@ -11325,9 +11325,9 @@ const FinancePage = ({
       </div>
 
       {/* --- 3. Filter Component --- */}
-      <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt">
-        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
-          <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col gap-2 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
+      <div ref={filterRef} className={`w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt ${showMobileFilters ? 'filter-expanded' : ''}`}>
+        <div className={`w-full mx-auto pointer-events-none relative ${showMobileFilters ? 'h-auto' : 'h-[76px] sm:h-[92px]'} z-50 transition-all duration-300`}>
+          <div className={`${showMobileFilters ? 'relative top-0' : 'absolute top-1/2 -translate-y-1/2'} left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col gap-2 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all duration-300`}>
             <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 w-full">
                <div className="relative flex-1 min-w-0 w-full">
                   <input 
@@ -11342,12 +11342,12 @@ const FinancePage = ({
                
                <button 
                  onClick={() => setShowMobileFilters(!showMobileFilters)} 
-                 className={`sm:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                 className={`lg:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                >
-                  <Filter size={18} />
+                  {showMobileFilters ? <ChevronUp size={18} /> : <Filter size={18} />}
                </button>
 
-               <div className="hidden sm:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
+               <div className="hidden lg:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
                  <div className="w-[100px] relative">
                    <CustomSelect 
                      value={filterType} 
@@ -11410,40 +11410,40 @@ const FinancePage = ({
             </div>
 
             {showMobileFilters && (
-               <div className="sm:hidden flex flex-col gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 relative z-[60]">
-                 <div className="flex gap-2">
-                   <div className="flex-1 relative">
+               <div className="lg:hidden flex flex-col gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 relative z-[60]">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   <div className="relative">
                      <CustomSelect value={filterType} onChange={(val) => setFilterType(val)} options={[{value: 'all', label: 'ทั้งหมด'}, {value: 'income', label: 'รายรับ'}, {value: 'expense', label: 'รายจ่าย'}, {value: 'pos', label: 'POS'}, {value: 'manual', label: 'Manual'}]} compact fullWidth className="w-full" />
                    </div>
-                   <div className="flex-1 relative">
+                   <div className="relative">
                      <CustomSelect value={filterBranch} onChange={(val) => setFilterBranch(val)} options={[{value: 'all', label: 'ทุกสาขา'}, ...(branchesData || []).map(b => ({value: b.id, label: b.name}))]} compact fullWidth className="w-full" />
                    </div>
                  </div>
                  
-                 <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[40px] z-[45]">
-                    <div className="w-[110px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
+                 <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[40px] sm:h-[48px] z-[45]">
+                    <div className="w-[100px] sm:w-[130px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
                         <CustomSelect 
                             value={timeFilterMode} 
                             onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
                             options={[{value:'all',label:'✨ ทุกเวลา'},{value:'month',label:'📅 รายเดือน'},{value:'year',label:'📌 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
                             compact fullWidth 
-                            className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-2" 
+                            className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-2" 
                         />
                     </div>
                     <div className="flex items-center min-w-0 flex-1 relative transition-all duration-200">
-                        {timeFilterMode === 'all' && <div className="w-full text-center text-[10px] font-bold text-slate-400 kanit-text px-2 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center">แสดงข้อมูลทั้งหมด</div>}
+                        {timeFilterMode === 'all' && <div className="w-full text-center text-[10px] sm:text-xs font-bold text-slate-400 kanit-text px-2 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center">แสดงข้อมูลทั้งหมด</div>}
                         {timeFilterMode === 'month' && (
                             <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl">
-                                <div className="flex-[3] relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px]" /></div>
-                                <div className="flex-[2] relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px]" /></div>
+                                <div className="flex-[3] relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
+                                <div className="flex-[2] relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
                             </div>
                         )}
                         {timeFilterMode === 'year' && (
-                            <div className="w-full relative h-full bg-white rounded-r-xl"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px]" /></div>
+                            <div className="w-full relative h-full bg-white rounded-r-xl"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
                         )}
                         {timeFilterMode === 'range' && (
                             <div className="flex items-center justify-between w-full h-full px-2 gap-1 bg-white rounded-r-xl relative z-[45]">
-                                <button onClick={handleOpenFinRange} className={`text-[11px] sm:text-xs font-bold kanit-text px-2 py-1.5 rounded-lg transition-colors truncate flex-1 text-left flex items-center gap-1.5 ${dateRange.start ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                                <button onClick={handleOpenFinRange} className={`text-[11px] sm:text-sm font-bold kanit-text px-2 py-1.5 rounded-lg transition-colors truncate flex-1 text-left flex items-center gap-1.5 ${dateRange.start ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:bg-slate-50'}`}>
                                     {dateRange.start && dateRange.end ? `${formatRangeStr(dateRange.start)} - ${formatRangeStr(dateRange.end)}` : 'คลิกเลือกวันที่'}
                                 </button>
                                 {dateRange.start ? <button onClick={clearFinRange} className="text-slate-400 hover:text-rose-500 p-2 shrink-0 transition-colors bg-white"><X size={14}/></button> : <CalendarIcon size={14} className="text-slate-300 shrink-0 mr-1" />}
@@ -17510,6 +17510,10 @@ export default function App() {
         /* --- [NEW] CSS คำนวณระยะกาง Filter ของหน้านัดหมายอัตโนมัติ --- */
         .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 52px); }
         @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 60px); } }
+
+        /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก (เพิ่มระยะห่างจากขอบบนเพื่อความสวยงามและไม่โดนบัง) */
+        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 64px); z-index: 60; }
+        @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 72px); } }
       `}} />
     </div>
   );
