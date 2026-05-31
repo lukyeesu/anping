@@ -523,49 +523,46 @@ const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = ''
             <div class="row">
                 <span class="label">ชื่อ</span><span class="value">${patient.prefix ? patient.prefix + ' ' : ''}${patient.firstName || ''}</span>
                 <span class="label">นามสกุล</span><span class="value">${patient.lastName || ''}</span>
-                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 150px;">${patient.nickname || ''}</span>
+                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 100px;">${patient.nickname || ''}</span>
+                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 120px;">${patient.dob || ''}</span>
             </div>
             <div class="row">
-                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 150px;">${patient.dob || ''}</span>
-                <span class="label">อายุ</span><span class="value w-auto" style="width: 100px;">${ageStr}</span>
-                <span class="label">เลขบัตรประชาชน</span><span class="value">${patient.idCard || ''}</span>
+                <span class="label">อายุ</span><span class="value w-auto" style="width: 140px;">${ageStr}</span>
+                <span class="label">หมายเลขบัตรประชาชน</span><span class="value">${patient.idCard || ''}</span>
+                <span class="label">ที่อยู่บ้านเลขที่</span><span class="value w-auto" style="width: 100px;">${patient.address || ''}</span>
+                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 50px;">${patient.moo || ''}</span>
             </div>
             <div class="row">
-                <span class="label">บ้านเลขที่</span><span class="value w-auto" style="width: 250px;">${patient.address || ''}</span>
-                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 80px;">${patient.moo || ''}</span>
                 <span class="label">ถนน</span><span class="value">${patient.road || ''}</span>
-            </div>
-            <div class="row">
                 <span class="label">ตำบล</span><span class="value">${patient.subDistrict || ''}</span>
                 <span class="label">อำเภอ</span><span class="value">${patient.district || ''}</span>
                 <span class="label">จังหวัด</span><span class="value">${patient.province || ''}</span>
-                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 100px;">${patient.zipcode || ''}</span>
+                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 80px;">${patient.zipcode || ''}</span>
             </div>
             <div class="row">
-                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${phone}</span>
-                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 100px;">${patient.nationality || ''}</span>
-                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 100px;">${patient.ethnicity || ''}</span>
-                <span class="label">ศาสนา</span><span class="value">${patient.religion || ''}</span>
+                <span class="label">เบอร์โทรศัพท์</span><span class="value">${phone}</span>
+                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 120px;">${patient.nationality || ''}</span>
+                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 120px;">${patient.ethnicity || ''}</span>
             </div>
             <div class="row">
+                <span class="label">ศาสนา</span><span class="value w-auto" style="width: 150px;">${patient.religion || ''}</span>
                 <span class="label">อาชีพ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.occupation || ''}</span>
             </div>
             <div class="row">
-                <span class="label">ชื่อผู้ติดต่อกรณีฉุกเฉิน</span><span class="value">${patient.emName || ''}</span>
-                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 200px;">${patient.emRelation || ''}</span>
+                <span class="label">ชื่อผู้ติดต่อได้กรณีฉุกเฉิน</span><span class="value">${patient.emName || ''}</span>
+                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 180px;">${patient.emRelation || ''}</span>
             </div>
             <div class="row">
                 <span class="label">ที่อยู่ที่ติดต่อได้</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.emAddress || ''}</span>
+                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${patient.emPhone || ''}</span>
             </div>
             <div class="row">
                 <span class="label">อาการที่จะตรวจ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.chiefComplaint || ''}</span>
             </div>
             <div class="row">
-                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 150px;">${patient.bloodGroup || ''}</span>
-                <span class="label">การแพ้ยา</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.allergies || ''}</span>
-            </div>
-            <div class="row">
-                <span class="label">โรคประจำตัว</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.underlyingDisease || ''}</span>
+                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 100px;">${patient.bloodGroup || ''}</span>
+                <span class="label">การแพ้ยา</span><span class="value">${patient.allergies || ''}</span>
+                <span class="label">โรคประจำตัว</span><span class="value">${patient.underlyingDisease || ''}</span>
             </div>
         </div>
     </body>
@@ -16130,38 +16127,14 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       setIsPrinting(true);
 
       const docsToPrint = filteredDocs.filter(d => selectedDocs.includes(d.id));
-      let combinedBody = '';
-      let combinedStyles = '';
+      let combinedHtml = '';
 
-      docsToPrint.forEach((doc, index) => {
+      docsToPrint.forEach(doc => {
           let html = '';
-          let pageClass = '';
-          
-          if (doc.type === 'record') {
-              html = globalGenerateRecordHtml(doc.rawData, branchesData, currentBranch);
-              pageClass = 'page-a5-land';
-          } else if (doc.type === 'opd') {
-              html = globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber, branchesData, currentBranch);
-              pageClass = 'page-a5-land';
-          } else if (doc.type === 'receipt') {
-              html = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts, currentBranch);
-              pageClass = 'page-a4';
-          }
-
-          // Extract style block
-          const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-          if (styleMatch) {
-              // Remove @page rules from individual styles to avoid conflicts
-              let cleanStyle = styleMatch[1].replace(/@page\s*\{[^}]+\}/gi, '');
-              // Prefix classes to avoid style bleed if needed, but for now just concat
-              combinedStyles += cleanStyle + '\n';
-          }
-
-          // Extract body content
-          const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-          const content = bodyMatch ? bodyMatch[1] : html;
-
-          combinedBody += `<div class="print-page ${pageClass}" id="doc-${index}">${content}</div>`;
+          if (doc.type === 'record') html = globalGenerateRecordHtml(doc.rawData, branchesData, currentBranch);
+          else if (doc.type === 'opd') html = globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber, branchesData, currentBranch);
+          else if (doc.type === 'receipt') html = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts, currentBranch);
+          combinedHtml += `<div class="print-page">${html}</div>`;
       });
 
       const finalHtml = `
@@ -16172,30 +16145,15 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           <title>พิมพ์เอกสาร (${selectedDocs.length} รายการ)</title>
           <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
           <style>
-              /* Base Resets */
-              body { margin: 0; padding: 0; background: #fff; font-family: 'Sarabun', sans-serif; }
-              * { box-sizing: border-box; }
-              
-              /* Named Pages for mixed orientations and sizes (Chrome/Edge support) */
-              @page a4-page { size: A4; margin: 5mm; }
-              @page a5-land-page { size: A5 landscape; margin: 10mm; }
-              @page a5-port-page { size: A5; margin: 10mm; }
-
+              body { margin: 0; padding: 0; background: #fff; }
               @media print {
                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                  .print-page { page-break-after: always; overflow: hidden; }
+                  .print-page { page-break-after: always; }
                   .print-page:last-child { page-break-after: auto; }
-                  
-                  .page-a4 { page: a4-page; }
-                  .page-a5-land { page: a5-land-page; }
-                  .page-a5-port { page: a5-port-page; }
               }
-              
-              /* Combine Extracted Styles */
-              ${combinedStyles}
           </style>
       </head>
-      <body>${combinedBody}</body>
+      <body>${combinedHtml}</body>
       </html>`;
 
       const printWindow = window.open('', '_blank');
