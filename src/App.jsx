@@ -16395,7 +16395,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 };
 
 // --- [NEW] ระบบรายงานและศูนย์รวมเอกสาร (Reports & Documents Manager) ---
-const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData = [], posProducts = [], isGlobalLoading, showToast, currentBranch }) => {
+const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData = [], posProducts = [], isGlobalLoading, showToast, currentBranch, staffData = [] }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [selectedDocs, setSelectedDocs] = useState([]);
@@ -16409,26 +16409,35 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
     let docs = [];
     const nowIso = new Date().toISOString();
 
-    // 1.1 เวชระเบียน (Medical Records) และ ประวัติการรักษา (OPD)
+    // 1.1 เวชระเบียน (Medical Records), ประวัติการรักษา (OPD) และ ใบรับรองแพทย์
     patientsData.forEach(p => {
-        const patientName = `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`.trim();
-        const recDate = p.createdAt || nowIso;
+        // [FIX] ตรวจสอบและซ่อมแซมข้อมูลชื่อให้สมบูรณ์ (ให้ตรงกับ Logic ใน MedicalRecords)
+        const parsed = parsePatientName(getPatientFullName(p));
+        const fullPatient = {
+            ...p,
+            prefix: p.prefix || parsed.prefix,
+            firstName: p.firstName || parsed.firstName,
+            lastName: p.lastName || parsed.lastName
+        };
+
+        const patientName = getPatientFullName(fullPatient);
+        const recDate = fullPatient.createdAt || nowIso;
         
         // เพิ่มเวชระเบียน
         docs.push({
-            id: `REC-${p.hn || p.id}`,
+            id: `REC-${fullPatient.hn || fullPatient.id}`,
             type: 'record',
             typeLabel: 'เวชระเบียนผู้ป่วย',
             date: recDate,
             timestamp: new Date(recDate).getTime(),
             patientName: patientName || 'ไม่ระบุชื่อ',
-            refNo: p.hn || p.id,
-            rawData: p
+            refNo: fullPatient.hn || fullPatient.id,
+            rawData: fullPatient
         });
 
-        // เพิ่มประวัติการรักษา (OPD)
-        if (p.opdRecords && p.opdRecords.length > 0) {
-            p.opdRecords.forEach((opd, idx) => {
+        // เพิ่มประวัติการรักษา (OPD) และ ใบรับรองแพทย์
+        if (fullPatient.opdRecords && fullPatient.opdRecords.length > 0) {
+            fullPatient.opdRecords.forEach((opd, idx) => {
                 let opdIsoDate = nowIso;
                 if (opd.datetime) {
                     try {
@@ -16437,19 +16446,34 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                         if (dParts.length === 3) {
                             opdIsoDate = new Date(parseInt(dParts[2])-543, parseInt(dParts[1])-1, parseInt(dParts[0])).toISOString();
                         }
-                    } catch(e) {}
+                    } catch { /* Ignore invalid date format */ }
                 }
 
+                // ประวัติการรักษา (OPD)
                 docs.push({
-                    id: `OPD-${p.hn || p.id}-${idx}`,
+                    id: `OPD-${fullPatient.hn || fullPatient.id}-${idx}`,
                     type: 'opd',
                     typeLabel: 'ประวัติการรักษา (OPD)',
                     date: opdIsoDate,
                     timestamp: new Date(opdIsoDate).getTime(),
                     patientName: patientName || 'ไม่ระบุชื่อ',
-                    refNo: `${p.hn || p.id} (ครั้งที่ ${p.opdRecords.length - idx})`,
-                    rawData: { opd, patient: p, index: idx, visitNumber: p.opdRecords.length - idx }
+                    refNo: `${fullPatient.hn || fullPatient.id} (ครั้งที่ ${fullPatient.opdRecords.length - idx})`,
+                    rawData: { opd, patient: fullPatient, index: idx, visitNumber: fullPatient.opdRecords.length - idx }
                 });
+
+                // เพิ่มใบรับรองแพทย์ (ถ้ามีการรันเลขที่เอกสารแล้ว)
+                if (opd.medCertNumber) {
+                    docs.push({
+                        id: `MEDCERT-${fullPatient.hn || fullPatient.id}-${idx}`,
+                        type: 'medcert',
+                        typeLabel: 'ใบรับรองแพทย์',
+                        date: opdIsoDate,
+                        timestamp: new Date(opdIsoDate).getTime(),
+                        patientName: patientName || 'ไม่ระบุชื่อ',
+                        refNo: opd.medCertNumber,
+                        rawData: { opd, patient: fullPatient, index: idx }
+                    });
+                }
             });
         }
     });
@@ -16471,7 +16495,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
         }
     });
 
-    // เรียงลำดับจากใหม่ไปเก่า (ใช้ตัวเลข timestamp เพื่อความเร็วสูงสุด)
+    // เรียงลำดับจากใหม่ไปเก่า
     return docs.sort((a, b) => b.timestamp - a.timestamp);
   }, [patientsData, posHistoryData]);
 
@@ -16488,13 +16512,14 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   // 3. สถิติสรุปเอกสาร
   const stats = useMemo(() => {
       const total = allDocuments.length;
-      let recs = 0, opds = 0, receipts = 0;
+      let recs = 0, opds = 0, receipts = 0, medcerts = 0;
       allDocuments.forEach(d => {
           if (d.type === 'record') recs++;
           else if (d.type === 'opd') opds++;
           else if (d.type === 'receipt') receipts++;
+          else if (d.type === 'medcert') medcerts++;
       });
-      return { total, records: recs, opds, receipts: receipts };
+      return { total, records: recs, opds, receipts, medcerts };
   }, [allDocuments]);
 
   // 4. การจัดการเลือกเอกสาร (Checkbox)
@@ -16512,11 +16537,54 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
   const isAllSelected = filteredDocs.length > 0 && selectedDocs.length === filteredDocs.length;
 
+  // ฟังก์ชันพิมพ์เดี่ยวที่ยกมาจากหน้าเวชระเบียนแบบ 100% เพื่อให้ผลลัพธ์เหมือนกันทุกประการ
+  const handleSinglePrint = (doc) => {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+          alert('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups');
+          return;
+      }
+      
+      let html = '';
+      try {
+          if (doc.type === 'record') {
+              html = globalGenerateRecordHtml(doc.rawData, branchesData, currentBranch);
+          } else if (doc.type === 'opd') {
+              html = globalGenerateOpdHtml(doc.rawData.patient, doc.rawData.opd, doc.rawData.visitNumber, branchesData, currentBranch);
+          } else if (doc.type === 'receipt') {
+              html = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts, currentBranch);
+          } else if (doc.type === 'medcert') {
+              html = globalGenerateMedicalCertificateHtml(doc.rawData.patient, doc.rawData.opd, branchesData, currentBranch, staffData);
+          }
+
+          printWindow.document.write(html);
+          printWindow.document.close();
+          
+          setTimeout(() => {
+              printWindow.print();
+          }, 500);
+      } catch (err) {
+          console.error("Single Print Error:", err);
+          showToast("เกิดข้อผิดพลาดในการพิมพ์: " + err.message, "danger");
+      }
+  };
+
   const handleBulkPrint = () => {
       if (selectedDocs.length === 0) {
           showToast('กรุณาเลือกเอกสารที่ต้องการพิมพ์อย่างน้อย 1 รายการ', 'warning');
           return;
       }
+      
+      // กรณีใบเดียว ให้ใช้ handleSinglePrint เพื่อผลลัพธ์ที่เหมือนต้นฉบับ 100%
+      if (selectedDocs.length === 1) {
+          const doc = filteredDocs.find(d => d.id === selectedDocs[0]);
+          if (doc) {
+              handleSinglePrint(doc);
+              setSelectedDocs([]);
+              return;
+          }
+      }
+
       setIsPrinting(true);
 
       const docsToPrint = filteredDocs.filter(d => selectedDocs.includes(d.id));
@@ -16535,23 +16603,29 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               pageClass = 'page-a5-land';
           } else if (doc.type === 'receipt') {
               html = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts, currentBranch);
-              pageClass = 'page-a4';
+              pageClass = 'page-a4-receipt';
+          } else if (doc.type === 'medcert') {
+              html = globalGenerateMedicalCertificateHtml(doc.rawData.patient, doc.rawData.opd, branchesData, currentBranch, staffData);
+              pageClass = 'page-a4-medcert';
           }
 
-          // Extract style block
           const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
           if (styleMatch) {
-              // Remove @page rules from individual styles to avoid conflicts
               let cleanStyle = styleMatch[1].replace(/@page\s*\{[^}]+\}/gi, '');
-              // Prefix classes to avoid style bleed if needed, but for now just concat
+              
+              // Scoping CSS: เปลี่ยน body เป็น .doc-page-index และ prefix ตัวอื่นๆ
+              cleanStyle = cleanStyle.replace(/([^\r\n,{}]+)(?=[^{}]*\{)/g, (match) => {
+                  const selector = match.trim();
+                  if (selector === 'body' || selector === 'html') return `.doc-page-${index}`;
+                  return `.doc-page-${index} ${selector}`;
+              });
               combinedStyles += cleanStyle + '\n';
           }
 
-          // Extract body content
           const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
           const content = bodyMatch ? bodyMatch[1] : html;
 
-          combinedBody += `<div class="print-page ${pageClass}" id="doc-${index}">${content}</div>`;
+          combinedBody += `<div class="print-page ${pageClass} doc-page-${index}" id="doc-${index}">${content}</div>`;
       });
 
       const finalHtml = `
@@ -16562,26 +16636,21 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           <title>พิมพ์เอกสาร (${selectedDocs.length} รายการ)</title>
           <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
           <style>
-              /* Base Resets */
               body { margin: 0; padding: 0; background: #fff; font-family: 'Sarabun', sans-serif; }
               * { box-sizing: border-box; }
-              
-              /* Named Pages for mixed orientations and sizes (Chrome/Edge support) */
-              @page a4-page { size: A4; margin: 5mm; }
+              @page a4-page-medcert { size: A4; margin: 0; }
+              @page a4-page-receipt { size: A4; margin: 5mm; }
               @page a5-land-page { size: A5 landscape; margin: 10mm; }
               @page a5-port-page { size: A5; margin: 10mm; }
-
               @media print {
                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                   .print-page { page-break-after: always; overflow: hidden; }
                   .print-page:last-child { page-break-after: auto; }
-                  
-                  .page-a4 { page: a4-page; }
+                  .page-a4-medcert { page: a4-page-medcert; }
+                  .page-a4-receipt { page: a4-page-receipt; }
                   .page-a5-land { page: a5-land-page; }
                   .page-a5-port { page: a5-port-page; }
               }
-              
-              /* Combine Extracted Styles */
               ${combinedStyles}
           </style>
       </head>
@@ -16590,7 +16659,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
       const printWindow = window.open('', '_blank');
       if (!printWindow) {
-          showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'danger');
+          alert('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups');
           setIsPrinting(false);
           return;
       }
@@ -16600,14 +16669,8 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           printWindow.print();
           setIsPrinting(false);
           setSelectedDocs([]); 
-          showToast(`สั่งพิมพ์ ${docsToPrint.length} รายการสำเร็จ`, 'success');
+          showToast('สั่งพิมพ์สำเร็จ', 'success');
       }, 800);
-  };
-
-  const getDocIcon = (type) => {
-      if (type === 'record') return <Users className="text-indigo-500" />;
-      if (type === 'opd') return <Stethoscope className="text-emerald-500" />;
-      return <Receipt className="text-sky-500" />;
   };
 
   const getDocBadge = (type, label) => {
@@ -16615,26 +16678,17 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       if (type === 'record') colorClass = 'bg-indigo-50 text-indigo-600 border-indigo-100';
       if (type === 'opd') colorClass = 'bg-emerald-50 text-emerald-600 border-emerald-100';
       if (type === 'receipt') colorClass = 'bg-sky-50 text-sky-600 border-sky-100';
+      if (type === 'medcert') colorClass = 'bg-rose-50 text-rose-600 border-rose-100';
       return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold kanit-text border ${colorClass}`}>{label}</span>;
   };
 
-  // --- [FIXED] Infinity Scroll Logic (Matched with MedicalRecords 100%) ---
-  const [visibleCount, setVisibleCount] = useState(30);
+  // Infinite Scroll & Sticky Behavior
+  const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const visibleDocs = filteredDocs.slice(0, visibleCount);
 
   useEffect(() => {
-    setVisibleCount(30);
-    setIsLoadingMore(false);
-  }, [search, filterType]);
-
-  const visibleDocs = useMemo(() => {
-    return filteredDocs.slice(0, visibleCount);
-  }, [filteredDocs, visibleCount]);
-
-  useEffect(() => {
-    const mainElement = document.getElementById('main-scroll-container');
-    if (!mainElement) return;
-
+    const mainElement = document.querySelector('main') || window;
     const handleScroll = (e) => {
       if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
       const { scrollTop, clientHeight, scrollHeight } = e.target;
@@ -16660,20 +16714,12 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       }
     };
 
-    setTimeout(() => {
-        if (mainElement && headerRef.current) {
-            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-            else headerRef.current.classList.remove('is-scrolled');
-        }
-    }, 50);
-
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
   }, [visibleCount, filteredDocs.length, isLoadingMore]);
 
   return (
     <div className="fade-in pb-10 relative flex flex-col h-full w-full">
-      {/* --- 1. Sticky Header --- */}
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
@@ -16694,9 +16740,8 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
         </div>
       </div>
 
-      {/* --- 2. Stats Section --- */}
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl flex items-center justify-center shrink-0"><LayoutList size={20} /></div>
@@ -16720,6 +16765,13 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
+                <div className="w-10 h-10 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl flex items-center justify-center shrink-0"><FileText size={20} /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบรับรองแพทย์</p></div>
+              </div>
+              <div className="relative z-10 mt-auto"><p className="font-black text-rose-600 font-data text-2xl sm:text-3xl">{stats.medcerts}</p></div>
+            </div>
+            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl flex items-center justify-center shrink-0"><Receipt size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบเสร็จ</p></div>
               </div>
@@ -16728,7 +16780,6 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
          </div>
       </div>
 
-      {/* --- 3. Filter Component --- */}
       <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt">
         <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
@@ -16742,6 +16793,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                     <option value="all">ทั้งหมด</option>
                     <option value="record">เวชระเบียน</option>
                     <option value="opd">ใบ OPD</option>
+                    <option value="medcert">ใบรับรองแพทย์</option>
                     <option value="receipt">ใบเสร็จ</option>
                  </select>
                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -16751,7 +16803,6 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
         </div>
       </div>
 
-      {/* --- 4. List Section --- */}
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
         <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden flex flex-col min-h-[400px]">
           <div className="px-2 sm:px-4 py-4">
@@ -16790,19 +16841,19 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                         <td className="p-4">{getDocBadge(doc.type, doc.typeLabel)}</td>
                         <td className="p-4 font-bold text-slate-700 kanit-text">{doc.refNo}</td>
                         <td className="p-4 text-slate-800 kanit-text font-medium">{doc.patientName}</td>
-                        <td className="p-4 text-center"><button onClick={(e) => { e.stopPropagation(); setSelectedDocs([doc.id]); setTimeout(() => handleBulkPrint(), 50); }} className="p-2 text-slate-400 hover:text-sky-600 transition-colors"><Printer size={16}/></button></td>
+                        <td className="p-4 text-center"><button onClick={(e) => { e.stopPropagation(); handleSinglePrint(doc); }} className="p-2 text-slate-400 hover:text-sky-600 transition-colors"><Printer size={16}/></button></td>
                       </tr>
                     )
                 }) : (<tr><td colSpan="6" className="p-20 text-center text-slate-400 italic">ไม่พบข้อมูล</td></tr>)}
                 
                 {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
                     <tr key={`skel-rep-more-${i}`} className="border-b border-slate-50 last:border-0">
-                      <td className="p-4 text-center"><div className="h-5 w-5 bg-slate-200 rounded mx-auto animate-pulse"></div></td>
-                      <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
-                      <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
-                      <td className="p-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
-                      <td className="p-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
-                      <td className="p-4 text-center"><div className="h-8 w-8 bg-slate-200 rounded-lg mx-auto animate-pulse"></div></td>
+                      <td className="p-4 text-center"><div className="h-5 w-5 bg-slate-100 rounded mx-auto animate-pulse"></div></td>
+                      <td className="p-4"><div className="h-4 w-24 bg-slate-100 rounded animate-pulse"></div></td>
+                      <td className="p-4"><div className="h-4 w-20 bg-slate-100 rounded animate-pulse"></div></td>
+                      <td className="p-4"><div className="h-4 w-24 bg-slate-100 rounded animate-pulse"></div></td>
+                      <td className="p-4"><div className="h-4 w-40 bg-slate-100 rounded animate-pulse"></div></td>
+                      <td className="p-4 text-center"><div className="h-8 w-8 bg-slate-100 rounded-lg mx-auto animate-pulse"></div></td>
                     </tr>
                 ))}
               </tbody>
@@ -16811,12 +16862,12 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           
           <div className="md:hidden flex flex-col divide-y divide-slate-100">
             {isGlobalLoading ? (
-               Array.from({ length: 5 }).map((_, i) => (
+               Array.from({ length: 6 }).map((_, i) => (
                   <div key={`skel-rep-mob-${i}`} className="p-4 bg-white flex gap-3 animate-pulse">
-                     <div className="pt-1"><div className="w-5 h-5 bg-slate-200 rounded"></div></div>
+                     <div className="pt-1"><div className="w-5 h-5 bg-slate-100 rounded"></div></div>
                      <div className="flex-1 flex flex-col gap-2">
-                        <div className="h-4 w-3/4 bg-slate-200 rounded"></div>
-                        <div className="h-3 w-1/2 bg-slate-200 rounded"></div>
+                        <div className="h-4 w-3/4 bg-slate-100 rounded"></div>
+                        <div className="h-3 w-1/2 bg-slate-100 rounded"></div>
                      </div>
                   </div>
                ))
@@ -16833,7 +16884,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                       </div>
                       <div className="flex justify-between items-end mt-2">
                         <div className="flex flex-col gap-1">{getDocBadge(doc.type, doc.typeLabel)}<span className="text-[10px] font-bold text-slate-400">{doc.refNo}</span></div>
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedDocs([doc.id]); setTimeout(() => handleBulkPrint(), 50); }} className="p-1.5 text-slate-400 bg-slate-50 rounded-md border border-slate-200"><Printer size={14}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleSinglePrint(doc); }} className="p-1.5 text-slate-400 bg-slate-50 rounded-md border border-slate-200"><Printer size={14}/></button>
                       </div>
                     </div>
                   </div>
@@ -16842,15 +16893,14 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             
             {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
                 <div key={`skel-rep-mob-more-${i}`} className="p-4 bg-white flex gap-3 animate-pulse">
-                    <div className="pt-1"><div className="w-5 h-5 bg-slate-200 rounded"></div></div>
+                    <div className="pt-1"><div className="w-5 h-5 bg-slate-100 rounded"></div></div>
                     <div className="flex-1 flex flex-col gap-2">
-                      <div className="h-4 w-3/4 bg-slate-200 rounded"></div>
-                      <div className="h-3 w-1/2 bg-slate-200 rounded"></div>
+                      <div className="h-4 w-3/4 bg-slate-100 rounded"></div>
+                      <div className="h-3 w-1/2 bg-slate-100 rounded"></div>
                     </div>
                 </div>
             ))}
           </div>
-
           <div className="h-10 w-full flex flex-col justify-start"></div>
         </div>
       </div>
@@ -16858,7 +16908,6 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
     </div>
   );
 };
-
 export default function App() {
   // --- แก้ไข: จดจำหน้าปัจจุบันใน LocalStorage (รีเฟรชแล้วอยู่หน้าเดิม ยกเว้นตั้งค่า) ---
   const [currentTab, setCurrentTab] = useState(() => {
@@ -17094,17 +17143,17 @@ export default function App() {
     audio.onended = () => { if (onEnd) onEnd(); };
     audio.onerror = () => {
       console.warn("Audio load failed, falling back to Web Speech API");
-      useNativeTTS(text, onEnd, lang);
+      handleNativeTTS(text, onEnd, lang);
     };
 
     audio.play().catch(err => {
       console.warn("Audio play failed, falling back to Web Speech API:", err);
-      useNativeTTS(text, onEnd, lang);
+      handleNativeTTS(text, onEnd, lang);
     });
   };
 
   // Helper สำหรับเรียกใช้ Native Browser TTS (รองรับระบุภาษา)
-  const useNativeTTS = (text, onEnd, lang = 'th') => {
+  const handleNativeTTS = (text, onEnd, lang = 'th') => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -17682,7 +17731,7 @@ export default function App() {
 
             {currentTab === 'reports' && (
                 <div className="w-full mx-auto px-0 py-0">
-                    <ReportsManager 
+                    <ReportsManager
                         patientsData={patientsData}
                         posHistoryData={posHistoryData}
                         branchesData={branchesData}
@@ -17690,6 +17739,7 @@ export default function App() {
                         isGlobalLoading={isGlobalLoading}
                         showToast={showToast}
                         currentBranch={currentBranch}
+                        staffData={staffData}
                     />
                 </div>
             )}
