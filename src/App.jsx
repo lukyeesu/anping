@@ -716,6 +716,174 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
     `;
 };
 
+const globalGenerateMedicalCertificateHtml = (patient, record, branchesData = [], currentBranch = '', staffData = []) => {
+    const branchIdToUse = (record && record.branchId) || (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
+    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
+    const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
+    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
+    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
+    const logoUrl = targetBranch.logo || '';
+
+    const doctorName = record.doctor || '-';
+    // ป้องกัน Error กรณี staffData ไม่ใช่ Array หรือถูกส่งมาเป็น undefined
+    const safeStaffData = Array.isArray(staffData) ? staffData : [];
+    const doctorStaff = safeStaffData.find(staff => {
+      const sName = `${staff.prefix || ''}${staff.firstName || ''} ${staff.lastName || ''}`.trim();
+      return sName.includes(doctorName.replace(/^(นพ\.|พญ\.|พท\.|พจ\.)\s*/, '')) || doctorName.includes(staff.firstName || '');
+    }) || {};
+    const licenseNumber = doctorStaff.licenseNumber || '-';
+    const doctorPosition = doctorStaff.position || 'แพทย์';
+
+    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
+    const fullName = `${patient.prefix || ''}${patient.firstName || ''} ${patient.lastName || ''}`.trim();
+    
+    const recordDate = record.datetime ? record.datetime.split(' ')[0] : '';
+    let displayDate = '-';
+    // ดึงเลขเอกสารที่บันทึกไว้ในฐานข้อมูล ถ้าไม่มีจะเว้นว่างไว้เพื่อรอระบบสร้าง
+    let docNumber = record.medCertNumber || ''; 
+    // ตัวแปรสำหรับแยกวันที่ออกเป็น วัน เดือน ปี เพื่อใช้ในย่อหน้าสุดท้าย
+    let printDay = '....', printMonth = '..................', printYear = '........';
+    
+    if (recordDate) {
+        const [d, m, y] = recordDate.split('/');
+        const months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+        const monthName = months[parseInt(m, 10) - 1] || '';
+        displayDate = `${parseInt(d, 10)} ${monthName} ${y}`;
+        
+        // เก็บค่าแยกไว้ใช้
+        printDay = parseInt(d, 10);
+        printMonth = monthName;
+        printYear = y;
+
+        // หากเป็นการกดพรีวิวดู โดยยังไม่มีการเซฟเลขลงฐานข้อมูล
+        if (!docNumber) {
+            const adYear = parseInt(y, 10) - 543;
+            const mm = m.padStart(2, '0');
+            docNumber = `DC${adYear}${mm}-TEMP`;
+        }
+    }
+
+    const ageStr = patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี ' + (getAgeString(patient.dob).split(' ')[2] || '0') + ' เดือน' : '';
+
+    // ฟังก์ชันคำนวณขนาดฟอนต์อัตโนมัติสำหรับชื่อที่ยาวเกินไป
+    const getSigFontSize = (name) => {
+        const len = (name || '').length;
+        if (len >= 35) return '11px';
+        if (len >= 25) return '13px';
+        return '15px';
+    };
+    const patientFontSize = getSigFontSize(fullName);
+    const doctorFontSize = getSigFontSize(doctorName);
+
+    return `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบรับรองแพทย์ - ${patient.hn}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            /* Impeccable Style Resets & Base */
+            body { font-family: 'Sarabun', sans-serif; font-size: 15px; color: #111827; margin: 0; padding: 0; line-height: 1.8; font-weight: 400; }
+            @page { size: A4; }
+            .container { width: 100%; box-sizing: border-box; }
+            
+            /* Typography Hierarchy */
+            .text-label { color: #111827; font-weight: 400; } /* Changed color to black and weight to normal */
+            .text-value { color: #111827; font-weight: 400; } /* Changed weight to normal */
+            .text-bold { font-weight: 700; } /* New class for bold text */
+            .text-heading { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin: 20px 0 30px 0; }
+            
+            /* Layout & Grids */
+            .header-block { display: flex; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
+            .meta-block { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-bottom: 10px; font-size: 14px; }
+            .content-block { padding: 0 10px; }
+            .content-line { margin: 0; }
+            .indent { text-indent: 40px; }
+            
+            /* Signature Section */
+            .signature-section { display: flex; justify-content: space-between; margin-top: 100px; page-break-inside: avoid; }
+            .signature-box { width: 45%; text-align: center; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+            .signature-line { border-bottom: 1px dotted #111827; width: 80%; height: 1px; margin: 0 auto; }
+            .signature-text { margin: 0; line-height: 1.4; white-space: nowrap; }
+            
+            @media print {
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <!-- Header Section -->
+            <div class="header-block">
+                <div style="width: 80px; margin-right: 24px; flex-shrink: 0;">
+                    ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="width: 100%; height: auto; object-fit: contain;" />` : ''}
+                </div>
+                <div style="flex-grow: 1; padding-top: 5px;">
+                    <div class="text-bold" style="font-size: 20px; margin-bottom: 0px;">${clinicName}</div>
+                    <div style="font-size: 14px; line-height: 1.4;">${clinicAddress}</div>
+                    <div style="font-size: 14px; line-height: 1.4;">โทร: ${clinicPhone}</div>
+                </div>
+            </div>
+
+            <!-- Title -->
+            <div class="text-heading">ใบรับรองแพทย์</div>
+            
+            <!-- Document Meta -->
+            <div class="meta-block">
+                <div>เลขที่เอกสาร: ${docNumber}</div>
+                <div>วันที่: ${displayDate}</div>
+            </div>
+
+            <!-- Content Body -->
+            <div class="content-block">
+                
+                <!-- Doctor & Patient Info -->
+                <div class="content-line indent">
+                    ข้าพเจ้า ${doctorName} ตำแหน่ง ${doctorPosition}
+                </div>
+                <div class="content-line">
+                    เลขที่ใบประกอบโรคศิลป์ ${licenseNumber}
+                </div>
+                <div class="content-line">
+                    ได้ตรวจร่างกายของ ${fullName}
+                </div>
+                <div class="content-line">
+                    เลขที่ผู้ป่วย HN ${hnNumberOnly}
+                </div>
+                <div class="content-line">
+                    อายุ ${ageStr}
+                </div>
+                <div class="content-line">
+                    อาการ ${record.cc || '-'}
+                </div>
+                <div class="content-line">
+                    การวินิจฉัย ${record.dx || '-'}
+                </div>
+                <div class="content-line" style="word-break: break-word;">
+                ความเห็น/ข้อแนะนำ ${record.advice || '-'}
+            </div>
+
+        </div>
+
+        <!-- Signatures -->
+        <div class="signature-section">
+            <div class="signature-box">
+                <div class="signature-text">ลงชื่อ ............................................. ผู้รับ</div>
+                <div class="signature-text" style="font-size: ${patientFontSize};">( ${fullName} )</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-text" style="margin-bottom: 5px;">ลงชื่อ ............................................. แพทย์ผู้ตรวจ</div>
+                <div class="signature-text" style="font-size: ${doctorFontSize};">( ${doctorName} )</div>
+                <div class="signature-text" style="font-size: 14px;">(ใบประกอบโรคศิลป์เลขที่ : ${licenseNumber})</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+`;
+};
+
 const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posProducts, currentBranch = '') => {
     const branchIdToUse = (txn.branchId && txn.branchId !== 'all') ? txn.branchId : (currentBranch !== 'all' ? currentBranch : '');
     const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
@@ -2095,7 +2263,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 };
 
 // เพิ่ม prop setPatientsData เพื่อให้สามารถเพิ่มคนไข้ใหม่จากหน้านัดหมายได้
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching }) => {
+const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -2104,12 +2272,10 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
   // --- ใช้ Custom Hook แทนการประกาศ State แยกเอง ---
   const apptModal = useModal();
-  const apptAlert = useModal();
-  const apptCalendar = useModal();
+    const apptCalendar = useModal();
   const apptSwipeProps = useSwipeDown(apptCalendar.close);
 
-  const [sweetAlert, setSweetAlert] = useState({ type: '', title: '', text: '', onConfirm: null });
-  const [visibleCount, setVisibleCount] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const headerRef = React.useRef(null);
@@ -2191,10 +2357,10 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   };
 
   const handleDeleteAppt = (id) => {
-      setSweetAlert({
+      showGlobalAlert({
         type: 'warning', title: 'ยืนยันการลบการนัดหมาย?', text: 'คุณแน่ใจหรือไม่ว่าต้องการลบการนัดหมายนี้?',
         onConfirm: async () => {
-            apptAlert.close();
+            globalAlert.setIsOpen(false);
             setIsProcessing(true);
             try {
                await callAppScript('DELETE_DATA', 'Queue', { id });
@@ -2204,8 +2370,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             setIsProcessing(false);
         }
       });
-      apptAlert.open();
-  };
+        };
 
   const handleEventDrop = async (eventId, newDate) => {
       let updatedAppt = null;
@@ -3126,16 +3291,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         </div>
       )}
 
-      {apptAlert.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${apptAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full max-h-[80dvh] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col items-center text-center ${apptAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={apptAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยันลบ</button></div>
-          </div>
-        </div>,
-        document.body
-      )}
+      
 
       {isProcessing && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm fade-in">
@@ -3532,14 +3688,14 @@ const PatientModal = React.memo(({
     calDate, calView, setCalDate, setCalView, handlePrevMonth, handleNextMonth,
     blankDays, monthDays, opdCalDate, setOpdCalDate, opdCalView, setOpdCalView,
     opdYearPageStart, setOpdYearPageStart, opdTime, setOpdTime, isCalendarClosing,
-    closeMedCalendar, isOpdCalendarClosing, closeMedOpdCalendar, sweetAlert, 
-    isAlertClosing, closeMedAlert, editingOpdIndex, yearPageStart, setYearPageStart, 
-    branchesData = [], currentBranch = '',
+    closeMedCalendar, isOpdCalendarClosing, closeMedOpdCalendar,
+    editingOpdIndex, yearPageStart, setYearPageStart,
+    branchesData = [], currentBranch = '', staffData = [],
     CheckCircle2, Loader2, ScanText, X, FileText, Pencil, Plus, Users, CreditCard, Clock, MapPin, Package, Stethoscope, Phone, Trash2, CalendarIcon, User, UserPlus, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, AlertTriangle
-}) => {
+    }) => {
 
-  // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
-  const handlePrintOpdRecord = (record, index) => {
+    // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
+    const handlePrintOpdRecord = (record, index) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         alert('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups');
@@ -3551,11 +3707,28 @@ const PatientModal = React.memo(({
 
     printWindow.document.write(html);
     printWindow.document.close();
-    
+
     setTimeout(() => {
         printWindow.print();
     }, 500);
-  };
+    };
+
+    const handlePrintMedicalCertificate = (record, index) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups');
+        return;
+    }
+
+    const html = globalGenerateMedicalCertificateHtml(formData, record, branchesData, currentBranch, staffData);
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
+    };
 
   if (!isOpen) return null;
 
@@ -3996,15 +4169,18 @@ const PatientModal = React.memo(({
                                       </div>
                                   </div>
                               </div>
-                              <div className="grid grid-cols-3 gap-2 pt-1">
-                                  <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
-                                      <Printer size={14} /> พิมพ์
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                                  <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
+                                      <Printer size={14} /> OPD
                                   </button>
-                                  <button type="button" onClick={() => handleDeleteOpdRecord(index)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
-                                      <Trash2 size={14} /> ลบ
+                                  <button type="button" onClick={() => handlePrintMedicalCertificate(record, index)} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-emerald-600 bg-white border border-slate-100 hover:bg-emerald-50 hover:border-emerald-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
+                                      <Printer size={14} /> ใบรับรอง
                                   </button>
-                                  <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-white border border-slate-100 hover:bg-sky-50 hover:border-sky-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
+                                  <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-sky-600 bg-white border border-slate-100 hover:bg-sky-50 hover:border-sky-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
                                       <Pencil size={14} /> แก้ไข
+                                  </button>
+                                  <button type="button" onClick={() => handleDeleteOpdRecord(index)} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
+                                      <Trash2 size={14} /> ลบ
                                   </button>
                               </div>
                           </div>
@@ -4038,14 +4214,13 @@ const PatientModal = React.memo(({
     </div>
   );
 });
-
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], callAppScript, showToast, isGlobalLoading, posProducts = [] }) => {
+// เปลี่ยนแปลงบรรทัดรับ Props ของ MedicalRecords
+const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
   const [isProcessing, setIsProcessing] = useState(false);
   const medModal = useModal();
-  const medAlert = useModal();
   const [editingId, setEditingId] = useState(null);
   const [isViewMode, setIsViewMode] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
@@ -4057,6 +4232,39 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const videoRef = React.useRef(null);
 
   const [showPrefixDropdown, setShowPrefixDropdown] = useState(false); // State ควบคุม Dropdown คำนำหน้า
+  const [showDoctorSuggest, setShowDoctorSuggest] = useState(false); // State ควบคุม Dropdown ค้นหาแพทย์
+
+  // --- [NEW] State สำหรับระบบจดจำแพทย์ที่เลือกล่าสุด (Recent Doctors) ---
+  const [recentDoctors, setRecentDoctors] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem('clinic_recent_doctors');
+        if (saved) return JSON.parse(saved);
+    }
+    return [];
+  });
+
+  // บันทึก Recent Doctors ลง Local Storage เมื่อมีการเปลี่ยนแปลง
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('clinic_recent_doctors', JSON.stringify(recentDoctors));
+    }
+  }, [recentDoctors]);
+
+  // ฟังก์ชันจัดการเมื่อเลือกแพทย์
+  const handleSelectDoctor = (doctorName) => {
+    setNewOpdRecord({...newOpdRecord, doctor: doctorName});
+    setShowDoctorSuggest(false);
+    
+    // อัปเดตรายชื่อแพทย์ล่าสุด (เอาไปไว้บนสุด และจำกัดแค่ 3 ชื่อ)
+    setRecentDoctors(prev => {
+        const newRecents = [doctorName, ...prev.filter(name => name !== doctorName)].slice(0, 3);
+        return newRecents;
+    });
+  };
+
+  // --- จำลองระบบ Login User (ดึงจาก Auth Context ในระบบจริง) ---
+  // ทดสอบระบบ: หากต้องการทดสอบว่าเป็นแพทย์ ให้เปลี่ยน role เป็น 'doctor', name: 'พญ. ใจดี'
+  const currentUser = { id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' }; 
 
   const headerRef = React.useRef(null);
   const filterRef = React.useRef(null); // --- [NEW] เพิ่ม Ref สำหรับ Filter เพื่อให้มันขยายตัวได้ ---
@@ -4168,7 +4376,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   
   const [formData, setFormData] = useState(initialFormState);
   
-  const initialOpdState = { datetime: '', doctor: '', branchId: '', temp: '', pulse: '', bp: '', weight: '', height: '', cc: '', dx: '', tx: [''], note: '' };
+  const initialOpdState = { datetime: '', doctor: '', branchId: '', temp: '', pulse: '', bp: '', weight: '', height: '', cc: '', dx: '', tx: [''], advice: '', note: '' };
   const [showOpdForm, setShowOpdForm] = useState(false);
   const [isClosingOpdForm, setIsClosingOpdForm] = useState(false);
   const [newOpdRecord, setNewOpdRecord] = useState(initialOpdState);
@@ -4191,10 +4399,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const [isModalClosing, setIsModalClosing] = useState(false);
   const [isCalendarClosing, setIsCalendarClosing] = useState(false);
   const [isOpdCalendarClosing, setIsOpdCalendarClosing] = useState(false);
-  const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
-  const [isAlertClosing, setIsAlertClosing] = useState(false);
-
-  // Fix: Use refs instead of direct DOM manipulation
+      // Fix: Use refs instead of direct DOM manipulation
   const dobWrapperRef = React.useRef(null);
   const opdWrapperRef = React.useRef(null);
   const opdSectionRef = React.useRef(null);
@@ -4203,9 +4408,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const closeMedModal = () => { medModal.close(); };
   const closeMedCalendar = () => { setIsCalendarClosing(true); setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300); };
   const closeMedOpdCalendar = () => { setIsOpdCalendarClosing(true); setTimeout(() => { setShowOpdCalendar(false); setIsOpdCalendarClosing(false); }, 300); };
-  const closeMedAlert = () => { setIsAlertClosing(true); setTimeout(() => { setSweetAlert(prev => ({...prev, isOpen: false})); setIsAlertClosing(false); }, 300); };
-
-  const medCalSwipeProps = useSwipeDown(closeMedCalendar);
+    const medCalSwipeProps = useSwipeDown(closeMedCalendar);
   const medOpdCalSwipeProps = useSwipeDown(closeMedOpdCalendar);
 
   // --- ฟังก์ชันจัดการเบอร์โทรศัพท์แบบไดนามิก ---
@@ -4701,6 +4904,117 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }
   };
 
+  // --- อัปเกรด: ฟังก์ชันพิมพ์ใบรับรองแพทย์ พร้อมระบบ Auto-Increment เลขรัน และเซฟลงฐานข้อมูล ---
+  const handlePrintMedicalCertificate = async (record, index) => {
+    let updatedRecord = { ...record };
+    let dataToPrint = formData;
+    
+    // ฟังก์ชันจัดการเปิดหน้าต่างพิมพ์ (เรียกใช้ซ้ำได้)
+    const executePrint = (printData, rec) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+            return;
+        }
+        try {
+            const html = globalGenerateMedicalCertificateHtml(printData, rec, branchesData, currentBranch, staffData);
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => { if (printWindow.print) printWindow.print(); }, 500);
+        } catch (e) {
+            console.error("Print Error:", e);
+            showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
+        }
+    };
+    
+    // 1. ตรวจสอบว่าประวัติการรักษานี้ มีเลขใบรับรองแพทย์แล้วหรือยัง?
+    if (record.medCertNumber) {
+        // หากมีเลขอยู่แล้ว (พิมพ์ซ้ำ) ให้พิมพ์ได้เลยไม่ต้องถามยืนยัน
+        executePrint(dataToPrint, updatedRecord);
+        return;
+    }
+
+    // 2. ถ้ายังไม่มีเลข ให้เด้ง Modal ถามเพื่อยืนยัน ป้องกันพนักงานกดผิด
+    showGlobalAlert({
+        type: 'info',
+        title: 'ออกใบรับรองแพทย์?',
+        text: 'ระบบจะทำการรัน "เลขที่เอกสารใหม่" และบันทึกลงประวัติการรักษานี้ คุณแน่ใจหรือไม่ว่าต้องการดำเนินการต่อ?',
+        onConfirm: async () => {
+            globalAlert.setIsOpen(false);
+            setIsProcessing(true); // ป้องกันกดซ้ำขณะประมวลผล
+            showToast('กำลังสร้างเลขที่เอกสารใหม่...', 'success');
+
+            const recordDate = record.datetime ? record.datetime.split(' ')[0] : '';
+            let y = new Date().getFullYear();
+            let m = String(new Date().getMonth() + 1).padStart(2, '0');
+            
+            // ดึง ปี ค.ศ. และ เดือน ออกมาจากวันที่รับการรักษา
+            if (recordDate) {
+                const parts = recordDate.split('/');
+                if (parts.length === 3) {
+                    y = parseInt(parts[2], 10) - 543;
+                    m = parts[1].padStart(2, '0');
+                }
+            }
+            
+            // รูปแบบ Prefix เช่น DC202604-
+            const docPrefix = `DC${y}${m}-`;
+            let maxSeq = 0;
+            
+            // สแกนหาเลขรันสูงสุดในฐานข้อมูลคนไข้ทั้งหมด (เฉพาะเดือน/ปีนั้นๆ)
+            patientsData.forEach(p => {
+                if (p.opdRecords) {
+                    p.opdRecords.forEach(opd => {
+                        if (opd.medCertNumber && opd.medCertNumber.startsWith(docPrefix)) {
+                            const seqStr = opd.medCertNumber.replace(docPrefix, '');
+                            const seqNum = parseInt(seqStr, 10);
+                            if (!isNaN(seqNum) && seqNum > maxSeq) {
+                                maxSeq = seqNum;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            // สร้างเลขรันใหม่ 5 หลัก (เช่น 00001)
+            const nextSeq = String(maxSeq + 1).padStart(5, '0');
+            updatedRecord.medCertNumber = `${docPrefix}${nextSeq}`;
+            
+            // อัปเดตข้อมูลลง State ก่อน
+            const newRecords = [...(formData.opdRecords || [])];
+            newRecords[index] = updatedRecord;
+            dataToPrint = { ...formData, opdRecords: newRecords };
+            setFormData(dataToPrint);
+            
+            // จัดเตรียมข้อมูลส่งไปเซฟที่ Backend (Google Apps Script)
+            const combinedData = {
+              ...dataToPrint,
+              name: `${dataToPrint.prefix}${dataToPrint.firstName} ${dataToPrint.lastName}`.trim(),
+              phone: dataToPrint.phones && dataToPrint.phones.length > 0 ? dataToPrint.phones[0] : '',
+              id: editingId || dataToPrint.hn
+            };
+            
+            try {
+              if (callAppScript) {
+                  await callAppScript('SAVE_DATA', 'Patients', combinedData);
+              }
+              // อัปเดต Global State
+              setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));
+              showToast(`บันทึกเลขที่เอกสารสำเร็จ: ${updatedRecord.medCertNumber}`, 'success');
+              // เปิดหน้าต่างสั่งพิมพ์หลังจากที่บันทึกเลขรันลงเซิร์ฟเวอร์เสร็จสมบูรณ์
+              executePrint(dataToPrint, updatedRecord);
+            } catch (e) {
+              console.error("Save MedCertNumber Error:", e);
+              showToast('สร้างเอกสารสำเร็จ แต่บันทึกลงฐานข้อมูลไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต', 'warning');
+              // ถึงเซิร์ฟเวอร์จะล่ม ก็ยังยอมให้เปิดปริ้นท์ได้อยู่ดี
+              executePrint(dataToPrint, updatedRecord);
+            } finally {
+              setIsProcessing(false);
+            }
+        }
+    });
+      };
+
   const handleOpenOpdForm = (index = null, record = null) => {
     if (index !== null && record) { 
       setEditingOpdIndex(index); 
@@ -4712,7 +5026,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     } 
     else { 
       setEditingOpdIndex(null); 
-      setNewOpdRecord({ ...initialOpdState, datetime: formatDateTime(new Date().toISOString()), tx: [''], branchId: currentBranch !== 'all' ? currentBranch : '' }); 
+      // ดึงข้อมูลแพทย์ผู้รักษาอัตโนมัติหากคนล็อกอินเป็นแพทย์
+      const isDoctor = currentUser.role === 'doctor' || currentUser.category === 'doctor';
+      setNewOpdRecord({ 
+          ...initialOpdState, 
+          datetime: formatDateTime(new Date().toISOString()), 
+          tx: [''], 
+          branchId: currentBranch !== 'all' ? currentBranch : '',
+          doctor: isDoctor ? currentUser.name : ''
+      }); 
     }
     setShowOpdForm(true);
 
@@ -4784,12 +5106,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   };
 
   const handleDeleteOpdRecord = (index) => {
-    setSweetAlert({
+    showGlobalAlert({
       type: 'warning',
       title: 'ยืนยันการลบประวัติ?',
       text: 'คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการรักษานี้?',
       onConfirm: async () => {
-        medAlert.close();
+        globalAlert.setIsOpen(false);
         setIsProcessing(true);
         
         const newRecords = [...(formData.opdRecords || [])];
@@ -4816,8 +5138,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         }
       }
     });
-    medAlert.open();
-  };
+      };
 
   const handleSavePatient = async (e) => {
     e.preventDefault();
@@ -4869,12 +5190,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   const handleDeleteClick = (patient) => {
     const patientHn = patient.hn || patient.id;
-    setSweetAlert({
+    showGlobalAlert({
       type: 'warning',
       title: 'ยืนยันการลบข้อมูล?',
       text: `คุณแน่ใจหรือไม่ว่าต้องการลบประวัติของ ${getPatientFullName(patient)}? การกระทำนี้ไม่สามารถย้อนกลับได้`,
       onConfirm: async () => {
-        medAlert.close();
+        globalAlert.setIsOpen(false);
         setIsProcessing(true);
         try {
           await callAppScript('DELETE_DATA', 'Patients', { hn: patientHn, id: patientHn });
@@ -4887,8 +5208,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         }
       }
     });
-    medAlert.open();
-  };
+      };
 
   // --- 1. Component Separation & 2. React.memo (via useMemo) ---
   // การใช้ useMemo ห่อหุ้มการเรนเดอร์ตาราง จะทำหน้าที่เหมือน React.memo และแยก Component ออกมาในตัว
@@ -5443,7 +5763,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                       
                       <div className="flex flex-col gap-4">
                         {/* แถวที่ 1: วันที่/เวลา, แพทย์ */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-20">
                           <div className="relative">
                             <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">วันที่/เวลา</label>
                             <div ref={opdWrapperRef} className="relative group">
@@ -5451,10 +5771,88 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                               <button type="button" onClick={handleOpenOpdCalendar} className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-sky-500 rounded-lg transition-colors"><CalendarIcon size={16} /></button>
                             </div>
                           </div>
-                          <div>
+                          
+                          {/* --- Dropdown แพทย์ผู้รักษา (อัจฉริยะ + Recent) --- */}
+                          <div className="relative">
                             <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">แพทย์ผู้รักษา</label>
-                            <input type="text" className={`${theme.input} bg-white py-2 text-sm font-data`} value={newOpdRecord.doctor} onChange={(e) => setNewOpdRecord({...newOpdRecord, doctor: e.target.value})} placeholder="ระบุชื่อแพทย์" />
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    className={`${theme.input} bg-white py-2 text-sm font-data ${currentUser.role === 'doctor' || currentUser.category === 'doctor' ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' : 'pr-8 cursor-pointer'}`} 
+                                    value={newOpdRecord.doctor} 
+                                    onChange={(e) => {
+                                        if (currentUser.role !== 'doctor' && currentUser.category !== 'doctor') setNewOpdRecord({...newOpdRecord, doctor: e.target.value});
+                                    }} 
+                                    onFocus={() => {
+                                        if (currentUser.role !== 'doctor' && currentUser.category !== 'doctor') setShowDoctorSuggest(true);
+                                    }}
+                                    onBlur={() => setTimeout(() => setShowDoctorSuggest(false), 200)}
+                                    placeholder="ค้นหา หรือ ระบุชื่อแพทย์" 
+                                    readOnly={currentUser.role === 'doctor' || currentUser.category === 'doctor'}
+                                />
+                                {(currentUser.role !== 'doctor' && currentUser.category !== 'doctor') && (
+                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                        <ChevronDown size={16} className={`transition-transform duration-200 ${showDoctorSuggest ? 'rotate-180' : ''}`} />
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {showDoctorSuggest && (currentUser.role !== 'doctor' && currentUser.category !== 'doctor') && (
+                                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top flex flex-col">
+                                    
+                                    {/* ส่วนที่ 1: แพทย์ที่เลือกล่าสุด (แสดงเฉพาะตอนที่ยังไม่ได้พิมพ์ค้นหา) */}
+                                    {recentDoctors.length > 0 && !newOpdRecord.doctor && (
+                                        <div className="flex flex-col">
+                                            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
+                                                <History size={12} className="text-slate-400" />
+                                                <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">เลือกล่าสุด</span>
+                                            </div>
+                                            {recentDoctors.map((docName, idx) => (
+                                                <div 
+                                                    key={`recent-${idx}`} 
+                                                    onMouseDown={(e) => { e.preventDefault(); handleSelectDoctor(docName); }} 
+                                                    className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors text-slate-700 flex items-center gap-2`}
+                                                >
+                                                    <Clock size={12} className="text-slate-300" />
+                                                    {docName}
+                                                </div>
+                                            ))}
+                                            <div className="h-px bg-slate-200 mx-3 my-1"></div>
+                                        </div>
+                                    )}
+
+                                    {/* ส่วนที่ 2: รายชื่อแพทย์ทั้งหมด */}
+                                    <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
+                                        <Users size={12} className="text-slate-400" />
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">รายชื่อทั้งหมด</span>
+                                    </div>
+                                    {(() => {
+                                        const allDocs = staffData.filter(s => s.role === 'doctor' || s.category === 'doctor');
+                                        const filteredDocs = allDocs.filter(d => !newOpdRecord.doctor || d.name.toLowerCase().includes(newOpdRecord.doctor.toLowerCase()));
+                                        
+                                        if (filteredDocs.length > 0) {
+                                            return filteredDocs.map((doc, idx) => (
+                                                <div 
+                                                    key={doc.id || idx} 
+                                                    onMouseDown={(e) => { e.preventDefault(); handleSelectDoctor(doc.name); }} 
+                                                    className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${newOpdRecord.doctor === doc.name ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                                >
+                                                    {doc.name}
+                                                </div>
+                                            ));
+                                        } else {
+                                            return (
+                                                <div className="px-3 py-6 text-sm text-slate-400 font-data flex flex-col items-center justify-center gap-2 kanit-text">
+                                                    <Search size={24} className="opacity-20" />
+                                                    <span>ไม่พบรายชื่อแพทย์</span>
+                                                </div>
+                                            );
+                                        }
+                                    })()}
+                                </div>
+                            )}
                           </div>
+
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">สาขาที่รับบริการ</label>
                             <select 
@@ -5552,10 +5950,13 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                           </div>
                         </div>
 
-                        {/* แถวที่ 5: Note */}
+                        {/* แถวที่ 5: ความเห็น/ข้อแนะนำ & Note */}
                         <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">ความเห็น/ข้อแนะนำ</label>
+                          <textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none font-data mb-3`} value={newOpdRecord.advice || ''} onChange={(e) => setNewOpdRecord({...newOpdRecord, advice: e.target.value})} placeholder="ระบุความเห็นหรือข้อแนะนำ..."></textarea>
+
                           <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">หมายเหตุเพิ่มเติม</label>
-                          <textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none font-data`} value={newOpdRecord.note} onChange={(e) => setNewOpdRecord({...newOpdRecord, note: e.target.value})} placeholder="รายละเอียดหรือคำแนะนำเพิ่มเติม..."></textarea>
+                          <textarea rows="2" className={`${theme.input} bg-white py-2 text-sm resize-none font-data`} value={newOpdRecord.note} onChange={(e) => setNewOpdRecord({...newOpdRecord, note: e.target.value})} placeholder="รายละเอียดหรือหมายเหตุอื่นๆ..."></textarea>
                         </div>
                       </div>
                       
@@ -5610,6 +6011,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                   <div className="flex justify-end gap-1">
                                     <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="text-sky-600 p-1.5 bg-sky-50 border border-sky-100 rounded-lg shadow-sm transition-colors hover:bg-sky-100" title="พิมพ์ใบ OPD">
                                       <Printer size={16} />
+                                    </button>
+                                    <button type="button" onClick={() => handlePrintMedicalCertificate(record, index)} className="text-emerald-600 p-1.5 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm transition-colors hover:bg-emerald-100" title="พิมพ์ใบรับรองแพทย์">
+                                      <FileText size={16} />
                                     </button>
                                     <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="text-slate-400 hover:text-sky-600 p-1.5 bg-white hover:bg-sky-50 border border-slate-100 rounded-lg shadow-sm transition-colors" title="แก้ไข">
                                       <Pencil size={16} />
@@ -5675,15 +6079,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                           </div>
                                       </div>
                                   </div>
-                                  <div className="grid grid-cols-3 gap-2 pt-1">
-                                      <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintOpdRecord(record, index); }} className="flex items-center justify-center gap-2 py-2 text-sky-600 bg-sky-50 border border-sky-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm hover:bg-sky-100">
-                                          <Printer size={14} /> พิมพ์
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintOpdRecord(record, index); }} className="flex items-center justify-center gap-1.5 py-2 text-sky-600 bg-sky-50 border border-sky-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm hover:bg-sky-100">
+                                          <Printer size={14} /> OPD
                                       </button>
-                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteOpdRecord(index); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
-                                          <Trash2 size={14} /> ลบ
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintMedicalCertificate(record, index); }} className="flex items-center justify-center gap-1.5 py-2 text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm hover:bg-emerald-100">
+                                          <Printer size={14} /> ใบรับรอง
                                       </button>
-                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenOpdForm(index, record); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-white border border-slate-100 hover:bg-sky-50 hover:border-sky-100 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm">
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenOpdForm(index, record); }} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-sky-600 bg-white border border-slate-100 hover:bg-sky-50 hover:border-sky-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
                                           <Pencil size={14} /> แก้ไข
+                                      </button>
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteOpdRecord(index); }} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-rose-600 bg-white border border-slate-100 hover:bg-rose-50 hover:border-rose-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
+                                          <Trash2 size={14} /> ลบ
                                       </button>
                                   </div>
                               </div>
@@ -5857,16 +6264,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         </div>
       )}
 
-      {medAlert.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${medAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${medAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={medAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
-          </div>
-        </div>,
-        document.body
-      )}
+      
     </>
   );
 };
@@ -5881,7 +6279,7 @@ const POSSystem = ({
     setInventoryLogsData,
     currentBranch,
     branchesData = [],
-    showToast, callAppScript, isGlobalLoading,
+    showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert,
     showMobileBars,
     handlePrintReceipt // <--- เพิ่ม Props นี้
 }) => {
@@ -5923,9 +6321,7 @@ const POSSystem = ({
   const checkoutModal = useModal();
   const historyModal = useModal();
   const manageModal = useModal();
-  const posAlert = useModal();
-
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [paymentMethod, setPaymentMethod] = useState('cash');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
 
@@ -6006,13 +6402,10 @@ const POSSystem = ({
   const [isProcessingProduct, setIsProcessingProduct] = useState(false);
   const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1 };
   const [productForm, setProductForm] = useState(initialProductForm);
-  const [sweetAlert, setSweetAlert] = useState({ isOpen: false, type: '', title: '', text: '', onConfirm: null });
-
-  const [isAlertClosing, setIsAlertClosing] = useState(false);
-  const closeAlert = () => {
+      const closeAlert = () => {
     setIsAlertClosing(true);
     setTimeout(() => {
-        setSweetAlert(prev => ({ ...prev, isOpen: false }));
+        globalAlert.close();
         setIsAlertClosing(false);
     }, 300);
   };
@@ -6500,11 +6893,11 @@ const POSSystem = ({
   };
 
   const handleDeleteProduct = (prod) => {
-      setSweetAlert({
+      showGlobalAlert({
           type: 'warning', title: 'ยืนยันการลบรายการ?',
           text: `คุณต้องการลบ "${prod.name}" ใช่หรือไม่?`,
           onConfirm: async () => {
-              posAlert.close();
+              globalAlert.setIsOpen(false);
               setIsProcessingProduct(true);
               try {
                   await callAppScript('DELETE_DATA', 'setting_pos', { id: prod.id });
@@ -6516,8 +6909,7 @@ const POSSystem = ({
               setIsProcessingProduct(false);
           }
       });
-      posAlert.open();
-  };
+        };
 
   // สร้างตัวเลือกสำหรับ CustomSelect โดยเรียงลำดับจากประวัติการรักษาล่าสุด (หรือลงทะเบียนล่าสุด) ก่อน
   const patientOptions = useMemo(() => {
@@ -7477,22 +7869,13 @@ const POSSystem = ({
 
       {/* Modal และ Alert จัดการสินค้าถูกย้ายไปยัง CatalogManager แล้ว */}
       
-      {posAlert.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${posAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${posAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={posAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
-          </div>
-        </div>,
-        document.body
-      )}
+      
     </>
   );
 };
 
 // --- ระบบฐานข้อมูลรายการ (Catalog Manager) ---
-const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading, posHistoryData = [] }) => {
+const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, posHistoryData = [] }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all'); // เพิ่ม State สำหรับจัดการการกรอง
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
@@ -7501,12 +7884,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   const [showCategorySuggest, setShowCategorySuggest] = useState(false);
   const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1, minStock: 5 };
   const [productForm, setProductForm] = useState(initialProductForm);
-  const [alertConfig, setAlertConfig] = useState({ type: 'warning', title: '', text: '', onConfirm: null });
-  const alertModal = useModal();
-  const sweetAlert = { ...alertModal, ...alertConfig };
-  const setSweetAlert = setAlertConfig;
-
-  const headerRef = React.useRef(null);
+          const headerRef = React.useRef(null);
   const filterRef = React.useRef(null);
 
   // --- ระบบ Sticky เลียนแบบหน้าอื่นๆ ---
@@ -7619,11 +7997,11 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   };
 
   const handleDeleteProduct = (prod) => {
-      setSweetAlert({
+      showGlobalAlert({
           type: 'warning', title: 'ยืนยันการลบรายการ?',
           text: `คุณต้องการลบ "${prod.name}" ใช่หรือไม่?`,
           onConfirm: async () => {
-              sweetAlert.close();
+              globalAlert.setIsOpen(false);
               setIsProcessingProduct(true);
               try {
                   await callAppScript('DELETE_DATA', 'setting_pos', { id: prod.id });
@@ -7635,8 +8013,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
               setIsProcessingProduct(false);
           }
       });
-      sweetAlert.open();
-  };
+        };
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -7863,7 +8240,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                     <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0 border border-sky-100 shadow-inner">
                       <PIcon size={28} />
                     </div>
-                    <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                    <div className="flex flex-col gap-1.5">
                       <button onClick={() => handleOpenEditProduct(prod)} className="p-2.5 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all border border-slate-100 shadow-sm"><Pencil size={16} /></button>
                       <button onClick={() => handleDeleteProduct(prod)} className="p-2.5 bg-white text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-100 shadow-sm"><Trash2 size={16} /></button>
                     </div>
@@ -8038,30 +8415,18 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
         document.body
       )}
 
-      {sweetAlert.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${sweetAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${sweetAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{sweetAlert.title}</h3><p className="text-slate-500 mb-8 kanit-text">{sweetAlert.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={sweetAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={sweetAlert.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
-          </div>
-        </div>,
-        document.body
-      )}
+      
     </div>
   );
 };
 
 // --- ระบบจัดการสาขา (Branch Manager) ---
-const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppScript, isGlobalLoading }) => {
+const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const alertModal = useModal();
-  const [alertConfig, setAlertConfig] = useState({ title: '', text: '', onConfirm: null });
-  
-  const initialForm = { id: '', name: '', clinicName: '', licenseNumber: '', logo: '', taxId: '', address: '', phone: '', email: '', manager: '', status: 'active', rooms: [] };
+      const initialForm = { id: '', name: '', clinicName: '', licenseNumber: '', logo: '', taxId: '', address: '', phone: '', email: '', manager: '', status: 'active', rooms: [] };
   const [formData, setFormData] = useState(initialForm);
 
   const addRoom = () => setFormData(prev => ({ ...prev, rooms: [...(prev.rooms || []), ''] }));
@@ -8150,11 +8515,12 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
   };
 
   const handleDeleteBranch = (branch) => {
-    setAlertConfig({
+    showGlobalAlert({
+      type: 'warning',
       title: 'ยืนยันการลบสาขา?',
       text: `คุณต้องการลบข้อมูล "${branch.name}" ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้`,
       onConfirm: async () => {
-        alertModal.close();
+        globalAlert.setIsOpen(false);
         setIsProcessing(true);
         try {
           await callAppScript('DELETE_DATA', 'Branches', { id: branch.id });
@@ -8167,8 +8533,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
         }
       }
     });
-    alertModal.open();
-  };
+      };
 
   return (
     <div className="flex flex-col h-full fade-in pb-20 md:pb-0">
@@ -8274,16 +8639,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
       </div>
 
       {/* --- Alert Modal --- */}
-      {alertModal.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${alertModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${alertModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3><p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={alertModal.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
-          </div>
-        </div>,
-        document.body
-      )}
+      
 
       {isModalOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
@@ -10314,7 +10670,9 @@ const FinancePage = ({
   posProducts = [],
   staffData = [],
   setStaffData,
-  handlePrintReceipt // <-- เพิ่มบรรทัดนี้เพื่อรับค่าฟังก์ชันพิมพ์ใบเสร็จ
+  handlePrintReceipt, // <-- เพิ่มบรรทัดนี้เพื่อรับค่าฟังก์ชันพิมพ์ใบเสร็จ
+  showGlobalAlert,
+  globalAlert
 }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all'); 
@@ -10392,13 +10750,10 @@ const FinancePage = ({
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isDetailClosing, setIsDetailClosing] = useState(false);
 
-  const sweetAlert = useModal();
-  const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
-  const [isAlertClosing, setIsAlertClosing] = useState(false);
-  const closeFinAlert = () => {
+        const closeFinAlert = () => {
       setIsAlertClosing(true);
       setTimeout(() => {
-          sweetAlert.setIsOpen(false);
+          globalAlert.close();
       }, 300);
   };
 
@@ -11033,17 +11388,16 @@ const FinancePage = ({
   };
 
   const handleDeleteTransaction = async (tx) => {
-      setIsAlertClosing(false);
       if (tx.isAuto) {
         showToast('รายการจากระบบ POS ไม่สามารถลบได้ กรุณากด "แก้ไข" และเปลี่ยนสถานะบิลเป็น "ยกเลิก (Void)" แทน', 'warning');
         return;
       }
-      setAlertConfig({
+      showGlobalAlert({
         type: 'warning',
         title: 'ยืนยันการลบรายการ?',
         text: `คุณต้องการลบรายการ "${tx.category}" จำนวน ${formatCurrency(tx.amount)} ใช่หรือไม่?`,
         onConfirm: async () => {
-            closeFinAlert();
+            globalAlert.setIsOpen(false);
             setIsProcessing(true);
             try {
                 const sheetName = tx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
@@ -11081,8 +11435,7 @@ const FinancePage = ({
             }
         }
       });
-      sweetAlert.open();
-  };
+        };
 
   const handleSaveTransaction = async (e) => {
     e.preventDefault();
@@ -12837,16 +13190,7 @@ const FinancePage = ({
       )}
 
       {/* --- Sweet Alert --- */}
-      {sweetAlert.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${sweetAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${sweetAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3><p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={sweetAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
-          </div>
-        </div>,
-        document.body
-      )}
+      
 
       {/* --- [NEW] Modal: Date Range Calendar สำหรับหน้าการเงิน --- */}
       {showFinRangeCalendar && createPortal(
@@ -12971,7 +13315,7 @@ const FinancePage = ({
 };
 
 // --- ระบบจัดการพนักงาน (Staff Manager) ---
-const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading }) => {
+const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert }) => {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   
@@ -12979,10 +13323,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   const staffModal = useModal();
   const scheduleModal = useModal();
   const payrollModal = useModal();
-  const alertModal = useModal();
-  const [alertConfig, setAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
-
-  const [editingId, setEditingId] = useState(null);
+      const [editingId, setEditingId] = useState(null);
   
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffModalDate, setStaffModalDate] = useState(null);
@@ -13445,7 +13786,8 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   
   // Form พนักงาน
   const initialForm = { 
-    id: '', prefix: '', firstName: '', lastName: '', name: '', role: 'nurse', phone: '', idCard: '', dob: '', gender: '',
+    id: '', empCode: '', username: '', password: '', category: 'staff', position: '', email: '',
+    prefix: '', firstName: '', lastName: '', name: '', role: 'nurse', phone: '', idCard: '', dob: '', gender: '', licenseNumber: '',
     nationality: 'ไทย', ethnicity: 'ไทย', religion: 'พุทธ',
     address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '',
     curAddress: '', curMoo: '', curRoad: '', curSubDistrict: '', curDistrict: '', curProvince: '', curZipcode: '',
@@ -13949,7 +14291,21 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   // --- Handlers ---
   const handleOpenAdd = () => {
     setEditingId(null);
-    setFormData(initialForm);
+    
+    // คำนวณรหัสพนักงานอัตโนมัติ (EM001, EM002...)
+    let maxNum = 0;
+    staffData.forEach(s => {
+        if (s.empCode && s.empCode.toUpperCase().startsWith('EM')) {
+            const numMatch = s.empCode.match(/\d+$/);
+            if (numMatch) {
+                const num = parseInt(numMatch[0], 10);
+                if (num > maxNum) maxNum = num;
+            }
+        }
+    });
+    const nextEmpCode = `EM${String(maxNum + 1).padStart(3, '0')}`;
+    
+    setFormData({ ...initialForm, empCode: nextEmpCode });
     staffModal.open();
   };
 
@@ -14008,11 +14364,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   };
 
   const handleDelete = (staff) => {
-    setAlertConfig({
+    showGlobalAlert({
+      type: 'warning',
       title: 'ยืนยันการลบพนักงาน',
       text: `คุณต้องการลบข้อมูลพนักงาน "${staff.name}" ใช่หรือไม่?`,
       onConfirm: async () => {
-         alertModal.close();
+         globalAlert.setIsOpen(false);
          setIsProcessing(true);
          try {
            if (callAppScript) {
@@ -14027,8 +14384,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
          }
       }
     });
-    alertModal.open();
-  };
+      };
 
   // --- Schedule ---
   const handleOpenSchedule = (staff) => {
@@ -14207,7 +14563,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
             </h1>
             <p className="text-slate-500 text-xs sm:text-sm kanit-text mt-0.5">จัดการข้อมูล, ตารางงาน และค่าคอมมิชชั่น</p>
           </div>
-          <button onClick={handleOpenAdd} className="bg-sky-500 text-white hover:bg-sky-600 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold shadow-md shadow-sky-500/20 transition-all active:scale-95 flex items-center gap-2 kanit-text text-sm sm:text-base pointer-events-auto">
+          <button onClick={handleOpenAdd} disabled={isGlobalLoading} className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold shadow-md transition-all flex items-center gap-2 kanit-text text-sm sm:text-base pointer-events-auto ${isGlobalLoading ? 'bg-slate-300 text-white cursor-not-allowed shadow-none' : 'bg-sky-500 text-white hover:bg-sky-600 shadow-sky-500/20 active:scale-95'}`}>
             <Plus size={18} /> <span className="hidden sm:inline">เพิ่มพนักงาน</span>
           </button>
         </div>
@@ -14982,6 +15338,23 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                   </div>
 
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full">
+                      {/* บัญชีผู้ใช้ */}
+                      <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">รหัสพนักงาน</label><input type="text" className={`${theme.input} !py-2.5 font-data bg-slate-100 text-slate-500 cursor-not-allowed`} value={formData.empCode || ''} disabled readOnly placeholder="ระบบจะสร้างให้อัตโนมัติ" /></div>
+                          <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">ID พนักงาน (Username)</label><input type="text" className={`${theme.input} !py-2.5 font-data`} value={formData.username || ''} onChange={(e) => setFormData({...formData, username: e.target.value})} placeholder="สำหรับเข้าสู่ระบบ" /></div>
+                          <div>
+                              {editingId ? (
+                                  <div className="flex flex-col h-full justify-end">
+                                      <button type="button" onClick={() => showToast('ระบบได้ส่งลิงก์รีเซ็ตรหัสผ่าน (Token 15 นาที) ไปยังอีเมลพนักงานแล้ว', 'success')} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-sky-600 hover:bg-sky-50 rounded-xl font-bold kanit-text text-[13px] transition-colors shadow-sm">
+                                          ส่งลิงก์รีเซ็ตรหัสผ่าน
+                                      </button>
+                                  </div>
+                              ) : (
+                                  <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">รหัสผ่านเริ่มต้น <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} !py-2.5 font-data`} value={formData.password || ''} onChange={(e) => setFormData({...formData, password: e.target.value})} placeholder="กำหนดรหัสผ่าน" /></div>
+                              )}
+                          </div>
+                      </div>
+
                       <div className="relative" style={{ zIndex: 50 }}>
                         <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label>
                         <div className="relative">
@@ -15004,12 +15377,25 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                       <div className="lg:col-span-1 relative" style={{ zIndex: 45 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อ <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} /></div>
                       <div className="lg:col-span-1 relative" style={{ zIndex: 45 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">นามสกุล <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} font-data`} value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} /></div>
                       
-                      <div className="md:col-span-2 lg:col-span-1 relative" style={{ zIndex: 40 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ตำแหน่ง <span className="text-rose-500">*</span></label>
+                      <div className="relative" style={{ zIndex: 40 }}>
+                        <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                        <CustomSelect value={formData.category} onChange={(val) => setFormData({...formData, category: val})} options={[{value:'doctor', label:'แพทย์'}, {value:'staff', label:'สต๊าฟ/พนักงาน'}]} />
+                      </div>
+
+                      <div className="relative" style={{ zIndex: 40 }}>
+                        <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ตำแหน่งงาน</label>
+                        <input type="text" className={`${theme.input} font-data`} value={formData.position || ''} onChange={(e) => setFormData({...formData, position: e.target.value})} placeholder="เช่น แพทย์แผนจีน, ผู้ช่วย..." />
+                      </div>
+
+                      <div className="relative" style={{ zIndex: 38 }}>
+                        <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">สิทธิ์เข้าระบบ <span className="text-rose-500">*</span></label>
                         <CustomSelect value={formData.role} onChange={(val) => setFormData({...formData, role: val})} options={[{value:'doctor', label:'แพทย์'}, {value:'nurse', label:'พยาบาล/ผู้ช่วย'}, {value:'sale', label:'พนักงานขาย'}, {value:'admin', label:'แอดมิน'}]} />
                       </div>
                       
                       <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input required type="tel" className={`${theme.input} font-data`} value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} /></div>
+                      <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อีเมล</label><input type="email" className={`${theme.input} font-data`} value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="example@mail.com" /></div>
                       <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เลขบัตรประชาชน</label><input type="text" className={`${theme.input} font-data`} value={formData.idCard} onChange={(e) => setFormData({...formData, idCard: e.target.value})} maxLength="13" /></div>
+                      <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เลขที่ใบประกอบโรคศิลป์</label><input type="text" className={`${theme.input} font-data`} value={formData.licenseNumber || ''} onChange={(e) => setFormData({...formData, licenseNumber: e.target.value})} /></div>
                       
                       <div className="relative" style={{ zIndex: 30 }}>
                         <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">วันเกิด</label>
@@ -15857,7 +16243,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                 <div className="flex flex-wrap items-center gap-2 mt-1.5 sm:mt-2">
                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-bold kanit-text border shadow-sm ${roleMap[viewProfileStaff.role]?.color || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                                         {roleMap[viewProfileStaff.role] ? React.createElement(roleMap[viewProfileStaff.role].icon, { size: 14 }) : null}
-                                        {roleMap[viewProfileStaff.role]?.label || 'ไม่ระบุตำแหน่ง'}
+                                        {viewProfileStaff.position || roleMap[viewProfileStaff.role]?.label || 'ไม่ระบุตำแหน่ง'}
                                     </span>
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-[10px] sm:text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 kanit-text shadow-sm">
                                         <Building2 size={14} className="text-slate-400 shrink-0" /> <span className="truncate">{branchesData.find(b => b.id === viewProfileStaff.branchId)?.name || 'ทุกสาขา'}</span>
@@ -15869,11 +16255,19 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                         {/* ข้อมูลรายละเอียดพนักงาน (Grid) */}
                         <div className="space-y-4 sm:space-y-5">
                             <div className="bg-slate-50/50 p-5 rounded-[1.5rem] border border-slate-100 shadow-sm">
-                                <h4 className="text-sm font-bold text-slate-800 kanit-text mb-4 flex items-center gap-2 pb-2 border-b border-slate-200/60"><User size={18} className="text-sky-500" /> ข้อมูลส่วนตัว</h4>
+                                <h4 className="text-sm font-bold text-slate-800 kanit-text mb-4 flex items-center gap-2 pb-2 border-b border-slate-200/60"><User size={18} className="text-sky-500" /> ข้อมูลส่วนตัว & การติดต่อ</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-5 gap-x-4 pl-1">
                                     <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เลขบัตรประชาชน</p>
-                                        <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.idCard || '-'}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">รหัสพนักงาน</p>
+                                        <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.empCode || '-'}</p>
+                                    </div>
+                                    <div className="col-span-1 sm:col-span-2">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">อีเมล</p>
+                                        <p className="text-sm font-bold text-slate-700 font-data truncate">{viewProfileStaff.email || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">หมวดหมู่</p>
+                                        <p className="text-sm font-bold text-slate-700 kanit-text">{viewProfileStaff.category === 'doctor' ? 'แพทย์' : viewProfileStaff.category === 'staff' ? 'สต๊าฟ/พนักงาน' : '-'}</p>
                                     </div>
                                     <div className="col-span-1 sm:col-span-2">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เบอร์โทรศัพท์</p>
@@ -15885,6 +16279,10 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                                 </a>
                                             )}
                                         </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">เลขบัตรประชาชน</p>
+                                        <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.idCard || '-'}</p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">วันเกิด</p>
@@ -15991,15 +16389,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       )}
 
       {/* --- Alert Modal --- */}
-      {alertModal.isOpen && (
-        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${alertModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${alertModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="w-20 h-20 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-4"><AlertTriangle size={40} /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{alertConfig.title}</h3><p className="text-slate-500 mb-8 kanit-text">{alertConfig.text}</p>
-            <div className="flex gap-3 w-full"><button onClick={alertModal.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">ยกเลิก</button><button onClick={alertConfig.onConfirm} className="flex-1 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-semibold transition-colors shadow-lg shadow-rose-500/30 kanit-text">ยืนยัน</button></div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 };
@@ -16770,6 +17160,39 @@ export default function App() {
 
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
 
+  // --- ระบบ Global Alert ส่วนกลาง (ทดแทน sweetAlert/medAlert ของแต่ละหน้า) ---
+  const globalAlert = useModal();
+  const [globalAlertConfig, setGlobalAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
+
+  const showGlobalAlert = ({ type = 'info', title = '', text = '', onConfirm = null }) => {
+    setGlobalAlertConfig({ type, title, text, onConfirm });
+    globalAlert.open();
+  };
+
+  const GlobalAlertUI = () => {
+      if (!globalAlert.isOpen) return null;
+      return createPortal(
+          <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${globalAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+            <div className={`bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${globalAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${globalAlertConfig.type === 'info' ? 'bg-sky-100 text-sky-500' : 'bg-rose-100 text-rose-500'}`}>
+                {globalAlertConfig.type === 'info' ? <FileText size={40} /> : <AlertTriangle size={40} />}
+              </div>
+              <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{globalAlertConfig.title}</h3>
+              <p className="text-slate-500 mb-8 kanit-text">{globalAlertConfig.text}</p>
+              <div className="flex gap-3 w-full">
+                <button onClick={globalAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">
+                  ยกเลิก
+                </button>
+                <button onClick={() => { if (globalAlertConfig.onConfirm) globalAlertConfig.onConfirm(); }} className={`flex-1 py-3.5 text-white rounded-2xl font-semibold transition-colors shadow-lg kanit-text ${globalAlertConfig.type === 'info' ? 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30'}`}>
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+      );
+  };
+
   // แจ้งเตือนแบบ State ปลอดภัยที่สุด แสดงบนสุดและไม่ทำให้จอโหลดใหม่ซ้อน
   const [toast, setToast] = useState(null);
   const [isToastClosing, setIsToastClosing] = useState(false);
@@ -17153,63 +17576,63 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} />
+                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
 
             {currentTab === 'catalog' && (
                 <div className="w-full">
-                    <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} />
+                    <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
 
             {currentTab === 'pos' && (
                 <div className="flex-1 w-full relative min-h-0 flex flex-col">
-                    <POSSystem 
-                        products={posProducts} 
-                        setProducts={setPosProducts} 
-                        patientsData={patientsData} 
-                        setPatientsData={setPatientsData} 
-                        posHistoryData={posHistoryData} 
-                        setPosHistoryData={setPosHistoryData} 
+                    <POSSystem products={posProducts}
+                        setProducts={setPosProducts}
+                        patientsData={patientsData}
+                        setPatientsData={setPatientsData}
+                        posHistoryData={posHistoryData}
+                        setPosHistoryData={setPosHistoryData}
                         inventoryData={inventoryData}
                         setInventoryData={setInventoryData}
                         setInventoryLogsData={setInventoryLogsData}
-                        staffData={staffData} 
+                        staffData={staffData}
                         currentBranch={currentBranch}
                         branchesData={branchesData}
-                        showToast={showToast} 
-                        callAppScript={callAppScript} 
+                        showToast={showToast}
+                        callAppScript={callAppScript}
                         isGlobalLoading={isGlobalLoading}
                         showMobileBars={showMobileBars}
                         handlePrintReceipt={handlePrintReceipt}
-                    />
+                    showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
 
             {currentTab === 'finance' && (
                 <div className="w-full mx-auto px-0 py-0">
-                   <FinancePage 
-                     currentBranch={currentBranch} 
-                     financeData={financeData} 
-                     setFinanceData={setFinanceData} 
-                     posHistoryData={posHistoryData} 
-                     branchesData={branchesData} 
-                     isGlobalLoading={isGlobalLoading} 
-                     callAppScript={callAppScript} 
-                     showToast={showToast} 
+                   <FinancePage
+                     currentBranch={currentBranch}
+                     financeData={financeData}
+                     setFinanceData={setFinanceData}
+                     posHistoryData={posHistoryData}
+                     branchesData={branchesData}
+                     isGlobalLoading={isGlobalLoading}
+                     callAppScript={callAppScript}
+                     showToast={showToast}
                      setPosHistoryData={setPosHistoryData}
                      patientsData={patientsData}
                      posProducts={posProducts}
                      staffData={staffData}
                      setStaffData={setStaffData}
                      handlePrintReceipt={handlePrintReceipt}
+                     showGlobalAlert={showGlobalAlert} globalAlert={globalAlert}
                    />
                 </div>
             )}
@@ -17233,8 +17656,7 @@ export default function App() {
 
             {currentTab === 'staff' && (
                 <div className="w-full mx-auto px-0 py-0">
-                    <StaffManager 
-                       staffData={staffData} 
+                    <StaffManager staffData={staffData} 
                        setStaffData={setStaffData} 
                        financeData={financeData} 
                        setFinanceData={setFinanceData} 
@@ -17243,19 +17665,18 @@ export default function App() {
                        callAppScript={callAppScript} 
                        showToast={showToast} 
                        isGlobalLoading={isGlobalLoading} 
-                    />
+                    showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
             
             {currentTab === 'branch' && (
                 <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8">
-                    <BranchManager 
-                        branchesData={branchesData} 
+                    <BranchManager branchesData={branchesData} 
                         setBranchesData={setBranchesData} 
                         showToast={showToast} 
                         callAppScript={callAppScript} 
                         isGlobalLoading={isGlobalLoading} 
-                    />
+                    showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
 
@@ -17572,6 +17993,7 @@ export default function App() {
         @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 64px); } }
         @media (min-width: 768px) and (max-width: 1023px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 59px); } }
       `}} />
+      {GlobalAlertUI()}
     </div>
   );
 }
