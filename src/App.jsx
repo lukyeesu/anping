@@ -16611,13 +16611,21 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
           const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
           if (styleMatch) {
-              let cleanStyle = styleMatch[1].replace(/@page\s*\{[^}]+\}/gi, '');
+              let cleanStyle = styleMatch[1]
+                  .replace(/@page\s*\{[^}]+\}/gi, '')
+                  .replace(/\/\*[\s\S]*?\*\//g, ''); // [FIX] ลบ Comments ออกเพื่อป้องกันปัญหาตอนสโคปคลาส
               
-              // Scoping CSS: เปลี่ยน body เป็น .doc-page-index และ prefix ตัวอื่นๆ
+              // [FIX] Scoping CSS อย่างปลอดภัย ข้ามคำสั่ง @media และจัดการ comma-separated selectors
               cleanStyle = cleanStyle.replace(/([^\r\n,{}]+)(?=[^{}]*\{)/g, (match) => {
                   const selector = match.trim();
-                  if (selector === 'body' || selector === 'html') return `.doc-page-${index}`;
-                  return `.doc-page-${index} ${selector}`;
+                  if (!selector || selector.startsWith('@')) return match; // ป้องกันการทำลาย @media print
+                  
+                  return selector.split(',').map(s => {
+                      const sel = s.trim();
+                      if (sel === 'body' || sel === 'html') return `.doc-page-${index}`;
+                      if (sel.startsWith('@')) return sel;
+                      return `.doc-page-${index} ${sel}`;
+                  }).join(', ') + ' ';
               });
               combinedStyles += cleanStyle + '\n';
           }
@@ -16638,14 +16646,21 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           <style>
               body { margin: 0; padding: 0; background: #fff; font-family: 'Sarabun', sans-serif; }
               * { box-sizing: border-box; }
-              @page a4-page-medcert { size: A4; margin: 0; }
+              @page a4-page-medcert { size: A4; }
               @page a4-page-receipt { size: A4; margin: 5mm; }
               @page a5-land-page { size: A5 landscape; margin: 10mm; }
               @page a5-port-page { size: A5; margin: 10mm; }
               @media print {
                   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                  .print-page { page-break-after: always; overflow: hidden; }
-                  .print-page:last-child { page-break-after: auto; }
+                  .print-page { 
+                      page-break-after: always; /* Legacy fallback */
+                      break-after: page; /* Modern standard */
+                      overflow: hidden; 
+                  }
+                  .print-page:last-child { 
+                      page-break-after: auto; 
+                      break-after: auto;
+                  }
                   .page-a4-medcert { page: a4-page-medcert; }
                   .page-a4-receipt { page: a4-page-receipt; }
                   .page-a5-land { page: a5-land-page; }
