@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -5264,8 +5264,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const renderPdpaButton = (patient) => {
       const status = patient.pdpaStatus;
       
-      const mktIcon = patient.isConsentMarketing ? '?' : '?';
-      const revIcon = patient.isConsentReview ? '?' : '?';
+      const mktIcon = patient.isConsentMarketing ? '✓' : '✗';
+      const revIcon = patient.isConsentReview ? '✓' : '✗';
       
       if (status === 'green') {
           return (
@@ -5285,7 +5285,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                       <XCircle size={12}/> ไม่ยินยอม
                   </span>
                   <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-colors">
-                      MKT: <span className="text-rose-500">?</span> | REV: <span className="text-rose-500">?</span>
+                      MKT: <span className="text-rose-500">✗</span> | REV: <span className="text-rose-500">✗</span>
                   </span>
               </div>
           );
