@@ -431,6 +431,158 @@ const bahtTextPrint = (amount) => {
     return result;
 };
 
+const globalGenerateInformedConsentHtml = (patient, branchesData = [], currentBranch = '') => {
+    const branchIdToUse = (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
+    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
+    const clinicName = targetBranch.clinicName || targetBranch.name || "อันผิงคลินิก (Anping Clinic)";
+    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
+    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
+    const logoUrl = targetBranch.logo || '';
+    
+    const formattedDate = patient.informedConsentTimestamp 
+        ? new Date(patient.informedConsentTimestamp).toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          }) + ' น.'
+        : '-';
+
+    const patientFullName = getPatientFullName(patient);
+    const signerName = patient.informedConsentSignerType === 'patient'
+        ? patientFullName
+        : patient.informedConsentRepresentativeName;
+        
+    const relationStr = patient.informedConsentSignerType === 'patient'
+        ? 'ผู้ป่วยลงนามด้วยตนเอง'
+        : `ผู้แทนโดยชอบธรรม (ความเกี่ยวข้อง: ${patient.informedConsentRepresentativeRelation || '-'})`;
+
+    return `
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>ใบยินยอมรับการรักษาพยาบาล - ${patient.hn || patient.id}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Sarabun', sans-serif; font-size: 15px; color: #111827; margin: 0; padding: 0; line-height: 1.8; font-weight: 400; }
+            @page { size: A4; margin: 20mm; }
+            .container { width: 100%; box-sizing: border-box; }
+            .text-bold { font-weight: 700; }
+            .text-heading { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin: 25px 0 30px 0; }
+            .header-block { display: flex; align-items: flex-start; border-bottom: 2px solid #111827; padding-bottom: 20px; margin-bottom: 30px; }
+            .meta-block { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-bottom: 20px; font-size: 14px; }
+            .content-block { padding: 0 5px; font-size: 14.5px; text-align: justify; }
+            .indent { text-indent: 40px; }
+            .signature-section { display: flex; justify-content: space-between; margin-top: 50px; page-break-inside: avoid; align-items: flex-end; }
+            .signature-box { width: 45%; text-align: center; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+            .signature-line { border-bottom: 1px dotted #111827; width: 80%; height: 1px; margin: 0 auto; }
+            .signature-text { margin: 0; line-height: 1.4; white-space: nowrap; }
+            
+            @media print {
+                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <!-- Header Section -->
+            <div class="header-block">
+                <div style="width: 80px; margin-right: 24px; flex-shrink: 0;">
+                    ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="width: 100%; height: auto; object-fit: contain;" />` : ''}
+                </div>
+                <div style="flex-grow: 1; padding-top: 5px;">
+                    <div class="text-bold" style="font-size: 20px; margin-bottom: 0px;">${clinicName}</div>
+                    <div style="font-size: 14px; line-height: 1.4;">${clinicAddress}</div>
+                    <div style="font-size: 14px; line-height: 1.4;">โทร: ${clinicPhone}</div>
+                </div>
+            </div>
+
+            <!-- Title -->
+            <div class="text-heading">หนังสือแสดงความยินยอมเข้ารับการรักษาพยาบาล (Informed Consent)</div>
+            
+            <!-- Document Meta -->
+            <div class="meta-block">
+                <div class="text-bold">เลขทะเบียนผู้ป่วย (HN): ${patient.hn || patient.id}</div>
+                <div>วันที่ลงนาม: ${formattedDate}</div>
+            </div>
+
+            <!-- Patient Info Section -->
+            <div style="margin-bottom: 25px; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
+                    <tr>
+                        <td style="padding: 6px 0; width: 120px;" class="text-bold">ชื่อ-สกุลผู้ป่วย:</td>
+                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827;">${patientFullName}</td>
+                        <td style="padding: 6px 0; width: 120px; text-align: right;" class="text-bold">เลขบัตรประชาชน:</td>
+                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827; padding-left: 10px;">${patient.idCard || '-'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 0;" class="text-bold">ผู้ลงนามยินยอม:</td>
+                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827;">${signerName}</td>
+                        <td style="padding: 6px 0; text-align: right;" class="text-bold">ความเกี่ยวข้อง:</td>
+                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827; padding-left: 10px;">${relationStr}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Content Body -->
+            <div class="content-block">
+                <div class="indent" style="margin-bottom: 15px;">
+                    หนังสือยินยอมฉบับนี้ทำขึ้นเพื่อแสดงว่า ข้าพเจ้าได้รับทราบข้อมูล รายละเอียด ความจำเป็น ความเสี่ยง และผลข้างเคียงที่อาจเกิดขึ้นจากการตรวจรักษาพยาบาลและทำหัตถการทางการแพทย์ของอันผิงคลินิกเป็นที่เข้าใจโดยละเอียดครบถ้วนแล้ว โดยมีข้อตกลงและความเข้าใจดังต่อไปนี้:
+                </div>
+                
+                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">1. รายละเอียดเกี่ยวกับหัตถการและการรักษา</div>
+                <div style="margin-bottom: 15px; padding-left: 15px;">
+                    การทำหัตถการต่างๆ อาทิ การฝังเข็ม การครอบแก้ว การนวดทุยหนา การกัวซา หรือการใช้ยาสมุนไพรจีน มีวัตถุประสงค์เพื่อปรับสมดุลร่างกาย รักษาอาการปวดเกร็ง ตึงตัวของกล้ามเนื้อ และส่งเสริมการไหลเวียนของลมปราณ (ชี่) และโลหิตตามแนวเส้นลมปราณ
+                </div>
+
+                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">2. ความเสี่ยงและผลข้างเคียงที่อาจเกิดขึ้น</div>
+                <div style="margin-bottom: 15px; padding-left: 15px;">
+                    ข้าพเจ้ารับทราบว่าการทำหัตถการอาจก่อให้เกิดอาการระบม รอยเขียวช้ำชั่วคราวบริเวณจุดฝังเข็มหรือครอบแก้ว ซึ่งจะค่อยๆ หายไปเองตามธรรมชาติภายใน 3-7 วัน รวมถึงอาจมีความรู้สึกตึง หน่วง ปวดตื้อ หรือกระตุกขณะเข็มกระตุ้นจุด ซึ่งเป็นผลปกติของการรักษา (ความรู้สึกเต๋อชี่) ในบางกรณีอาจมีอาการหน้ามืด ใจสั่น วิงเวียนศีรษะ (อาการเมาเข็ม) ซึ่งสามารถป้องกันและรักษาได้โดยการนอนพักผ่อนอย่างเพียงพอก่อนรับบริการ
+                </div>
+
+                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">3. ข้อพึงปฏิบัติก่อนและหลังเข้ารับการตรวจรักษา</div>
+                <div style="margin-bottom: 15px; padding-left: 15px;">
+                    ข้าพเจ้าจะให้ข้อมูลประวัติการแพทย์ ประวัติการแพ้ยา แพ้อาหาร โรคประจำตัว ยาที่กำลังรับประทานอยู่เป็นประจำ ตลอดจนภาวะการตั้งครรภ์อย่างตรงไปตรงมา และปฏิบัติตามคำแนะนำของแพทย์อย่างเคร่งครัด ทั้งก่อนและหลังทำหัตถการ เพื่อป้องกันความเสี่ยงจากภาวะแทรกซ้อน เช่น ภาวะเลือดหยุดยาก หรือการติดเชื้อ
+                </div>
+
+                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">4. ความยินยอมและสมัครใจ</div>
+                <div style="margin-bottom: 15px; padding-left: 15px;">
+                    ข้าพเจ้าขอรับรองว่าได้ยินยอมเข้ารับการตรวจและรักษาพยาบาลจากอันผิงคลินิกด้วยความสมัครใจ ปราศจากการบังคับ ข่มขู่ หรือชักจูงใดๆ และข้าพเจ้าเข้าใจดีว่าไม่มีการรับประกันผลการรักษาพยาบาลว่าจะหายขาด 100% เนื่องจากผลการรักษาขึ้นอยู่กับสภาพร่างกายและการดูแลตนเองของแต่ละบุคคลด้วย
+                </div>
+            </div>
+
+            <!-- Signature Section -->
+            <div class="signature-section">
+                <!-- Metadata box on left -->
+                <div style="width: 50%; font-size: 11px; color: #4b5563; line-height: 1.5; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; background-color: #f8fafc;">
+                    <div class="text-bold" style="margin-bottom: 4px; color: #1e293b;">หลักฐานการลงนามอิเล็กทรอนิกส์ (E-Signature)</div>
+                    <div>วัน-เวลาลงนาม: ${formattedDate}</div>
+                    <div style="word-break: break-all;">IP Address: ${patient.informedConsentIpAddress || '-'}</div>
+                    <div style="word-break: break-all; font-size: 10px;">อุปกรณ์: ${patient.informedConsentUserAgent || '-'}</div>
+                </div>
+                <!-- Signature Box on right -->
+                <div class="signature-box" style="width: 45%;">
+                    <div style="height: 70px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                        ${patient.informedConsentSignatureUrl ? `
+                            <img src="${patient.informedConsentSignatureUrl}" style="max-height: 70px; max-width: 200px; object-fit: contain;" alt="Signature" />
+                        ` : `
+                            <div style="font-size: 12px; color: #94a3b8; font-style: italic; border-bottom: 1px dotted #111827; width: 150px; height: 50px;"></div>
+                        `}
+                    </div>
+                    <div class="signature-line" style="width: 100%;"></div>
+                    <div class="signature-text" style="margin-top: 5px;">ลงชื่อ: ___________________________</div>
+                    <div class="signature-text" style="font-size: 13px; color: #4b5563; margin-top: 3px;">(${signerName})</div>
+                    <div class="signature-text" style="font-size: 12px; color: #6b7280;">ผู้ให้ความยินยอม</div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+};
+
 const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = '') => {
     const branchIdToUse = (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
     const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
@@ -4705,6 +4857,27 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }
   };
 
+  const handlePrintInformedConsent = (patient) => {
+    console.log("handlePrintInformedConsent called with patient:", patient);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+        return;
+    }
+
+    try {
+        const html = globalGenerateInformedConsentHtml(patient, branchesData, currentBranch);
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => {
+            if (printWindow.print) printWindow.print();
+        }, 500);
+    } catch (e) {
+        console.error("Print Error:", e);
+        showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "danger");
+    }
+  };
+
   // --- 3. Derived State (Memos & Filtering) ---
   const calculatedAge = useMemo(() => getAgeString(formData.dob), [formData.dob]);
   const blankDays = Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i);
@@ -5267,42 +5440,23 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   };
 
   const renderPdpaButton = (patient) => {
-      const status = patient.pdpaStatus;
       const patientHn = patient.hn || patient.id;
       const isCurrentProcessing = processingPdpaHn === patientHn;
       
-      const mktIcon = patient.isConsentMarketing ? '✓' : '✗';
-      const revIcon = patient.isConsentReview ? '✓' : '✗';
+      // Determine statuses
+      const isPdpaAgreed = patient.pdpaStatus === 'green';
+      const isTxAgreed = patient.informedConsentStatus === 'green';
+      const isMktAgreed = patient.isConsentMarketing === true || patient.isConsentMarketing === 'true';
+      const isRevAgreed = patient.isConsentReview === true || patient.isConsentReview === 'true';
       
-      if (status === 'green') {
-          return (
-              <div className="flex flex-col items-center justify-center gap-1 group">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center gap-1 w-fit mx-auto">
-                      <ShieldCheck size={12}/> ยินยอมแล้ว
-                  </span>
-                  <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-colors">
-                      MKT: <span className={patient.isConsentMarketing ? "text-emerald-500" : "text-rose-500"}>{mktIcon}</span> | REV: <span className={patient.isConsentReview ? "text-emerald-500" : "text-rose-500"}>{revIcon}</span>
-                  </span>
-              </div>
-          );
-      } else if (status === 'red') {
-          return (
-              <div className="flex flex-col items-center justify-center gap-1 group">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center gap-1 w-fit mx-auto">
-                      <XCircle size={12}/> ไม่ยินยอม
-                  </span>
-                  <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-colors">
-                      MKT: <span className="text-rose-500">✗</span> | REV: <span className="text-rose-500">✗</span>
-                  </span>
-              </div>
-          );
-      }
-      // For yellow (pending), still allow generating the link from the table
-      return (
+      const hasAnyConsentAgreed = isPdpaAgreed || isTxAgreed || isMktAgreed || isRevAgreed;
+
+      // Link button renderer
+      const renderLinkButton = () => (
           <button 
               disabled={isProcessing}
-              onClick={(e) => handleGeneratePdpaLink(patient, e)} 
-              className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-colors flex items-center justify-center gap-1 mx-auto ${
+              onClick={(e) => { e.stopPropagation(); handleGeneratePdpaLink(patient, e); }} 
+              className={`mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold border transition-colors flex items-center justify-center gap-1 mx-auto ${
                   isCurrentProcessing
                       ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                       : isProcessing
@@ -5311,12 +5465,52 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
               }`}
           >
              {isCurrentProcessing ? (
-                 <Loader2 size={12} className="animate-spin text-slate-400" />
+                 <Loader2 size={10} className="animate-spin text-slate-400" />
              ) : (
-                 <Link size={12}/>
+                 <Link size={10}/>
              )}
              {isCurrentProcessing ? 'กำลังสร้าง...' : 'ขอยินยอม'}
           </button>
+      );
+
+      // Render small green check/red cross badge
+      const renderMiniBadge = (label, isAgreed) => (
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+              isAgreed 
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                  : 'bg-rose-50 text-rose-700 border border-rose-100'
+          }`}>
+              <span>{label}:</span>
+              <span className={isAgreed ? 'text-emerald-500 font-black' : 'text-rose-500 font-black'}>
+                  {isAgreed ? '✓' : '✗'}
+              </span>
+          </span>
+      );
+
+      // If no consent has been given yet (never consented or only pending link), show ONLY the button
+      if (!hasAnyConsentAgreed) {
+          return (
+              <div className="py-1">
+                  {renderLinkButton()}
+              </div>
+          );
+      }
+
+      // If at least one consent is given, show all 4 badges, but HIDE the button
+      return (
+          <div className="flex flex-col items-center gap-1.5 py-1">
+              {/* Top: PDPA / การรักษา */}
+              <div className="flex justify-center items-center gap-1.5 w-full">
+                  {renderMiniBadge('PDPA', isPdpaAgreed)}
+                  {renderMiniBadge('การรักษา', isTxAgreed)}
+              </div>
+              
+              {/* Bottom: MKT / REV */}
+              <div className="flex justify-center items-center gap-1.5 w-full">
+                  {renderMiniBadge('MKT', isMktAgreed)}
+                  {renderMiniBadge('REV', isRevAgreed)}
+              </div>
+          </div>
       );
   };
 
@@ -5555,7 +5749,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
                         <th className="pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th>
-                        <th className="pt-6 pb-4 font-medium text-center kanit-text">สถานะ PDPA</th>
+                        <th className="pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th>
                         <th className="pt-6 pb-4 font-medium text-right pr-6 kanit-text">จัดการ</th>
                       </tr>
                     </thead>
@@ -5570,8 +5764,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                             <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
-                            <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                            <td className="py-4 text-center"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                            <td className="py-4 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex gap-1">
+                                  <div className="h-3.5 w-10 bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-12 bg-slate-200 rounded animate-pulse"></div>
+                                </div>
+                                <div className="flex gap-1">
+                                  <div className="h-3.5 w-8 bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-8 bg-slate-200 rounded animate-pulse"></div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                         ))
                       ) : memoizedPatientTableRows}
@@ -5584,8 +5790,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                             <td className="py-4"><div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div></td>
                             <td className="py-4"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
-                            <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                            <td className="py-4 text-center"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                            <td className="py-4 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex gap-1">
+                                  <div className="h-3.5 w-10 bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-12 bg-slate-200 rounded animate-pulse"></div>
+                                </div>
+                                <div className="flex gap-1">
+                                  <div className="h-3.5 w-8 bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-8 bg-slate-200 rounded animate-pulse"></div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                       ))}
                     </tbody>
@@ -5680,75 +5898,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
               <form id="patient-form" onSubmit={handleSavePatient}>
                 <fieldset disabled={isViewMode} className="space-y-5 sm:space-y-6 border-none p-0 m-0 min-w-0">
                   
-                  {/* PDPA Section (Only visible if editing an existing record) */}
-                  {editingId && (() => {
-                      const pat = patientsData.find(p => (p.hn || p.id) === (formData.hn || formData.id)) || formData;
-                      return (
-                          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
-                              <div className="border-b border-sky-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                  <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><ShieldCheck size={20} /> สถานะความยินยอม (PDPA)</h4>
-                                  {!isViewMode && (
-                                       <button 
-                                           type="button" 
-                                           onClick={(e) => handleGeneratePdpaLink(pat, e)} 
-                                           disabled={isProcessing}
-                                           className="text-xs sm:text-sm px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-amber-200 shadow-sm disabled:opacity-50"
-                                       >
-                                           {isProcessing && processingPdpaHn === (pat.hn || pat.id) ? (
-                                               <Loader2 size={16} className="animate-spin text-amber-600" />
-                                           ) : (
-                                               <Link size={16} />
-                                           )}
-                                           {isProcessing && processingPdpaHn === (pat.hn || pat.id) ? 'กำลังสร้าง...' : 'สร้างลิงก์ขออนุญาตใหม่'}
-                                       </button>
-                                   )}
-                              </div>
-                              
-                              {pat.pdpaStatus === 'green' ? (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                      <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex flex-col justify-center items-center text-center">
-                                          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-emerald-500 mb-2 shadow-sm"><ShieldCheck size={24}/></div>
-                                          <h5 className="font-bold text-emerald-700 kanit-text text-lg">ยินยอมแล้ว</h5>
-                                          <p className="text-xs text-emerald-600 mt-1">ผู้ป่วยให้ความยินยอมเมื่อ: {pat.pdpaTimestamp ? new Date(pat.pdpaTimestamp).toLocaleString('th-TH') : '-'}</p>
-                                      </div>
-                                      <div className="space-y-3 flex flex-col justify-center">
-                                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
-                                              <span className="text-sm font-medium text-slate-600 kanit-text">การตลาด (Marketing)</span>
-                                              <span className={`text-sm font-bold flex items-center gap-1 ${pat.isConsentMarketing ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                  {pat.isConsentMarketing ? <><CheckCircle2 size={16}/> ยินยอม</> : <><XCircle size={16}/> ไม่ยินยอม</>}
-                                              </span>
-                                          </div>
-                                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
-                                              <span className="text-sm font-medium text-slate-600 kanit-text">การรีวิว (Review)</span>
-                                              <span className={`text-sm font-bold flex items-center gap-1 ${pat.isConsentReview ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                  {pat.isConsentReview ? <><CheckCircle2 size={16}/> ยินยอม</> : <><XCircle size={16}/> ไม่ยินยอม</>}
-                                              </span>
-                                          </div>
-                                          <div className="text-[10px] text-slate-400 mt-2 px-1">
-                                              <p><strong>IP Address:</strong> {pat.pdpaIpAddress || '-'}</p>
-                                              <p className="truncate" title={pat.pdpaUserAgent || '-'}><strong>อุปกรณ์:</strong> {pat.pdpaUserAgent || '-'}</p>
-                                          </div>
-                                      </div>
-                                  </div>
-                              ) : pat.pdpaStatus === 'red' ? (
-                                  <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 flex flex-col justify-center items-center text-center">
-                                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-rose-500 mb-2 shadow-sm"><XCircle size={24}/></div>
-                                      <h5 className="font-bold text-rose-700 kanit-text text-lg">ไม่ยินยอม</h5>
-                                      <p className="text-xs text-rose-600 mt-1">ผู้ป่วยปฏิเสธการให้ความยินยอม (จำเป็นต้องยินยอมเพื่อรับบริการ)</p>
-                                      <div className="text-[10px] text-rose-400 mt-2">
-                                          <p>ทำรายการเมื่อ: {pat.pdpaTimestamp ? new Date(pat.pdpaTimestamp).toLocaleString('th-TH') : '-'}</p>
-                                      </div>
-                                  </div>
-                              ) : (
-                                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col justify-center items-center text-center">
-                                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-slate-400 mb-2 shadow-sm"><FileText size={24}/></div>
-                                      <h5 className="font-bold text-slate-600 kanit-text text-lg">ยังไม่มีข้อมูลความยินยอม</h5>
-                                      <p className="text-xs text-slate-500 mt-1">กรุณาสร้างลิงก์ขออนุญาตให้ผู้ป่วยทำรายการ</p>
-                                  </div>
-                              )}
-                          </div>
-                      );
-                  })()}
+
 
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
                   <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -5967,6 +6117,157 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                   </div>
                 </div>
                 </fieldset>
+
+                {/* Consent Status Section (Only visible if editing an existing record) */}
+                {editingId && (() => {
+                    const pat = patientsData.find(p => (p.hn || p.id) === (formData.hn || formData.id)) || formData;
+                    return (
+                        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10 animate-in fade-in duration-300">
+                            <div className="border-b border-sky-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><ShieldCheck size={20} /> สถานะความยินยอมระบบออนไลน์</h4>
+                                {!isViewMode && (
+                                     <button 
+                                         type="button" 
+                                         onClick={(e) => handleGeneratePdpaLink(pat, e)} 
+                                         disabled={isProcessing}
+                                         className="text-xs sm:text-sm px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-amber-200 shadow-sm disabled:opacity-50"
+                                     >
+                                         {isProcessing && processingPdpaHn === (pat.hn || pat.id) ? (
+                                             <Loader2 size={16} className="animate-spin text-amber-600" />
+                                         ) : (
+                                             <Link size={16} />
+                                         )}
+                                         {isProcessing && processingPdpaHn === (pat.hn || pat.id) ? 'กำลังสร้าง...' : 'สร้างลิงก์ขอยินยอม (PDPA & การรักษา)'}
+                                     </button>
+                                 )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Column 1: PDPA Consent */}
+                                <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 flex flex-col justify-between">
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-sm kanit-text mb-3 flex items-center gap-1.5"><ShieldCheck size={16} className="text-sky-500"/> 1. ความยินยอมข้อมูลส่วนบุคคล (PDPA)</h5>
+                                        {pat.pdpaStatus === 'green' ? (
+                                            <div className="space-y-4">
+                                                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex flex-col justify-center items-center text-center">
+                                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-emerald-500 mb-2 shadow-sm"><ShieldCheck size={20}/></div>
+                                                    <h6 className="font-bold text-emerald-700 kanit-text text-base">ยินยอมให้เก็บและใช้ข้อมูลแล้ว</h6>
+                                                    <p className="text-[11px] text-emerald-600 mt-1">ผู้ป่วยให้ความยินยอมเมื่อ: {pat.pdpaTimestamp ? new Date(pat.pdpaTimestamp).toLocaleString('th-TH') : '-'}</p>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 flex justify-between items-center text-xs">
+                                                        <span className="font-medium text-slate-500 kanit-text">การตลาด (Marketing)</span>
+                                                        <span className={`font-bold flex items-center gap-1 ${pat.isConsentMarketing ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {pat.isConsentMarketing ? <><CheckCircle2 size={14}/> ยินยอม</> : <><XCircle size={14}/> ไม่ยินยอม</>}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 flex justify-between items-center text-xs">
+                                                        <span className="font-medium text-slate-500 kanit-text">การรีวิว (Review)</span>
+                                                        <span className={`font-bold flex items-center gap-1 ${pat.isConsentReview ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {pat.isConsentReview ? <><CheckCircle2 size={14}/> ยินยอม</> : <><XCircle size={14}/> ไม่ยินยอม</>}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : pat.pdpaStatus === 'red' ? (
+                                            <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 flex flex-col justify-center items-center text-center">
+                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-rose-500 mb-2 shadow-sm"><XCircle size={20}/></div>
+                                                <h6 className="font-bold text-rose-700 kanit-text text-base">ไม่ยินยอม</h6>
+                                                <p className="text-xs text-rose-600 mt-1">ผู้ป่วยปฏิเสธการให้ความยินยอม (จำเป็นต้องยินยอมเพื่อรับบริการ)</p>
+                                                <div className="text-[10px] text-rose-400 mt-2">
+                                                    <p>ทำรายการเมื่อ: {pat.pdpaTimestamp ? new Date(pat.pdpaTimestamp).toLocaleString('th-TH') : '-'}</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white p-6 rounded-xl border border-slate-200 border-dashed flex flex-col justify-center items-center text-center min-h-[160px]">
+                                                <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-2 shadow-sm"><FileText size={20}/></div>
+                                                <h6 className="font-bold text-slate-600 kanit-text text-sm">ยังไม่มีข้อมูลความยินยอม</h6>
+                                                <p className="text-xs text-slate-400 mt-1">กรุณาสร้างลิงก์ขอยินยอมให้ผู้ป่วยทำรายการ</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {pat.pdpaStatus === 'green' && (
+                                        <div className="text-[10px] text-slate-400 mt-4 pt-3 border-t border-slate-200/50 space-y-0.5">
+                                            <p><strong>IP Address:</strong> {pat.pdpaIpAddress || '-'}</p>
+                                            <p className="truncate" title={pat.pdpaUserAgent || '-'}><strong>อุปกรณ์:</strong> {pat.pdpaUserAgent || '-'}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Column 2: Informed Consent */}
+                                <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 flex flex-col justify-between">
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-sm kanit-text mb-3 flex items-center gap-1.5"><HeartPulse size={16} className="text-sky-500"/> 2. ใบยินยอมรับการรักษาพยาบาล (Informed Consent)</h5>
+                                        {pat.informedConsentStatus === 'green' ? (
+                                            <div className="space-y-3">
+                                                <div className="bg-emerald-50 p-3.5 rounded-xl border border-emerald-100 flex flex-col justify-center items-center text-center">
+                                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-emerald-500 mb-2 shadow-sm"><CheckSquare size={20}/></div>
+                                                    <h6 className="font-bold text-emerald-700 kanit-text text-sm">ยินยอมรับการรักษาพยาบาลแล้ว</h6>
+                                                    <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                                                        ลงนามโดย: {pat.informedConsentSignerType === 'patient' ? 'ผู้ป่วยเอง' : `ผู้แทนโดยชอบธรรม (${pat.informedConsentRepresentativeName || '-'})`}
+                                                     </p>
+                                                     {pat.informedConsentSignerType === 'representative' && (
+                                                         <p className="text-[10px] text-emerald-500 font-medium">ความเกี่ยวข้อง: {pat.informedConsentRepresentativeRelation || '-'}</p>
+                                                     )}
+                                                    <p className="text-[10px] text-emerald-500 mt-0.5">ยินยอมเมื่อ: {pat.informedConsentTimestamp ? new Date(pat.informedConsentTimestamp).toLocaleString('th-TH') : '-'}</p>
+                                                </div>
+
+                                                {/* Signature Display */}
+                                                {pat.informedConsentSignatureUrl && (
+                                                    <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 flex flex-col items-center">
+                                                        <span className="text-[10px] font-bold text-slate-400 mb-1 self-start kanit-text">ภาพลายมือชื่อ (E-Signature)</span>
+                                                        <div className="bg-slate-50 border border-slate-100 rounded-md p-1.5 w-full flex items-center justify-center h-16 overflow-hidden relative">
+                                                            <img 
+                                                                src={pat.informedConsentSignatureUrl} 
+                                                                alt="E-Signature" 
+                                                                className="max-h-full max-w-full object-contain pointer-events-none"
+                                                                onError={(e) => {
+                                                                    e.target.style.display = 'none';
+                                                                    e.target.parentNode.innerHTML = '<span class="text-xs text-slate-400 font-medium">รูปภาพลายเซ็น</span>';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-between w-full mt-1.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePrintInformedConsent(pat)}
+                                                                className="text-[10px] text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1 transition-colors"
+                                                            >
+                                                                <Printer size={10} /> พิมพ์ใบยินยอม (A4)
+                                                            </button>
+                                                            <a 
+                                                                href={pat.informedConsentSignatureUrl} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer" 
+                                                                className="text-[10px] text-sky-500 hover:text-sky-600 font-bold flex items-center gap-1 transition-colors"
+                                                            >
+                                                                <ExternalLink size={10} /> ดูลายเซ็นขนาดเต็ม
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white p-6 rounded-xl border border-slate-200 border-dashed flex flex-col justify-center items-center text-center min-h-[160px]">
+                                                <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-2 shadow-sm"><FileText size={20}/></div>
+                                                <h6 className="font-bold text-slate-600 kanit-text text-sm">ยังไม่มีข้อมูลการยินยอมการรักษา</h6>
+                                                <p className="text-xs text-slate-400 mt-1">กรุณาสร้างลิงก์ขอยินยอมให้ผู้ป่วยทำรายการ</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {pat.informedConsentStatus === 'green' && (
+                                        <div className="text-[10px] text-slate-400 mt-4 pt-3 border-t border-slate-200/50 space-y-0.5">
+                                            <p><strong>IP Address:</strong> {pat.informedConsentIpAddress || '-'}</p>
+                                            <p className="truncate" title={pat.informedConsentUserAgent || '-'}><strong>อุปกรณ์:</strong> {pat.informedConsentUserAgent || '-'}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 <div ref={opdSectionRef} className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10 mt-6 sm:mt-8">
                   <div className="border-b border-sky-100 pb-3 mb-5 flex justify-between items-center">
@@ -16651,6 +16952,23 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             rawData: fullPatient
         });
 
+        // เพิ่มใบยินยอมการรักษา (ถ้าลงชื่อยินยอมเรียบร้อยแล้ว)
+        if (fullPatient.informedConsentStatus === 'green') {
+            const consentDate = fullPatient.informedConsentTimestamp 
+                ? new Date(fullPatient.informedConsentTimestamp).toISOString()
+                : recDate;
+            docs.push({
+                id: `CONSENT-${fullPatient.hn || fullPatient.id}`,
+                type: 'consent',
+                typeLabel: 'ใบยินยอมรับการรักษาพยาบาล',
+                date: consentDate,
+                timestamp: new Date(consentDate).getTime(),
+                patientName: patientName || 'ไม่ระบุชื่อ',
+                refNo: fullPatient.hn || fullPatient.id,
+                rawData: fullPatient
+            });
+        }
+
         // เพิ่มประวัติการรักษา (OPD) และ ใบรับรองแพทย์
         if (fullPatient.opdRecords && fullPatient.opdRecords.length > 0) {
             fullPatient.opdRecords.forEach((opd, idx) => {
@@ -16728,14 +17046,15 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   // 3. สถิติสรุปเอกสาร
   const stats = useMemo(() => {
       const total = allDocuments.length;
-      let recs = 0, opds = 0, receipts = 0, medcerts = 0;
+      let recs = 0, opds = 0, receipts = 0, medcerts = 0, consents = 0;
       allDocuments.forEach(d => {
           if (d.type === 'record') recs++;
           else if (d.type === 'opd') opds++;
           else if (d.type === 'receipt') receipts++;
           else if (d.type === 'medcert') medcerts++;
+          else if (d.type === 'consent') consents++;
       });
-      return { total, records: recs, opds, receipts, medcerts };
+      return { total, records: recs, opds, receipts, medcerts, consents };
   }, [allDocuments]);
 
   // 4. การจัดการเลือกเอกสาร (Checkbox)
@@ -16771,6 +17090,8 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               html = globalGenerateReceiptHtml(doc.rawData, 'A4', branchesData, patientsData, posProducts, currentBranch);
           } else if (doc.type === 'medcert') {
               html = globalGenerateMedicalCertificateHtml(doc.rawData.patient, doc.rawData.opd, branchesData, currentBranch, staffData);
+          } else if (doc.type === 'consent') {
+              html = globalGenerateInformedConsentHtml(doc.rawData, branchesData, currentBranch);
           }
 
           printWindow.document.write(html);
@@ -16823,6 +17144,9 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
           } else if (doc.type === 'medcert') {
               html = globalGenerateMedicalCertificateHtml(doc.rawData.patient, doc.rawData.opd, branchesData, currentBranch, staffData);
               pageClass = 'page-a4-medcert';
+          } else if (doc.type === 'consent') {
+              html = globalGenerateInformedConsentHtml(doc.rawData, branchesData, currentBranch);
+              pageClass = 'page-a4-consent';
           }
 
           const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
@@ -16863,6 +17187,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               body { margin: 0; padding: 0; background: #fff; font-family: 'Sarabun', sans-serif; }
               * { box-sizing: border-box; }
               @page a4-page-medcert { size: A4; }
+              @page a4-page-consent { size: A4; }
               @page a4-page-receipt { size: A4; margin: 5mm; }
               @page a5-land-page { size: A5 landscape; margin: 10mm; }
               @page a5-port-page { size: A5; margin: 10mm; }
@@ -16878,6 +17203,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                       break-after: auto;
                   }
                   .page-a4-medcert { page: a4-page-medcert; }
+                  .page-a4-consent { page: a4-page-consent; }
                   .page-a4-receipt { page: a4-page-receipt; }
                   .page-a5-land { page: a5-land-page; }
                   .page-a5-port { page: a5-port-page; }
@@ -16910,6 +17236,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       if (type === 'opd') colorClass = 'bg-emerald-50 text-emerald-600 border-emerald-100';
       if (type === 'receipt') colorClass = 'bg-sky-50 text-sky-600 border-sky-100';
       if (type === 'medcert') colorClass = 'bg-rose-50 text-rose-600 border-rose-100';
+      if (type === 'consent') colorClass = 'bg-amber-50 text-amber-600 border-amber-100';
       return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold kanit-text border ${colorClass}`}>{label}</span>;
   };
 
@@ -16972,7 +17299,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       </div>
 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
+         <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl flex items-center justify-center shrink-0"><LayoutList size={20} /></div>
@@ -17003,6 +17330,13 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
+                <div className="w-10 h-10 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl flex items-center justify-center shrink-0"><HeartPulse size={20} /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบยินยอมรักษา</p></div>
+              </div>
+              <div className="relative z-10 mt-auto"><p className="font-black text-amber-600 font-data text-2xl sm:text-3xl">{stats.consents}</p></div>
+            </div>
+            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl flex items-center justify-center shrink-0"><Receipt size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบเสร็จ</p></div>
               </div>
@@ -17025,6 +17359,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                     <option value="record">เวชระเบียน</option>
                     <option value="opd">ใบ OPD</option>
                     <option value="medcert">ใบรับรองแพทย์</option>
+                    <option value="consent">ใบยินยอมรักษา</option>
                     <option value="receipt">ใบเสร็จ</option>
                  </select>
                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -17140,19 +17475,148 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   );
 };
 const PdpaConsentForm = ({ token, hn }) => {
-    const [status, setStatus] = useState('loading'); // loading, pending, consented, declined, invalid
+    const [status, setStatus] = useState('loading'); // loading, pending, consented, declined, invalid, saving
     const [patient, setPatient] = useState(null);
     const [step, setStep] = useState(1);
     const [page1Agreed, setPage1Agreed] = useState(false);
     const [marketingConsent, setMarketingConsent] = useState(null);
     const [reviewConsent, setReviewConsent] = useState(null);
-    const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+    
+    // Set to true by default to read inline continuously as requested
+    const [hasScrolledToBottom, setHasScrolledToBottom] = useState(true);
 
-    const handleScroll = (e) => {
-        const bottom = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight < 20;
-        if (bottom && !hasScrolledToBottom) {
-            setHasScrolledToBottom(true);
+    // Informed Consent states
+    const [signerType, setSignerType] = useState('patient'); // 'patient' or 'representative'
+    const [representativeName, setRepresentativeName] = useState('');
+    const [relationship, setRelationship] = useState('');
+    const [riskAgreed, setRiskAgreed] = useState(false);
+    const [voluntaryAgreed, setVoluntaryAgreed] = useState(false);
+    
+    // Set to true by default to read inline continuously as requested
+    const [hasScrolledToBottomIC, setHasScrolledToBottomIC] = useState(true);
+    
+    // Canvas States & Snappy drawing refs
+    const [isEmpty, setIsEmpty] = useState(true);
+    const canvasRef = useRef(null);
+    const isDrawingRef = useRef(false);
+    const lastCoordsRef = useRef({ x: 0, y: 0 });
+
+    // Scroll to top of window instantly when moving between steps
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [step]);
+
+    const [savingStep, setSavingStep] = useState(0);
+
+    // Dynamic step simulator for saving state
+    useEffect(() => {
+        if (status !== 'saving') {
+            setSavingStep(0);
+            return;
         }
+        const interval = setInterval(() => {
+            setSavingStep((prev) => (prev < 3 ? prev + 1 : prev));
+        }, 900);
+        return () => clearInterval(interval);
+    }, [status]);
+
+    // snappier drawing hook to bypass react state updates and prevent touch page scroll jitter
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const getCoords = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        };
+
+        const handleStart = (e) => {
+            if (!riskAgreed || !voluntaryAgreed) return;
+            if (e.cancelable) e.preventDefault();
+            
+            const coords = getCoords(e);
+            isDrawingRef.current = true;
+            lastCoordsRef.current = coords;
+
+            const ctx = canvas.getContext('2d');
+            ctx.beginPath();
+            ctx.moveTo(coords.x, coords.y);
+            
+            // Snappy feedback: draw a small point on tap
+            ctx.arc(coords.x, coords.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#0f172a';
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(coords.x, coords.y);
+
+            setIsEmpty(false);
+        };
+
+        const handleMove = (e) => {
+            if (!isDrawingRef.current) return;
+            if (e.cancelable) e.preventDefault();
+
+            const coords = getCoords(e);
+            const ctx = canvas.getContext('2d');
+            
+            ctx.beginPath();
+            ctx.moveTo(lastCoordsRef.current.x, lastCoordsRef.current.y);
+            ctx.lineTo(coords.x, coords.y);
+            ctx.strokeStyle = '#0f172a'; // slate-900 color for signature ink
+            ctx.lineWidth = 4.5; // slightly thicker for better readability
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+            
+            lastCoordsRef.current = coords;
+            setIsEmpty(false);
+        };
+
+        const handleEnd = () => {
+            isDrawingRef.current = false;
+        };
+
+        // Bind raw touch/mouse events directly to prevent default mobile scroll behavior
+        canvas.addEventListener('mousedown', handleStart, { passive: false });
+        canvas.addEventListener('mousemove', handleMove, { passive: false });
+        canvas.addEventListener('mouseup', handleEnd);
+        canvas.addEventListener('mouseleave', handleEnd);
+
+        canvas.addEventListener('touchstart', handleStart, { passive: false });
+        canvas.addEventListener('touchmove', handleMove, { passive: false });
+        canvas.addEventListener('touchend', handleEnd);
+        canvas.addEventListener('touchcancel', handleEnd);
+
+        return () => {
+            canvas.removeEventListener('mousedown', handleStart);
+            canvas.removeEventListener('mousemove', handleMove);
+            canvas.removeEventListener('mouseup', handleEnd);
+            canvas.removeEventListener('mouseleave', handleEnd);
+
+            canvas.removeEventListener('touchstart', handleStart);
+            canvas.removeEventListener('touchmove', handleMove);
+            canvas.removeEventListener('touchend', handleEnd);
+            canvas.removeEventListener('touchcancel', handleEnd);
+        };
+    }, [riskAgreed, voluntaryAgreed]);
+
+    const clearCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setIsEmpty(true);
     };
 
     // Fetch patient data on mount
@@ -17191,13 +17655,46 @@ const PdpaConsentForm = ({ token, hn }) => {
 
     const handleSubmit = async () => {
         if (marketingConsent === null || reviewConsent === null) {
-            alert('กรุณาเลือกความยินยอมให้ครบถ้วน');
+            alert('กรุณาเลือกความยินยอมให้ครบถ้วนในหน้า 2 ก่อน');
+            setStep(2);
+            return;
+        }
+
+        if (signerType === 'representative' && (!representativeName.trim() || !relationship.trim())) {
+            alert('กรุณากรอกข้อมูลผู้แทนโดยชอบธรรมและความเกี่ยวข้องกับผู้ป่วยให้ครบถ้วน');
+            return;
+        }
+
+        if (!riskAgreed || !voluntaryAgreed) {
+            alert('กรุณกดยินยอมรับทราบความเสี่ยงและสมัครใจรับการรักษาให้ครบถ้วน');
+            return;
+        }
+
+        if (isEmpty) {
+            alert('กรุณาลงลายมือชื่อของท่านในช่องลงนาม');
+            return;
+        }
+
+        // 1. Extract E-Signature from canvas as base64 synchronously BEFORE unmounting
+        let base64Data = '';
+        try {
+            const canvas = canvasRef.current;
+            if (!canvas) {
+                alert('ไม่พบช่องลงนาม กรุณาลองใหม่อีกครั้ง');
+                return;
+            }
+            const dataUrl = canvas.toDataURL("image/png");
+            base64Data = dataUrl.split(',')[1]; // Remove data url header
+        } catch (canvasErr) {
+            console.error('Canvas export error:', canvasErr);
+            alert('เกิดข้อผิดพลาดในการประมวลผลลายเซ็น: ' + canvasErr.message);
             return;
         }
         
         setStatus('saving');
         
         try {
+            // 2. Fetch IP Address
             let ipAddress = 'unknown';
             try {
                 const ipRes = await fetch('https://api.ipify.org?format=json');
@@ -17207,18 +17704,58 @@ const PdpaConsentForm = ({ token, hn }) => {
                 console.warn('Could not fetch IP', ipErr);
             }
 
+            // 3. Upload E-Signature to Google Drive
+            const fileName = `signature_${patient.hn || patient.id}_${new Date().getTime()}.png`;
+            const uploadResponse = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ 
+                    action: 'UPLOAD_FILE', 
+                    sheetName: 'Patients', 
+                    payload: {
+                        folderId: '1UX-E1SB7qSEq2yK9e8gBZsNj13W2F92R',
+                        fileName: fileName,
+                        mimeType: 'image/png',
+                        data: base64Data
+                    }
+                }),
+            });
+            const uploadResult = await uploadResponse.json();
+            if (uploadResult.status !== 'success') {
+                throw new Error(uploadResult.message || 'ไม่สามารถบันทึกลายเซ็นลง Google Drive ได้');
+            }
+            
+            const signatureUrl = uploadResult.fileUrl;
+
+            // 4. Build updated patient object containing both PDPA and Informed Consent details
             const updatedPatient = { 
                 ...patient, 
+                // PDPA fields
                 pdpaStatus: 'green',
                 pdpaTimestamp: new Date().toISOString(),
                 pdpaIpAddress: ipAddress,
                 pdpaUserAgent: navigator.userAgent,
                 isConsentMarketing: marketingConsent === 'yes',
                 isConsentReview: reviewConsent === 'yes',
+
+                // Informed Consent fields
+                informedConsentStatus: 'green',
+                informedConsentTimestamp: new Date().toISOString(),
+                informedConsentIpAddress: ipAddress,
+                informedConsentUserAgent: navigator.userAgent,
+                informedConsentSignerType: signerType,
+                informedConsentRepresentativeName: signerType === 'representative' ? representativeName : '',
+                informedConsentRepresentativeRelation: signerType === 'representative' ? relationship : '',
+                informedConsentRiskAgreed: riskAgreed,
+                informedConsentVoluntaryAgreed: voluntaryAgreed,
+                informedConsentSignatureUrl: signatureUrl,
+                informedConsentDocId: 'informed-consent-v1', // Document ID
+                
                 pdpaToken: null, 
                 pdpaExpires: null 
             };
 
+            // 5. Save Patient data
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -17233,14 +17770,29 @@ const PdpaConsentForm = ({ token, hn }) => {
                 setStatus('pending');
             }
         } catch (error) {
-            console.error('Save error', error);
-            alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่');
+            console.error('Submit error:', error);
+            alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message);
             setStatus('pending');
         }
     };
 
     if (status === 'loading') {
-        return <div className="min-h-screen flex items-center justify-center bg-white font-sans"><div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-sky-500 animate-[loading_1.5s_infinite_linear]"></div></div></div>;
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-start pt-24 sm:pt-36 bg-white p-6 font-sans">
+                <div className="mb-12 animate-[pulse_2s_infinite_ease-in-out]">
+                    <img src="/anpingclinic.png" alt="Anping Clinic Logo" className="w-64 sm:w-80 h-auto object-contain" />
+                </div>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="relative w-10 h-10">
+                        <div className="absolute inset-0 rounded-full border-2 border-slate-100"></div>
+                        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-sky-500 animate-spin"></div>
+                    </div>
+                    <p className="text-slate-400 text-xs tracking-widest kanit-text animate-[pulse_1.5s_infinite_ease-in-out] mt-2">
+                        กำลังดึงข้อมูลเอกสาร...
+                    </p>
+                </div>
+            </div>
+        );
     }
 
     if (status === 'invalid') {
@@ -17257,17 +17809,50 @@ const PdpaConsentForm = ({ token, hn }) => {
 
     if (status === 'saving') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans text-center">
-                <div className="max-w-md w-full">
-                    <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden mx-auto mb-6"><div className="h-full bg-emerald-500 animate-[loading_1.5s_infinite_linear]"></div></div>
-                    <h2 className="text-xl font-bold text-slate-800 kanit-text">กำลังยืนยันข้อมูล...</h2>
-                    <p className="text-slate-400 mt-2 text-sm">กรุณารอสักครู่ ระบบกำลังบันทึกสถานะของคุณ</p>
+            <div className="min-h-screen flex flex-col items-center justify-start pt-24 sm:pt-36 bg-white p-6 font-sans text-center animate-in fade-in duration-300">
+                <div className="mb-12 animate-[pulse_2s_infinite_ease-in-out]">
+                    <img src="/anpingclinic.png" alt="Anping Clinic Logo" className="w-64 sm:w-80 h-auto object-contain" />
+                </div>
+                
+                <div className="max-w-md w-full flex flex-col items-center">
+                    {/* Cool custom radar/pulse loading circle representing data transfer */}
+                    <div className="relative flex items-center justify-center w-16 h-16 mb-8">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-20 animate-ping"></span>
+                        <div className="relative rounded-full h-12 w-12 bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-500 shadow-sm shadow-emerald-500/10">
+                            <svg className="animate-spin h-6 w-6 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <h2 className="text-xl font-bold text-slate-800 kanit-text">
+                        กำลังยืนยันและบันทึกข้อมูล
+                    </h2>
+                    
+                    {/* Static status text */}
+                    <div className="h-6 mt-3 flex items-center justify-center">
+                        <p className="text-emerald-600 font-semibold text-sm transition-all duration-300 animate-[pulse_1.5s_infinite_ease-in-out]">
+                            กำลังบันทึกเอกสารยินยอม...
+                        </p>
+                    </div>
+                    
+                    <p className="text-slate-400 mt-4 text-xs max-w-xs leading-relaxed">
+                        กรุณารอสักครู่ ระบบกำลังยืนยันตัวตนและบันทึกข้อมูลการยินยอมการเก็บข้อมูลและการรักษาพยาบาล
+                    </p>
                 </div>
             </div>
         );
     }
 
     if (status === 'consented') {
+        const handleCloseTab = () => {
+            window.close();
+            setTimeout(() => {
+                alert("หากหน้าต่างไม่ปิดโดยอัตโนมัติ กรุณาปิดแท็บนี้ด้วยตนเอง");
+            }, 100);
+        };
+
         return (
             <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans">
                 <div className="max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
@@ -17275,7 +17860,13 @@ const PdpaConsentForm = ({ token, hn }) => {
                         <CheckCircle2 size={48} />
                     </div>
                     <h2 className="text-3xl font-bold text-slate-800 mb-3 kanit-text">เรียบร้อยแล้ว</h2>
-                    <p className="text-slate-500 leading-relaxed">ขอบคุณที่ให้ความไว้วางใจ<br/>เราจะดูแลข้อมูลของคุณด้วยความปลอดภัยสูงสุด</p>
+                    <p className="text-slate-500 leading-relaxed mb-8">ขอบคุณที่ให้ความยินยอมการเก็บข้อมูลและการรักษาพยาบาล<br/>อันผิงคลินิกจะดูแลข้อมูลการรักษาและการบริการอย่างปลอดภัยสูงสุด</p>
+                    <button
+                        onClick={handleCloseTab}
+                        className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] text-sm kanit-text"
+                    >
+                        ปิดหน้าต่างนี้
+                    </button>
                 </div>
             </div>
         );
@@ -17287,24 +17878,23 @@ const PdpaConsentForm = ({ token, hn }) => {
             <div className="fixed top-0 left-0 w-full h-1.5 bg-slate-50 z-50">
                 <div 
                     className="h-full bg-sky-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(14,165,233,0.5)]" 
-                    style={{ width: step === 1 ? '50%' : '100%' }}
+                    style={{ width: step === 1 ? '33.3%' : step === 2 ? '66.6%' : '100%' }}
                 ></div>
             </div>
 
             <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 max-w-4xl mx-auto w-full">
                 {step === 1 && (
                     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <header className="mb-10 text-center sm:text-left">
-                            <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl mb-6 shadow-sm"><ShieldCheck size={32} /></div>
+                        <header className="mb-10 text-left w-full">
+                            <div className="flex justify-center w-full mb-6">
+                                <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl shadow-sm"><ShieldCheck size={28} /></div>
+                            </div>
                             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text leading-tight">ความยินยอมและรับทราบ<br/>การเก็บรวบรวมข้อมูลส่วนบุคคล</h1>
                         </header>
 
                         <div className="relative group">
-                            {/* Scroll Area */}
-                            <div 
-                                className="text-slate-600 space-y-5 mb-8 leading-relaxed max-h-[45vh] overflow-y-auto custom-scrollbar pr-4 py-2"
-                                onScroll={handleScroll}
-                            >
+                            {/* Full Read Area */}
+                            <div className="text-slate-600 space-y-5 mb-8 leading-relaxed py-2">
                                 <p className="text-lg text-slate-700 font-medium italic">"อันผิงคลินิก ให้ความสำคัญกับความเป็นส่วนตัวของท่านเป็นอันดับหนึ่ง"</p>
                                 <p>ท่านรับทราบและยินยอมให้คลินิก เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคล เพื่อวัตถุประสงค์ในการให้บริการทางการแพทย์ การตรวจวินิจฉัย การรักษาด้วยศาสตร์แพทย์แผนจีน การจัดทำเวชระเบียน และการติดต่อนัดหมาย</p>
                                 
@@ -17322,28 +17912,14 @@ const PdpaConsentForm = ({ token, hn }) => {
                                 </div>
                                 <p className="text-slate-400 text-xs text-center py-4 italic">...ขอบคุณที่ร่วมเป็นส่วนหนึ่งของการพัฒนาบริการของเรา...</p>
                             </div>
-
-                            {/* Fade Effect */}
-                            {!hasScrolledToBottom && (
-                                <div className="absolute bottom-8 left-0 w-full h-20 bg-gradient-to-t from-white to-transparent pointer-events-none transition-opacity duration-500"></div>
-                            )}
-
-                            {/* Floating Badge */}
-                            {!hasScrolledToBottom && (
-                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-amber-50 text-amber-600 px-4 py-2 rounded-full text-xs font-bold shadow-lg shadow-amber-200/40 border border-amber-100 flex items-center gap-2 animate-bounce">
-                                    <TrendingDown size={14}/> เลื่อนเพื่ออ่านให้จบ
-                                </div>
-                            )}
                         </div>
 
                         <div className="space-y-6">
                             <label 
                                 className={`flex items-center gap-4 p-6 rounded-3xl transition-all duration-300 select-none cursor-pointer ${
-                                    !hasScrolledToBottom 
-                                        ? 'bg-slate-50 opacity-40 grayscale cursor-not-allowed scale-[0.98]' 
-                                        : page1Agreed 
-                                            ? 'bg-sky-50 ring-2 ring-sky-500/20' 
-                                            : 'bg-slate-50 hover:bg-slate-100'
+                                    page1Agreed 
+                                        ? 'bg-sky-50 ring-2 ring-sky-500/20' 
+                                        : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                             >
                                 <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-300 ${page1Agreed ? 'bg-sky-500 text-white shadow-md' : 'bg-white border-2 border-slate-200'}`}>
@@ -17352,7 +17928,6 @@ const PdpaConsentForm = ({ token, hn }) => {
                                         type="checkbox" 
                                         className="hidden" 
                                         checked={page1Agreed} 
-                                        disabled={!hasScrolledToBottom} 
                                         onChange={(e) => setPage1Agreed(e.target.checked)} 
                                     />
                                 </div>
@@ -17376,11 +17951,11 @@ const PdpaConsentForm = ({ token, hn }) => {
 
                 {step === 2 && patient && (
                     <div className="w-full animate-in fade-in slide-in-from-right-8 duration-700">
-                        <button onClick={() => setStep(1)} className="group text-slate-400 hover:text-sky-500 mb-8 flex items-center gap-2 text-sm font-medium transition-colors">
-                            <TrendingDown className="rotate-90 group-hover:-translate-x-1 transition-transform" size={18} /> ย้อนกลับ
+                        <button onClick={() => setStep(1)} className="group text-slate-400 hover:text-sky-500 mb-8 flex items-center gap-1.5 text-sm font-bold transition-colors">
+                            <ChevronLeft className="group-hover:-translate-x-1 transition-transform" size={18} /> ย้อนกลับ
                         </button>
 
-                        <header className="mb-8">
+                        <header className="mb-8 text-left w-full">
                             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text mb-3 leading-tight">ยืนยันตัวตนและข้อตกลง<br/>ทางอิเล็กทรอนิกส์</h1>
                             <p className="text-slate-400 text-sm leading-relaxed">การให้ความยินยอมผ่านระบบนี้ มีผลทางกฎหมายสมบูรณ์เทียบเท่าการลงนามในเอกสาร</p>
                         </header>
@@ -17439,15 +18014,283 @@ const PdpaConsentForm = ({ token, hn }) => {
                         </div>
 
                         <button 
-                            onClick={handleSubmit} 
+                            onClick={() => setStep(3)} 
                             disabled={marketingConsent === null || reviewConsent === null}
                             className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
                                 marketingConsent !== null && reviewConsent !== null
-                                    ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/25 hover:bg-emerald-600 hover:scale-[1.02]' 
+                                    ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/25 hover:bg-sky-600 hover:scale-[1.02] active:scale-95' 
                                     : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                             }`}
                         >
-                            ยืนยันและตกลง
+                            ดำเนินการต่อ
+                        </button>
+                    </div>
+                )}
+
+                {step === 3 && patient && (
+                    <div className="w-full animate-in fade-in slide-in-from-right-8 duration-700">
+                        <button onClick={() => setStep(2)} className="group text-slate-400 hover:text-sky-500 mb-8 flex items-center gap-1.5 text-sm font-bold transition-colors">
+                            <ChevronLeft className="group-hover:-translate-x-1 transition-transform" size={18} /> ย้อนกลับ
+                        </button>
+
+                        <header className="mb-6 text-left w-full">
+                            <div className="flex justify-center w-full mb-6">
+                                <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl shadow-sm"><HeartPulse size={28} /></div>
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text leading-tight font-sans">ใบยินยอมรับการรักษาพยาบาล<br/>(Informed Consent)</h1>
+                            <p className="text-slate-400 text-sm mt-2 leading-relaxed">กรุณาอ่านข้อมูลการรักษา ผลข้างเคียง และลงลายมือชื่อเพื่อยืนยันการรับการรักษาพยาบาล</p>
+                        </header>
+
+                        {/* Patient info details */}
+                        <div className="bg-slate-50/50 p-4 rounded-2xl mb-6 flex flex-wrap gap-4 text-xs justify-between">
+                            <div><span className="text-slate-400">ชื่อผู้รับบริการ:</span> <strong className="text-slate-700 ml-1">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</strong></div>
+                            <div><span className="text-slate-400">เลขประจำตัวผู้ป่วย (HN):</span> <strong className="text-slate-700 ml-1 font-data">{patient.hn || patient.id || '-'}</strong></div>
+                            <div><span className="text-slate-400">วันที่ทำรายการ:</span> <strong className="text-slate-700 ml-1">{new Date().toLocaleDateString('th-TH')} {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</strong></div>
+                        </div>
+
+                        {/* Full Read Area for Clinical details */}
+                        <div className="relative group mb-6">
+                            <div className="text-slate-600 space-y-5 mb-5 leading-relaxed">
+                                <h3 className="font-bold text-slate-800 text-xl sm:text-2xl border-b border-slate-200 pb-2.5 mb-6 kanit-text">ข้อมูลเบื้องต้นที่ผู้รับบริการควรทราบก่อนเข้ารับการรักษา</h3>
+                                
+                                <div>
+                                    <h4 className="font-bold text-slate-800">การฝังเข็มคืออะไร?</h4>
+                                    <p className="text-slate-500">การฝังเข็มเป็นศาสตร์การรักษาแขนงหนึ่งของการแพทย์แผนจีน โดยใช้เข็มขนาดเล็กที่ผ่านการฆ่าเชื้อแล้ว ฝังลงบนตำแหน่งเฉพาะของร่างกาย (จุดฝังเข็ม) เพื่อปรับสมดุลของพลังงาน (ลมปราณ หรือ ชี่) ในร่างกาย ซึ่งจะช่วยบำบัดและรักษาโรคหรืออาการต่าง ๆ</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-bold text-slate-800">การฝังเข็มปลอดภัยหรือไม่?</h4>
+                                    <p className="text-slate-500">โดยทั่วไปแล้วการฝังเข็มมีความปลอดภัยสูง อันตรายร้ายแรงที่อาจเกิดขึ้นพบได้น้อยมาก (น้อยกว่า 1 ต่อ 10,000 การรักษา) และมีงานวิจัยที่บ่งชี้ว่าการฝังเข็มมีความปลอดภัยมากกว่าการใช้ยาแก้อักเสบบางชนิด</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-bold text-slate-800">การฝังเข็มมีผลข้างเคียงหรือไม่?</h4>
+                                    <p className="text-slate-500 mb-2">ผู้รับบริการอาจพบผลข้างเคียงดังต่อไปนี้ได้</p>
+                                    
+                                    <ul className="space-y-3 pl-2">
+                                        <li>
+                                            <strong className="text-slate-700 block">1. อาการเป็นลม เวียนศีรษะ หน้ามืด (เมาเข็ม)</strong>
+                                            <span className="text-slate-500 block">ซึ่งจะเกิดขึ้นในขณะฝังเข็มหรือขณะที่คาเข็ม อาการเป็นลม เวียนศีรษะ หน้ามืด (เมาเข็ม) สามารถเกิดขึ้นได้ โดยเฉพาะการฝังเข็มช่วงแรก ซึ่งส่วนใหญ่จะพบในผู้ป่วยที่มีภาวะตื่นตระหนก หวาดกลัวมาก ตื่นเต้นมาก หิวหรืออิ่มมากเกินไป สภาพร่างกายอ่อนแอ เป็นต้น</span>
+                                            <span className="text-slate-500 font-bold block mt-1">** ถ้ามีอาการเกิดขึ้น ควรหลีกเลี่ยงการขับขี่ยานพาหนะ</span>
+                                        </li>
+                                        <li>
+                                            <strong className="text-slate-700 block">2. ก้อนเลือดจ้ำเลือด</strong>
+                                            <span className="text-slate-500 block">เลือดซึมออกเล็กน้อยตามรูเข็มหลังการถอนเข็ม ซึ่งพบได้บ่อย ส่วนใหญ่เลือดจะหยุดเองหรือโดยการกดไว้ชั่วครู่ ไม่มีผลข้างเคียงใด ๆ หรืออาจจะมีอาการบวมชั่วคราวตรงบริเวณที่มีเลือดออก</span>
+                                            <span className="text-slate-500 block mt-1">เลือดออกเล็กน้อยใต้ผิวหนังเกิดเป็นรอยช้ำ พบได้ในตำแหน่งที่มีเส้นเลือดฝอยมาก มักไม่มีอันตรายหรือผลข้างเคียงใด ๆ รอยช้ำจะจางหายไปเองภายในระยะเวลาไม่กี่วัน หากผู้ป่วยมีภาวะเลือดออกง่าย ก็จะง่ายต่อการมีรอยจ้ำเลือดตามบริเวณที่ฝังเข็ม</span>
+                                        </li>
+                                        <li>
+                                            <strong className="text-slate-700 block">3. ภาวะลมรั่วในช่องเยื่อหุ้มปอด (Pneumothorax)</strong>
+                                            <span className="text-slate-500 block">ลมรั่วจากปอด พบได้น้อยมากจากการฝังเข็ม แล้วเกิดการติดเชื้อหรือปอดทะลุ</span>
+                                        </li>
+                                        <li>
+                                            <strong className="text-slate-700 block">4. การครอบกระปุกหรือครอบแก้ว (Cupping)</strong>
+                                            <span className="text-slate-500 block">หลังทำการครอบแก้วจะเกิดรอยจ้ำเป็นปกติ และจะจางหายไปเองใน 3-7 วัน ในบางกรณีอาจเกิดตุ่มน้ำพองได้ หากเป็นตุ่มขนาดเล็กจะยุบหายไปเอง แต่หากเป็นตุ่มขนาดใหญ่ แพทย์อาจจำเป็นต้องเจาะระบายของเหลวออกและทำความสะอาดแผลเพื่อป้องกันการติดเชื้อ</span>
+                                        </li>
+                                        <li>
+                                            <strong className="text-slate-700 block">5. การรมยาหรือโกฐุฬาลำพา (Moxibustion)</strong>
+                                            <span className="text-slate-500 block">หลังจากการรมยาจะมีรอยแดงเกิดขึ้นบ้างตรงจุดที่รมยา ไปถึงการไหม้ของผิวหนังจากความร้อนจนเกิดถุงน้ำเกิดขึ้น เป็นต้น</span>
+                                        </li>
+                                        <li>
+                                            <strong className="text-slate-700 block">6. อาการแพ้</strong>
+                                            <span className="text-slate-500 block">อาจเกิดผื่นแพ้ได้ในผู้รับบริการที่มีประวัติแพ้โลหะ</span>
+                                        </li>
+                                    </ul>
+                                    <p className="text-slate-500 mt-2">อาการดังกล่าวข้างต้นทั้งหมดนี้ สามารถหายได้หลังการรักษา (น้อยกว่าร้อยละ 3 ของผู้ป่วย) ถ้าผู้รับบริการมีอาการแย่ลงควรแจ้งต่อแพทย์แผนจีนผู้ทำการรักษาในทันที</p>
+                                    <p className="text-slate-500 mt-1">นอกจากนี้ ถ้ามีความเสี่ยงอื่นในกรณีผู้ป่วยแต่ละคน แพทย์แผนจีนจะแจ้งกับผู้ป่วยในแต่ละราย</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-bold text-slate-800">ระยะเวลาในการรักษา</h4>
+                                    <p className="text-slate-500">โดยทั่วไป การรักษา 1 ชุด (1 Course) จะประกอบด้วยการรักษาประมาณ 10 ครั้ง อย่างไรก็ตาม ระยะเวลาและความถี่ในการรักษาจะแตกต่างกันไปในแต่ละบุคคล ขึ้นอยู่กับชนิดของโรค ความรุนแรง และระยะเวลาของการเจ็บป่วย ซึ่งแพทย์จะเป็นผู้ประเมินและวางแผนการรักษาที่เหมาะสมให้เป็นรายบุคคล</p>
+                                </div>
+
+                                <div className="p-3 bg-sky-50 border border-sky-100 rounded-xl text-sky-800 font-bold text-center">
+                                    "เข็มที่ใช้ในการรักษาเป็นเข็มปลอดเชื้อ และเป็นชนิดใช้ครั้งเดียวแล้วทิ้งเท่านั้น"
+                                </div>
+
+                                <div>
+                                    <h4 className="font-bold text-slate-800">ข้อควรปฏิบัติก่อนมารับการรักษา</h4>
+                                    <p className="text-slate-500">ไม่ควรปล่อยให้ท้องว่าง หิวจัด หรือรับประทานอาหารอิ่มจัดจนเกินไปก่อนเข้ารับการรักษา เพื่อลดความเสี่ยงในการเกิดภาวะเมาเข็ม</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* หนังสือให้ความยินยอม */}
+                        <div className="mb-6 space-y-5 text-slate-600">
+                            <h3 className="font-bold text-slate-800 text-xl sm:text-2xl border-b border-slate-200 pb-2.5 mb-6 kanit-text">หนังสือให้ความยินยอม</h3>
+                            <p className="leading-relaxed">ข้าพเจ้าได้รับทราบข้อมูลเกี่ยวกับวิธีการรักษา ความเสี่ยง และผลข้างเคียงอันไม่พึงประสงค์ที่อาจเกิดขึ้นได้จากการรักษาด้วยศาสตร์การแพทย์แผนจีน (การฝังเข็ม, การครอบแก้ว, การรมยา และยาสมุนไพรจีน) จากแพทย์แผนจีนของอันผิงคลินิก โดยละเอียดแล้ว</p>
+                            
+                            {/* Signer Selection UI */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-100 space-y-3">
+                                <span className="font-bold text-slate-700 block mb-1">ข้าพเจ้าลงนามในฐานะ:</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <label className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${signerType === 'patient' ? 'border-sky-500 bg-sky-50/30' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                        <input 
+                                            type="radio" 
+                                            name="signerType" 
+                                            value="patient" 
+                                            checked={signerType === 'patient'} 
+                                            onChange={() => setSignerType('patient')}
+                                            className="accent-sky-500 w-4 h-4"
+                                        />
+                                        <div>
+                                            <span className="font-bold text-slate-700 block">ผู้ป่วย</span>
+                                            <span className="text-xs text-slate-400">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</span>
+                                        </div>
+                                    </label>
+                                    <label className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${signerType === 'representative' ? 'border-sky-500 bg-sky-50/30' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                        <input 
+                                            type="radio" 
+                                            name="signerType" 
+                                            value="representative" 
+                                            checked={signerType === 'representative'} 
+                                            onChange={() => setSignerType('representative')}
+                                            className="accent-sky-500 w-4 h-4"
+                                        />
+                                        <div>
+                                            <span className="font-bold text-slate-700 block">ผู้แทนโดยชอบธรรม</span>
+                                            <span className="text-xs text-slate-400">ระบุผู้มีอำนาจลงนามแทน</span>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {signerType === 'representative' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 animate-in fade-in duration-300">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">ชื่อผู้แทนโดยชอบธรรม</label>
+                                            <input 
+                                                type="text" 
+                                                value={representativeName} 
+                                                onChange={(e) => setRepresentativeName(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-sm font-medium"
+                                                placeholder="ระบุชื่อ-นามสกุล ของท่าน"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">ความเกี่ยวข้องเป็น</label>
+                                            <input 
+                                                type="text" 
+                                                value={relationship} 
+                                                onChange={(e) => setRelationship(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-sm font-medium"
+                                                placeholder="เช่น บิดา, มารดา, บุตร"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <p className="leading-relaxed">ข้าพเจ้าได้ซักถามข้อสงสัยจนเป็นที่พอใจ และยินยอมโดยสมัครใจให้แพทย์แผนจีนของอันผิงคลินิก ทำการตรวจวินิจฉัย บำบัด และฟื้นฟูร่างกายและจิตใจของข้าพเจ้า ด้วยหัตถการที่เห็นสมควรและจำเป็น</p>
+                            <p className="leading-relaxed">ข้าพเจ้ายินยอมรับผลที่อาจเกิดขึ้นจากเหตุสุดวิสัย โดยจะไม่เรียกร้องหรือฟ้องร้องต่อแพทย์และบุคลากรของคลินิก หากได้ปฏิบัติหน้าที่โดยรอบคอบตามมาตรฐานวิชาชีพการแพทย์แผนจีนแล้ว</p>
+                            <p className="leading-relaxed">ข้าพเจ้าเข้าใจดีว่าข้อมูลการรักษาของข้าพเจ้าจะถูกเก็บไว้เป็นความลับ และข้าพเจ้ามีสิทธิ์ที่จะปฏิเสธการรักษา หรือขอความเห็นจากแพทย์ท่านอื่นได้ทุกเวลา</p>
+                            <strong className="text-slate-800 block mt-2">จึงลงลายมือชื่อไว้เป็นหลักฐาน</strong>
+                        </div>
+
+                        {/* Checkboxes for consent validation */}
+                        <div className="space-y-4 mb-6">
+                            <label 
+                                className={`flex items-start gap-3 p-4 rounded-2xl transition-all duration-300 select-none cursor-pointer ${
+                                    riskAgreed 
+                                        ? 'bg-sky-50 ring-2 ring-sky-500/10' 
+                                        : 'bg-slate-50 hover:bg-slate-100/80'
+                                }`}
+                            >
+                                <div className={`w-5 h-5 rounded flex items-center justify-center mt-0.5 shrink-0 transition-all duration-300 ${riskAgreed ? 'bg-sky-500 text-white shadow-sm' : 'bg-white border-2 border-slate-200'}`}>
+                                    {riskAgreed && <CheckSquare size={14} />}
+                                    <input 
+                                        type="checkbox" 
+                                        className="hidden" 
+                                        checked={riskAgreed} 
+                                        onChange={(e) => setRiskAgreed(e.target.checked)} 
+                                    />
+                                </div>
+                                <span className={`text-sm font-semibold leading-relaxed ${riskAgreed ? 'text-sky-800' : 'text-slate-600'}`}>
+                                    ข้าพเจ้าได้รับทราบและเข้าใจความเสี่ยงจากการรักษาด้วยการฝังเข็ม ครอบแก้ว รมยาแล้ว และหัตถการทั้งหมดแล้ว
+                                </span>
+                            </label>
+
+                            <label 
+                                className={`flex items-start gap-3 p-4 rounded-2xl transition-all duration-300 select-none cursor-pointer ${
+                                    voluntaryAgreed 
+                                        ? 'bg-sky-50 ring-2 ring-sky-500/10' 
+                                        : 'bg-slate-50 hover:bg-slate-100/80'
+                                }`}
+                            >
+                                <div className={`w-5 h-5 rounded flex items-center justify-center mt-0.5 shrink-0 transition-all duration-300 ${voluntaryAgreed ? 'bg-sky-500 text-white shadow-sm' : 'bg-white border-2 border-slate-200'}`}>
+                                    {voluntaryAgreed && <CheckSquare size={14} />}
+                                    <input 
+                                        type="checkbox" 
+                                        className="hidden" 
+                                        checked={voluntaryAgreed} 
+                                        onChange={(e) => setVoluntaryAgreed(e.target.checked)} 
+                                    />
+                                </div>
+                                <span className={`text-sm font-semibold leading-relaxed ${voluntaryAgreed ? 'text-sky-800' : 'text-slate-600'}`}>
+                                    ข้าพเจ้าตกลงยินยอมรับการรักษาด้วยความสมัครใจ
+                                </span>
+                            </label>
+                        </div>
+
+                        {/* Signature Canvas Area */}
+                        <div className="space-y-2 mb-8">
+                            <div className="flex justify-between items-center px-1">
+                                <label className="block text-sm font-bold text-slate-700 kanit-text flex items-center gap-1.5 select-none">
+                                    <Pencil size={16} className="text-sky-500" /> ลงลายมือชื่ออิเล็กทรอนิกส์
+                                </label>
+                                {!isEmpty && (
+                                    <button 
+                                        type="button" 
+                                        onClick={clearCanvas}
+                                        className="text-xs text-rose-500 hover:text-rose-600 font-bold transition-colors flex items-center gap-1 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-100"
+                                    >
+                                        ล้างลายเซ็น
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="relative border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 overflow-hidden transition-all duration-300">
+                                <canvas
+                                    ref={canvasRef}
+                                    width={600}
+                                    height={300}
+                                    className={`w-full h-64 sm:h-72 block cursor-crosshair touch-none ${(!riskAgreed || !voluntaryAgreed) ? 'pointer-events-none opacity-30' : ''}`}
+                                />
+                                {/* Overlay if locked */}
+                                {(!riskAgreed || !voluntaryAgreed) && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-100/60 backdrop-blur-[1px] text-slate-500 font-bold kanit-text text-sm p-4 text-center select-none leading-relaxed">
+                                        กรุณาเลือกยอมรับความยินยอมการรักษาทั้ง 2 ข้อด้านบน เพื่อเปิดการลงลายมือชื่อ
+                                    </div>
+                                )}
+                                {/* Background pen watermark */}
+                                {riskAgreed && voluntaryAgreed && isEmpty && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 pointer-events-none select-none">
+                                        <Pencil size={24} className="mb-1 opacity-50" />
+                                        <span className="text-xs kanit-text font-medium opacity-50">ใช้นิ้วหรือปากกาวาดลายเซ็นที่นี่</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <button 
+                            type="button"
+                            onClick={handleSubmit} 
+                            disabled={
+                                !riskAgreed || 
+                                !voluntaryAgreed || 
+                                isEmpty || 
+                                (signerType === 'representative' && (!representativeName.trim() || !relationship.trim()))
+                            }
+                            className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
+                                riskAgreed && 
+                                voluntaryAgreed && 
+                                !isEmpty && 
+                                (signerType === 'patient' || (representativeName.trim() && relationship.trim()))
+                                    ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/25 hover:bg-emerald-600 hover:scale-[1.02] active:scale-95' 
+                                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            }`}
+                        >
+                            ยืนยันและตกลงยอมรับการรักษา
                         </button>
                     </div>
                 )}
