@@ -9,7 +9,7 @@ import {
   User, Briefcase, Table as TableIcon, CalendarDays, LayoutList, List, Truck,
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
-  UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone
+  UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -685,7 +685,7 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
                 <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${patient.allergies || 'ไม่มี'}</span>
             </div>
             <div class="vitals">
-                T: <span class="val-box">${record.temp || ''}</span> °C &nbsp;&nbsp;&nbsp;
+                T: <span class="val-box">${record.temp || ''}</span> ?C &nbsp;&nbsp;&nbsp;
                 P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
                 BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
                 น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
@@ -3043,7 +3043,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                                  .slice(0, 5).map((p, i) => (
                                     <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
                                        <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
-                                       <span className="text-xs text-slate-500 font-data">{p.phone || p.phone1 ? `📞 ${p.phone || p.phone1}` : 'ไม่มีเบอร์โทรศัพท์'}</span>
+                                       <span className="text-xs text-slate-500 font-data">{p.phone || p.phone1 ? `?? ${p.phone || p.phone1}` : 'ไม่มีเบอร์โทรศัพท์'}</span>
                                     </div>
                                  ))}
                                  {patientsData.filter(p => {
@@ -3110,7 +3110,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                             <CustomSelect 
                                 value={formData.status} 
                                 onChange={(val) => setFormData({...formData, status: val})} 
-                                options={[{value:'pending', label:'🟡 รอยืนยัน (Pending)'}, {value:'confirmed', label:'🟢 ยืนยันแล้ว (Confirmed)'}, {value:'cancelled', label:'🔴 ยกเลิก (Cancelled)'}]} 
+                                options={[{value:'pending', label:'?? รอยืนยัน (Pending)'}, {value:'confirmed', label:'?? ยืนยันแล้ว (Confirmed)'}, {value:'cancelled', label:'?? ยกเลิก (Cancelled)'}]} 
                                 disabled={isViewMode} 
                             />
                         </div>
@@ -3982,7 +3982,7 @@ const PatientModal = React.memo(({
                       </div>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                       <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">อุณหภูมิ (°C)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.temp} onChange={(e) => setNewOpdRecord({...newOpdRecord, temp: e.target.value})} placeholder="36.5" /></div>
+                       <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">อุณหภูมิ (?C)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.temp} onChange={(e) => setNewOpdRecord({...newOpdRecord, temp: e.target.value})} placeholder="36.5" /></div>
                        <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">สัญญาณชีพ (/min)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.pulse} onChange={(e) => setNewOpdRecord({...newOpdRecord, pulse: e.target.value})} placeholder="80" /></div>
                        <div className="col-span-2 md:col-span-1"><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">ความดัน</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.bp} onChange={(e) => setNewOpdRecord({...newOpdRecord, bp: e.target.value})} placeholder="120/80" /></div>
                        <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">น้ำหนัก (kg)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.weight} onChange={(e) => setNewOpdRecord({...newOpdRecord, weight: e.target.value})} placeholder="60" /></div>
@@ -4215,7 +4215,7 @@ const PatientModal = React.memo(({
   );
 });
 // เปลี่ยนแปลงบรรทัดรับ Props ของ MedicalRecords
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -5188,6 +5188,116 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }
   };
 
+  const handleGeneratePdpaLink = async (patient, e) => {
+    e.stopPropagation();
+
+    // Check if patient already has a status, require confirmation
+    if (patient.pdpaStatus === 'green' || patient.pdpaStatus === 'red') {
+        showGlobalAlert({
+            type: 'info', // Using info for blue theme if available, otherwise default
+            title: 'สร้างลิงก์ขออนุญาตใหม่?',
+            text: 'ผู้ป่วยรายนี้ได้ให้ความยินยอม (หรือปฏิเสธ) ไปแล้ว คุณแน่ใจหรือไม่ว่าต้องการสร้างลิงก์ให้ผู้ป่วยทำรายการใหม่? ข้อมูลความยินยอมเดิมจะถูกลบและรอการยืนยันใหม่',
+            onConfirm: () => {
+                globalAlert.setIsOpen(false);
+                proceedGenerateLink(patient);
+            }
+        });
+        return;
+    }
+
+    proceedGenerateLink(patient);
+  };
+
+  const proceedGenerateLink = async (patient) => {
+    const token = Math.random().toString(36).substr(2, 9);
+    const expires = new Date().getTime() + 60 * 60 * 1000; // 1 hour
+
+    // Reset specific consents when generating new link
+    const updatedPatient = { 
+        ...patient, 
+        pdpaStatus: 'yellow', 
+        pdpaToken: token, 
+        pdpaExpires: expires,
+        isConsentMarketing: null,
+        isConsentReview: null
+    };
+
+    setIsProcessing(true);
+    try {
+        await callAppScript('SAVE_DATA', 'Patients', updatedPatient);
+        setPatientsData(patientsData.map(p => (p.hn || p.id) === (patient.hn || patient.id) ? updatedPatient : p));
+
+        const link = `${window.location.origin}/?pdpa=${token}&hn=${patient.hn || patient.id}`;
+
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(link);
+            showToast('สร้างลิ้งก์ PDPA และคัดลอกลงคลิปบอร์ดแล้ว (หมดอายุใน 1 ชม.)', 'success');
+        } else {
+            // Fallback
+            const textArea = document.createElement("textarea");
+            textArea.value = link;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast('สร้างลิ้งก์ PDPA และคัดลอกลงคลิปบอร์ดแล้ว (หมดอายุใน 1 ชม.)', 'success');
+            } catch (err) {
+                console.error('Fallback copy failed', err);
+            }
+            document.body.removeChild(textArea);
+        }
+        
+        // Open QR Modal instead of immediately opening a new tab
+        setPdpaQrModal({ isOpen: true, link: link, patient: updatedPatient });
+        
+    } catch (error) {
+        console.error("Error generating PDPA link:", error);
+        showToast('เกิดข้อผิดพลาดในการสร้างลิ้งก์ PDPA', 'warning');
+    }
+    setIsProcessing(false);
+  };
+
+  const renderPdpaButton = (patient) => {
+      const status = patient.pdpaStatus;
+      
+      const mktIcon = patient.isConsentMarketing ? '?' : '?';
+      const revIcon = patient.isConsentReview ? '?' : '?';
+      
+      if (status === 'green') {
+          return (
+              <div className="flex flex-col items-center justify-center gap-1 group">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center gap-1 w-fit mx-auto">
+                      <ShieldCheck size={12}/> ยินยอมแล้ว
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-colors">
+                      MKT: <span className={patient.isConsentMarketing ? "text-emerald-500" : "text-rose-500"}>{mktIcon}</span> | REV: <span className={patient.isConsentReview ? "text-emerald-500" : "text-rose-500"}>{revIcon}</span>
+                  </span>
+              </div>
+          );
+      } else if (status === 'red') {
+          return (
+              <div className="flex flex-col items-center justify-center gap-1 group">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center gap-1 w-fit mx-auto">
+                      <XCircle size={12}/> ไม่ยินยอม
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 transition-colors">
+                      MKT: <span className="text-rose-500">?</span> | REV: <span className="text-rose-500">?</span>
+                  </span>
+              </div>
+          );
+      }
+      // For yellow (pending), still allow generating the link from the table
+      return (
+          <button onClick={(e) => handleGeneratePdpaLink(patient, e)} className="px-2 py-1 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center justify-center gap-1 mx-auto">
+             <Link size={12}/> ขอยินยอม
+          </button>
+      );
+  };
+
   const handleDeleteClick = (patient) => {
     const patientHn = patient.hn || patient.id;
     showGlobalAlert({
@@ -5221,6 +5331,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
         <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
         <td className="py-4 text-center text-slate-500">{patient.opdRecords ? patient.opdRecords.length : 0}</td>
+        <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
         <td className="py-4 text-right pr-6">
           <div className="flex justify-end gap-2 transition-opacity">
             <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-sky-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
@@ -5246,13 +5357,13 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                 
                 {/* แถวที่ 1: รหัส HN, ป้ายสถานะ และปุ่มจัดการ */}
                 <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center flex-wrap gap-2.5">
                         <span className="font-black text-sky-600 text-base kanit-text tracking-wide">{getPatientId(patient)}</span>
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${isNewPatient ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
                             {isNewPatient ? 'ผู้ป่วยใหม่' : 'ผู้ป่วยเก่า'}
                         </span>
                     </div>
-                    <div className="text-right whitespace-nowrap bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                    <div className="text-right whitespace-nowrap bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 shrink-0 ml-2">
                         <span className="font-medium text-slate-500 text-[10px] sm:text-xs kanit-text">รับการรักษา</span>
                         <span className="font-bold text-sky-600 text-xs sm:text-sm font-data mx-1">{patient.opdRecords ? patient.opdRecords.length : 0}</span>
                         <span className="font-medium text-slate-500 text-[10px] sm:text-xs kanit-text">ครั้ง</span>
@@ -5297,6 +5408,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                         <div className="min-w-0 flex-1 truncate">
                             <span className="font-medium text-slate-500">รับบริการล่าสุด:</span>
                             <span className="font-bold text-sky-600 ml-1.5 font-data">{lastVisitStr}</span>
+                        </div>
+                    </div>
+                    
+                    {/* แถวที่ 3.5: สถานะ PDPA */}
+                    <div className="flex items-center gap-2 text-xs mt-1 pt-2 border-t border-slate-200">
+                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><ShieldCheck size={10} /></div>
+                        <div className="min-w-0 flex-1 flex items-center gap-2">
+                            <span className="font-medium text-slate-500">PDPA:</span>
+                            {renderPdpaButton(patient)}
                         </div>
                     </div>
                 </div>
@@ -5413,6 +5533,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
                         <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
                         <th className="pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th>
+                        <th className="pt-6 pb-4 font-medium text-center kanit-text">สถานะ PDPA</th>
                         <th className="pt-6 pb-4 font-medium text-right pr-6 kanit-text">จัดการ</th>
                       </tr>
                     </thead>
@@ -5520,7 +5641,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                     {isViewMode ? <FileText className="w-5 h-5 sm:w-6 sm:h-6" /> : (editingId ? <Pencil className="w-5 h-5 sm:w-6 sm:h-6" /> : <Plus className="w-5 h-5 sm:w-6 sm:h-6" />)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base sm:text-2xl font-bold text-slate-800 kanit-text truncate leading-tight">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName} (การรักษา ${formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง)` : 'เพิ่มเวชระเบียนใหม่'}</h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-base sm:text-2xl font-bold text-slate-800 kanit-text truncate leading-tight">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName} (การรักษา ${formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง)` : 'เพิ่มเวชระเบียนใหม่'}</h3>
+                  </div>
                   <p className="text-[10px] sm:text-sm text-slate-500 kanit-text truncate leading-tight mt-0.5">{isViewMode ? `อายุ ${calculatedAge} | ข้อมูลผู้ป่วยสำหรับเรียกดู` : (editingId ? `อายุ ${calculatedAge} | แก้ไขข้อมูลเวชระเบียน` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}</p>
                 </div>
               </div>
@@ -5534,6 +5657,72 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             <div className="p-4 sm:p-5 flex-1 bg-slate-50/30 overflow-y-auto custom-scrollbar">
               <form id="patient-form" onSubmit={handleSavePatient}>
                 <fieldset disabled={isViewMode} className="space-y-5 sm:space-y-6 border-none p-0 m-0 min-w-0">
+                  
+                  {/* PDPA Section (Only visible if editing an existing record) */}
+                  {editingId && (() => {
+                      const pat = patientsData.find(p => (p.hn || p.id) === (formData.hn || formData.id)) || formData;
+                      return (
+                          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
+                              <div className="border-b border-sky-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                  <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><ShieldCheck size={20} /> สถานะความยินยอม (PDPA)</h4>
+                                  {!isViewMode && (
+                                      <button 
+                                          type="button" 
+                                          onClick={(e) => handleGeneratePdpaLink(pat, e)} 
+                                          disabled={isProcessing}
+                                          className="text-xs sm:text-sm px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-amber-200 shadow-sm disabled:opacity-50"
+                                      >
+                                          <Link size={16} /> สร้างลิงก์ขออนุญาตใหม่
+                                      </button>
+                                  )}
+                              </div>
+                              
+                              {pat.pdpaStatus === 'green' ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                      <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex flex-col justify-center items-center text-center">
+                                          <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-emerald-500 mb-2 shadow-sm"><ShieldCheck size={24}/></div>
+                                          <h5 className="font-bold text-emerald-700 kanit-text text-lg">ยินยอมแล้ว</h5>
+                                          <p className="text-xs text-emerald-600 mt-1">ผู้ป่วยให้ความยินยอมเมื่อ: {pat.pdpaTimestamp ? new Date(pat.pdpaTimestamp).toLocaleString('th-TH') : '-'}</p>
+                                      </div>
+                                      <div className="space-y-3 flex flex-col justify-center">
+                                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                                              <span className="text-sm font-medium text-slate-600 kanit-text">การตลาด (Marketing)</span>
+                                              <span className={`text-sm font-bold flex items-center gap-1 ${pat.isConsentMarketing ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                  {pat.isConsentMarketing ? <><CheckCircle2 size={16}/> ยินยอม</> : <><XCircle size={16}/> ไม่ยินยอม</>}
+                                              </span>
+                                          </div>
+                                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                                              <span className="text-sm font-medium text-slate-600 kanit-text">การรีวิว (Review)</span>
+                                              <span className={`text-sm font-bold flex items-center gap-1 ${pat.isConsentReview ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                  {pat.isConsentReview ? <><CheckCircle2 size={16}/> ยินยอม</> : <><XCircle size={16}/> ไม่ยินยอม</>}
+                                              </span>
+                                          </div>
+                                          <div className="text-[10px] text-slate-400 mt-2 px-1">
+                                              <p><strong>IP Address:</strong> {pat.pdpaIpAddress || '-'}</p>
+                                              <p className="truncate" title={pat.pdpaUserAgent || '-'}><strong>อุปกรณ์:</strong> {pat.pdpaUserAgent || '-'}</p>
+                                          </div>
+                                      </div>
+                                  </div>
+                              ) : pat.pdpaStatus === 'red' ? (
+                                  <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 flex flex-col justify-center items-center text-center">
+                                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-rose-500 mb-2 shadow-sm"><XCircle size={24}/></div>
+                                      <h5 className="font-bold text-rose-700 kanit-text text-lg">ไม่ยินยอม</h5>
+                                      <p className="text-xs text-rose-600 mt-1">ผู้ป่วยปฏิเสธการให้ความยินยอม (จำเป็นต้องยินยอมเพื่อรับบริการ)</p>
+                                      <div className="text-[10px] text-rose-400 mt-2">
+                                          <p>ทำรายการเมื่อ: {pat.pdpaTimestamp ? new Date(pat.pdpaTimestamp).toLocaleString('th-TH') : '-'}</p>
+                                      </div>
+                                  </div>
+                              ) : (
+                                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 border-dashed flex flex-col justify-center items-center text-center">
+                                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-slate-400 mb-2 shadow-sm"><FileText size={24}/></div>
+                                      <h5 className="font-bold text-slate-600 kanit-text text-lg">ยังไม่มีข้อมูลความยินยอม</h5>
+                                      <p className="text-xs text-slate-500 mt-1">กรุณาสร้างลิงก์ขออนุญาตให้ผู้ป่วยทำรายการ</p>
+                                  </div>
+                              )}
+                          </div>
+                      );
+                  })()}
+
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
                   <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><Users size={20} /> ข้อมูลส่วนตัว</h4>
@@ -5870,7 +6059,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
                         {/* แถวที่ 2: Vitals ปรับลด Grid สำหรับหน้าจอมือถือให้อ่านง่ายขึ้น */}
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">อุณหภูมิ (°C)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.temp} onChange={(e) => setNewOpdRecord({...newOpdRecord, temp: e.target.value})} placeholder="36.5" /></div>
+                           <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">อุณหภูมิ (?C)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.temp} onChange={(e) => setNewOpdRecord({...newOpdRecord, temp: e.target.value})} placeholder="36.5" /></div>
                            <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">สัญญาณชีพ (/min)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.pulse} onChange={(e) => setNewOpdRecord({...newOpdRecord, pulse: e.target.value})} placeholder="80" /></div>
                            <div className="col-span-2 md:col-span-1"><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">ความดัน</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.bp} onChange={(e) => setNewOpdRecord({...newOpdRecord, bp: e.target.value})} placeholder="120/80" /></div>
                            <div><label className="block text-[10px] font-medium text-slate-600 mb-1 ml-1 kanit-text">น้ำหนัก (kg)</label><input type="text" className={`${theme.input} bg-white py-2 text-sm px-2 text-center font-data`} value={newOpdRecord.weight} onChange={(e) => setNewOpdRecord({...newOpdRecord, weight: e.target.value})} placeholder="60" /></div>
@@ -7675,7 +7864,7 @@ const POSSystem = ({
                                                     compact
                                                     value={historyEditForm.status} 
                                                     onChange={val => setHistoryEditForm({...historyEditForm, status: val})}
-                                                    options={[{value:'completed', label:'🟢 สำเร็จ'}, {value:'cancelled', label:'🔴 ยกเลิก (Void)'}]}
+                                                    options={[{value:'completed', label:'?? สำเร็จ'}, {value:'cancelled', label:'?? ยกเลิก (Void)'}]}
                                                     className="w-full"
                                                 />
                                             </div>
@@ -7685,7 +7874,7 @@ const POSSystem = ({
                                                     compact
                                                     value={historyEditForm.paymentMethod} 
                                                     onChange={val => setHistoryEditForm({...historyEditForm, paymentMethod: val})}
-                                                    options={[{value:'cash', label:'💵 เงินสด'}, {value:'transfer', label:'📱 โอนเงิน'}, {value:'credit', label:'💳 บัตรเครดิต'}]}
+                                                    options={[{value:'cash', label:'?? เงินสด'}, {value:'transfer', label:'?? โอนเงิน'}, {value:'credit', label:'?? บัตรเครดิต'}]}
                                                     className="w-full"
                                                 />
                                             </div>
@@ -11747,7 +11936,7 @@ const FinancePage = ({
                         <CustomSelect 
                             value={timeFilterMode} 
                             onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
-                            options={[{value:'all',label:'✨ ทุกเวลา'},{value:'month',label:'📅 รายเดือน'},{value:'year',label:'📌 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
+                            options={[{value:'all',label:'? ทุกเวลา'},{value:'month',label:'?? รายเดือน'},{value:'year',label:'?? รายปี'},{value:'range',label:'??? กำหนดเอง'}]} 
                             compact fullWidth 
                             className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-3" 
                         />
@@ -11793,7 +11982,7 @@ const FinancePage = ({
                           <CustomSelect 
                               value={timeFilterMode} 
                               onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
-                              options={[{value:'all',label:'✨ ทุกเวลา'},{value:'month',label:'📅 รายเดือน'},{value:'year',label:'📌 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
+                              options={[{value:'all',label:'? ทุกเวลา'},{value:'month',label:'?? รายเดือน'},{value:'year',label:'?? รายปี'},{value:'range',label:'??? กำหนดเอง'}]} 
                               compact fullWidth 
                               className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-2" 
                           />
@@ -12523,10 +12712,10 @@ const FinancePage = ({
                                     value={formData.method}
                                     onChange={(val) => setFormData({...formData, method: val})}
                                     options={[
-                                        {value: 'cash', label: '💵 เงินสด'},
-                                        {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
-                                        {value: 'credit_card', label: '💳 บัตรเครดิต'},
-                                        {value: 'other', label: '📦 อื่นๆ'}
+                                        {value: 'cash', label: '?? เงินสด'},
+                                        {value: 'transfer', label: '?? โอนเงินเข้าบัญชี'},
+                                        {value: 'credit_card', label: '?? บัตรเครดิต'},
+                                        {value: 'other', label: '?? อื่นๆ'}
                                     ]}
                                     className="w-full"
                                 />
@@ -12904,10 +13093,10 @@ const FinancePage = ({
                             value={posEditForm.paymentMethod} 
                             onChange={(val) => setPosEditForm({...posEditForm, paymentMethod: val})}
                             options={[
-                                {value: 'cash', label: '💵 เงินสด'},
-                                {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
-                                {value: 'credit', label: '💳 บัตรเครดิต'},
-                                {value: 'other', label: '📦 อื่นๆ'}
+                                {value: 'cash', label: '?? เงินสด'},
+                                {value: 'transfer', label: '?? โอนเงินเข้าบัญชี'},
+                                {value: 'credit', label: '?? บัตรเครดิต'},
+                                {value: 'other', label: '?? อื่นๆ'}
                             ]}
                             className="w-full"
                           />
@@ -16923,7 +17112,338 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
     </div>
   );
 };
+const PdpaConsentForm = ({ token, hn }) => {
+    const [status, setStatus] = useState('loading'); // loading, pending, consented, declined, invalid
+    const [patient, setPatient] = useState(null);
+    const [step, setStep] = useState(1);
+    const [page1Agreed, setPage1Agreed] = useState(false);
+    const [marketingConsent, setMarketingConsent] = useState(null);
+    const [reviewConsent, setReviewConsent] = useState(null);
+    const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+
+    const handleScroll = (e) => {
+        const bottom = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight < 20;
+        if (bottom && !hasScrolledToBottom) {
+            setHasScrolledToBottom(true);
+        }
+    };
+
+    // Fetch patient data on mount
+    useEffect(() => {
+        const fetchPatient = async () => {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Patients', payload: null }),
+                });
+                const responseText = await response.text();
+                const result = JSON.parse(responseText);
+                if (result.status === 'success') {
+                    const found = result.data.find(p => (p.hn || p.id) === hn);
+                    if (found) {
+                        if (found.pdpaToken === token && found.pdpaExpires && new Date().getTime() <= found.pdpaExpires) {
+                            setPatient(found);
+                            setStatus('pending');
+                        } else {
+                            setStatus('invalid');
+                        }
+                    } else {
+                        setStatus('invalid');
+                    }
+                } else {
+                    setStatus('invalid');
+                }
+            } catch (err) {
+                console.error('Error fetching patient data:', err);
+                setStatus('invalid');
+            }
+        };
+        fetchPatient();
+    }, [token, hn]);
+
+    const handleSubmit = async () => {
+        if (marketingConsent === null || reviewConsent === null) {
+            alert('กรุณาเลือกความยินยอมให้ครบถ้วน');
+            return;
+        }
+        
+        setStatus('saving');
+        
+        try {
+            let ipAddress = 'unknown';
+            try {
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipRes.json();
+                ipAddress = ipData.ip;
+            } catch (ipErr) {
+                console.warn('Could not fetch IP', ipErr);
+            }
+
+            const updatedPatient = { 
+                ...patient, 
+                pdpaStatus: 'green',
+                pdpaTimestamp: new Date().toISOString(),
+                pdpaIpAddress: ipAddress,
+                pdpaUserAgent: navigator.userAgent,
+                isConsentMarketing: marketingConsent === 'yes',
+                isConsentReview: reviewConsent === 'yes',
+                pdpaToken: null, 
+                pdpaExpires: null 
+            };
+
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Patients', payload: updatedPatient }),
+            });
+            const responseText = await response.text();
+            const result = JSON.parse(responseText);
+            if (result.status === 'success') {
+                setStatus('consented');
+            } else {
+                alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่');
+                setStatus('pending');
+            }
+        } catch (error) {
+            console.error('Save error', error);
+            alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่');
+            setStatus('pending');
+        }
+    };
+
+    if (status === 'loading') {
+        return <div className="min-h-screen flex items-center justify-center bg-white font-sans"><div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-sky-500 animate-[loading_1.5s_infinite_linear]"></div></div></div>;
+    }
+
+    if (status === 'invalid') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans">
+                <div className="max-w-md w-full text-center">
+                    <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle size={40} /></div>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-3 kanit-text">ลิงก์ไม่ถูกต้อง หรือ หมดอายุ</h2>
+                    <p className="text-slate-400">กรุณาติดต่อเจ้าหน้าที่คลินิกเพื่อขอลิงก์ใหม่อีกครั้ง</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (status === 'saving') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans text-center">
+                <div className="max-w-md w-full">
+                    <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden mx-auto mb-6"><div className="h-full bg-emerald-500 animate-[loading_1.5s_infinite_linear]"></div></div>
+                    <h2 className="text-xl font-bold text-slate-800 kanit-text">กำลังยืนยันข้อมูล...</h2>
+                    <p className="text-slate-400 mt-2 text-sm">กรุณารอสักครู่ ระบบกำลังบันทึกสถานะของคุณ</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (status === 'consented') {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans">
+                <div className="max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
+                    <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-500/10">
+                        <CheckCircle2 size={48} />
+                    </div>
+                    <h2 className="text-3xl font-bold text-slate-800 mb-3 kanit-text">เรียบร้อยแล้ว</h2>
+                    <p className="text-slate-500 leading-relaxed">ขอบคุณที่ให้ความไว้วางใจ<br/>เราจะดูแลข้อมูลของคุณด้วยความปลอดภัยสูงสุด</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen flex flex-col bg-white font-sans selection:bg-sky-100">
+            {/* Progress Bar Container */}
+            <div className="fixed top-0 left-0 w-full h-1.5 bg-slate-50 z-50">
+                <div 
+                    className="h-full bg-sky-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(14,165,233,0.5)]" 
+                    style={{ width: step === 1 ? '50%' : '100%' }}
+                ></div>
+            </div>
+
+            <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 max-w-4xl mx-auto w-full">
+                {step === 1 && (
+                    <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <header className="mb-10 text-center sm:text-left">
+                            <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl mb-6 shadow-sm"><ShieldCheck size={32} /></div>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text leading-tight">ความยินยอมและรับทราบ<br/>การเก็บรวบรวมข้อมูลส่วนบุคคล</h1>
+                        </header>
+
+                        <div className="relative group">
+                            {/* Scroll Area */}
+                            <div 
+                                className="text-slate-600 space-y-5 mb-8 leading-relaxed max-h-[45vh] overflow-y-auto custom-scrollbar pr-4 py-2"
+                                onScroll={handleScroll}
+                            >
+                                <p className="text-lg text-slate-700 font-medium italic">"อันผิงคลินิก ให้ความสำคัญกับความเป็นส่วนตัวของท่านเป็นอันดับหนึ่ง"</p>
+                                <p>ท่านรับทราบและยินยอมให้คลินิก เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคล เพื่อวัตถุประสงค์ในการให้บริการทางการแพทย์ การตรวจวินิจฉัย การรักษาด้วยศาสตร์แพทย์แผนจีน การจัดทำเวชระเบียน และการติดต่อนัดหมาย</p>
+                                
+                                <section>
+                                    <h3 className="font-bold text-slate-800 mb-2">1. ข้อมูลที่เราจัดเก็บ</h3>
+                                    <ul className="space-y-3">
+                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> ชื่อ-นามสกุล, วันเกิด, เลขบัตรประชาชน หรือหนังสือเดินทาง</li>
+                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> ที่อยู่, เบอร์โทรศัพท์, LINE ID</li>
+                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> ประวัติสุขภาพ, อาการ, ข้อมูลแพ้ยา, ผลการวินิจฉัยและการรักษา</li>
+                                    </ul>
+                                </section>
+
+                                <div className="p-5 bg-slate-50 rounded-2xl border-none text-slate-500 text-sm leading-relaxed">
+                                    <strong className="text-slate-700 block mb-1">ความสำคัญ:</strong> ข้อมูลดังกล่าวเป็นพื้นฐานจำเป็นในการประเมินและวางแผนการรักษา หากท่านไม่ให้ข้อมูลที่จำเป็น คลินิกอาจไม่สามารถให้บริการทางการแพทย์ได้อย่างครบถ้วนและปลอดภัยสูงสุด
+                                </div>
+                                <p className="text-slate-400 text-xs text-center py-4 italic">...ขอบคุณที่ร่วมเป็นส่วนหนึ่งของการพัฒนาบริการของเรา...</p>
+                            </div>
+
+                            {/* Fade Effect */}
+                            {!hasScrolledToBottom && (
+                                <div className="absolute bottom-8 left-0 w-full h-20 bg-gradient-to-t from-white to-transparent pointer-events-none transition-opacity duration-500"></div>
+                            )}
+
+                            {/* Floating Badge */}
+                            {!hasScrolledToBottom && (
+                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-amber-50 text-amber-600 px-4 py-2 rounded-full text-xs font-bold shadow-lg shadow-amber-200/40 border border-amber-100 flex items-center gap-2 animate-bounce">
+                                    <TrendingDown size={14}/> เลื่อนเพื่ออ่านให้จบ
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-6">
+                            <label 
+                                className={`flex items-center gap-4 p-6 rounded-3xl transition-all duration-300 select-none cursor-pointer ${
+                                    !hasScrolledToBottom 
+                                        ? 'bg-slate-50 opacity-40 grayscale cursor-not-allowed scale-[0.98]' 
+                                        : page1Agreed 
+                                            ? 'bg-sky-50 ring-2 ring-sky-500/20' 
+                                            : 'bg-slate-50 hover:bg-slate-100'
+                                }`}
+                            >
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-300 ${page1Agreed ? 'bg-sky-500 text-white shadow-md' : 'bg-white border-2 border-slate-200'}`}>
+                                    {page1Agreed && <CheckSquare size={16} />}
+                                    <input 
+                                        type="checkbox" 
+                                        className="hidden" 
+                                        checked={page1Agreed} 
+                                        disabled={!hasScrolledToBottom} 
+                                        onChange={(e) => setPage1Agreed(e.target.checked)} 
+                                    />
+                                </div>
+                                <span className={`font-bold kanit-text text-lg ${page1Agreed ? 'text-sky-700' : 'text-slate-600'}`}>รับทราบและยินยอมเงื่อนไข</span>
+                            </label>
+
+                            <button 
+                                onClick={() => setStep(2)} 
+                                disabled={!page1Agreed}
+                                className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
+                                    page1Agreed 
+                                        ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/25 hover:bg-sky-600 hover:scale-[1.02] active:scale-95' 
+                                        : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                }`}
+                            >
+                                ดำเนินการต่อ
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 2 && patient && (
+                    <div className="w-full animate-in fade-in slide-in-from-right-8 duration-700">
+                        <button onClick={() => setStep(1)} className="group text-slate-400 hover:text-sky-500 mb-8 flex items-center gap-2 text-sm font-medium transition-colors">
+                            <TrendingDown className="rotate-90 group-hover:-translate-x-1 transition-transform" size={18} /> ย้อนกลับ
+                        </button>
+
+                        <header className="mb-8">
+                            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text mb-3 leading-tight">ยืนยันตัวตนและข้อตกลง<br/>ทางอิเล็กทรอนิกส์</h1>
+                            <p className="text-slate-400 text-sm leading-relaxed">การให้ความยินยอมผ่านระบบนี้ มีผลทางกฎหมายสมบูรณ์เทียบเท่าการลงนามในเอกสาร</p>
+                        </header>
+
+                        <div className="bg-slate-50/50 p-6 sm:p-8 rounded-[2.5rem] mb-10 space-y-4">
+                            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                                <div><span className="text-slate-400 block mb-1">ชื่อ-นามสกุล</span> <strong className="text-slate-700 text-base">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</strong></div>
+                                <div><span className="text-slate-400 block mb-1">วันเกิด</span> <strong className="text-slate-700 text-base">{patient.dob ? formatDate(patient.dob) : '-'}</strong></div>
+                                <div><span className="text-slate-400 block mb-1">เลขบัตรประชาชน</span> <strong className="text-slate-700 text-base font-data tracking-wider">{patient.idCard || '-'}</strong></div>
+                                <div><span className="text-slate-400 block mb-1">เบอร์โทรศัพท์</span> <strong className="text-slate-700 text-base font-data">{patient.phone || patient.phone1 || '-'}</strong></div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6 mb-12">
+                            <h3 className="font-bold text-slate-800 kanit-text text-xl flex items-center gap-2">
+                                ความยินยอมเพิ่มเติม <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">ทางเลือก</span>
+                            </h3>
+
+                            {/* Marketing Consent */}
+                            <div className="space-y-4">
+                                <p className="text-sm text-slate-500 leading-relaxed">1. ให้คลินิกติดต่อเพื่อแจ้งสิทธิประโยชน์ โปรโมชั่น หรือข่าวสารทางการตลาด</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button 
+                                        onClick={() => setMarketingConsent('yes')}
+                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                    >
+                                        <CheckCircle2 size={18} /> ยินยอม
+                                    </button>
+                                    <button 
+                                        onClick={() => setMarketingConsent('no')}
+                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                    >
+                                        <XCircle size={18} /> ไม่ยินยอม
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Review Consent */}
+                            <div className="space-y-4">
+                                <p className="text-sm text-slate-500 leading-relaxed">2. ให้นำข้อมูลหรือภาพถ่าย (โดยปกปิดตัวตน) ไปใช้เพื่อการศึกษาหรือรีวิวการรักษา</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button 
+                                        onClick={() => setReviewConsent('yes')}
+                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                    >
+                                        <CheckCircle2 size={18} /> ยินยอม
+                                    </button>
+                                    <button 
+                                        onClick={() => setReviewConsent('no')}
+                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                    >
+                                        <XCircle size={18} /> ไม่ยินยอม
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleSubmit} 
+                            disabled={marketingConsent === null || reviewConsent === null}
+                            className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
+                                marketingConsent !== null && reviewConsent !== null
+                                    ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/25 hover:bg-emerald-600 hover:scale-[1.02]' 
+                                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            }`}
+                        >
+                            ยืนยันและตกลง
+                        </button>
+                    </div>
+                )}
+            </main>
+
+            <style dangerouslySetInnerHTML={{ __html: `
+                @keyframes loading {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(200%); }
+                }
+            `}} />
+        </div>
+    );
+};
 export default function App() {
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const pdpaToken = urlParams.get('pdpa');
+  const pdpaHn = urlParams.get('hn');
+
+  if (pdpaToken && pdpaHn) {
+      return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} />;
+  }
+
   // --- แก้ไข: จดจำหน้าปัจจุบันใน LocalStorage (รีเฟรชแล้วอยู่หน้าเดิม ยกเว้นตั้งค่า) ---
   const [currentTab, setCurrentTab] = useState(() => {
     // เช็คว่าทำงานบน Browser และมี localStorage ให้ใช้
@@ -17128,12 +17648,13 @@ export default function App() {
   }, [currentTab]);
 
   const [patientsData, setPatientsData] = useState(GOOGLE_SCRIPT_URL ? [] : mockPatients);
-  const [branchesData, setBranchesData] = useState(GOOGLE_SCRIPT_URL ? [] : mockBranches); 
+  const [branchesData, setBranchesData] = useState(GOOGLE_SCRIPT_URL ? [] : mockBranches);
   const [queueData, setQueueData] = useState([]);
   const [inventoryData, setInventoryData] = useState([]);
-  const [inventoryLogsData, setInventoryLogsData] = useState([]); 
-  const [posHistoryData, setPosHistoryData] = useState([]); 
-  const [financeData, setFinanceData] = useState([]); 
+  const [inventoryLogsData, setInventoryLogsData] = useState([]);
+  const [posHistoryData, setPosHistoryData] = useState([]);
+  const [financeData, setFinanceData] = useState([]);
+  const [pdpaQrModal, setPdpaQrModal] = useState({ isOpen: false, link: '' });
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
   const speak = (text, onEnd) => {
@@ -17640,7 +18161,7 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} />
                 </div>
             )}
 
@@ -18058,6 +18579,40 @@ export default function App() {
         @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 64px); } }
         @media (min-width: 768px) and (max-width: 1023px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 59px); } }
       `}} />
+
+      {/* PDPA QR Code Modal */}
+      {pdpaQrModal.isOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200 border border-slate-100">
+                  <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
+                      <h3 className="font-bold text-lg text-slate-800 kanit-text flex items-center gap-2">
+                          <ShieldCheck size={24} className="text-sky-500" /> สแกนเพื่อยินยอม
+                      </h3>
+                      <button onClick={() => setPdpaQrModal({ isOpen: false, link: '' })} className="text-slate-400 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-xl transition-colors">
+                          <XCircle size={20} />
+                      </button>
+                  </div>
+                  <div className="flex flex-col items-center">
+                      <div className="bg-white p-3 rounded-2xl border-2 border-dashed border-sky-200 shadow-sm mb-5 relative">
+                          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(pdpaQrModal.link)}&margin=10`} alt="QR Code" className="w-56 h-56 rounded-xl" />
+                      </div>
+                      <p className="text-sm text-slate-500 text-center mb-6 px-2 leading-relaxed">
+                          ให้ผู้ป่วยสแกน QR Code เพื่อให้ความยินยอม หรือคลิกปุ่มด้านล่างเพื่อเปิดหน้าต่างให้ผู้ป่วยทำรายการบนอุปกรณ์นี้
+                      </p>
+                      <button 
+                          onClick={() => {
+                              window.open(pdpaQrModal.link, '_blank');
+                              setPdpaQrModal({ isOpen: false, link: '' });
+                          }}
+                          className="w-full py-3.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/20 transform hover:-translate-y-0.5"
+                      >
+                          <ExternalLink size={18} /> เปิดหน้ายินยอมบนเครื่องนี้
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {GlobalAlertUI()}
     </div>
   );
