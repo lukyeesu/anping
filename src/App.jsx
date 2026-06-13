@@ -4220,6 +4220,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingPdpaHn, setProcessingPdpaHn] = useState(null);
   const medModal = useModal();
   const [editingId, setEditingId] = useState(null);
   const [isViewMode, setIsViewMode] = useState(false);
@@ -5209,6 +5210,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   };
 
   const proceedGenerateLink = async (patient) => {
+    const patientHn = patient.hn || patient.id;
+    setProcessingPdpaHn(patientHn);
     const token = Math.random().toString(36).substr(2, 9);
     const expires = new Date().getTime() + 60 * 60 * 1000; // 1 hour
 
@@ -5257,12 +5260,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     } catch (error) {
         console.error("Error generating PDPA link:", error);
         showToast('เกิดข้อผิดพลาดในการสร้างลิ้งก์ PDPA', 'warning');
+    } finally {
+        setIsProcessing(false);
+        setProcessingPdpaHn(null);
     }
-    setIsProcessing(false);
   };
 
   const renderPdpaButton = (patient) => {
       const status = patient.pdpaStatus;
+      const patientHn = patient.hn || patient.id;
+      const isCurrentProcessing = processingPdpaHn === patientHn;
       
       const mktIcon = patient.isConsentMarketing ? '✓' : '✗';
       const revIcon = patient.isConsentReview ? '✓' : '✗';
@@ -5292,8 +5299,23 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       }
       // For yellow (pending), still allow generating the link from the table
       return (
-          <button onClick={(e) => handleGeneratePdpaLink(patient, e)} className="px-2 py-1 rounded-md text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center justify-center gap-1 mx-auto">
-             <Link size={12}/> ขอยินยอม
+          <button 
+              disabled={isProcessing}
+              onClick={(e) => handleGeneratePdpaLink(patient, e)} 
+              className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-colors flex items-center justify-center gap-1 mx-auto ${
+                  isCurrentProcessing
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                      : isProcessing
+                          ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                          : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+              }`}
+          >
+             {isCurrentProcessing ? (
+                 <Loader2 size={12} className="animate-spin text-slate-400" />
+             ) : (
+                 <Link size={12}/>
+             )}
+             {isCurrentProcessing ? 'กำลังสร้าง...' : 'ขอยินยอม'}
           </button>
       );
   };
@@ -5341,7 +5363,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         </td>
       </tr>
     ));
-  }, [sortedPatients, visibleCount]); // อัปเดตตารางเฉพาะตอนข้อมูลเปลี่ยนหรือเลื่อนโหลดเพิ่มเท่านั้น (Virtualization Concept)
+  }, [sortedPatients, visibleCount, isProcessing, processingPdpaHn]); // อัปเดตตารางเฉพาะตอนข้อมูลเปลี่ยนหรือเลื่อนโหลดเพิ่มเท่านั้น (Virtualization Concept)
 
   const memoizedPatientMobileCards = useMemo(() => {
     return sortedPatients.slice(0, visibleCount).map((patient, index) => {
@@ -5666,15 +5688,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                               <div className="border-b border-sky-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                   <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><ShieldCheck size={20} /> สถานะความยินยอม (PDPA)</h4>
                                   {!isViewMode && (
-                                      <button 
-                                          type="button" 
-                                          onClick={(e) => handleGeneratePdpaLink(pat, e)} 
-                                          disabled={isProcessing}
-                                          className="text-xs sm:text-sm px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-amber-200 shadow-sm disabled:opacity-50"
-                                      >
-                                          <Link size={16} /> สร้างลิงก์ขออนุญาตใหม่
-                                      </button>
-                                  )}
+                                       <button 
+                                           type="button" 
+                                           onClick={(e) => handleGeneratePdpaLink(pat, e)} 
+                                           disabled={isProcessing}
+                                           className="text-xs sm:text-sm px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-amber-200 shadow-sm disabled:opacity-50"
+                                       >
+                                           {isProcessing && processingPdpaHn === (pat.hn || pat.id) ? (
+                                               <Loader2 size={16} className="animate-spin text-amber-600" />
+                                           ) : (
+                                               <Link size={16} />
+                                           )}
+                                           {isProcessing && processingPdpaHn === (pat.hn || pat.id) ? 'กำลังสร้าง...' : 'สร้างลิงก์ขออนุญาตใหม่'}
+                                       </button>
+                                   )}
                               </div>
                               
                               {pat.pdpaStatus === 'green' ? (
