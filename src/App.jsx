@@ -5652,7 +5652,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             </div>
         );
     });
-  }, [sortedPatients, visibleCount]);
+  }, [sortedPatients, visibleCount, isProcessing, processingPdpaHn]);
 
   return (
     <>
