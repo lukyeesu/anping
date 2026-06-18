@@ -19521,6 +19521,836 @@ const SettingsManager = ({
   );
 };
 
+const StaffProfilePage = ({ 
+  currentUser, 
+  setCurrentUser,
+  staffData = [], 
+  setStaffData,
+  branchesData = [], 
+  roleLabels = {}, 
+  callAppScript, 
+  showToast 
+}) => {
+  const staff = useMemo(() => {
+    return staffData.find(s => s.id === currentUser.id) || currentUser;
+  }, [staffData, currentUser]);
+
+  const roleMap = useMemo(() => {
+    const defaultMap = {
+      'doctor': { label: 'แพทย์ (Doctor)', color: 'bg-indigo-50 text-indigo-600 border-indigo-200', icon: Stethoscope },
+      'nurse': { label: 'พยาบาล/ผู้ช่วย (Nurse)', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: HeartPulse || Plus },
+      'sale': { label: 'พนักงานขาย (Sale)', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: Tag },
+      'admin': { label: 'แอดมิน (Admin)', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Settings },
+    };
+    const map = {};
+    Object.entries(roleLabels || {
+      admin: 'แอดมิน (Admin)',
+      doctor: 'แพทย์ (Doctor)',
+      nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
+      sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+    }).forEach(([key, label]) => {
+      if (defaultMap[key]) {
+        map[key] = defaultMap[key];
+      } else {
+        map[key] = {
+          label: label,
+          color: 'bg-sky-50 text-sky-600 border-sky-200',
+          icon: UserCog
+        };
+      }
+    });
+    return map;
+  }, [roleLabels]);
+
+  const [activeTab, setActiveTab] = useState('general');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const [formData, setFormData] = useState({
+    prefix: '',
+    firstName: '',
+    lastName: '',
+    photo: '',
+    email: '',
+    phone: '',
+    idCard: '',
+    dob: '',
+    gender: '',
+    nationality: '',
+    ethnicity: '',
+    religion: '',
+    address: '',
+    moo: '',
+    road: '',
+    subDistrict: '',
+    district: '',
+    province: '',
+    zipcode: '',
+    curAddress: '',
+    curMoo: '',
+    curRoad: '',
+    curSubDistrict: '',
+    curDistrict: '',
+    curProvince: '',
+    curZipcode: '',
+    emName: '',
+    emRelation: '',
+    emPhone: '',
+  });
+
+  // Sync with user details when staff details load/change
+  useEffect(() => {
+    if (staff) {
+      setFormData({
+        prefix: staff.prefix || '',
+        firstName: staff.firstName || '',
+        lastName: staff.lastName || '',
+        photo: staff.photo || '',
+        email: staff.email || '',
+        phone: staff.phone || '',
+        idCard: staff.idCard || '',
+        dob: staff.dob || '',
+        gender: staff.gender || '',
+        nationality: staff.nationality || 'ไทย',
+        ethnicity: staff.ethnicity || 'ไทย',
+        religion: staff.religion || 'พุทธ',
+        address: staff.address || '',
+        moo: staff.moo || '',
+        road: staff.road || '',
+        subDistrict: staff.subDistrict || '',
+        district: staff.district || '',
+        province: staff.province || '',
+        zipcode: staff.zipcode || '',
+        curAddress: staff.curAddress || '',
+        curMoo: staff.curMoo || '',
+        curRoad: staff.curRoad || '',
+        curSubDistrict: staff.curSubDistrict || '',
+        curDistrict: staff.curDistrict || '',
+        curProvince: staff.curProvince || '',
+        curZipcode: staff.curZipcode || '',
+        emName: staff.emName || '',
+        emRelation: staff.emRelation || '',
+        emPhone: staff.emPhone || '',
+      });
+    }
+  }, [staff]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('th-TH').format(amount || 0) + ' ฿';
+  };
+
+  const currentRoleInfo = roleMap[staff.role] || { label: 'ไม่ระบุสิทธิ์', color: 'bg-slate-50 text-slate-600 border-slate-200', icon: UserCog };
+
+  // Copy Registered Address to Current Address
+  const handleCopyAddress = () => {
+    setFormData(prev => ({
+      ...prev,
+      curAddress: prev.address,
+      curMoo: prev.moo,
+      curRoad: prev.road,
+      curSubDistrict: prev.subDistrict,
+      curDistrict: prev.district,
+      curProvince: prev.province,
+      curZipcode: prev.zipcode,
+    }));
+    showToast('คัดลอกที่อยู่ตามบัตรประชาชนสำเร็จ', 'success');
+  };
+
+  const completenessPercent = useMemo(() => {
+    const fields = [
+      formData.prefix, formData.firstName, formData.lastName, formData.photo,
+      formData.email, formData.phone, formData.idCard, formData.dob, formData.gender,
+      formData.nationality, formData.address, formData.zipcode, formData.emName, formData.emPhone
+    ];
+    const filled = fields.filter(f => !!f).length;
+    return Math.round((filled / fields.length) * 100);
+  }, [formData]);
+
+  // Upload Photo Handler
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { 
+        showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB', 'warning');
+        return;
+      }
+      setIsProcessing(true);
+      showToast('กำลังอัปโหลดรูปภาพ...', 'success');
+      
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result.split(',')[1]; 
+        
+        try {
+            const response = await callAppScript('UPLOAD_FILE', 'Staff', {
+                fileName: `STAFF_${Date.now()}_${file.name}`,
+                mimeType: file.type,
+                data: base64Data,
+                folderId: '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+            });
+
+            if (response.status === 'success' && response.fileUrl) {
+                setFormData(prev => ({ ...prev, photo: response.fileUrl }));
+                showToast('อัปโหลดรูปภาพสำเร็จ (อย่าลืมกดบันทึกข้อมูลส่วนตัว)', 'success');
+            } else {
+                showToast('อัปโหลดรูปภาพไม่สำเร็จ: ' + (response.message || 'เกิดข้อผิดพลาด'), 'danger');
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('อัปโหลดรูปภาพล้มเหลว', 'danger');
+        } finally {
+            setIsProcessing(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!formData.firstName || !formData.lastName) {
+      showToast('กรุณากรอกชื่อและนามสกุล', 'warning');
+      return;
+    }
+    
+    setIsProcessing(true);
+    const fullName = `${formData.prefix || ''}${formData.firstName} ${formData.lastName}`.trim();
+    const payload = {
+      ...staff,
+      ...formData,
+      name: fullName,
+    };
+
+    try {
+      if (callAppScript) {
+        await callAppScript('SAVE_DATA', 'Staff', payload);
+      }
+      
+      // Update local staff list
+      if (setStaffData) {
+        setStaffData(prev => prev.map(s => s.id === staff.id ? payload : s));
+      }
+      
+      // Update logged-in session state
+      if (currentUser.id === staff.id) {
+        const updatedCurrentUser = {
+          ...currentUser,
+          ...payload,
+          name: fullName,
+          photo: formData.photo || currentUser.photo,
+        };
+        setCurrentUser(updatedCurrentUser);
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('clinic_currentUser', JSON.stringify(updatedCurrentUser));
+        }
+      }
+      
+      showToast('บันทึกข้อมูลส่วนตัวและผู้ติดต่อฉุกเฉินสำเร็จ', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'danger');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="w-full bg-slate-50/50 min-h-screen p-4 md:p-8 animate-in fade-in duration-300">
+      
+      {/* Banner / Header Card */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] overflow-hidden mb-8">
+        <div className="relative h-40 md:h-56 bg-gradient-to-r from-sky-400 via-sky-500 to-indigo-600 overflow-hidden">
+          {/* Abstract blobs for a premium look */}
+          <div className="absolute top-[-20%] right-[-10%] w-72 h-72 rounded-full bg-white/10 blur-3xl"></div>
+          <div className="absolute bottom-[-50%] left-[5%] w-96 h-96 rounded-full bg-sky-300/20 blur-3xl"></div>
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+        </div>
+        
+        <div className="px-6 md:px-10 pb-8 relative flex flex-col md:flex-row items-center md:items-end gap-6 -mt-16 md:-mt-20">
+          {/* Profile Picture with Edit Button */}
+          <div className="relative shrink-0 group">
+            <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-white bg-slate-100 shadow-xl relative transition-all duration-300 group-hover:scale-[1.03]">
+              {formData.photo ? (
+                <img src={formData.photo} alt={staff.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className={`w-full h-full flex items-center justify-center font-bold text-5xl text-white ${staff.role==='doctor'?'bg-indigo-400':staff.role==='nurse'?'bg-emerald-400':staff.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
+                  {formData.firstName?.charAt(0) || staff.name?.charAt(0)}
+                </div>
+              )}
+              {/* Overlay edit banner */}
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute inset-0 bg-slate-900/60 text-white flex flex-col items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer"
+              >
+                <Camera size={24} className="animate-pulse" />
+                <span className="text-xs font-semibold kanit-text">อัปโหลดรูปภาพ</span>
+              </div>
+
+              {isProcessing && (
+                <div className="absolute inset-0 bg-slate-900/80 text-white flex flex-col items-center justify-center gap-2">
+                  <Loader2 size={24} className="animate-spin text-sky-400" />
+                  <span className="text-[10px] font-bold kanit-text text-sky-400">กำลังอัปโหลด...</span>
+                </div>
+              )}
+            </div>
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref={fileInputRef} 
+              className="hidden" 
+              onChange={handlePhotoUpload} 
+              disabled={isProcessing} 
+            />
+          </div>
+
+          {/* User Name & Core Role details */}
+          <div className="flex-1 text-center md:text-left min-w-0 md:mb-2 space-y-2">
+            <h1 className="text-2xl md:text-3xl font-black text-slate-800 kanit-text tracking-tight flex items-center justify-center md:justify-start gap-2.5">
+              {formData.prefix || ''}{formData.firstName || ''} {formData.lastName || ''}
+              <BadgeCheck size={22} className="text-sky-500 shrink-0" />
+            </h1>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-bold kanit-text border shadow-sm ${currentRoleInfo.color}`}>
+                {React.createElement(currentRoleInfo.icon, { size: 14 })}
+                {staff.position || currentRoleInfo.label}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200/60 kanit-text shadow-sm">
+                <Building2 size={14} className="text-slate-400 shrink-0" />
+                <span>{branchesData.find(b => b.id === staff.branchId)?.name || 'ทุกสาขา'}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200/60 kanit-text shadow-sm">
+                <Briefcase size={14} className="text-slate-400 shrink-0" />
+                <span>รหัสพนักงาน: {staff.empCode || '-'}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* LEFT COLUMN: Profile Menu & Completeness Tracker */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Completeness Box */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 kanit-text">ความสมบูรณ์ของโปรไฟล์</span>
+              <span className={`text-xs font-extrabold font-data px-2 py-0.5 rounded-lg ${
+                completenessPercent > 80 ? 'bg-emerald-50 text-emerald-600' :
+                completenessPercent > 50 ? 'bg-sky-50 text-sky-600' : 'bg-amber-50 text-amber-600'
+              }`}>
+                {completenessPercent}%
+              </span>
+            </div>
+            
+            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  completenessPercent > 80 ? 'bg-gradient-to-r from-emerald-400 to-teal-500' :
+                  completenessPercent > 50 ? 'bg-gradient-to-r from-sky-400 to-blue-500' : 
+                  'bg-gradient-to-r from-amber-400 to-orange-500'
+                }`}
+                style={{ width: `${completenessPercent}%` }}
+              ></div>
+            </div>
+            
+            <p className="text-[10px] text-slate-400 kanit-text leading-relaxed">
+              {completenessPercent === 100 
+                ? 'ยินดีด้วย! ข้อมูลโปรไฟล์ของคุณสมบูรณ์ครบถ้วนแล้ว' 
+                : 'กรอกข้อมูลส่วนตัว เบอร์โทรศัพท์ และข้อมูลการติดต่อให้ครบถ้วนเพื่อให้ระบบทำงานได้อย่างถูกต้อง'}
+            </p>
+          </div>
+
+          {/* Menu Tabs Navigation */}
+          <div className="bg-white rounded-3xl p-2.5 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible no-scrollbar">
+            {[
+              { id: 'general', label: 'ข้อมูลทั่วไป', icon: User },
+              { id: 'contact', label: 'การติดต่อ & ที่อยู่', icon: MapPin },
+              { id: 'emergency', label: 'ผู้ติดต่อฉุกเฉิน', icon: AlertCircle },
+              { id: 'employment', label: 'ข้อมูลการจ้างงาน', icon: ShieldCheck, isLocked: true },
+            ].map((tabItem) => {
+              const isTabActive = activeTab === tabItem.id;
+              return (
+                <button
+                  key={tabItem.id}
+                  type="button"
+                  onClick={() => setActiveTab(tabItem.id)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold kanit-text transition-all shrink-0 select-none ${
+                    isTabActive 
+                      ? 'bg-sky-500 text-white shadow-md shadow-sky-500/10' 
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                  }`}
+                >
+                  {React.createElement(tabItem.icon, { size: 16, className: isTabActive ? 'text-white' : 'text-slate-400 shrink-0' })}
+                  <span>{tabItem.label}</span>
+                  {tabItem.isLocked && (
+                    <span className={`ml-auto px-1.5 py-0.5 rounded-md text-[8px] font-extrabold shrink-0 ${isTabActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                      LOCKED
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Active Form Subtab */}
+        <div className="lg:col-span-3">
+          <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] relative min-h-[420px] flex flex-col">
+            
+            {/* Subtab content container */}
+            <div className="flex-1">
+              {activeTab === 'general' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800 kanit-text flex items-center gap-2">
+                      <User size={18} className="text-sky-500" />
+                      ข้อมูลทั่วไป & ประวัติส่วนบุคคล
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-0.5 kanit-text">จัดการคำนำหน้าชื่อ ชื่อสกุล และข้อมูลประจำตัวอื่น ๆ ของคุณ</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">คำนำหน้าชื่อ</label>
+                      <input
+                        type="text"
+                        placeholder="เช่น นาย, นางสาว, นพ., พญ."
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.prefix}
+                        onChange={(e) => setFormData({ ...formData, prefix: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ชื่อจริง <span className="text-rose-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ระบุชื่อจริง"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">นามสกุล <span className="text-rose-500">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ระบุนามสกุล"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">เลขบัตรประชาชน</label>
+                      <input
+                        type="text"
+                        placeholder="เลขบัตรประชาชน 13 หลัก"
+                        maxLength={13}
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                        value={formData.idCard}
+                        onChange={(e) => setFormData({ ...formData, idCard: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">วัน/เดือน/ปี เกิด</label>
+                      <input
+                        type="date"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                        value={formData.dob}
+                        onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">เพศ</label>
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.gender}
+                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                      >
+                        <option value="">ไม่ระบุ</option>
+                        <option value="ชาย">ชาย</option>
+                        <option value="หญิง">หญิง</option>
+                        <option value="อื่นๆ">อื่นๆ</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">สัญชาติ</label>
+                      <input
+                        type="text"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.nationality}
+                        onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">เชื้อชาติ</label>
+                      <input
+                        type="text"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.ethnicity}
+                        onChange={(e) => setFormData({ ...formData, ethnicity: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ศาสนา</label>
+                      <input
+                        type="text"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.religion}
+                        onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'contact' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800 kanit-text flex items-center gap-2">
+                      <MapPin size={18} className="text-sky-500" />
+                      ข้อมูลติดต่อ & ที่อยู่ปัจจุบัน
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-0.5 kanit-text">จัดการเบอร์โทรศัพท์ อีเมล และที่อยู่ของคุณสำหรับการจัดส่งเอกสารและติดต่อ</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">เบอร์โทรศัพท์</label>
+                      <input
+                        type="tel"
+                        placeholder="เช่น 0891234567"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">อีเมลติดต่อ</label>
+                      <input
+                        type="email"
+                        placeholder="example@anping.com"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Address according to card */}
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-700 kanit-text">1. ที่อยู่ตามทะเบียนบ้าน (ตามบัตรประชาชน)</h4>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">บ้านเลขที่/ซอย/หมู่บ้าน</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">หมู่ที่</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                          value={formData.moo}
+                          onChange={(e) => setFormData({ ...formData, moo: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ถนน</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.road}
+                          onChange={(e) => setFormData({ ...formData, road: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ตำบล/แขวง</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.subDistrict}
+                          onChange={(e) => setFormData({ ...formData, subDistrict: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">อำเภอ/เขต</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.district}
+                          onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">จังหวัด</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.province}
+                          onChange={(e) => setFormData({ ...formData, province: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">รหัสไปรษณีย์</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                          value={formData.zipcode}
+                          onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Current Address */}
+                  <div className="pt-4 border-t border-slate-100 space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h4 className="text-xs font-bold text-slate-700 kanit-text">2. ที่อยู่ปัจจุบัน (ที่พักอาศัยจริง)</h4>
+                      <button
+                        type="button"
+                        onClick={handleCopyAddress}
+                        className="text-xs font-bold text-sky-600 hover:text-white bg-sky-50 hover:bg-sky-500 border border-sky-100 hover:border-sky-500 rounded-xl px-3 py-1.5 transition-all duration-200 shadow-sm hover:shadow-sky-500/10"
+                      >
+                        คัดลอกจากที่อยู่ตามทะเบียนบ้าน
+                      </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">บ้านเลขที่/ซอย/หมู่บ้าน</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.curAddress}
+                          onChange={(e) => setFormData({ ...formData, curAddress: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">หมู่ที่</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                          value={formData.curMoo}
+                          onChange={(e) => setFormData({ ...formData, curMoo: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ถนน</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.curRoad}
+                          onChange={(e) => setFormData({ ...formData, curRoad: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ตำบล/แขวง</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.curSubDistrict}
+                          onChange={(e) => setFormData({ ...formData, curSubDistrict: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">อำเภอ/เขต</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.curDistrict}
+                          onChange={(e) => setFormData({ ...formData, curDistrict: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">จังหวัด</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                          value={formData.curProvince}
+                          onChange={(e) => setFormData({ ...formData, curProvince: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">รหัสไปรษณีย์</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                          value={formData.curZipcode}
+                          onChange={(e) => setFormData({ ...formData, curZipcode: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'emergency' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800 kanit-text flex items-center gap-2">
+                      <AlertCircle size={18} className="text-rose-500" />
+                      ผู้ติดต่อในกรณีฉุกเฉิน
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-0.5 kanit-text">ระบุข้อมูลผู้ติดต่อที่คลินิกสามารถติดต่อได้ทันทีในกรณีเกิดเหตุฉุกเฉิน</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ชื่อ-นามสกุล ผู้ติดต่อฉุกเฉิน</label>
+                      <input
+                        type="text"
+                        placeholder="เช่น นายประหยัด รักดี"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.emName}
+                        onChange={(e) => setFormData({ ...formData, emName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">ความสัมพันธ์</label>
+                      <input
+                        type="text"
+                        placeholder="เช่น บิดา, มารดา, คู่สมรส"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 kanit-text outline-none transition-all duration-200"
+                        value={formData.emRelation}
+                        onChange={(e) => setFormData({ ...formData, emRelation: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">เบอร์โทรศัพท์ผู้ติดต่อฉุกเฉิน</label>
+                      <input
+                        type="tel"
+                        placeholder="เช่น 0812345678"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-2xl focus:bg-white focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 block p-3.5 font-data outline-none transition-all duration-200"
+                        value={formData.emPhone}
+                        onChange={(e) => setFormData({ ...formData, emPhone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'employment' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-emerald-800 kanit-text flex items-center gap-2">
+                        <ShieldCheck size={18} className="text-emerald-500" />
+                        ข้อมูลการจ้างงาน & อัตราผลตอบแทน
+                      </h3>
+                      <p className="text-emerald-600/70 text-xs mt-0.5 kanit-text">รายละเอียดข้อตกลง สัญญาจ้าง และโครงสร้างรายได้พนักงาน</p>
+                    </div>
+                    <span className="text-[10px] font-extrabold uppercase bg-amber-500/10 text-amber-600 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 shadow-sm">
+                      <ShieldCheck size={12} />
+                      LOCKED (อ่านอย่างเดียว)
+                    </span>
+                  </div>
+
+                  <div className="bg-emerald-50/20 border border-emerald-100 rounded-3xl p-6 relative overflow-hidden">
+                    {/* Lock background watermark */}
+                    <div className="absolute right-4 bottom-4 text-emerald-500/5 select-none pointer-events-none">
+                      <ShieldCheck size={160} />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 relative z-10">
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold kanit-text block uppercase tracking-wider">ประเภทการจ้างงาน</span>
+                        <div className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                          <span className="text-sm font-semibold text-slate-700 kanit-text">
+                            {staff.employmentType === 'monthly' ? 'พนักงานรายเดือน' : staff.employmentType === 'daily' ? 'พนักงานรายวัน' : 'สัญญาจ้างชั่วคราว (Part-time)'}
+                          </span>
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold kanit-text block uppercase tracking-wider">เงินเดือนฐาน / ค่าจ้างรายวัน</span>
+                        <div className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-800 font-data">
+                            {formatCurrency(staff.baseSalary)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 kanit-text">บาท</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold kanit-text block uppercase tracking-wider">อัตราค่าล่วงเวลา (OT / ชม.)</span>
+                        <div className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-800 font-data">
+                            {staff.otRate > 0 ? `${formatCurrency(staff.otRate)}` : 'ไม่มีค่า OT'}
+                          </span>
+                          {staff.otRate > 0 && <span className="text-[10px] text-slate-400 kanit-text">ต่อชั่วโมง</span>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-slate-400 font-bold kanit-text block uppercase tracking-wider">ค่าคอมมิชชั่นการขาย</span>
+                        <div className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                          <span className="text-sm font-bold text-slate-800 font-data">
+                            {staff.commissionRate > 0 ? `${staff.commissionRate}${staff.commissionType === 'percent' ? '%' : ' บาท'}` : 'ไม่มีค่าคอมมิชชั่น'}
+                          </span>
+                          {staff.commissionRate > 0 && (
+                            <span className="text-[10px] text-slate-400 kanit-text">
+                              {staff.commissionCondition === 'threshold' ? `(เริ่มคำนวณจากบิลที่ ${staff.commissionThreshold})` : '(รับค่าคอมทุกบิล)'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-5 border-t border-emerald-100/60 flex items-start gap-2.5 text-slate-500 text-xs leading-relaxed relative z-10">
+                      <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="kanit-text text-[11px]">
+                        <strong>คำแนะนำด้านความปลอดภัย:</strong> ข้อมูลสัญญาสิทธิและการจ้างงานถูกควบคุมและล็อคไว้เพื่อความเป็นระเบียบและโปร่งใสของระบบเงินเดือน หากมีความจำเป็นต้องเปลี่ยนแปลงกรุณาแจ้งเจ้าของคลินิกหรือฝ่ายบุคคลโดยตรง
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Save Button is only shown/active for editable tabs */}
+            {activeTab !== 'employment' && (
+              <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between flex-wrap gap-4">
+                <p className="text-[11px] text-slate-400 kanit-text flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-emerald-500" />
+                  ข้อมูลของคุณได้รับการป้องกันด้วยการเข้ารหัสความปลอดภัยระดับมาตรฐานคลินิก
+                </p>
+                <button
+                  onClick={handleSave}
+                  type="button"
+                  disabled={isProcessing}
+                  className="px-6 py-3 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white rounded-2xl text-xs font-bold kanit-text shadow-lg shadow-sky-500/10 hover:shadow-sky-500/20 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2"
+                >
+                  {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  บันทึกการเปลี่ยนแปลงข้อมูล
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
@@ -19779,6 +20609,23 @@ export default function App() {
   ]);
   const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '' });
   const [currentUser, setCurrentUser] = useState({ id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' });
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isMobileProfileDropdownOpen, setIsMobileProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef(null);
+  const mobileProfileDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setIsProfileDropdownOpen(false);
+      }
+      if (mobileProfileDropdownRef.current && !mobileProfileDropdownRef.current.contains(event.target)) {
+        setIsMobileProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
   const speak = (text, onEnd) => {
@@ -20371,41 +21218,82 @@ export default function App() {
               ))}
             </nav>
 
-            <div className="p-4 border-t border-slate-100/50 overflow-hidden min-h-[80px] flex items-center justify-center relative shrink-0">
-              <div 
-                className={`absolute w-full px-4 flex items-center gap-3 ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
-                style={{ opacity: 'var(--drag-progress)' }}
+            <div className="p-4 border-t border-slate-100/50 overflow-visible min-h-[80px] flex items-center justify-center relative shrink-0" ref={profileDropdownRef}>
+              {/* Profile click trigger */}
+              <button 
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className="w-full flex items-center gap-3 hover:bg-slate-50 p-2 rounded-2xl transition-colors cursor-pointer text-left focus:outline-none"
               >
-                <div className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div>
-                <div className="text-left whitespace-nowrap min-w-[100px]">
-                  <select 
-                    value={currentUser.role}
-                    onChange={(e) => {
-                      const selectedRole = e.target.value;
-                      setCurrentUser({
-                        id: selectedRole + '1',
-                        name: (roleLabels[selectedRole] || selectedRole) + ' User',
-                        role: selectedRole,
-                        category: selectedRole === 'doctor' ? 'doctor' : 'staff'
-                      });
-                    }}
-                    className="bg-transparent border-0 font-semibold text-slate-700 text-xs focus:ring-0 outline-none cursor-pointer p-0 pr-4"
+                {/* Profile Image / Icon */}
+                <div className="w-10 h-10 shrink-0 rounded-full overflow-hidden border border-slate-200 bg-slate-50 relative shadow-sm">
+                  {currentUser?.photo ? (
+                    <img src={currentUser.photo} alt={currentUser.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-sm">
+                      {currentUser?.name?.charAt(0) || 'A'}
+                    </div>
+                  )}
+                </div>
+
+                <div 
+                  className={`text-left whitespace-nowrap min-w-[100px] transition-all duration-300 ${!isSidebarExpanded && !isDraggingSidebar ? 'w-0 opacity-0 pointer-events-none' : 'w-auto opacity-100'}`}
+                >
+                  <div className="font-bold text-slate-800 text-xs truncate max-w-[120px]">{currentUser.name}</div>
+                  <p className="text-[10px] text-slate-400 font-medium truncate max-w-[120px]">
+                    {staffData.find(s => s.id === currentUser.id)?.position || roleLabels[currentUser.role] || currentUser.role}
+                  </p>
+                </div>
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {isProfileDropdownOpen && (
+                <div className="absolute bottom-[80px] left-4 w-52 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 overflow-hidden z-[100] py-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200 origin-bottom-left">
+                  <div className="px-4 py-2 border-b border-slate-50 mb-1.5">
+                    <div className="font-bold text-slate-800 text-xs truncate">{currentUser.name}</div>
+                    <p className="text-[9px] text-emerald-500 font-medium mt-0.5">ออนไลน์</p>
+                  </div>
+                  
+                  {/* View Profile Tab Button */}
+                  <button 
+                    onClick={() => { setIsProfileDropdownOpen(false); setCurrentTab('profile'); }}
+                    className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-sky-600 flex items-center gap-2.5 kanit-text transition-colors"
                   >
-                    {Object.entries(roleLabels || {}).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
-                  <p className="text-[9px] text-emerald-500 kanit-text mt-0.5">ออนไลน์ (คลิกเปลี่ยน)</p>
+                    <User size={15} className="text-slate-400 shrink-0" /> 
+                    โปรไฟล์ของฉัน
+                  </button>
+
+                  {/* Switch Role Tester inside dropdown */}
+                  <div className="px-4 py-2 mt-1 border-t border-slate-50">
+                    <label className="block text-[8px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">สลับสิทธิ์การใช้งาน (ทดสอบ)</label>
+                    <select 
+                      value={currentUser.role}
+                      onChange={(e) => {
+                        const selectedRole = e.target.value;
+                        const matchingStaff = staffData.find(s => s.role === selectedRole);
+                        const newMockUser = matchingStaff ? {
+                          ...matchingStaff,
+                          category: matchingStaff.category || (selectedRole === 'doctor' ? 'doctor' : 'staff')
+                        } : {
+                          id: selectedRole + '1',
+                          name: (roleLabels[selectedRole] || selectedRole) + ' User',
+                          role: selectedRole,
+                          category: selectedRole === 'doctor' ? 'doctor' : 'staff'
+                        };
+                        setCurrentUser(newMockUser);
+                        if (typeof window !== 'undefined' && window.localStorage) {
+                          localStorage.setItem('clinic_currentUser', JSON.stringify(newMockUser));
+                        }
+                        setIsProfileDropdownOpen(false);
+                      }}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-xl text-slate-600 text-[10px] p-2 font-bold cursor-pointer focus:ring-0 outline-none"
+                    >
+                      {Object.entries(roleLabels || {}).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-              <div 
-                className={`absolute ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
-                style={{ opacity: 'calc(1 - var(--drag-progress))' }}
-              >
-                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 ring-2 ring-white">
-                  <User size={18} />
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </aside>
@@ -20422,30 +21310,76 @@ export default function App() {
               <h2 className="text-lg font-black kanit-text tracking-tight mt-0.5">Clinic<span className="text-sky-500">Hub</span></h2>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="text-right">
-              <select 
-                value={currentUser.role}
-                onChange={(e) => {
-                  const selectedRole = e.target.value;
-                  setCurrentUser({
-                    id: selectedRole + '1',
-                    name: (roleLabels[selectedRole] || selectedRole) + ' User',
-                    role: selectedRole,
-                    category: selectedRole === 'doctor' ? 'doctor' : 'staff'
-                  });
-                }}
-                className="bg-transparent border-0 font-bold text-slate-700 text-[11px] focus:ring-0 outline-none cursor-pointer p-0 text-right pr-4 max-w-[85px] xs:max-w-[120px] sm:max-w-[150px] truncate"
-              >
-                {Object.entries(roleLabels || {}).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-              <p className="text-[9px] text-emerald-500 kanit-text mt-0.5">ออนไลน์</p>
-            </div>
-            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-inner ring-2 ring-white">
-              <User size={16} />
-            </div>
+          <div className="flex items-center gap-2 sm:gap-3 relative" ref={mobileProfileDropdownRef}>
+            <button 
+              onClick={() => setIsMobileProfileDropdownOpen(!isMobileProfileDropdownOpen)}
+              className="flex items-center gap-2 hover:bg-slate-50 p-1 rounded-xl transition-colors cursor-pointer text-left focus:outline-none"
+            >
+              <div className="text-right flex flex-col justify-center">
+                <div className="font-bold text-slate-800 text-[11px] sm:text-xs truncate max-w-[100px] xs:max-w-[120px]">{currentUser.name}</div>
+                <p className="text-[9px] text-emerald-500 kanit-text mt-0.5">ออนไลน์</p>
+              </div>
+              <div className="w-9 h-9 shrink-0 rounded-full overflow-hidden border border-slate-200 bg-slate-50 relative shadow-sm">
+                {currentUser?.photo ? (
+                  <img src={currentUser.photo} alt={currentUser.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-xs">
+                    {currentUser?.name?.charAt(0) || 'A'}
+                  </div>
+                )}
+              </div>
+            </button>
+
+            {/* Profile Dropdown Menu (Mobile) */}
+            {isMobileProfileDropdownOpen && (
+              <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 overflow-hidden z-[100] py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                <div className="px-3.5 py-2 border-b border-slate-50 mb-1">
+                  <div className="font-bold text-slate-800 text-xs truncate">{currentUser.name}</div>
+                  <p className="text-[9px] text-slate-400 truncate font-medium">
+                    {staffData.find(s => s.id === currentUser.id)?.position || roleLabels[currentUser.role] || currentUser.role}
+                  </p>
+                </div>
+                
+                <button 
+                  onClick={() => { setIsMobileProfileDropdownOpen(false); setCurrentTab('profile'); }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-sky-600 flex items-center gap-2.5 kanit-text transition-colors"
+                >
+                  <User size={14} className="text-slate-400 shrink-0" />
+                  โปรไฟล์ของฉัน
+                </button>
+
+                {/* Switch Role Tester inside dropdown (Mobile) */}
+                <div className="px-3.5 py-2 mt-1 border-t border-slate-50">
+                  <label className="block text-[8px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">สลับสิทธิ์การใช้งาน (ทดสอบ)</label>
+                  <select 
+                    value={currentUser.role}
+                    onChange={(e) => {
+                      const selectedRole = e.target.value;
+                      const matchingStaff = staffData.find(s => s.role === selectedRole);
+                      const newMockUser = matchingStaff ? {
+                        ...matchingStaff,
+                        category: matchingStaff.category || (selectedRole === 'doctor' ? 'doctor' : 'staff')
+                      } : {
+                        id: selectedRole + '1',
+                        name: (roleLabels[selectedRole] || selectedRole) + ' User',
+                        role: selectedRole,
+                        category: selectedRole === 'doctor' ? 'doctor' : 'staff'
+                      };
+                      setCurrentUser(newMockUser);
+                      if (typeof window !== 'undefined' && window.localStorage) {
+                        localStorage.setItem('clinic_currentUser', JSON.stringify(newMockUser));
+                      }
+                      setIsMobileProfileDropdownOpen(false);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-100 rounded-xl text-slate-600 text-[10px] p-2 font-bold cursor-pointer focus:ring-0 outline-none"
+                  >
+                    {Object.entries(roleLabels || {}).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
@@ -20613,6 +21547,21 @@ export default function App() {
                         callAppScript={callAppScript}
                         showToast={showToast}
                         isGlobalLoading={isGlobalLoading}
+                    />
+                </div>
+            )}
+
+            {currentTab === 'profile' && (
+                <div className="w-full">
+                    <StaffProfilePage 
+                        currentUser={currentUser}
+                        setCurrentUser={setCurrentUser}
+                        staffData={staffData}
+                        setStaffData={setStaffData}
+                        branchesData={branchesData}
+                        roleLabels={roleLabels}
+                        callAppScript={callAppScript}
+                        showToast={showToast}
                     />
                 </div>
             )}
