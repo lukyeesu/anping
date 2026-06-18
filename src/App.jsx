@@ -28,18 +28,6 @@ const theme = {
   input: 'w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:bg-white transition-all outline-none text-slate-700 text-base font-medium'
 };
 
-// --- จำลองข้อมูล (Mock Data) ---
-const mockBranches = [
-  { id: 'b1', name: 'สาขาหลัก (กรุงเทพ)' },
-  { id: 'b2', name: 'สาขาเชียงใหม่' },
-];
-
-const mockPatients = [
-  { id: 'HN001', name: 'สมชาย ใจดี', phone: '081-234-5678', lastVisit: '2023-10-25', branchId: 'b1' },
-  { id: 'HN002', name: 'สมหญิง รักสวย', phone: '089-876-5432', lastVisit: '2023-10-26', branchId: 'b2' },
-  { id: 'HN003', name: 'มีชัย ทำดี', phone: '082-333-4444', lastVisit: '2023-10-27', branchId: 'b1' },
-];
-
 // --- Map ไอคอนที่สามารถเลือกได้สำหรับระบบ POS ---
 const POS_ICONS = {
   Stethoscope, Package, Pill, Briefcase, Users, Clock, CalendarDays, FileText, CreditCard, Tag, 
@@ -466,19 +454,28 @@ const globalGenerateInformedConsentHtml = (patient, branchesData = [], currentBr
         <title>ใบยินยอมรับการรักษาพยาบาล - ${patient.hn || patient.id}</title>
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
+            /* Impeccable Style Resets & Base */
             body { font-family: 'Sarabun', sans-serif; font-size: 15px; color: #111827; margin: 0; padding: 0; line-height: 1.8; font-weight: 400; }
-            @page { size: A4; margin: 20mm; }
+            @page { size: A4; }
             .container { width: 100%; box-sizing: border-box; }
+            
+            /* Typography Hierarchy */
+            .text-label { color: #111827; font-weight: 400; }
+            .text-value { color: #111827; font-weight: 400; }
             .text-bold { font-weight: 700; }
-            .text-heading { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin: 25px 0 30px 0; }
-            .header-block { display: flex; align-items: flex-start; border-bottom: 2px solid #111827; padding-bottom: 20px; margin-bottom: 30px; }
-            .meta-block { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-bottom: 20px; font-size: 14px; }
-            .content-block { padding: 0 5px; font-size: 14.5px; text-align: justify; }
+            .text-heading { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; text-align: center; margin: 20px 0 30px 0; }
+            
+            /* Layout & Grids */
+            .header-block { display: flex; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
+            .meta-block { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin-bottom: 10px; font-size: 14px; }
+            .content-block { padding: 0 10px; }
             .indent { text-indent: 40px; }
-            .signature-section { display: flex; justify-content: space-between; margin-top: 50px; page-break-inside: avoid; align-items: flex-end; }
+            
+            /* Signature Section */
+            .signature-section { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; align-items: flex-end; }
             .signature-box { width: 45%; text-align: center; display: flex; flex-direction: column; gap: 5px; align-items: center; }
             .signature-line { border-bottom: 1px dotted #111827; width: 80%; height: 1px; margin: 0 auto; }
-            .signature-text { margin: 0; line-height: 1.4; white-space: nowrap; }
+            .signature-text { margin: 0; line-height: 1.4; white-space: nowrap; font-size: 13px; }
             
             @media print {
                 body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -500,56 +497,41 @@ const globalGenerateInformedConsentHtml = (patient, branchesData = [], currentBr
             </div>
 
             <!-- Title -->
-            <div class="text-heading">หนังสือแสดงความยินยอมเข้ารับการรักษาพยาบาล (Informed Consent)</div>
+            <div class="text-heading">หนังสือให้ความยินยอม</div>
             
             <!-- Document Meta -->
             <div class="meta-block">
-                <div class="text-bold">เลขทะเบียนผู้ป่วย (HN): ${patient.hn || patient.id}</div>
+                <div>เลขทะเบียนผู้ป่วย: ${patient.hn || patient.id || '-'}</div>
                 <div>วันที่ลงนาม: ${formattedDate}</div>
             </div>
-
-            <!-- Patient Info Section -->
-            <div style="margin-bottom: 25px; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 15px;">
-                    <tr>
-                        <td style="padding: 6px 0; width: 120px;" class="text-bold">ชื่อ-สกุลผู้ป่วย:</td>
-                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827;">${patientFullName}</td>
-                        <td style="padding: 6px 0; width: 120px; text-align: right;" class="text-bold">เลขบัตรประชาชน:</td>
-                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827; padding-left: 10px;">${patient.idCard || '-'}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px 0;" class="text-bold">ผู้ลงนามยินยอม:</td>
-                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827;">${signerName}</td>
-                        <td style="padding: 6px 0; text-align: right;" class="text-bold">ความเกี่ยวข้อง:</td>
-                        <td style="padding: 6px 0; border-bottom: 1px dotted #111827; padding-left: 10px;">${relationStr}</td>
-                    </tr>
-                </table>
-            </div>
-
+            
             <!-- Content Body -->
-            <div class="content-block">
+            <div class="content-block" style="margin-top: 15px;">
                 <div class="indent" style="margin-bottom: 15px;">
-                    หนังสือยินยอมฉบับนี้ทำขึ้นเพื่อแสดงว่า ข้าพเจ้าได้รับทราบข้อมูล รายละเอียด ความจำเป็น ความเสี่ยง และผลข้างเคียงที่อาจเกิดขึ้นจากการตรวจรักษาพยาบาลและทำหัตถการทางการแพทย์ของอันผิงคลินิกเป็นที่เข้าใจโดยละเอียดครบถ้วนแล้ว โดยมีข้อตกลงและความเข้าใจดังต่อไปนี้:
-                </div>
-                
-                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">1. รายละเอียดเกี่ยวกับหัตถการและการรักษา</div>
-                <div style="margin-bottom: 15px; padding-left: 15px;">
-                    การทำหัตถการต่างๆ อาทิ การฝังเข็ม การครอบแก้ว การนวดทุยหนา การกัวซา หรือการใช้ยาสมุนไพรจีน มีวัตถุประสงค์เพื่อปรับสมดุลร่างกาย รักษาอาการปวดเกร็ง ตึงตัวของกล้ามเนื้อ และส่งเสริมการไหลเวียนของลมปราณ (ชี่) และโลหิตตามแนวเส้นลมปราณ
+                    ข้าพเจ้าได้รับทราบข้อมูลเกี่ยวกับวิธีการรักษา ความเสี่ยง และผลข้างเคียงอันไม่พึงประสงค์ที่อาจเกิดขึ้นได้จากการรักษาด้วยศาสตร์การแพทย์แผนจีน (การฝังเข็ม, การครอบแก้ว, การรมยา และยาสมุนไพรจีน) จากแพทย์แผนจีนของอันผิงคลินิก โดยละเอียดแล้ว
                 </div>
 
-                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">2. ความเสี่ยงและผลข้างเคียงที่อาจเกิดขึ้น</div>
-                <div style="margin-bottom: 15px; padding-left: 15px;">
-                    ข้าพเจ้ารับทราบว่าการทำหัตถการอาจก่อให้เกิดอาการระบม รอยเขียวช้ำชั่วคราวบริเวณจุดฝังเข็มหรือครอบแก้ว ซึ่งจะค่อยๆ หายไปเองตามธรรมชาติภายใน 3-7 วัน รวมถึงอาจมีความรู้สึกตึง หน่วง ปวดตื้อ หรือกระตุกขณะเข็มกระตุ้นจุด ซึ่งเป็นผลปกติของการรักษา (ความรู้สึกเต๋อชี่) ในบางกรณีอาจมีอาการหน้ามืด ใจสั่น วิงเวียนศีรษะ (อาการเมาเข็ม) ซึ่งสามารถป้องกันและรักษาได้โดยการนอนพักผ่อนอย่างเพียงพอก่อนรับบริการ
+                <div style="display: flex; align-items: flex-end; margin-bottom: 15px; padding-left: 40px;">
+                    <span class="text-bold" style="white-space: nowrap;">ข้าพเจ้าลงนามในฐานะ:</span> 
+                    <div style="flex-grow: 1; border-bottom: 1px dotted #111827; margin-left: 10px; font-size: 14px; padding-bottom: 2px; line-height: 1.2;">
+                        ${patient.informedConsentSignerType === 'patient' ? `ผู้ป่วย ${patientFullName}` : `ผู้แทนโดยชอบธรรม (${patient.informedConsentRepresentativeRelation || '-'}) ของผู้ป่วยชื่อ ${patientFullName}`}
+                    </div>
                 </div>
 
-                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">3. ข้อพึงปฏิบัติก่อนและหลังเข้ารับการตรวจรักษา</div>
-                <div style="margin-bottom: 15px; padding-left: 15px;">
-                    ข้าพเจ้าจะให้ข้อมูลประวัติการแพทย์ ประวัติการแพ้ยา แพ้อาหาร โรคประจำตัว ยาที่กำลังรับประทานอยู่เป็นประจำ ตลอดจนภาวะการตั้งครรภ์อย่างตรงไปตรงมา และปฏิบัติตามคำแนะนำของแพทย์อย่างเคร่งครัด ทั้งก่อนและหลังทำหัตถการ เพื่อป้องกันความเสี่ยงจากภาวะแทรกซ้อน เช่น ภาวะเลือดหยุดยาก หรือการติดเชื้อ
+                <div class="indent" style="margin-bottom: 15px;">
+                    ข้าพเจ้าขอรับรองว่าได้ยินยอมเข้ารับการตรวจและรักษาพยาบาลจากอันผิงคลินิกด้วย<span class="text-bold">ความสมัครใจ ปราศจากการบังคับ ข่มขู่ หรือชักจูงใดๆ</span> และยินยอมรับความเสี่ยงในการเกิดอาการเมาเข็มและผลข้างเคียงต่างๆ และข้าพเจ้าเข้าใจดีว่าไม่มีการรับประกันผลการรักษาพยาบาลว่าจะหายขาด 100% เนื่องจากผลการรักษาขึ้นอยู่กับสภาพร่างกายและการดูแลตนเองของแต่ละบุคคลด้วย
                 </div>
 
-                <div class="text-bold" style="margin-top: 15px; margin-bottom: 5px;">4. ความยินยอมและสมัครใจ</div>
-                <div style="margin-bottom: 15px; padding-left: 15px;">
-                    ข้าพเจ้าขอรับรองว่าได้ยินยอมเข้ารับการตรวจและรักษาพยาบาลจากอันผิงคลินิกด้วยความสมัครใจ ปราศจากการบังคับ ข่มขู่ หรือชักจูงใดๆ และข้าพเจ้าเข้าใจดีว่าไม่มีการรับประกันผลการรักษาพยาบาลว่าจะหายขาด 100% เนื่องจากผลการรักษาขึ้นอยู่กับสภาพร่างกายและการดูแลตนเองของแต่ละบุคคลด้วย
+                <div class="indent" style="margin-bottom: 15px;">
+                    ข้าพเจ้ายินยอมรับผลที่อาจเกิดขึ้นจากเหตุสุดวิสัย โดยจะไม่เรียกร้องหรือฟ้องร้องต่อแพทย์และบุคลากรของคลินิก หากได้ปฏิบัติหน้าที่โดยรอบคอบตามมาตรฐานวิชาชีพการแพทย์แผนจีนแล้ว
+                </div>
+
+                <div class="indent" style="margin-bottom: 25px;">
+                    ข้าพเจ้าเข้าใจดีว่าข้อมูลการรักษาของข้าพเจ้าจะถูกเก็บไว้เป็นความลับ และข้าพเจ้ามีสิทธิ์ที่จะปฏิเสธการรักษา หรือขอความเห็นจากแพทย์ท่านอื่นได้ทุกเวลา
+                </div>
+
+                <div style="margin-bottom: 20px; text-align: center;" class="text-bold">
+                    จึงลงลายมือชื่อไว้เป็นหลักฐาน
                 </div>
             </div>
 
@@ -564,17 +546,14 @@ const globalGenerateInformedConsentHtml = (patient, branchesData = [], currentBr
                 </div>
                 <!-- Signature Box on right -->
                 <div class="signature-box" style="width: 45%;">
-                    <div style="height: 70px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    <div style="position: relative; height: 70px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px; width: 100%;">
                         ${patient.informedConsentSignatureUrl ? `
-                            <img src="${patient.informedConsentSignatureUrl}" style="max-height: 70px; max-width: 200px; object-fit: contain;" alt="Signature" />
-                        ` : `
-                            <div style="font-size: 12px; color: #94a3b8; font-style: italic; border-bottom: 1px dotted #111827; width: 150px; height: 50px;"></div>
-                        `}
+                            <img src="${patient.informedConsentSignatureUrl}" style="position: absolute; bottom: 5px; max-height: 80px; max-width: 180px; object-fit: contain; z-index: 10;" alt="Signature" />
+                        ` : ''}
+                        <div class="signature-text" style="position: relative; z-index: 1;">ลงชื่อ ..............................................................</div>
                     </div>
-                    <div class="signature-line" style="width: 100%;"></div>
-                    <div class="signature-text" style="margin-top: 5px;">ลงชื่อ: ___________________________</div>
-                    <div class="signature-text" style="font-size: 13px; color: #4b5563; margin-top: 3px;">(${signerName})</div>
-                    <div class="signature-text" style="font-size: 12px; color: #6b7280;">ผู้ให้ความยินยอม</div>
+                    <div class="signature-text" style="font-size: 14px; margin-top: 5px;">( ${signerName} )</div>
+                    <div class="signature-text" style="font-size: 13px; margin-top: 2px;">ผู้ให้ความยินยอม</div>
                 </div>
             </div>
         </div>
@@ -1383,16 +1362,19 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
     const [isOpen, setIsOpen] = useState(false);
     const selectedOption = options.find(o => (typeof o === 'object' ? String(o.value) : String(o)) === String(value));
     const displayLabel = selectedOption ? (typeof selectedOption === 'object' ? selectedOption.label : selectedOption) : placeholder;
+    const hasColor = selectedOption && typeof selectedOption === 'object' && selectedOption.color;
 
     return (
-        <div className={`relative ${className || ''} ${disabled ? 'opacity-70 pointer-events-none' : ''}`}>
+        <div className={`relative ${className || ''} ${disabled ? (hasColor ? 'pointer-events-none' : 'opacity-70 pointer-events-none') : ''}`}>
             <div
                 tabIndex={disabled ? -1 : 0}
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 onBlur={() => setTimeout(() => setIsOpen(false), 150)}
                 className={compact 
                     ? `flex items-center ${fullWidth ? 'w-full px-3 justify-between' : 'justify-center px-2.5'} gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-xl py-2 transition-all font-data shadow-sm`
-                    : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
+                    : hasColor
+                        ? `w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data font-semibold transition-all ${isOpen ? 'ring-2 ring-sky-500/20' : ''} ${selectedOption.color} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`
+                        : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
                 }
             >
                 <span className={`truncate ${compact ? 'font-medium text-slate-600 text-sm kanit-text' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
@@ -1403,14 +1385,22 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                     {options.length > 0 ? options.map((opt, i) => {
                         const val = typeof opt === 'object' ? opt.value : opt;
                         const lbl = typeof opt === 'object' ? opt.label : opt;
+                        const optColor = opt && typeof opt === 'object' && opt.color ? opt.color : '';
                         const isSelected = String(value) === String(val);
                         return (
                             <div
                                 key={i}
                                 onMouseDown={(e) => { e.preventDefault(); onChange(val); setIsOpen(false); }}
-                                className={`px-4 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors whitespace-nowrap ${compact ? 'text-sm py-2.5' : 'text-sm py-2.5'} ${isSelected ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                className={`px-4 hover:brightness-95 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-all whitespace-nowrap text-sm py-2.5 ${
+                                    optColor 
+                                        ? `${optColor} ${isSelected ? 'font-bold ring-1 ring-inset ring-sky-500/30' : ''}` 
+                                        : `${isSelected ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700 hover:bg-sky-50'}`
+                                }`}
                             >
-                                {lbl}
+                                <span className="inline-flex items-center gap-2">
+                                    {optColor && <span className="w-2.5 h-2.5 rounded-full bg-current opacity-70" />}
+                                    {lbl}
+                                </span>
                             </div>
                         );
                     }) : (
@@ -1425,14 +1415,42 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
 const systemStatusTypes = [
   { value: 'confirmed', label: 'ยืนยันแล้ว', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   { value: 'pending', label: 'รอยืนยัน', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  { value: 'cancelled', label: 'ยกเลิก', color: 'bg-rose-100 text-rose-700 border-rose-200' }
+  { value: 'cancelled', label: 'ยกเลิก', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+  { value: 'postponed', label: 'เลื่อนนัด', color: 'bg-violet-100 text-violet-700 border-violet-200' }
 ];
+
+const parseThaiDateToISO = (thaiDateTimeStr) => {
+    if (!thaiDateTimeStr) return null;
+    try {
+        const parts = thaiDateTimeStr.split(' ');
+        const dateParts = parts[0].split('/');
+        if (dateParts.length !== 3) return null;
+        const d = parseInt(dateParts[0], 10);
+        const m = parseInt(dateParts[1], 10) - 1;
+        const y = parseInt(dateParts[2], 10) - 543;
+        let h = 0, min = 0;
+        if (parts[1]) {
+            const timeParts = parts[1].replace('น.', '').trim().split(':');
+            if (timeParts.length >= 2) {
+                h = parseInt(timeParts[0], 10);
+                min = parseInt(timeParts[1], 10);
+            }
+        }
+        return new Date(y, m, d, h, min).toISOString();
+    } catch (e) {
+        return null;
+    }
+};
+
 const colorPresets = [];
 
 // [UPDATED COMPONENT] Calendar View Implementation - HIGH PERFORMANCE OPTIMIZED
 // --- [PERFORMANCE OPTIMIZATION] คอมโพเนนต์ช่องวันที่ในปฏิทิน (แยกออกมาเพื่อใช้ React.memo) ---
+const EMPTY_ARRAY = [];
+
+// --- [PERFORMANCE OPTIMIZATION] คอมโพเนนต์ช่องวันที่ในปฏิทิน (แยกออกมาเพื่อใช้ React.memo) ---
 const CalendarDay = React.memo(({ 
-    day, currentDate, events, isCurrent, dateStr, cornerClass, docsOnThisDay, 
+    day, events, isCurrent, dateStr, cornerClass, docsOnThisDay, 
     onDayClick, onShowStaff, renderEventItem, isLoading 
 }) => {
     const hasDoctor = docsOnThisDay.length > 0;
@@ -1440,7 +1458,7 @@ const CalendarDay = React.memo(({
     return (
         <div 
             data-date={dateStr}
-            onClick={() => !isLoading && onDayClick({ date: currentDate, events })}
+            onClick={() => !isLoading && onDayClick(day, events)}
             className={`calendar-dropzone border-b border-r border-slate-100 p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1.5 transition-colors group aspect-[1/2] sm:aspect-square overflow-hidden relative cursor-pointer ${isCurrent ? 'bg-sky-50/40' : 'bg-white hover:bg-slate-50'} ${cornerClass} ${isLoading ? 'pointer-events-none' : ''}`}
         >
             <div className="flex justify-between items-center p-0.5 sm:p-1 xl:p-1.5 shrink-0 w-full min-w-0 gap-1">
@@ -1456,7 +1474,7 @@ const CalendarDay = React.memo(({
                    ) : hasDoctor ? (
                       <button 
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); if(onShowStaff) onShowStaff(currentDate); }}
+                        onClick={(e) => { e.stopPropagation(); if(onShowStaff) onShowStaff(day); }}
                         className="text-[7px] sm:text-[9px] xl:text-[11px] 2xl:text-xs bg-emerald-50 text-emerald-600 px-1.5 py-0.5 xl:px-2 xl:py-1 rounded-full flex items-center justify-center gap-1 border border-emerald-100 truncate max-w-full font-bold hover:bg-emerald-100 active:scale-95 transition-all" 
                         title={`แพทย์เข้ากะ: ${docsOnThisDay.map(d => d.name).join(', ')} (คลิกเพื่อดูบุคลากรทั้งหมด)`}
                       >
@@ -1492,10 +1510,66 @@ const CalendarDay = React.memo(({
             </div>
         </div>
     );
+}, (prevProps, nextProps) => {
+    return (
+        prevProps.day === nextProps.day &&
+        prevProps.isCurrent === nextProps.isCurrent &&
+        prevProps.dateStr === nextProps.dateStr &&
+        prevProps.cornerClass === nextProps.cornerClass &&
+        prevProps.isLoading === nextProps.isLoading &&
+        prevProps.onDayClick === nextProps.onDayClick &&
+        prevProps.onShowStaff === nextProps.onShowStaff &&
+        prevProps.renderEventItem === nextProps.renderEventItem &&
+        prevProps.events.length === nextProps.events.length &&
+        prevProps.events.every((ev, i) => ev.id === nextProps.events[i].id && ev.dealStatus === nextProps.events[i].dealStatus && ev.name === nextProps.events[i].name) &&
+        prevProps.docsOnThisDay.length === nextProps.docsOnThisDay.length &&
+        prevProps.docsOnThisDay.every((doc, i) => doc.id === nextProps.docsOnThisDay[i].id)
+    );
 });
 
-const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading }) => {
+const getEffectiveApptStatus = (appt) => {
+    let effStatus = appt.dealStatus || appt.status;
+    for (let i = 1; i <= 4; i++) {
+        if (appt[`postpone${i}_date`] && appt[`postpone${i}_status`]) {
+            effStatus = appt[`postpone${i}_status`];
+        } else break;
+    }
+    return effStatus;
+};
+
+const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading, roleLabels = {} }) => {
   const [viewDate, setViewDate] = useState(new Date());
+
+  const handleDayClick = React.useCallback((day, events) => {
+      const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+      setSelectedDayDetails({ date, events });
+  }, [viewDate]);
+
+  const handleShowStaff = React.useCallback((day) => {
+      const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+      setStaffModalDate(date);
+      setShowStaffModal(true);
+  }, [viewDate]);
+
+  const doctorsOnDutyMap = useMemo(() => {
+      const map = {};
+      const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+          const currentDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
+          const dateStr = `${String(d).padStart(2,'0')}/${String(viewDate.getMonth()+1).padStart(2,'0')}/${viewDate.getFullYear()+543}`;
+          const dayOfWeek = currentDate.getDay();
+          
+          map[d] = staffData.filter(s => {
+              if (s.role !== 'doctor' || !s.schedule) return false;
+              const specificData = s.schedule[dateStr];
+              if (specificData !== undefined) return specificData.active;
+              if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
+              if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
+              return false;
+          });
+      }
+      return map;
+  }, [viewDate, staffData]);
 
   // --- [LAZY LOADING] เมื่อเปลี่ยนเดือน ให้แจ้งคอมโพเนนต์แม่เพื่อโหลดข้อมูลเพิ่ม ---
   useEffect(() => {
@@ -1712,8 +1786,24 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
     const paddingEnd = new Date(endOfMonth);
     paddingEnd.setDate(paddingEnd.getDate() + 7);
 
+    const getEventDateStr = (item) => {
+        // ถ้ามี rawPostponedDate (คำนวณจาก save) ให้ใช้เลย
+        if (item.rawPostponedDate) return item.rawPostponedDate;
+        // ค้นหาวันที่เลื่อนนัดล่าสุดจาก postpone fields
+        let lastPostponeDate = null;
+        for (let i = 4; i >= 1; i--) {
+            const pDate = item[`postpone${i}_date`];
+            if (pDate) {
+                lastPostponeDate = parseThaiDateToISO(pDate);
+                break;
+            }
+        }
+        if (lastPostponeDate) return lastPostponeDate;
+        return item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
+    };
+
     return activities.filter(item => {
-        const dateStr = item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
+        const dateStr = getEventDateStr(item);
         if (!dateStr) return false;
         const d = new Date(dateStr);
         return d >= paddingStart && d <= paddingEnd;
@@ -1722,8 +1812,22 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
   const eventsMap = useMemo(() => {
     const map = {};
+    const getEventDateStr = (item) => {
+        if (item.rawPostponedDate) return item.rawPostponedDate;
+        let lastPostponeDate = null;
+        for (let i = 4; i >= 1; i--) {
+            const pDate = item[`postpone${i}_date`];
+            if (pDate) {
+                lastPostponeDate = parseThaiDateToISO(pDate);
+                break;
+            }
+        }
+        if (lastPostponeDate) return lastPostponeDate;
+        return item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
+    };
+
     filteredActivitiesForMonth.forEach(item => {
-        const dateStr = item.rawDeliveryStart || item.rawDeliveryDateTime || item.rawDateTime;
+        const dateStr = getEventDateStr(item);
         if(!dateStr) return;
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return;
@@ -1732,7 +1836,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
         map[key].push(item);
     });
     Object.keys(map).forEach(key => {
-        map[key].sort((a, b) => new Date(a.rawDeliveryStart || a.rawDateTime) - new Date(b.rawDeliveryStart || b.rawDateTime));
+        map[key].sort((a, b) => new Date(getEventDateStr(a)) - new Date(getEventDateStr(b)));
     });
     return map;
   }, [filteredActivitiesForMonth]);
@@ -1819,7 +1923,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {events.map((ev, idx) => {
-                                            const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+                                            const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                                             const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-');
                                             return (
                                                 <tr key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="hover:bg-sky-50/30 cursor-pointer transition-colors group">
@@ -1830,7 +1934,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                         </div>
                                                     </td>
                                                     <td className="p-4 align-top">
-                                                        <div className="font-bold text-slate-800">{ev.name}</div>
+                                                        <div className="font-bold text-slate-800 flex items-center flex-wrap gap-1">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={10} /> เคยเลื่อนนัด</span>}</div>
                                                         <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5 truncate max-w-[200px]">{ev.category || '-'}</div>
                                                     </td>
                                                     <td className="p-4 align-top text-center">
@@ -1869,7 +1973,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
                         <div className="md:hidden space-y-3">
                             {events.map((ev, idx) => {
-                                const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+                                const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                                 const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-');
                                 return (
                                     <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 active:scale-95 transition-transform cursor-pointer">
@@ -1889,7 +1993,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                             </div>
                                         </div>
                                         <div className="mt-1">
-                                            <h4 className="font-bold text-slate-800 text-sm line-clamp-2">{ev.name}</h4>
+                                            <h4 className="font-bold text-slate-800 text-sm line-clamp-2 flex items-center flex-wrap gap-1">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={10} /> เคยเลื่อนนัด</span>}</h4>
                                             <div className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit mt-1 truncate max-w-full">{ev.category || '-'}</div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
@@ -1945,20 +2049,32 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           return false;
       });
 
-      const groupedStaff = {
-          doctor: workingStaff.filter(s => s.role === 'doctor'),
-          nurse: workingStaff.filter(s => s.role === 'nurse'),
-          sale: workingStaff.filter(s => s.role === 'sale'),
-          admin: workingStaff.filter(s => s.role === 'admin' || !['doctor', 'nurse', 'sale'].includes(s.role))
-      };
+      // จัดกลุ่มพนักงานตามตำแหน่งแบบไดนามิก
+      const displayRoleLabels = roleLabels || { doctor: 'แพทย์ (Doctor)', nurse: 'พยาบาล/ผู้ช่วย (Nurse)', sale: 'พนักงานขาย/ที่ปรึกษา', admin: 'แอดมิน/จัดการทั่วไป' };
+      const groupedStaff = {};
+      Object.keys(displayRoleLabels).forEach(key => {
+          groupedStaff[key] = workingStaff.filter(s => s.role === key);
+      });
+      // รวบรวมพนักงานที่มีบทบาทอื่นนอกเหนือจากที่กำหนด
+      const otherStaff = workingStaff.filter(s => !Object.keys(displayRoleLabels).includes(s.role));
+      if (otherStaff.length > 0) {
+          groupedStaff['other'] = otherStaff;
+      }
 
-      const roleLabels = { doctor: 'แพทย์ (Doctor)', nurse: 'พยาบาล/ผู้ช่วย (Nurse)', sale: 'พนักงานขาย/ที่ปรึกษา', admin: 'แอดมิน/จัดการทั่วไป' };
       const roleColors = {
           doctor: 'text-indigo-600 bg-indigo-50 border-indigo-200',
           nurse: 'text-emerald-600 bg-emerald-50 border-emerald-200',
           sale: 'text-amber-600 bg-amber-50 border-amber-200',
           admin: 'text-slate-600 bg-slate-100 border-slate-200'
       };
+      Object.keys(displayRoleLabels).forEach(key => {
+          if (!roleColors[key]) {
+              roleColors[key] = 'text-sky-600 bg-sky-50 border-sky-200';
+          }
+      });
+      if (!roleColors['other']) {
+          roleColors['other'] = 'text-sky-600 bg-sky-50 border-sky-200';
+      }
 
       const modalContent = (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
@@ -1986,12 +2102,12 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                           <div className="space-y-6">
                               {Object.keys(groupedStaff).map(roleKey => {
                                   const staffs = groupedStaff[roleKey];
-                                  if (staffs.length === 0) return null;
+                                  if (!staffs || staffs.length === 0) return null;
                                   return (
                                       <div key={roleKey} className="space-y-3">
                                           <h4 className="font-bold text-slate-700 kanit-text text-sm flex items-center gap-2 border-b border-slate-200/60 pb-2">
-                                              <span className={`w-2 h-2 rounded-full ${roleColors[roleKey].split(' ')[1]}`}></span>
-                                              {roleLabels[roleKey]} ({staffs.length})
+                                              <span className={`w-2 h-2 rounded-full ${roleColors[roleKey]?.split(' ')[1] || 'bg-sky-400'}`}></span>
+                                              {displayRoleLabels[roleKey] || roleKey} ({staffs.length})
                                           </h4>
                                           <div className="grid grid-cols-1 gap-2.5">
                                               {staffs.map(s => {
@@ -2050,7 +2166,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
      // พยายามหลีกเลี่ยงการ New Date ใหม่เยอะๆ (รับค่าเวลาที่ดึงง่ายๆ ไว้ล่วงหน้า)
      const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '');
      const displayText = `${timeStr ? timeStr + ' ' : ''}${ev.name} (${ev.artist || '-'})`;
-     const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+     const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
      let itemColor = statusInfo.color || 'bg-slate-50 border-slate-200 text-slate-600';
      
      let dotColor = 'bg-slate-400';
@@ -2076,8 +2192,9 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           title={`${timeStr} ${ev.name} (${ev.artist})`}
        >
           <div className={`rounded-full shrink-0 ${dotColor} ${compact ? 'w-1.5 h-1.5 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2' : 'w-1.5 h-1.5 sm:w-2 sm:h-2 xl:w-2.5 xl:h-2.5'}`}></div>
-          <span className={`truncate font-medium tracking-tighter font-data ${compact ? 'block text-[8px] sm:text-[10px] xl:text-xs 2xl:text-[13px]' : 'text-[9px] sm:text-xs xl:text-sm 2xl:text-base'}`}>
+          <span className={`truncate flex items-center font-medium tracking-tighter font-data ${compact ? 'text-[8px] sm:text-[10px] xl:text-xs 2xl:text-[13px]' : 'text-[9px] sm:text-xs xl:text-sm 2xl:text-base'}`}>
              {displayText}
+             {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="เคยเลื่อนนัด" className="inline-flex shrink-0 items-center bg-amber-100 text-amber-700 ml-1.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] leading-none border border-amber-200/50"><Clock size={8} className="mr-0.5" /> เลื่อน</span>}
           </span>
        </div>
      );
@@ -2119,31 +2236,23 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
                         const day = cell.day;
                         const currentDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-                        const events = eventsMap[`${currentDate.getFullYear()}-${currentDate.getMonth()}-${currentDate.getDate()}`] || [];
+                        const events = eventsMap[`${currentDate.getFullYear()}-${currentDate.getMonth()}-${currentDate.getDate()}`] || EMPTY_ARRAY;
                         const isCurrent = isToday(currentDate);
                         const dateStr = `${String(day).padStart(2,'0')}/${String(viewDate.getMonth()+1).padStart(2,'0')}/${viewDate.getFullYear()+543}`;
                         
-                        const docsOnThisDay = staffData.filter(s => {
-                            if (s.role !== 'doctor' || !s.schedule) return false;
-                            const specificData = s.schedule[dateStr];
-                            if (specificData !== undefined) return specificData.active;
-                            if (typeof s.schedule === 'object' && s.schedule[currentDate.getDay()]) return s.schedule[currentDate.getDay()].active;
-                            if (Array.isArray(s.schedule)) return s.schedule.includes(currentDate.getDay());
-                            return false;
-                        });
+                        const docsOnThisDay = doctorsOnDutyMap[day] || EMPTY_ARRAY;
                         
                         return (
                             <CalendarDay 
                                 key={day} 
                                 day={day}
-                                currentDate={currentDate}
                                 events={events}
                                 isCurrent={isCurrent}
                                 dateStr={dateStr}
                                 cornerClass={cornerClass}
                                 docsOnThisDay={docsOnThisDay}
-                                onDayClick={() => setSelectedDayDetails({ date: currentDate, events })}
-                                onShowStaff={() => { setStaffModalDate(currentDate); setShowStaffModal(true); }}
+                                onDayClick={handleDayClick}
+                                onShowStaff={handleShowStaff}
                                 renderEventItem={renderEventItem}
                                 isLoading={isLoading}
                             />
@@ -2243,7 +2352,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 space-y-2 sm:space-y-3">
                   {events.length > 0 ? events.map((ev, idx) => {
-                      const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+                      const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                       return (
                       <div key={idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="flex items-stretch gap-2 sm:gap-4 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:border-sky-200 hover:shadow-md transition-all cursor-pointer bg-white group">
                           <div className="w-16 sm:w-20 text-center shrink-0 flex flex-col items-center justify-center gap-1">
@@ -2303,7 +2412,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                               </div>
                               <div className="pl-2 sm:pl-4 space-y-2 sm:space-y-3">
                                   {events.length > 0 ? events.map((ev, idx) => {
-                                      const statusInfo = resolveStatus(ev.dealStatus, dealStatuses);
+                                      const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                                       return (
                                       <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer flex items-stretch gap-2 sm:gap-4">
                                           <div className="text-xs font-bold text-slate-500 pt-1 w-14 sm:w-20 shrink-0 flex flex-col items-center justify-center gap-1.5">
@@ -2415,7 +2524,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 };
 
 // เพิ่ม prop setPatientsData เพื่อให้สามารถเพิ่มคนไข้ใหม่จากหน้านัดหมายได้
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert }) => {
+const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [] }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -2433,11 +2542,19 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const headerRef = React.useRef(null);
   const filterRef = React.useRef(null);
   const apptDatetimeWrapperRef = React.useRef(null);
+  const apptPostponedDatetimeWrapperRef = React.useRef(null);
   const [apptCalendarPos, setApptCalendarPos] = useState({ top: 0, left: 0 });
+  const [activeDateField, setActiveDateField] = useState('datetime');
 
   const initialApptState = { 
     hn: '', patientName: '', searchPatient: '', doctor: '', datetime: '', reason: '', status: 'pending',
-    phones: [''], lineId: '', facebook: '', instagram: '', tiktok: '', serviceType: '', courses: []
+    phones: [''], lineId: '', facebook: '', instagram: '', tiktok: '', serviceType: '', courses: [],
+    postponeCount: 0,
+    postpone1_date: '', postpone1_status: '',
+    postpone2_date: '', postpone2_status: '',
+    postpone3_date: '', postpone3_status: '',
+    postpone4_date: '', postpone4_status: '',
+    createdAt: ''
   };
   const [formData, setFormData] = useState(initialApptState);
 
@@ -2474,6 +2591,24 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       } catch(e) { return null; }
   };
 
+  const getStatusInfo = (statusVal) => {
+    const found = dealStatuses.find(s => s.value === statusVal);
+    if (found) {
+      return {
+        label: found.label,
+        colorClass: found.color
+      };
+    }
+    if (statusVal === 'confirmed') return { label: 'ยืนยันแล้ว', colorClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+    if (statusVal === 'cancelled') return { label: 'ยกเลิก', colorClass: 'bg-rose-100 text-rose-700 border-rose-200' };
+    if (statusVal === 'pending') return { label: 'รอยืนยัน', colorClass: 'bg-amber-100 text-amber-700 border-amber-200' };
+    
+    return {
+      label: statusVal || '-',
+      colorClass: 'bg-slate-100 text-slate-500 border-slate-200'
+    };
+  };
+
   useEffect(() => {
     if (apptCalView === 'years') setApptYearPageStart(Math.floor((apptCalDate.getFullYear() + 543) / 12) * 12);
   }, [apptCalView, apptCalDate]);
@@ -2502,7 +2637,17 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         facebook: appt.facebook || '',
         instagram: appt.instagram || '',
         tiktok: appt.tiktok || '',
-        serviceType: appt.serviceType || ''
+        serviceType: appt.serviceType || '',
+        postponeCount: Number(appt.postponeCount || 0),
+        postpone1_date: appt.postpone1_date || '',
+        postpone1_status: appt.postpone1_status || '',
+        postpone2_date: appt.postpone2_date || '',
+        postpone2_status: appt.postpone2_status || '',
+        postpone3_date: appt.postpone3_date || '',
+        postpone3_status: appt.postpone3_status || '',
+        postpone4_date: appt.postpone4_date || '',
+        postpone4_status: appt.postpone4_status || '',
+        createdAt: appt.createdAt || ''
     });
     setIsViewMode(isView);
     apptModal.open();
@@ -2525,25 +2670,56 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         };
 
   const handleEventDrop = async (eventId, newDate) => {
-      let updatedAppt = null;
-      setQueueData(prev => {
-          const appt = prev.find(a => a.id === eventId);
-          if (!appt) return prev;
-          const oldTime = appt.datetime ? (appt.datetime.split(' ')[1] || '09:00 น.') : '09:00 น.';
-          const d = String(newDate.getDate()).padStart(2, '0');
-          const m = String(newDate.getMonth() + 1).padStart(2, '0');
-          const y = newDate.getFullYear() + 543;
-          const newDatetimeStr = `${d}/${m}/${y} ${oldTime}`;
-          const isoDate = convertThaiToISO(newDatetimeStr);
+      const appt = queueData.find(a => a.id === eventId);
+      if (!appt) return;
 
+      const apptStatus = appt.status || appt.dealStatus;
+      const isPostponed = apptStatus === 'postponed';
+
+      const oldTime = isPostponed && appt.postponedDate 
+          ? (appt.postponedDate.split(' ')[1] || '09:00 น.') 
+          : appt.datetime ? (appt.datetime.split(' ')[1] || '09:00 น.') : '09:00 น.';
+
+      const d = String(newDate.getDate()).padStart(2, '0');
+      const m = String(newDate.getMonth() + 1).padStart(2, '0');
+      const y = newDate.getFullYear() + 543;
+      const newDatetimeStr = `${d}/${m}/${y} ${oldTime}`;
+      const isoDate = convertThaiToISO(newDatetimeStr);
+
+      let updatedAppt;
+      if (isPostponed) {
+          const prevPostponedDate = appt.postponedDate || '';
+          let finalPostponedCount = Number(appt.postponedCount || 0);
+          let finalPostponeHistory = appt.postponeHistory || '';
+          
+          if (newDatetimeStr !== prevPostponedDate) {
+              finalPostponedCount += 1;
+              const logEntry = prevPostponedDate || appt.datetime;
+              if (finalPostponeHistory) {
+                  finalPostponeHistory += ` | ${logEntry}`;
+              } else {
+                  finalPostponeHistory = logEntry;
+              }
+          }
+
+          updatedAppt = {
+              ...appt,
+              postponedDate: newDatetimeStr,
+              rawPostponedDate: isoDate,
+              postponedCount: finalPostponedCount,
+              postponeHistory: finalPostponeHistory
+          };
+      } else {
           updatedAppt = { ...appt, datetime: newDatetimeStr, rawDeliveryStart: isoDate, rawDateTime: isoDate };
-          return prev.map(a => a.id === eventId ? updatedAppt : a);
-      });
+      }
 
-      if (updatedAppt) {
-          showToast(`เลื่อนนัดหมายไปวันที่ ${updatedAppt.datetime.split(' ')[0]} แล้ว`, 'success');
-          try { await callAppScript('SAVE_DATA', 'Queue', updatedAppt); } 
-          catch(e) { showToast('บันทึกการเลื่อนนัดไม่สำเร็จ ข้อมูลอาจไม่ตรงกับเซิร์ฟเวอร์', 'warning'); }
+      setQueueData(prev => prev.map(a => a.id === eventId ? updatedAppt : a));
+      showToast(`เลื่อนนัดหมายไปวันที่ ${d}/${m}/${y} แล้ว`, 'success');
+
+      try {
+          await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
+      } catch(e) {
+          showToast('บันทึกการเลื่อนนัดไม่สำเร็จ ข้อมูลอาจไม่ตรงกับเซิร์ฟเวอร์', 'warning');
       }
   };
 
@@ -2567,10 +2743,40 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     }
 
     const isoDate = convertThaiToISO(formData.datetime);
+    
+    // คำนวณ postponeCount จากจำนวนครั้งที่เลื่อนนัดจริง
+    let calcPostponeCount = 0;
+    if (formData.status === 'postponed' && formData.postpone1_date) calcPostponeCount = 1;
+    if (formData.postpone1_status === 'postponed' && formData.postpone2_date) calcPostponeCount = 2;
+    if (formData.postpone2_status === 'postponed' && formData.postpone3_date) calcPostponeCount = 3;
+    if (formData.postpone3_status === 'postponed' && formData.postpone4_date) calcPostponeCount = 4;
+
+    // หาสถานะล่าสุดและวันที่ล่าสุด (สำหรับ calendar)
+    let effectiveStatus = formData.status;
+    let effectiveDate = isoDate;
+    for (let i = 1; i <= 4; i++) {
+        const pDate = formData[`postpone${i}_date`];
+        const pStatus = formData[`postpone${i}_status`];
+        if (pDate) {
+            effectiveDate = convertThaiToISO(pDate);
+            if (pStatus) effectiveStatus = pStatus;
+        } else break;
+    }
+
     const payload = {
         id: editingId || `APPT${Date.now()}`, hn: finalHn, patientName: formData.patientName, datetime: formData.datetime, doctor: formData.doctor, reason: formData.reason, status: formData.status,
         phone: formData.phones, lineId: formData.lineId, facebook: formData.facebook, instagram: formData.instagram, tiktok: formData.tiktok, serviceType: formData.serviceType,
-        rawDeliveryStart: isoDate, rawDateTime: isoDate, name: formData.patientName || finalHn, artist: formData.doctor, category: formData.reason, dealStatus: formData.status
+        rawDeliveryStart: isoDate, rawDateTime: isoDate, name: formData.patientName || finalHn, artist: formData.doctor, category: formData.reason, dealStatus: effectiveStatus,
+        // ข้อมูลเลื่อนนัด
+        postponeCount: calcPostponeCount,
+        postpone1_date: formData.postpone1_date || '', postpone1_status: formData.postpone1_status || '',
+        postpone2_date: formData.postpone2_date || '', postpone2_status: formData.postpone2_status || '',
+        postpone3_date: formData.postpone3_date || '', postpone3_status: formData.postpone3_status || '',
+        postpone4_date: formData.postpone4_date || '', postpone4_status: formData.postpone4_status || '',
+        // วันที่ล่าสุดสำหรับปฏิทิน (effective date)
+        rawPostponedDate: calcPostponeCount > 0 ? effectiveDate : '',
+        // Timestamp วันที่สร้างนัดหมาย
+        createdAt: editingId ? (formData.createdAt || new Date().toISOString()) : new Date().toISOString()
     };
     
     try {
@@ -2695,12 +2901,14 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     return () => mainElement.removeEventListener('scroll', handleScroll);
   }, [visibleCount, filteredData.length, isLoadingMore, viewMode]);
 
-  const handleOpenApptCalendar = () => {
-    if (apptDatetimeWrapperRef.current) {
-      const rect = apptDatetimeWrapperRef.current.getBoundingClientRect();
+  const handleOpenApptCalendar = (fieldName = 'datetime', refElement = null) => {
+    setActiveDateField(fieldName);
+    const targetRef = refElement || apptDatetimeWrapperRef.current;
+    if (targetRef) {
+      const rect = targetRef.getBoundingClientRect();
       setApptCalendarPos({ top: rect.bottom, left: rect.left });
     }
-    const dtStr = formData.datetime;
+    const dtStr = formData[fieldName] || '';
     const now = new Date();
     let d = now.getDate(), m = now.getMonth(), y = now.getFullYear();
     let h = '09', min = '00';
@@ -2776,7 +2984,12 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 </div>
             </td>
             <td className="py-4 text-sky-600 font-medium text-center kanit-text">{appt.hn}</td>
-            <td className="py-4 text-slate-700 text-left px-2">{appt.patientName}</td>
+            <td className="py-4 text-slate-700 text-left px-2">
+                <div className="flex items-center flex-wrap gap-2">
+                    <span className="font-bold">{appt.patientName}</span>
+                    {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}
+                </div>
+            </td>
             <td className="py-4 text-center">
                 <div className="flex justify-center">
                 {(Array.isArray(appt.phone) ? appt.phone[0] : appt.phone) ? (
@@ -2790,13 +3003,14 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             <td className="py-4 text-slate-500 text-left px-2 max-w-[200px] truncate">{appt.reason}</td>
             <td className="py-4 text-center kanit-text">
                 <div className="flex justify-center">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                    appt.status === 'confirmed' ? 'bg-emerald-100 text-emerald-600' :
-                    appt.status === 'cancelled' ? 'bg-rose-100 text-rose-600' :
-                    'bg-amber-100 text-amber-600'
-                }`}>
-                    {appt.status === 'confirmed' ? 'ยืนยันแล้ว' : appt.status === 'cancelled' ? 'ยกเลิก' : 'รอยืนยัน'}
-                </span>
+                  {(() => {
+                    const info = getStatusInfo(getEffectiveApptStatus(appt));
+                    return (
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${info.colorClass}`}>
+                        {info.label}
+                      </span>
+                    );
+                  })()}
                 </div>
             </td>
             <td className="py-4 text-center">
@@ -2822,19 +3036,20 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 <div className="flex justify-between items-center mb-1.5">
                     <div className="flex items-center gap-3">
                         <span className="font-black text-sky-600 text-base kanit-text tracking-wide">{appt.hn}</span>
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${
-                            appt.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                            appt.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
-                            'bg-amber-50 text-amber-600 border border-amber-100'
-                        }`}>
-                            {appt.status === 'confirmed' ? 'ยืนยันแล้ว' : appt.status === 'cancelled' ? 'ยกเลิก' : 'รอยืนยัน'}
-                        </span>
+                        {(() => {
+                          const info = getStatusInfo(getEffectiveApptStatus(appt));
+                          return (
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${info.colorClass}`}>
+                              {info.label}
+                            </span>
+                          );
+                        })()}
                     </div>
                 </div>
 
                 {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
                 <div className="mb-3">
-                    <h4 className="font-bold text-slate-800 text-lg font-data leading-tight">{appt.patientName}</h4>
+                    <h4 className="font-bold text-slate-800 text-lg font-data leading-tight flex items-center flex-wrap gap-2">{appt.patientName} {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}</h4>
                     <div className="mt-1.5">
                         {(Array.isArray(appt.phone) ? appt.phone[0] : appt.phone) ? (
                             <a href={`tel:${Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
@@ -2889,14 +3104,15 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             activities={augmentedQueueData} 
             onEventClick={(ev) => handleOpenApptEdit(ev.originalData || ev, true)} 
             onDayClick={(date) => console.log('Day clicked:', date)} 
-            dealStatuses={systemStatusTypes} 
+            dealStatuses={dealStatuses} 
             staffData={staffData}
             onEventDrop={handleEventDrop}
             onMonthChange={fetchQueueForMonth}
             isLoading={isQueueFetching}
+            roleLabels={roleLabels}
          />
       );
-  }, [augmentedQueueData, staffData, fetchQueueForMonth, isQueueFetching]); // อัปเดตปฏิทินเมื่อข้อมูลหรือสถานะการโหลดเปลี่ยน
+  }, [augmentedQueueData, staffData, fetchQueueForMonth, isQueueFetching, roleLabels, dealStatuses]); // อัปเดตปฏิทินเมื่อข้อมูลหรือสถานะการโหลดเปลี่ยน
 
   return (
     <>
@@ -3195,7 +3411,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                                  .slice(0, 5).map((p, i) => (
                                     <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
                                        <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
-                                       <span className="text-xs text-slate-500 font-data">{p.phone || p.phone1 ? `?? ${p.phone || p.phone1}` : 'ไม่มีเบอร์โทรศัพท์'}</span>
+                                       <span className="text-xs text-slate-500 font-data flex items-center gap-1">{p.phone || p.phone1 ? <><Phone size={12} className="text-sky-500" /> {p.phone || p.phone1}</> : 'ไม่มีเบอร์โทรศัพท์'}</span>
                                     </div>
                                  ))}
                                  {patientsData.filter(p => {
@@ -3262,12 +3478,124 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                             <CustomSelect 
                                 value={formData.status} 
                                 onChange={(val) => setFormData({...formData, status: val})} 
-                                options={[{value:'pending', label:'?? รอยืนยัน (Pending)'}, {value:'confirmed', label:'?? ยืนยันแล้ว (Confirmed)'}, {value:'cancelled', label:'?? ยกเลิก (Cancelled)'}]} 
+                                options={dealStatuses} 
                                 disabled={isViewMode} 
                             />
                         </div>
                     </div>
 
+                    {/* === ส่วนเลื่อนนัด (แสดงเมื่อสถานะเป็น "เลื่อนนัด") === */}
+                    {formData.status === 'postponed' && (
+                      <div className="md:col-span-2 mt-1">
+                        <div className="bg-violet-50/60 border border-violet-200 rounded-2xl p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-violet-700 flex items-center gap-2 kanit-text">
+                              <CalendarClock size={16} /> ประวัติการเลื่อนนัด
+                            </h4>
+                            {(() => {
+                              let count = 0;
+                              for (let i = 1; i <= 4; i++) { if (formData[`postpone${i}_date`]) count = i; }
+                              return count > 0 ? (
+                                <span className="text-xs font-bold text-white bg-violet-500 px-2.5 py-1 rounded-full kanit-text">
+                                  เลื่อนแล้ว {count} ครั้ง
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+
+                          {/* ครั้งที่ 1 */}
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-6 h-6 rounded-full bg-violet-500 text-white text-xs font-bold flex items-center justify-center shrink-0">1</div>
+                              <span className="text-xs font-semibold text-violet-600 kanit-text">เลื่อนครั้งที่ 1</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-8">
+                              <div className="relative">
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">วันที่เลื่อนนัด <span className="text-rose-500">*</span></label>
+                                <div className="relative group">
+                                  <input required type="text" className="w-full px-3 py-2.5 pr-10 rounded-xl bg-white border border-violet-200 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm font-data" value={formData.postpone1_date} onChange={(e) => setFormData({...formData, postpone1_date: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." disabled={isViewMode} />
+                                  <button type="button" onClick={() => handleOpenApptCalendar('postpone1_date')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"><CalendarIcon size={16} /></button>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">สถานะใหม่ <span className="text-rose-500">*</span></label>
+                                <CustomSelect value={formData.postpone1_status} onChange={(val) => setFormData({...formData, postpone1_status: val})} options={dealStatuses} disabled={isViewMode} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ครั้งที่ 2 */}
+                          {formData.postpone1_status === 'postponed' && (
+                            <div className="space-y-3 pt-3 border-t border-violet-200/60">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-6 h-6 rounded-full bg-violet-500 text-white text-xs font-bold flex items-center justify-center shrink-0">2</div>
+                                <span className="text-xs font-semibold text-violet-600 kanit-text">เลื่อนครั้งที่ 2</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-8">
+                                <div className="relative">
+                                  <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">วันที่เลื่อนนัด <span className="text-rose-500">*</span></label>
+                                  <div className="relative group">
+                                    <input required type="text" className="w-full px-3 py-2.5 pr-10 rounded-xl bg-white border border-violet-200 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm font-data" value={formData.postpone2_date} onChange={(e) => setFormData({...formData, postpone2_date: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." disabled={isViewMode} />
+                                    <button type="button" onClick={() => handleOpenApptCalendar('postpone2_date')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"><CalendarIcon size={16} /></button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">สถานะใหม่ <span className="text-rose-500">*</span></label>
+                                  <CustomSelect value={formData.postpone2_status} onChange={(val) => setFormData({...formData, postpone2_status: val})} options={dealStatuses} disabled={isViewMode} />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ครั้งที่ 3 */}
+                          {formData.postpone2_status === 'postponed' && (
+                            <div className="space-y-3 pt-3 border-t border-violet-200/60">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-6 h-6 rounded-full bg-violet-500 text-white text-xs font-bold flex items-center justify-center shrink-0">3</div>
+                                <span className="text-xs font-semibold text-violet-600 kanit-text">เลื่อนครั้งที่ 3</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-8">
+                                <div className="relative">
+                                  <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">วันที่เลื่อนนัด <span className="text-rose-500">*</span></label>
+                                  <div className="relative group">
+                                    <input required type="text" className="w-full px-3 py-2.5 pr-10 rounded-xl bg-white border border-violet-200 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm font-data" value={formData.postpone3_date} onChange={(e) => setFormData({...formData, postpone3_date: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." disabled={isViewMode} />
+                                    <button type="button" onClick={() => handleOpenApptCalendar('postpone3_date')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"><CalendarIcon size={16} /></button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">สถานะใหม่ <span className="text-rose-500">*</span></label>
+                                  <CustomSelect value={formData.postpone3_status} onChange={(val) => setFormData({...formData, postpone3_status: val})} options={dealStatuses} disabled={isViewMode} />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ครั้งที่ 4 (สูงสุด) */}
+                          {formData.postpone3_status === 'postponed' && (
+                            <div className="space-y-3 pt-3 border-t border-violet-200/60">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-6 h-6 rounded-full bg-rose-500 text-white text-xs font-bold flex items-center justify-center shrink-0">4</div>
+                                <span className="text-xs font-semibold text-rose-600 kanit-text">เลื่อนครั้งที่ 4 (สูงสุด)</span>
+                                <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 kanit-text">ครั้งสุดท้าย</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-8">
+                                <div className="relative">
+                                  <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">วันที่เลื่อนนัด <span className="text-rose-500">*</span></label>
+                                  <div className="relative group">
+                                    <input required type="text" className="w-full px-3 py-2.5 pr-10 rounded-xl bg-white border border-rose-200 outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 text-sm font-data" value={formData.postpone4_date} onChange={(e) => setFormData({...formData, postpone4_date: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." disabled={isViewMode} />
+                                    <button type="button" onClick={() => handleOpenApptCalendar('postpone4_date')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><CalendarIcon size={16} /></button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">สถานะสุดท้าย <span className="text-rose-500">*</span></label>
+                                  <CustomSelect value={formData.postpone4_status} onChange={(val) => setFormData({...formData, postpone4_status: val})} options={dealStatuses.filter(s => s.value !== 'postponed')} disabled={isViewMode} />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">อาการ</label>
                         <textarea rows="2" className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm resize-none font-data" value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})} placeholder="เช่น ติดตามอาการ, ฟังผลเลือด..."></textarea>
@@ -3434,7 +3762,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                           const d = String(apptCalDate.getDate()).padStart(2, '0');
                           const m = String(apptCalDate.getMonth() + 1).padStart(2, '0');
                           const y = apptCalDate.getFullYear() + 543;
-                          setFormData({...formData, datetime: `${d}/${m}/${y} ${apptTime.h}:${apptTime.m} น.`});
+                          const formatted = `${d}/${m}/${y} ${apptTime.h}:${apptTime.m} น.`;
+                          setFormData({...formData, [activeDateField]: formatted});
                           apptCalendar.close();
                     }} className="px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md shadow-sky-500/20 transition-colors kanit-text whitespace-nowrap">ตกลง</button>
                 </div>
@@ -4367,7 +4696,7 @@ const PatientModal = React.memo(({
   );
 });
 // เปลี่ยนแปลงบรรทัดรับ Props ของ MedicalRecords
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -4417,7 +4746,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // --- จำลองระบบ Login User (ดึงจาก Auth Context ในระบบจริง) ---
   // ทดสอบระบบ: หากต้องการทดสอบว่าเป็นแพทย์ ให้เปลี่ยน role เป็น 'doctor', name: 'พญ. ใจดี'
-  const currentUser = { id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' }; 
+  // currentUser ถูกส่งมาจาก props ในคอมโพเนนต์หลักแล้ว 
 
   const headerRef = React.useRef(null);
   const filterRef = React.useRef(null); // --- [NEW] เพิ่ม Ref สำหรับ Filter เพื่อให้มันขยายตัวได้ ---
@@ -5673,24 +6002,27 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
           </div>
         </div>
 
-        {/* --- 2. Stats Section (ปรับ Layout ใหม่ & ลบ Margin Bottom) --- */}
+        {/* --- 2. Stats Section (ปรับ Layout ใหม่ให้แสดงผลสวยงามบนมือถือ ไม่บีบอัด) --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-           <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><Users size={20} className="sm:w-6 sm:h-6" /></div>
+           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+              {/* คนไข้ทั้งหมด - แสดงผลเป็นแถวยาวเต็มความกว้างบนมือถือ และกลับมาเป็นแนวตั้งบนจอใหญ่ */}
+              <div className="col-span-2 md:col-span-1 bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-row sm:flex-col justify-between items-center sm:items-start relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all min-h-[72px] sm:min-h-[140px] w-full">
+                <div className="flex items-center gap-2.5 sm:gap-3 relative z-10">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><Users size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="คนไข้ทั้งหมด">คนไข้ทั้งหมด</p>
                   </div>
                 </div>
-                <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-slate-800 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.total))}`}>{formatStatNumber(stats.total)}</p>
+                <div className="relative z-10 sm:mt-auto text-right sm:text-left">
+                  <p className={`font-black text-slate-800 font-data whitespace-nowrap overflow-hidden ${getDynamicTextSize(formatStatNumber(stats.total))}`}>{formatStatNumber(stats.total)}</p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-slate-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-blue-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-50 text-blue-500 border border-blue-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><User size={20} className="sm:w-6 sm:h-6" /></div>
+
+              {/* คนไข้ชาย - อยู่คู่กันฝั่งซ้ายบนมือถือ */}
+              <div className="col-span-1 bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-blue-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
+                <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-blue-50 text-blue-500 border border-blue-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><User size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="คนไข้ชาย">คนไข้ชาย</p>
                   </div>
@@ -5700,9 +6032,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-blue-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-pink-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-pink-50 text-pink-500 border border-pink-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><User size={20} className="sm:w-6 sm:h-6" /></div>
+
+              {/* คนไข้หญิง - อยู่คู่กันฝั่งขวาบนมือถือ */}
+              <div className="col-span-1 bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-pink-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
+                <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-pink-50 text-pink-500 border border-pink-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><User size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="คนไข้หญิง">คนไข้หญิง</p>
                   </div>
@@ -5836,6 +6170,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                         <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
                                         <div className="h-4 w-28 bg-slate-200 rounded animate-pulse"></div>
                                     </div>
+                                    {/* แถวที่ 3.5: สถานะ PDPA (Skeleton) */}
+                                    <div className="flex items-center gap-2 mt-1 pt-2 border-t border-slate-200">
+                                        <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                        <div className="h-4 w-36 bg-slate-200 rounded animate-pulse"></div>
+                                    </div>
+                                </div>
+                                {/* แถวที่ 4: ปุ่มจัดการ (Skeleton) */}
+                                <div className="mt-3 grid grid-cols-3 gap-2 pt-3 border-t border-slate-100">
+                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                    <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
                                 </div>
                             </div>
                         ))
@@ -5860,6 +6205,25 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                             <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
                                             <div className="h-4 w-40 bg-slate-200 rounded animate-pulse"></div>
                                         </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                            <div className="h-4 w-32 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                            <div className="h-4 w-28 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                        {/* แถวที่ 3.5: สถานะ PDPA (Skeleton) */}
+                                        <div className="flex items-center gap-2 mt-1 pt-2 border-t border-slate-200">
+                                            <div className="w-5 h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
+                                            <div className="h-4 w-36 bg-slate-200 rounded animate-pulse"></div>
+                                        </div>
+                                    </div>
+                                    {/* แถวที่ 4: ปุ่มจัดการ (Skeleton) */}
+                                    <div className="mt-3 grid grid-cols-3 gap-2 pt-3 border-t border-slate-100">
+                                        <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                        <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
+                                        <div className="h-9 bg-slate-200 rounded-xl animate-pulse"></div>
                                     </div>
                                 </div>
                             ))}
@@ -6372,16 +6736,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
                           <div>
                             <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">สาขาที่รับบริการ</label>
-                            <select 
-                              className={`${theme.input} bg-white py-2 text-sm font-data appearance-none cursor-pointer`}
+                            <CustomSelect
                               value={newOpdRecord.branchId}
-                              onChange={(e) => setNewOpdRecord({...newOpdRecord, branchId: e.target.value})}
-                            >
-                              <option value="">เลือกสาขา</option>
-                              {branchesData.map(b => (
-                                <option key={b.id} value={b.id}>{b.clinicName || b.name}</option>
-                              ))}
-                            </select>
+                              onChange={(val) => setNewOpdRecord({...newOpdRecord, branchId: val})}
+                              placeholder="เลือกสาขา"
+                              options={branchesData.map(b => ({ value: b.id, label: b.clinicName || b.name }))}
+                            />
                           </div>
                         </div>
 
@@ -8192,7 +8552,7 @@ const POSSystem = ({
                                                     compact
                                                     value={historyEditForm.status} 
                                                     onChange={val => setHistoryEditForm({...historyEditForm, status: val})}
-                                                    options={[{value:'completed', label:'?? สำเร็จ'}, {value:'cancelled', label:'?? ยกเลิก (Void)'}]}
+                                                    options={[{value:'completed', label:'✅ สำเร็จ'}, {value:'cancelled', label:'❌ ยกเลิก (Void)'}]}
                                                     className="w-full"
                                                 />
                                             </div>
@@ -8202,7 +8562,7 @@ const POSSystem = ({
                                                     compact
                                                     value={historyEditForm.paymentMethod} 
                                                     onChange={val => setHistoryEditForm({...historyEditForm, paymentMethod: val})}
-                                                    options={[{value:'cash', label:'?? เงินสด'}, {value:'transfer', label:'?? โอนเงิน'}, {value:'credit', label:'?? บัตรเครดิต'}]}
+                                                    options={[{value:'cash', label:'💵 เงินสด'}, {value:'transfer', label:'📱 โอนเงิน'}, {value:'credit', label:'💳 บัตรเครดิต'}]}
                                                     className="w-full"
                                                 />
                                             </div>
@@ -12264,7 +12624,7 @@ const FinancePage = ({
                         <CustomSelect 
                             value={timeFilterMode} 
                             onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
-                            options={[{value:'all',label:'? ทุกเวลา'},{value:'month',label:'?? รายเดือน'},{value:'year',label:'?? รายปี'},{value:'range',label:'??? กำหนดเอง'}]} 
+                            options={[{value:'all',label:'📅 ทุกเวลา'},{value:'month',label:'🗓️ รายเดือน'},{value:'year',label:'📆 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
                             compact fullWidth 
                             className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-3" 
                         />
@@ -12310,7 +12670,7 @@ const FinancePage = ({
                           <CustomSelect 
                               value={timeFilterMode} 
                               onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
-                              options={[{value:'all',label:'? ทุกเวลา'},{value:'month',label:'?? รายเดือน'},{value:'year',label:'?? รายปี'},{value:'range',label:'??? กำหนดเอง'}]} 
+                              options={[{value:'all',label:'📅 ทุกเวลา'},{value:'month',label:'🗓️ รายเดือน'},{value:'year',label:'📆 รายปี'},{value:'range',label:'🗓️ กำหนดเอง'}]} 
                               compact fullWidth 
                               className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px] [&>div:first-child]:!justify-start [&>div:first-child]:!pl-2" 
                           />
@@ -13040,10 +13400,10 @@ const FinancePage = ({
                                     value={formData.method}
                                     onChange={(val) => setFormData({...formData, method: val})}
                                     options={[
-                                        {value: 'cash', label: '?? เงินสด'},
-                                        {value: 'transfer', label: '?? โอนเงินเข้าบัญชี'},
-                                        {value: 'credit_card', label: '?? บัตรเครดิต'},
-                                        {value: 'other', label: '?? อื่นๆ'}
+                                        {value: 'cash', label: '💵 เงินสด'},
+                                        {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
+                                        {value: 'credit_card', label: '💳 บัตรเครดิต'},
+                                        {value: 'other', label: '📋 อื่นๆ'}
                                     ]}
                                     className="w-full"
                                 />
@@ -13421,10 +13781,10 @@ const FinancePage = ({
                             value={posEditForm.paymentMethod} 
                             onChange={(val) => setPosEditForm({...posEditForm, paymentMethod: val})}
                             options={[
-                                {value: 'cash', label: '?? เงินสด'},
-                                {value: 'transfer', label: '?? โอนเงินเข้าบัญชี'},
-                                {value: 'credit', label: '?? บัตรเครดิต'},
-                                {value: 'other', label: '?? อื่นๆ'}
+                                {value: 'cash', label: '💵 เงินสด'},
+                                {value: 'transfer', label: '📱 โอนเงินเข้าบัญชี'},
+                                {value: 'credit', label: '💳 บัตรเครดิต'},
+                                {value: 'other', label: '📋 อื่นๆ'}
                             ]}
                             className="w-full"
                           />
@@ -13832,7 +14192,7 @@ const FinancePage = ({
 };
 
 // --- ระบบจัดการพนักงาน (Staff Manager) ---
-const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert }) => {
+const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {} }) => {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   
@@ -14206,6 +14566,10 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
   const blankDobDays = Array.from({ length: new Date(dobCalDate.getFullYear(), dobCalDate.getMonth(), 1).getDay() }, (_, i) => i);
   const monthDobDays = Array.from({ length: new Date(dobCalDate.getFullYear(), dobCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1);
+  
+  useEffect(() => {
+    if (dobCalView === 'years') setDobYearPageStart(Math.floor((dobCalDate.getFullYear() + 543) / 12) * 12);
+  }, [dobCalView, dobCalDate]);
   // ----------------------------------------------------
 
   // --- States สำหรับปฏิทินช่วงเวลาการจ่ายเงิน (Payroll Range Calendar) ---
@@ -14453,20 +14817,32 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       });
 
       // จัดกลุ่มพนักงานตามตำแหน่ง
-      const groupedStaff = {
-          doctor: workingStaff.filter(s => s.role === 'doctor'),
-          nurse: workingStaff.filter(s => s.role === 'nurse'),
-          sale: workingStaff.filter(s => s.role === 'sale'),
-          admin: workingStaff.filter(s => s.role === 'admin' || !['doctor', 'nurse', 'sale'].includes(s.role))
-      };
+      // จัดกลุ่มพนักงานตามตำแหน่งแบบไดนามิก
+      const displayRoleLabels = roleLabels || { doctor: 'แพทย์ (Doctor)', nurse: 'พยาบาล/ผู้ช่วย (Nurse)', sale: 'พนักงานขาย/ที่ปรึกษา', admin: 'แอดมิน/จัดการทั่วไป' };
+      const groupedStaff = {};
+      Object.keys(displayRoleLabels).forEach(key => {
+          groupedStaff[key] = workingStaff.filter(s => s.role === key);
+      });
+      // รวบรวมพนักงานที่มีบทบาทอื่นนอกเหนือจากที่กำหนด
+      const otherStaff = workingStaff.filter(s => !Object.keys(displayRoleLabels).includes(s.role));
+      if (otherStaff.length > 0) {
+          groupedStaff['other'] = otherStaff;
+      }
 
-      const roleLabels = { doctor: 'แพทย์ (Doctor)', nurse: 'พยาบาล/ผู้ช่วย (Nurse)', sale: 'พนักงานขาย/ที่ปรึกษา', admin: 'แอดมิน/จัดการทั่วไป' };
       const roleColors = {
           doctor: 'text-indigo-600 bg-indigo-50 border-indigo-200',
           nurse: 'text-emerald-600 bg-emerald-50 border-emerald-200',
           sale: 'text-amber-600 bg-amber-50 border-amber-200',
           admin: 'text-slate-600 bg-slate-100 border-slate-200'
       };
+      Object.keys(displayRoleLabels).forEach(key => {
+          if (!roleColors[key]) {
+              roleColors[key] = 'text-sky-600 bg-sky-50 border-sky-200';
+          }
+      });
+      if (!roleColors['other']) {
+          roleColors['other'] = 'text-sky-600 bg-sky-50 border-sky-200';
+      }
 
       const modalContent = (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
@@ -14494,12 +14870,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                           <div className="space-y-6">
                               {Object.keys(groupedStaff).map(roleKey => {
                                   const staffs = groupedStaff[roleKey];
-                                  if (staffs.length === 0) return null;
+                                  if (!staffs || staffs.length === 0) return null;
                                   return (
                                       <div key={roleKey} className="space-y-3">
                                           <h4 className="font-bold text-slate-700 kanit-text text-sm flex items-center gap-2 border-b border-slate-200/60 pb-2">
-                                              <span className={`w-2 h-2 rounded-full ${roleColors[roleKey].split(' ')[1]}`}></span>
-                                              {roleLabels[roleKey]} ({staffs.length})
+                                              <span className={`w-2 h-2 rounded-full ${roleColors[roleKey]?.split(' ')[1] || 'bg-sky-400'}`}></span>
+                                              {displayRoleLabels[roleKey] || roleKey} ({staffs.length})
                                           </h4>
                                           <div className="grid grid-cols-1 gap-2.5">
                                               {staffs.map(s => {
@@ -14769,12 +15145,32 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     }
   };
 
-  const roleMap = {
-    'doctor': { label: 'แพทย์ (Doctor)', color: 'bg-indigo-50 text-indigo-600 border-indigo-200', icon: Stethoscope },
-    'nurse': { label: 'พยาบาล/ผู้ช่วย (Nurse)', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: HeartPulse || Plus },
-    'sale': { label: 'พนักงานขาย (Sale)', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: Tag },
-    'admin': { label: 'แอดมิน (Admin)', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Settings },
-  };
+  const roleMap = useMemo(() => {
+    const defaultMap = {
+      'doctor': { label: 'แพทย์ (Doctor)', color: 'bg-indigo-50 text-indigo-600 border-indigo-200', icon: Stethoscope },
+      'nurse': { label: 'พยาบาล/ผู้ช่วย (Nurse)', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: HeartPulse || Plus },
+      'sale': { label: 'พนักงานขาย (Sale)', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: Tag },
+      'admin': { label: 'แอดมิน (Admin)', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Settings },
+    };
+    const map = {};
+    Object.entries(roleLabels || {
+      admin: 'แอดมิน (Admin)',
+      doctor: 'แพทย์ (Doctor)',
+      nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
+      sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+    }).forEach(([key, label]) => {
+      if (defaultMap[key]) {
+        map[key] = defaultMap[key];
+      } else {
+        map[key] = {
+          label: label,
+          color: 'bg-sky-50 text-sky-600 border-sky-200',
+          icon: UserCog
+        };
+      }
+    });
+    return map;
+  }, [roleLabels]);
 
   const daysMap = [
     { val: 1, label: 'จันทร์', short: 'จ', color: 'bg-yellow-100 text-yellow-700' },
@@ -15578,10 +15974,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 onChange={(val) => setFilterRole(val)} 
                 options={[
                   {value: 'all', label: 'ทุกตำแหน่ง'},
-                  {value: 'doctor', label: 'แพทย์'},
-                  {value: 'nurse', label: 'พยาบาล/ผู้ช่วย'},
-                  {value: 'sale', label: 'เซลส์/ที่ปรึกษา'},
-                  {value: 'admin', label: 'แอดมิน'}
+                  ...Object.entries(roleLabels || {
+                    admin: 'แอดมิน (Admin)',
+                    doctor: 'แพทย์ (Doctor)',
+                    nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
+                    sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+                  }).map(([key, label]) => ({ value: key, label: label }))
                 ]}
                 compact fullWidth className="w-full"
              />
@@ -15881,7 +16279,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                           </div>
                           {showPrefixDropdown && (
                             <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
-                              {['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.'].map(opt => (
+                              {(staffPrefixes || ['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']).map(opt => (
                                 <div key={opt} onMouseDown={(e) => { e.preventDefault(); setFormData({...formData, prefix: opt}); setShowPrefixDropdown(false); }} className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${formData.prefix === opt ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}>
                                   {opt}
                                 </div>
@@ -15896,7 +16294,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                       
                       <div className="relative" style={{ zIndex: 40 }}>
                         <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมวดหมู่ <span className="text-rose-500">*</span></label>
-                        <CustomSelect value={formData.category} onChange={(val) => setFormData({...formData, category: val})} options={[{value:'doctor', label:'แพทย์'}, {value:'staff', label:'สต๊าฟ/พนักงาน'}]} />
+                        <CustomSelect value={formData.category} onChange={(val) => setFormData({...formData, category: val})} options={((staffCategories && staffCategories.length > 0) ? staffCategories : ['แพทย์', 'สต๊าฟ/พนักงาน']).map(cat => ({ value: cat === 'แพทย์' ? 'doctor' : cat === 'สต๊าฟ/พนักงาน' ? 'staff' : cat, label: cat }))} />
                       </div>
 
                       <div className="relative" style={{ zIndex: 40 }}>
@@ -15906,7 +16304,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                       <div className="relative" style={{ zIndex: 38 }}>
                         <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">สิทธิ์เข้าระบบ <span className="text-rose-500">*</span></label>
-                        <CustomSelect value={formData.role} onChange={(val) => setFormData({...formData, role: val})} options={[{value:'doctor', label:'แพทย์'}, {value:'nurse', label:'พยาบาล/ผู้ช่วย'}, {value:'sale', label:'พนักงานขาย'}, {value:'admin', label:'แอดมิน'}]} />
+                        <CustomSelect value={formData.role} onChange={(val) => setFormData({...formData, role: val})} options={Object.entries(roleLabels || {
+                          admin: 'แอดมิน (Admin)',
+                          doctor: 'แพทย์ (Doctor)',
+                          nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
+                          sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+                        }).map(([key, label]) => ({ value: key, label: label }))} />
                       </div>
                       
                       <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input required type="tel" className={`${theme.input} font-data`} value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} /></div>
@@ -17352,18 +17755,21 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
               <input type="text" placeholder="ค้นหาชื่อลูกค้า, รหัสเอกสาร, HN..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 shadow-inner font-data truncate" />
               <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
             </div>
-            <div className="w-[120px] sm:w-[160px] shrink-0">
-               <div className="relative w-full">
-                 <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="w-full px-3 py-2 sm:py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 appearance-none cursor-pointer font-data">
-                    <option value="all">ทั้งหมด</option>
-                    <option value="record">เวชระเบียน</option>
-                    <option value="opd">ใบ OPD</option>
-                    <option value="medcert">ใบรับรองแพทย์</option>
-                    <option value="consent">ใบยินยอมรักษา</option>
-                    <option value="receipt">ใบเสร็จ</option>
-                 </select>
-                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-               </div>
+            <div className="w-[125px] sm:w-[165px] shrink-0">
+               <CustomSelect
+                  value={filterType}
+                  onChange={(val) => setFilterType(val)}
+                  compact
+                  fullWidth
+                  options={[
+                    { value: 'all', label: 'ทั้งหมด' },
+                    { value: 'record', label: 'เวชระเบียน' },
+                    { value: 'opd', label: 'ใบ OPD' },
+                    { value: 'medcert', label: 'ใบรับรองแพทย์' },
+                    { value: 'consent', label: 'ใบยินยอมรักษา' },
+                    { value: 'receipt', label: 'ใบเสร็จ' }
+                  ]}
+               />
             </div>
           </div>
         </div>
@@ -17377,11 +17783,11 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm kanit-text">
                     <th className="p-4 w-16 text-center"><button onClick={toggleSelectAll} className="flex items-center justify-center w-full">{isAllSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded"></div>}</button></th>
-                    <th className="p-4 font-medium">วันที่ / เวลา</th>
-                    <th className="p-4 font-medium">ประเภท</th>
-                    <th className="p-4 font-medium">รหัสอ้างอิง</th>
-                    <th className="p-4 font-medium">ชื่อลูกค้า</th>
-                    <th className="p-4 font-medium text-center">พิมพ์</th>
+                    <th className="p-4 font-medium w-[12%]">วันที่ / เวลา</th>
+                    <th className="p-4 font-medium w-[16%]">ประเภท</th>
+                    <th className="p-4 font-medium w-[18%]">รหัสอ้างอิง</th>
+                    <th className="p-4 font-medium w-[46%]">ชื่อลูกค้า</th>
+                    <th className="p-4 font-medium text-center w-[8%]">พิมพ์</th>
                   </tr>
                 </thead>
                 <tbody className="">
@@ -18180,7 +18586,7 @@ const PdpaConsentForm = ({ token, hn }) => {
                                 )}
                             </div>
 
-                            <p className="leading-relaxed">ข้าพเจ้าได้ซักถามข้อสงสัยจนเป็นที่พอใจ และยินยอมโดยสมัครใจให้แพทย์แผนจีนของอันผิงคลินิก ทำการตรวจวินิจฉัย บำบัด และฟื้นฟูร่างกายและจิตใจของข้าพเจ้า ด้วยหัตถการที่เห็นสมควรและจำเป็น</p>
+                            <p className="leading-relaxed">ข้าพเจ้าขอรับรองว่าได้ยินยอมเข้ารับการตรวจและรักษาพยาบาลจากอันผิงคลินิกด้วยความสมัครใจ ปราศจากการบังคับ ข่มขู่ หรือชักจูงใดๆ และยินยอมรับความเสี่ยงในการเกิดอาการเมาเข็มและผลข้างเคียงต่างๆ และข้าพเจ้าเข้าใจดีว่าไม่มีการรับประกันผลการรักษาพยาบาลว่าจะหายขาด 100% เนื่องจากผลการรักษาขึ้นอยู่กับสภาพร่างกายและการดูแลตนเองของแต่ละบุคคลด้วย</p>
                             <p className="leading-relaxed">ข้าพเจ้ายินยอมรับผลที่อาจเกิดขึ้นจากเหตุสุดวิสัย โดยจะไม่เรียกร้องหรือฟ้องร้องต่อแพทย์และบุคลากรของคลินิก หากได้ปฏิบัติหน้าที่โดยรอบคอบตามมาตรฐานวิชาชีพการแพทย์แผนจีนแล้ว</p>
                             <p className="leading-relaxed">ข้าพเจ้าเข้าใจดีว่าข้อมูลการรักษาของข้าพเจ้าจะถูกเก็บไว้เป็นความลับ และข้าพเจ้ามีสิทธิ์ที่จะปฏิเสธการรักษา หรือขอความเห็นจากแพทย์ท่านอื่นได้ทุกเวลา</p>
                             <strong className="text-slate-800 block mt-2">จึงลงลายมือชื่อไว้เป็นหลักฐาน</strong>
@@ -18305,6 +18711,817 @@ const PdpaConsentForm = ({ token, hn }) => {
         </div>
     );
 };
+
+// ==========================================
+// ส่วนจัดการตั้งค่าระบบ (Settings Manager)
+// ==========================================
+const SettingsManager = ({
+  staffPrefixes = [],
+  setStaffPrefixes,
+  rolePermissions = {},
+  setRolePermissions,
+  roleLabels = {},
+  setRoleLabels,
+  staffCategories = [],
+  setStaffCategories,
+  appointmentStatuses = [],
+  setAppointmentStatuses,
+  integrationTokens = { line: '', telegram: '', discord: '' },
+  setIntegrationTokens,
+  callAppScript,
+  showToast,
+  isGlobalLoading
+}) => {
+  const colorPresets = [
+    { key: 'amber', name: 'ส้ม/เหลือง', bg: 'bg-amber-500', class: 'bg-amber-100 text-amber-700 border-amber-200' },
+    { key: 'emerald', name: 'เขียว', bg: 'bg-emerald-500', class: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    { key: 'rose', name: 'แดง', bg: 'bg-rose-500', class: 'bg-rose-100 text-rose-700 border-rose-200' },
+    { key: 'sky', name: 'ฟ้า', bg: 'bg-sky-500', class: 'bg-sky-100 text-sky-700 border-sky-200' },
+    { key: 'violet', name: 'ม่วง', bg: 'bg-violet-500', class: 'bg-violet-100 text-violet-700 border-violet-200' },
+    { key: 'indigo', name: 'น้ำเงิน', bg: 'bg-indigo-500', class: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+    { key: 'teal', name: 'เขียวอมฟ้า', bg: 'bg-teal-500', class: 'bg-teal-100 text-teal-700 border-teal-200' },
+    { key: 'fuchsia', name: 'ชมพู', bg: 'bg-fuchsia-500', class: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200' },
+    { key: 'slate', name: 'เทา', bg: 'bg-slate-500', class: 'bg-slate-100 text-slate-700 border-slate-200' }
+  ];
+  const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses'
+  const [newPrefix, setNewPrefix] = useState('');
+  const [newStaffCat, setNewStaffCat] = useState('');
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newApptStatus, setNewApptStatus] = useState('');
+  const [selectedColor, setSelectedColor] = useState('sky');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Local copies for editing
+  const [localPrefixes, setLocalPrefixes] = useState([]);
+  const [localPermissions, setLocalPermissions] = useState({});
+  const [localRoleLabels, setLocalRoleLabels] = useState({});
+  const [localStaffCats, setLocalStaffCats] = useState([]);
+  const [localApptStatuses, setLocalApptStatuses] = useState([]);
+  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', telegram: '', discord: '' });
+
+  // Sync with props
+  useEffect(() => {
+    if (staffPrefixes) setLocalPrefixes([...staffPrefixes]);
+  }, [staffPrefixes]);
+
+  useEffect(() => {
+    if (rolePermissions) setLocalPermissions({ ...rolePermissions });
+  }, [rolePermissions]);
+
+  useEffect(() => {
+    if (roleLabels) setLocalRoleLabels({ ...roleLabels });
+  }, [roleLabels]);
+
+  useEffect(() => {
+    if (staffCategories) setLocalStaffCats([...staffCategories]);
+  }, [staffCategories]);
+
+  useEffect(() => {
+    if (appointmentStatuses) setLocalApptStatuses([...appointmentStatuses]);
+  }, [appointmentStatuses]);
+
+  useEffect(() => {
+    if (integrationTokens) setLocalIntegrationTokens({ ...integrationTokens });
+  }, [integrationTokens]);
+
+  const addPrefix = () => {
+    const trimmed = newPrefix.trim();
+    if (!trimmed) return;
+    if (localPrefixes.includes(trimmed)) {
+      showToast('คำนำหน้านี้มีอยู่แล้ว', 'warning');
+      return;
+    }
+    setLocalPrefixes([...localPrefixes, trimmed]);
+    setNewPrefix('');
+  };
+
+  const removePrefix = (p) => {
+    setLocalPrefixes(localPrefixes.filter(item => item !== p));
+  };
+
+  const addStaffCat = () => {
+    const trimmed = newStaffCat.trim();
+    if (!trimmed) return;
+    if (localStaffCats.includes(trimmed)) {
+      showToast('หมวดหมู่พนักงานนี้มีอยู่แล้ว', 'warning');
+      return;
+    }
+    setLocalStaffCats([...localStaffCats, trimmed]);
+    setNewStaffCat('');
+  };
+
+  const removeStaffCat = (c) => {
+    if (['แพทย์', 'สต๊าฟ/พนักงาน'].includes(c)) {
+      showToast('ไม่สามารถลบหมวดหมู่เริ่มต้นได้', 'warning');
+      return;
+    }
+    setLocalStaffCats(localStaffCats.filter(item => item !== c));
+  };
+
+  const handleAddRole = () => {
+    const name = newRoleName.trim();
+    if (!name) return;
+    
+    // Check for duplicates
+    if (Object.values(localRoleLabels).some(label => label.toLowerCase() === name.toLowerCase())) {
+      showToast('บทบาทสิทธิ์นี้มีอยู่แล้ว', 'warning');
+      return;
+    }
+
+    // Generate slug
+    const slug = 'custom_' + Date.now().toString().slice(-6);
+    
+    setLocalRoleLabels(prev => ({ ...prev, [slug]: name }));
+    setLocalPermissions(prev => ({ ...prev, [slug]: ['dashboard'] })); // default permission
+    setNewRoleName('');
+    showToast(`เพิ่มบทบาท "${name}" สำเร็จ กรุณากำหนดสิทธิ์ใช้งานและกดบันทึกสิทธิ์เข้าระบบ`, 'success');
+  };
+
+  const handleRemoveRole = (roleKey) => {
+    if (['admin', 'doctor', 'nurse', 'sale'].includes(roleKey)) {
+      showToast('ไม่สามารถลบบทบาทเริ่มต้นได้', 'warning');
+      return;
+    }
+
+    const updatedLabels = { ...localRoleLabels };
+    delete updatedLabels[roleKey];
+    setLocalRoleLabels(updatedLabels);
+
+    const updatedPermissions = { ...localPermissions };
+    delete updatedPermissions[roleKey];
+    setLocalPermissions(updatedPermissions);
+
+    showToast('ลบบทบาทสำเร็จ กรุณากดบันทึกสิทธิ์เข้าระบบเพื่อยืนยัน', 'warning');
+  };
+
+  const handlePermissionChange = (role, tabId, checked) => {
+    setLocalPermissions(prev => {
+      const allowed = prev[role] || [];
+      const updated = checked 
+        ? [...allowed, tabId]
+        : allowed.filter(id => id !== tabId);
+      return { ...prev, [role]: updated };
+    });
+  };
+
+  const savePrefixes = async () => {
+    setIsSaving(true);
+    try {
+      await callAppScript('SAVE_DATA', 'Settings', { id: 'staff_prefixes', values: localPrefixes });
+      setStaffPrefixes(localPrefixes);
+      showToast('บันทึกรายการคำนำหน้าชื่อพนักงานสำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const savePermissions = async () => {
+    setIsSaving(true);
+    try {
+      await callAppScript('SAVE_DATA', 'Settings', { 
+        id: 'role_permissions', 
+        values: localPermissions,
+        labels: localRoleLabels
+      });
+      setRolePermissions(localPermissions);
+      setRoleLabels(localRoleLabels);
+      showToast('บันทึกสิทธิ์เข้าระบบสำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveCategories = async () => {
+    setIsSaving(true);
+    try {
+      await callAppScript('SAVE_DATA', 'Settings', { id: 'staff_categories', values: localStaffCats });
+      setStaffCategories(localStaffCats);
+      showToast('บันทึกตัวเลือกหมวดหมู่สำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const addApptStatus = () => {
+    const trimmed = newApptStatus.trim();
+    if (!trimmed) return;
+    const exists = localApptStatuses.some(item => {
+      const lbl = typeof item === 'string' ? item : item.label;
+      return lbl === trimmed;
+    });
+    if (exists) {
+      showToast('สถานะนัดหมายนี้มีอยู่แล้ว', 'warning');
+      return;
+    }
+    const newObj = { label: trimmed, color: selectedColor };
+    setLocalApptStatuses([...localApptStatuses, newObj]);
+    setNewApptStatus('');
+  };
+
+  const removeApptStatus = (index) => {
+    const target = localApptStatuses[index];
+    if (!target) return;
+    const label = typeof target === 'string' ? target : target.label;
+    if (['รอยืนยัน', 'ยืนยันแล้ว', 'ยกเลิก'].includes(label)) {
+      showToast('ไม่สามารถลบสถานะเริ่มต้นได้', 'warning');
+      return;
+    }
+    setLocalApptStatuses(localApptStatuses.filter((_, idx) => idx !== index));
+  };
+
+  const updateStatusColor = (index, color) => {
+    const updated = [...localApptStatuses];
+    const item = updated[index];
+    if (typeof item === 'string') {
+      updated[index] = { label: item, color };
+    } else {
+      updated[index] = { ...item, color };
+    }
+    setLocalApptStatuses(updated);
+  };
+
+  const moveStatusUp = (index) => {
+    if (index === 0) return;
+    const updated = [...localApptStatuses];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    setLocalApptStatuses(updated);
+  };
+
+  const moveStatusDown = (index) => {
+    if (index === localApptStatuses.length - 1) return;
+    const updated = [...localApptStatuses];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    setLocalApptStatuses(updated);
+  };
+
+  const saveApptStatuses = async () => {
+    setIsSaving(true);
+    try {
+      await callAppScript('SAVE_DATA', 'Settings', { id: 'appointment_statuses', values: localApptStatuses });
+      setAppointmentStatuses(localApptStatuses);
+      showToast('บันทึกสถานะนัดหมายสำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveIntegrations = async () => {
+    setIsSaving(true);
+    try {
+      await callAppScript('SAVE_DATA', 'Settings', { id: 'integration_tokens', values: localIntegrationTokens });
+      if (setIntegrationTokens) setIntegrationTokens(localIntegrationTokens);
+      showToast('บันทึกการเชื่อมต่อสำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const tabList = [
+    { id: 'dashboard', label: 'แดชบอร์ด' },
+    { id: 'records', label: 'เวชระเบียน' },
+    { id: 'queue', label: 'นัดหมาย' },
+    { id: 'pos', label: 'POS' },
+    { id: 'catalog', label: 'สินค้า/บริการ' },
+    { id: 'inventory', label: 'คลังสินค้า' },
+    { id: 'finance', label: 'การเงิน' },
+    { id: 'staff', label: 'พนักงาน' },
+    { id: 'branch', label: 'สาขา' },
+    { id: 'reports', label: 'รายงาน' },
+    { id: 'settings', label: 'ตั้งค่า' }
+  ];
+
+  return (
+    <div className="w-full bg-slate-50 min-h-screen p-4 md:p-8 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-800 kanit-text tracking-tight flex items-center gap-3">
+            <span className="p-2.5 bg-sky-500 text-white rounded-2xl shadow-lg shadow-sky-500/25">
+              <Settings size={28} />
+            </span>
+            ตั้งค่าระบบคลินิก
+          </h1>
+          <p className="text-slate-500 mt-1.5 text-sm font-medium kanit-text">จัดการคำนำหน้าพนักงาน, สิทธิ์เข้าระบบ และหมวดหมู่ต่าง ๆ</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Navigation Sidebar inside Settings */}
+        <div className="lg:col-span-1 flex flex-col gap-2.5">
+          <button
+            onClick={() => setActiveSubTab('prefixes')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'prefixes'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <User size={18} />
+            คำนำหน้าชื่อพนักงาน
+          </button>
+          <button
+            onClick={() => setActiveSubTab('permissions')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'permissions'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <ShieldCheck size={18} />
+            จัดการสิทธิ์เข้าระบบ
+          </button>
+          <button
+            onClick={() => setActiveSubTab('categories')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'categories'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <Tag size={18} />
+            ตัวเลือกหมวดหมู่พนักงาน
+          </button>
+          <button
+            onClick={() => setActiveSubTab('statuses')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'statuses'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <CalendarClock size={18} />
+            สถานะนัดหมาย
+          </button>
+          <button
+            onClick={() => setActiveSubTab('integrations')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'integrations'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <Link size={18} />
+            การเชื่อมต่อ (แจ้งเตือน)
+          </button>
+        </div>
+
+        {/* Content Area */}
+        <div className="lg:col-span-3">
+          <div className={`${theme.card} border-slate-100/80`}>
+            {/* SUBTAB 1: PREFIXES */}
+            {activeSubTab === 'prefixes' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text">ตั้งค่าคำนำหน้าชื่อพนักงาน</h3>
+                  <p className="text-slate-400 text-xs mt-1 kanit-text">เพิ่มหรือลบตัวเลือกคำนำหน้าชื่อ เช่น นาย, นาง, นางสาว, นพ., พญ.</p>
+                </div>
+
+                <div className="flex gap-3 max-w-md">
+                  <input
+                    type="text"
+                    placeholder="เช่น ศ., ว่าที่ ร.ต."
+                    className={theme.input}
+                    value={newPrefix}
+                    onChange={(e) => setNewPrefix(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addPrefix()}
+                  />
+                  <button
+                    onClick={addPrefix}
+                    className={`px-6 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-2 ${theme.primary} shrink-0`}
+                  >
+                    <Plus size={18} />
+                    เพิ่ม
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2.5 py-4">
+                  {localPrefixes.map((prefix) => (
+                    <span
+                      key={prefix}
+                      className="px-4 py-2 bg-slate-50 text-slate-700 font-data font-semibold text-sm rounded-xl border border-slate-200/60 flex items-center gap-2 hover:bg-rose-50 hover:border-rose-100 hover:text-rose-600 transition-colors group cursor-pointer"
+                      onClick={() => removePrefix(prefix)}
+                      title="คลิกเพื่อลบ"
+                    >
+                      {prefix}
+                      <X size={14} className="text-slate-400 group-hover:text-rose-500 transition-colors" />
+                    </span>
+                  ))}
+                  {localPrefixes.length === 0 && (
+                    <div className="text-slate-400 text-sm py-4 kanit-text italic">ไม่มีข้อมูลคำนำหน้าชื่อ</div>
+                  )}
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <button
+                    onClick={savePrefixes}
+                    disabled={isSaving}
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกรายการคำนำหน้าชื่อ
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 2: PERMISSIONS */}
+            {activeSubTab === 'permissions' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text">จัดการสิทธิ์เข้าระบบ (Access Permissions)</h3>
+                  <p className="text-slate-400 text-xs mt-1 kanit-text">กำหนดสิทธิ์ของแต่ละบทบาทว่าสามารถเข้าใช้งานหน้า/แท็บใดในระบบได้บ้าง และสามารถเพิ่ม/ลบบทบาทแบบกำหนดเองได้</p>
+                </div>
+
+                {/* Add Custom Role form */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col sm:flex-row gap-3 items-end max-w-xl mb-6">
+                  <div className="flex-1 w-full text-left">
+                    <label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">ชื่อสิทธิ์ผู้ใช้ใหม่</label>
+                    <input
+                      type="text"
+                      placeholder="เช่น พนักงานชั่วคราว, นักศึกษาฝึกงาน"
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none text-sm text-slate-700 font-medium"
+                      value={newRoleName}
+                      onChange={(e) => setNewRoleName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddRole()}
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddRole}
+                    className="px-6 py-2.5 rounded-xl font-bold kanit-text text-sm transition-all flex items-center justify-center gap-2 bg-sky-500 text-white hover:bg-sky-600 shrink-0 shadow-sm"
+                  >
+                    <Plus size={16} />
+                    เพิ่มสิทธิ์ใหม่
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">
+                  <table className="w-full border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-100">
+                        <th className="p-4 font-bold text-slate-600 kanit-text">ส่วนของระบบ / แท็บการใช้งาน</th>
+                        {Object.entries(localRoleLabels).map(([roleKey, roleLabel]) => {
+                          const isDefaultRole = ['admin', 'doctor', 'nurse', 'sale'].includes(roleKey);
+                          return (
+                            <th key={roleKey} className="p-4 font-bold text-slate-600 kanit-text text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span>{roleLabel}</span>
+                                {!isDefaultRole && (
+                                  <button
+                                    onClick={() => handleRemoveRole(roleKey)}
+                                    className="p-0.5 text-slate-400 hover:text-rose-600 rounded-full hover:bg-rose-50 transition-colors"
+                                    title="ลบบทบาทนี้"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {tabList.map((tab) => (
+                        <tr key={tab.id} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="p-4 font-bold text-slate-700 kanit-text">{tab.label} ({tab.id})</td>
+                          {Object.keys(localRoleLabels).map((roleKey) => {
+                            const isAllowed = (localPermissions[roleKey] || []).includes(tab.id);
+                            // แอดมินล็อกสิทธิ์แท็บตั้งค่าไว้เสมอ เพื่อป้องกันการล็อกตัวเอง
+                            const isLocked = roleKey === 'admin' && tab.id === 'settings';
+                            return (
+                              <td key={roleKey} className="p-4 text-center">
+                                <label className="inline-flex items-center justify-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={isAllowed}
+                                    disabled={isLocked}
+                                    onChange={(e) => handlePermissionChange(roleKey, tab.id, e.target.checked)}
+                                    className="w-5 h-5 rounded border-slate-300 text-sky-500 focus:ring-sky-500/20 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                                  />
+                                </label>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <button
+                    onClick={savePermissions}
+                    disabled={isSaving}
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกสิทธิ์เข้าระบบ
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 3: CATEGORIES */}
+            {activeSubTab === 'categories' && (
+              <div className="space-y-8">
+                {/* Staff categories */}
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 kanit-text">หมวดหมู่พนักงาน</h3>
+                    <p className="text-slate-400 text-xs mt-1 kanit-text">จัดการหมวดหมู่ของพนักงานเพื่อใช้แยกหน้าที่ เช่น แพทย์, สต๊าฟ, พยาบาล (ค่าเริ่มต้น: แพทย์, สต๊าฟ/พนักงาน)</p>
+                  </div>
+
+                  <div className="flex gap-3 max-w-md">
+                    <input
+                      type="text"
+                      placeholder="เช่น เภสัชกร, หมอนวดแผนไทย"
+                      className={theme.input}
+                      value={newStaffCat}
+                      onChange={(e) => setNewStaffCat(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addStaffCat()}
+                    />
+                    <button
+                      onClick={addStaffCat}
+                      className={`px-6 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-2 ${theme.primary} shrink-0`}
+                    >
+                      <Plus size={18} />
+                      เพิ่ม
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5 py-2">
+                    {localStaffCats.map((cat) => {
+                      const isDefault = ['แพทย์', 'สต๊าฟ/พนักงาน'].includes(cat);
+                      return (
+                        <span
+                          key={cat}
+                          className={`px-4 py-2 font-data font-semibold text-sm rounded-xl border flex items-center gap-2 transition-colors ${
+                            isDefault 
+                              ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                              : 'bg-slate-50 text-slate-700 border-slate-200/60 hover:bg-rose-50 hover:border-rose-100 hover:text-rose-600 group cursor-pointer'
+                          }`}
+                          onClick={() => !isDefault && removeStaffCat(cat)}
+                          title={isDefault ? 'หมวดหมู่พื้นฐาน ลบไม่ได้' : 'คลิกเพื่อลบ'}
+                        >
+                          {cat}
+                          {!isDefault && <X size={14} className="text-slate-400 group-hover:text-rose-500 transition-colors" />}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <button
+                    onClick={saveCategories}
+                    disabled={isSaving}
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกตัวเลือกหมวดหมู่
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 4: APPOINTMENT STATUSES */}
+            {activeSubTab === 'statuses' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text">ตั้งค่าสถานะนัดหมาย</h3>
+                  <p className="text-slate-400 text-xs mt-1 kanit-text">เพิ่ม ลบ เลือกสี และจัดลำดับสถานะสำหรับการนัดหมายและคิว</p>
+                </div>
+
+                {/* Form to add a new status */}
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4 max-w-xl">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5 kanit-text">ชื่อสถานะใหม่</label>
+                      <input
+                        type="text"
+                        placeholder="เช่น กำลังรักษา, เสร็จสิ้น"
+                        className={theme.input}
+                        value={newApptStatus}
+                        onChange={(e) => setNewApptStatus(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addApptStatus()}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={addApptStatus}
+                        className={`px-6 h-[46px] rounded-xl font-bold kanit-text text-sm transition-all flex items-center gap-2 ${theme.primary} shrink-0`}
+                      >
+                        <Plus size={18} />
+                        เพิ่มสถานะ
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-2 kanit-text">เลือกสีของสถานะนี้</label>
+                    <div className="flex flex-wrap gap-2">
+                      {colorPresets.map((preset) => {
+                        const isSelected = selectedColor === preset.key;
+                        return (
+                          <button
+                            key={preset.key}
+                            onClick={() => setSelectedColor(preset.key)}
+                            type="button"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                              isSelected
+                                ? 'bg-sky-500 text-white border-sky-600 shadow-sm'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <span className={`w-3 h-3 rounded-full ${preset.bg}`} />
+                            {preset.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* List of current statuses */}
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 kanit-text">
+                    รายการสถานะและการจัดเรียง (มีทั้งหมด {localApptStatuses.length} รายการ)
+                  </label>
+                  
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white shadow-sm divide-y divide-slate-100 max-w-3xl">
+                    {localApptStatuses.map((status, index) => {
+                      const label = typeof status === 'string' ? status : status.label;
+                      const colorKey = typeof status === 'string' ? 'sky' : (status.color || 'sky');
+                      const isDefault = ['รอยืนยัน', 'ยืนยันแล้ว', 'ยกเลิก'].includes(label);
+                      const currentPreset = colorPresets.find(p => p.key === colorKey) || colorPresets[3];
+
+                      return (
+                        <div key={label + '_' + index} className="flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors">
+                          {/* Reordering column */}
+                          <div className="flex items-center gap-1.5 mr-4">
+                            <button
+                              onClick={() => moveStatusUp(index)}
+                              disabled={index === 0}
+                              className={`p-1.5 rounded-lg border border-slate-100 bg-white transition-all ${
+                                index === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                              }`}
+                              title="เลื่อนขึ้น"
+                            >
+                              <ChevronUp size={16} />
+                            </button>
+                            <button
+                              onClick={() => moveStatusDown(index)}
+                              disabled={index === localApptStatuses.length - 1}
+                              className={`p-1.5 rounded-lg border border-slate-100 bg-white transition-all ${
+                                index === localApptStatuses.length - 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                              }`}
+                              title="เลื่อนลง"
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </div>
+
+                          {/* Info & Label */}
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold text-sm text-slate-800 kanit-text block truncate">{label}</span>
+                            <span className="text-[10px] text-slate-400 font-data">ลำดับที่ {index + 1}</span>
+                          </div>
+
+                          {/* Quick Color Picker */}
+                          <div className="flex items-center gap-1.5 px-4">
+                            {colorPresets.map((preset) => {
+                              const isActive = colorKey === preset.key;
+                              return (
+                                <button
+                                  key={preset.key}
+                                  onClick={() => updateStatusColor(index, preset.key)}
+                                  className={`w-5 h-5 rounded-full transition-all flex items-center justify-center ${preset.bg} ${
+                                    isActive ? 'ring-2 ring-offset-2 ring-sky-500 scale-110' : 'opacity-60 hover:opacity-100 hover:scale-105'
+                                  }`}
+                                  title={`เปลี่ยนสีเป็น ${preset.name}`}
+                                >
+                                  {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Preview Badge */}
+                          <div className="w-32 flex justify-center px-2">
+                            <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${currentPreset.class}`}>
+                              {label}
+                            </span>
+                          </div>
+
+                          {/* Delete Action */}
+                          <div className="w-12 flex justify-end">
+                            {isDefault ? (
+                              <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-md border border-slate-100 kanit-text cursor-not-allowed">
+                                ระบบ
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => removeApptStatus(index)}
+                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                                title="ลบสถานะนี้"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <button
+                    onClick={saveApptStatuses}
+                    disabled={isSaving}
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกสถานะนัดหมาย
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeSubTab === 'integrations' && (
+              <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm animate-in slide-in-from-right-4 duration-300">
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text">ตั้งค่าการเชื่อมต่อ และ การแจ้งเตือน (Integrations)</h3>
+                  <p className="text-sm text-slate-500 kanit-text mt-1">ใส่ Token เพื่อเชื่อมต่อระบบกับแอปพลิเคชันต่างๆ</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Line Notify Token / Line Messaging API Token</label>
+                    <input
+                      type="text"
+                      value={localIntegrationTokens.line || ''}
+                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, line: e.target.value })}
+                      placeholder="กรอก Line Token"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Telegram Bot Token</label>
+                    <input
+                      type="text"
+                      value={localIntegrationTokens.telegram || ''}
+                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, telegram: e.target.value })}
+                      placeholder="กรอก Telegram Token"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Discord Webhook URL</label>
+                    <input
+                      type="text"
+                      value={localIntegrationTokens.discord || ''}
+                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, discord: e.target.value })}
+                      placeholder="กรอก Discord Webhook URL"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 mt-8 flex justify-end">
+                  <button
+                    onClick={saveIntegrations}
+                    disabled={isSaving}
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกการเชื่อมต่อ
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function App() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const pdpaToken = urlParams.get('pdpa');
@@ -18334,7 +19551,20 @@ export default function App() {
     }
   }, [currentTab]);
 
-  const [currentBranch, setCurrentBranch] = useState('b1');
+  const [currentBranch, setCurrentBranch] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = localStorage.getItem('clinic_currentBranch');
+      if (saved) return saved;
+    }
+    return 'b1';
+  });
+
+  // บันทึกสาขาล่าสุดลง LocalStorage ทุกครั้งที่มีการเลือก
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('clinic_currentBranch', currentBranch);
+    }
+  }, [currentBranch]);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
@@ -18526,6 +19756,30 @@ export default function App() {
   const [financeData, setFinanceData] = useState([]);
   const [pdpaQrModal, setPdpaQrModal] = useState({ isOpen: false, link: '' });
 
+  // --- States for clinic settings (prefixes, roles/permissions, categories) ---
+  const [staffPrefixes, setStaffPrefixes] = useState(['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']);
+  const [rolePermissions, setRolePermissions] = useState({
+    admin: ['dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings'],
+    doctor: ['dashboard', 'records', 'queue'],
+    nurse: ['records', 'queue'],
+    sale: ['pos', 'catalog']
+  });
+  const [roleLabels, setRoleLabels] = useState({
+    admin: 'แอดมิน (Admin)',
+    doctor: 'แพทย์ (Doctor)',
+    nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
+    sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+  });
+  const [staffCategories, setStaffCategories] = useState(['แพทย์', 'สต๊าฟ/พนักงาน']);
+  const [appointmentStatuses, setAppointmentStatuses] = useState([
+    { label: 'รอยืนยัน', color: 'amber' },
+    { label: 'ยืนยันแล้ว', color: 'emerald' },
+    { label: 'เลื่อนนัด', color: 'violet' },
+    { label: 'ยกเลิก', color: 'rose' }
+  ]);
+  const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '' });
+  const [currentUser, setCurrentUser] = useState({ id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' });
+
   // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
   const speak = (text, onEnd) => {
     if (!text) {
@@ -18648,29 +19902,74 @@ export default function App() {
       );
   };
 
-  // แจ้งเตือนแบบ State ปลอดภัยที่สุด แสดงบนสุดและไม่ทำให้จอโหลดใหม่ซ้อน
-  const [toast, setToast] = useState(null);
-  const [isToastClosing, setIsToastClosing] = useState(false);
-  const toastTimerRef = React.useRef(null);
-  const toastCloseTimerRef = React.useRef(null);
+  // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน และหยุดเวลาชั่วคราวเมื่อชี้เมาส์/แตะจอ
+  const [toasts, setToasts] = useState([]);
 
   const showToast = (message, type = 'success') => {
-    // ล้าง Timer เก่าออกถ้ามีการกดรัวๆ
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    if (toastCloseTimerRef.current) clearTimeout(toastCloseTimerRef.current);
+    const newToast = {
+      id: 'toast_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      message,
+      type,
+      isClosing: false,
+      paused: false,
+      timeLeft: 3000
+    };
 
-    setToast({ message, type });
-    setIsToastClosing(false); // เริ่มแอนิเมชันขาเข้า
-
-    toastTimerRef.current = setTimeout(() => {
-      setIsToastClosing(true); // เริ่มแอนิเมชันขาออก
-      
-      toastCloseTimerRef.current = setTimeout(() => {
-        setToast(null); // ลบออกจาก DOM หลังแอนิเมชันเล่นจบ
-        setIsToastClosing(false);
-      }, 300); // หน่วงเวลาให้แอนิเมชัน slide-up เล่นจบก่อน
-    }, 3000);
+    setToasts(prev => {
+      const updated = [...prev];
+      if (updated.length >= 4) {
+        // หากครบ 4 อันแล้ว ให้ตัวแรกสุดเริ่มลบออก (isClosing = true) เพื่อรักษาความสวยงามและไม่ล้นจอ
+        updated[0] = { ...updated[0], isClosing: true, timeLeft: 0, closeStartedAt: Date.now() };
+      }
+      return [...updated, newToast];
+    });
   };
+
+  const dismissToast = (id) => {
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, isClosing: true, closeStartedAt: Date.now(), timeLeft: 0 } : t));
+  };
+
+  // Effect สำหรับจัดการนับเวลาถอยหลังทีละ 100ms ของทุก Toast
+  useEffect(() => {
+    if (toasts.length === 0) return;
+
+    const interval = setInterval(() => {
+      setToasts(prev => {
+        let changed = false;
+        const now = Date.now();
+        const updated = prev.map(t => {
+          if (t.paused) return t; // หยุดเวลานับถอยหลังเมื่อเมาส์ชี้อยู่ หรือกดค้าง
+          
+          if (t.timeLeft > 0) {
+            changed = true;
+            const newTime = t.timeLeft - 100;
+            if (newTime <= 0) {
+              return { ...t, timeLeft: 0, isClosing: true, closeStartedAt: now };
+            }
+            return { ...t, timeLeft: newTime };
+          }
+          return t;
+        });
+
+        // ลบ Toast ที่เล่นแอนิเมชันขาออกครบ 300ms แล้วออกจาก DOM
+        const cleaned = updated.filter(t => {
+          if (t.isClosing && !t.closeStartedAt) {
+            t.closeStartedAt = now;
+            changed = true;
+          }
+          if (t.closeStartedAt && now - t.closeStartedAt >= 300) {
+            changed = true;
+            return false;
+          }
+          return true;
+        });
+
+        return changed ? cleaned : prev;
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [toasts.length]);
 
   const handleScroll = (e) => {
     setIsScrolled(e.target.scrollTop > 20);
@@ -18742,7 +20041,8 @@ export default function App() {
           resBranches,
           resFinanceRevenue,
           resFinanceExpenses,
-          resStaff
+          resStaff,
+          resSettings
         ] = await Promise.all([
           callAppScript('GET_DATA', 'Patients'),
           callAppScript('GET_DATA', 'POS_Transactions'),
@@ -18752,7 +20052,8 @@ export default function App() {
           callAppScript('GET_DATA', 'Branches'),
           callAppScript('GET_DATA', 'Finance_Revenue'),
           callAppScript('GET_DATA', 'Finance_Expenses'),
-          callAppScript('GET_DATA', 'Staff')
+          callAppScript('GET_DATA', 'Staff'),
+          callAppScript('GET_DATA', 'Settings')
         ]);
 
         if (resPatients?.status === 'success') { 
@@ -18792,6 +20093,42 @@ export default function App() {
            setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
         }
 
+        if (resSettings?.status === 'success' && Array.isArray(resSettings.data)) {
+          const prefixes = resSettings.data.find(s => s.id === 'staff_prefixes');
+          if (prefixes && Array.isArray(prefixes.values)) {
+            setStaffPrefixes(prefixes.values);
+          }
+          const perms = resSettings.data.find(s => s.id === 'role_permissions');
+          if (perms && perms.values) {
+            setRolePermissions(perms.values);
+            if (perms.labels) {
+              setRoleLabels(perms.labels);
+            }
+          }
+          const staffCats = resSettings.data.find(s => s.id === 'staff_categories');
+          if (staffCats && Array.isArray(staffCats.values)) {
+            setStaffCategories(staffCats.values);
+          }
+          const apptStats = resSettings.data.find(s => s.id === 'appointment_statuses');
+          if (apptStats && Array.isArray(apptStats.values)) {
+            const normalized = apptStats.values.map(item => {
+              if (typeof item === 'string') {
+                let color = 'sky';
+                if (item === 'รอยืนยัน' || item.toLowerCase().includes('pend')) color = 'amber';
+                else if (item === 'ยืนยันแล้ว' || item.toLowerCase().includes('confirm')) color = 'emerald';
+                else if (item === 'ยกเลิก' || item.toLowerCase().includes('cancel')) color = 'rose';
+                return { label: item, color };
+              }
+              return item;
+            });
+            setAppointmentStatuses(normalized);
+          }
+          const intTokens = resSettings.data.find(s => s.id === 'integration_tokens');
+          if (intTokens && intTokens.values) {
+            setIntegrationTokens(intTokens.values);
+          }
+        }
+
         // โหลดข้อมูล Queue ของเดือนปัจจุบันเริ่มต้น
         const now = new Date();
         await fetchQueueForMonth(now.getFullYear(), now.getMonth());
@@ -18819,8 +20156,63 @@ export default function App() {
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
   ];
 
+  const dealStatuses = useMemo(() => {
+    const colorClasses = {
+      amber: 'bg-amber-100 text-amber-700 border-amber-200',
+      emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      rose: 'bg-rose-100 text-rose-700 border-rose-200',
+      sky: 'bg-sky-100 text-sky-700 border-sky-200',
+      violet: 'bg-violet-100 text-violet-700 border-violet-200',
+      indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      teal: 'bg-teal-100 text-teal-700 border-teal-200',
+      fuchsia: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
+      slate: 'bg-slate-100 text-slate-700 border-slate-200'
+    };
+    return appointmentStatuses.map((statusObj, index) => {
+      const label = typeof statusObj === 'string' ? statusObj : statusObj.label;
+      const colorKey = typeof statusObj === 'string' ? 'sky' : (statusObj.color || 'sky');
+
+      let value = 'pending';
+      if (label === 'ยืนยันแล้ว' || label.toLowerCase().includes('confirm')) value = 'confirmed';
+      else if (label === 'ยกเลิก' || label.toLowerCase().includes('cancel')) value = 'cancelled';
+      else if (label === 'เลื่อนนัด' || label.toLowerCase().includes('postpone')) value = 'postponed';
+      else if (label === 'รอยืนยัน' || label.toLowerCase().includes('pend')) value = 'pending';
+      else {
+        value = `custom_${index}`;
+      }
+
+      const color = colorClasses[colorKey] || colorClasses.sky;
+
+      return {
+        value,
+        label,
+        color
+      };
+    });
+  }, [appointmentStatuses]);
+
+  const allowedTabs = useMemo(() => {
+    return rolePermissions[currentUser.role] || ['dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings'];
+  }, [rolePermissions, currentUser.role]);
+
+  const filteredNavItems = useMemo(() => {
+    // แอดมินต้องเข้าหน้าตั้งค่าได้เสมอ เพื่อป้องกันการล็อกตัวเองออก
+    const tabs = currentUser.role === 'admin' && !allowedTabs.includes('settings') 
+      ? [...allowedTabs, 'settings'] 
+      : allowedTabs;
+    return navItems.filter(item => tabs.includes(item.id));
+  }, [navItems, allowedTabs, currentUser.role]);
+
+  // เมื่อสิทธิ์เปลี่ยนแล้วแท็บปัจจุบันที่เปิดอยู่ไม่มีสิทธิ์เข้าถึง ให้เด้งไปหน้าแรกที่สามารถเข้าได้
+  useEffect(() => {
+    const tabIds = filteredNavItems.map(item => item.id);
+    if (tabIds.length > 0 && !tabIds.includes(currentTab)) {
+      setCurrentTab(tabIds[0]);
+    }
+  }, [filteredNavItems, currentTab]);
+
   // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า
-  const mobileNavItems = navItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'settings'].includes(item.id));
+  const mobileNavItems = filteredNavItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'settings'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
 
   return (
@@ -18862,7 +20254,7 @@ export default function App() {
             </div>
             
             <nav className="flex-1 px-3 py-2 flex flex-col overflow-y-auto custom-scrollbar gap-1">
-              {navItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <button 
                   key={item.id} 
                   onClick={() => handleTabClick(item.id)} 
@@ -18883,8 +20275,24 @@ export default function App() {
                 <User size={18} />
               </div>
               <div className="text-left whitespace-nowrap">
-                <p className="text-xs font-semibold text-slate-700 kanit-text">Admin User</p>
-                <p className="text-[10px] text-slate-400 kanit-text">ออนไลน์</p>
+                <select 
+                  value={currentUser.role}
+                  onChange={(e) => {
+                    const selectedRole = e.target.value;
+                    setCurrentUser({
+                      id: selectedRole + '1',
+                      name: (roleLabels[selectedRole] || selectedRole) + ' User',
+                      role: selectedRole,
+                      category: selectedRole === 'doctor' ? 'doctor' : 'staff'
+                    });
+                  }}
+                  className="bg-transparent border-0 font-semibold text-slate-700 text-xs focus:ring-0 outline-none cursor-pointer p-0 pr-4"
+                >
+                  {Object.entries(roleLabels || {}).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-emerald-500 kanit-text mt-0.5">ออนไลน์ (คลิกเปลี่ยน)</p>
               </div>
             </div>
           </div>
@@ -18939,7 +20347,7 @@ export default function App() {
             </div>
 
             <nav className="flex-1 px-3 py-2 flex flex-col overflow-y-auto overflow-x-hidden relative gap-1 custom-scrollbar">
-              {navItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <button 
                   key={item.id} 
                   onClick={() => handleTabClick(item.id)} 
@@ -18970,8 +20378,24 @@ export default function App() {
               >
                 <div className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div>
                 <div className="text-left whitespace-nowrap min-w-[100px]">
-                  <p className="text-xs font-semibold text-slate-700 kanit-text">Admin User</p>
-                  <p className="text-[10px] text-slate-400 kanit-text">ออนไลน์</p>
+                  <select 
+                    value={currentUser.role}
+                    onChange={(e) => {
+                      const selectedRole = e.target.value;
+                      setCurrentUser({
+                        id: selectedRole + '1',
+                        name: (roleLabels[selectedRole] || selectedRole) + ' User',
+                        role: selectedRole,
+                        category: selectedRole === 'doctor' ? 'doctor' : 'staff'
+                      });
+                    }}
+                    className="bg-transparent border-0 font-semibold text-slate-700 text-xs focus:ring-0 outline-none cursor-pointer p-0 pr-4"
+                  >
+                    {Object.entries(roleLabels || {}).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-emerald-500 kanit-text mt-0.5">ออนไลน์ (คลิกเปลี่ยน)</p>
                 </div>
               </div>
               <div 
@@ -18987,8 +20411,8 @@ export default function App() {
         </aside>
         
         {/* --- Mobile Top Header --- */}
-        <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
-          <div className="flex items-center gap-2.5">
+        <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-3.5 py-2.5 sm:px-5 sm:py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
             <button onClick={() => setIsSidebarExpanded(true)} className="w-10 h-10 flex items-center justify-center text-slate-500 active:scale-90 transition-transform">
               <div className="w-8 h-8 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-sky-500/30">
                 <Stethoscope size={18} />
@@ -18998,10 +20422,26 @@ export default function App() {
               <h2 className="text-lg font-black kanit-text tracking-tight mt-0.5">Clinic<span className="text-sky-500">Hub</span></h2>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="text-right">
-              <p className="text-[11px] font-bold text-slate-700 kanit-text leading-none">Admin User</p>
-              <p className="text-[9px] text-emerald-500 kanit-text mt-0.5 font-medium">ออนไลน์</p>
+              <select 
+                value={currentUser.role}
+                onChange={(e) => {
+                  const selectedRole = e.target.value;
+                  setCurrentUser({
+                    id: selectedRole + '1',
+                    name: (roleLabels[selectedRole] || selectedRole) + ' User',
+                    role: selectedRole,
+                    category: selectedRole === 'doctor' ? 'doctor' : 'staff'
+                  });
+                }}
+                className="bg-transparent border-0 font-bold text-slate-700 text-[11px] focus:ring-0 outline-none cursor-pointer p-0 text-right pr-4 max-w-[85px] xs:max-w-[120px] sm:max-w-[150px] truncate"
+              >
+                {Object.entries(roleLabels || {}).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+              <p className="text-[9px] text-emerald-500 kanit-text mt-0.5">ออนไลน์</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-inner ring-2 ring-white">
               <User size={16} />
@@ -19031,13 +20471,13 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} />
                 </div>
             )}
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
+                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} />
                 </div>
             )}
 
@@ -19120,7 +20560,12 @@ export default function App() {
                        callAppScript={callAppScript} 
                        showToast={showToast} 
                        isGlobalLoading={isGlobalLoading} 
-                    showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
+                       showGlobalAlert={showGlobalAlert} 
+                       globalAlert={globalAlert}
+                       staffPrefixes={staffPrefixes}
+                       staffCategories={staffCategories}
+                       roleLabels={roleLabels}
+                    />
                 </div>
             )}
             
@@ -19151,8 +20596,24 @@ export default function App() {
             )}
             
             {currentTab === 'settings' && (
-                <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 py-4 md:py-8 h-[80vh]">
-                    <PlaceholderPage title="ตั้งค่าระบบ" desc="ตั้งค่าข้อมูลคลินิก ผู้ใช้งาน และสิทธิ์การเข้าถึง" icon={Settings} />
+                <div className="w-full">
+                    <SettingsManager 
+                        staffPrefixes={staffPrefixes}
+                        setStaffPrefixes={setStaffPrefixes}
+                        rolePermissions={rolePermissions}
+                        setRolePermissions={setRolePermissions}
+                        roleLabels={roleLabels}
+                        setRoleLabels={setRoleLabels}
+                        staffCategories={staffCategories}
+                        setStaffCategories={setStaffCategories}
+                        appointmentStatuses={appointmentStatuses}
+                        setAppointmentStatuses={setAppointmentStatuses}
+                        integrationTokens={integrationTokens}
+                        setIntegrationTokens={setIntegrationTokens}
+                        callAppScript={callAppScript}
+                        showToast={showToast}
+                        isGlobalLoading={isGlobalLoading}
+                    />
                 </div>
             )}
           </div>
@@ -19197,21 +20658,37 @@ export default function App() {
 
       </div>
 
-      {toast && (
+      {toasts.length > 0 && (
         <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[90vw] sm:max-w-md"
-          style={{ top: 'max(1rem, env(safe-area-inset-top))', marginTop: '0.5rem' }}
+          className="fixed left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
+          style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
         >
-          <div className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full sm:rounded-2xl shadow-2xl backdrop-blur-xl border text-white ${
-              toast.type === 'success' ? 'bg-emerald-500/95 border-emerald-400 shadow-emerald-500/20' : 
-              toast.type === 'warning' ? 'bg-amber-500/95 border-amber-400 shadow-amber-500/20' : 
-              'bg-rose-500/95 border-rose-400 shadow-rose-500/20'
-          } ${isToastClosing ? 'toast-animate-out' : 'toast-animate-in'}`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
-             toast.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
-             <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />}
-            <span className="font-medium kanit-text text-xs sm:text-sm leading-tight break-words">{toast.message}</span>
-          </div>
+          {toasts.map((t) => (
+            <div 
+              key={t.id}
+              onMouseEnter={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: true } : item))}
+              onMouseLeave={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: false } : item))}
+              onTouchStart={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: true } : item))}
+              onTouchEnd={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: false } : item))}
+              onTouchCancel={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: false } : item))}
+              onClick={() => dismissToast(t.id)}
+              className={`pointer-events-auto cursor-pointer ${t.isClosing ? 'toast-wrapper-closing' : 'toast-wrapper-active'}`}
+            >
+              <div 
+                key={`inner_${t.id}`}
+                className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full sm:rounded-2xl shadow-2xl backdrop-blur-xl border text-white ${
+                  t.type === 'success' ? 'bg-emerald-500/95 border-emerald-400 shadow-emerald-500/20' : 
+                  t.type === 'warning' ? 'bg-amber-500/95 border-amber-400 shadow-amber-500/20' : 
+                  'bg-rose-500/95 border-rose-400 shadow-rose-500/20'
+                } ${t.isClosing ? 'toast-animate-out' : (t.timeLeft > 2600 ? 'toast-animate-in' : '')}`}
+              >
+                {t.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
+                 t.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
+                 <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />}
+                <span className="font-medium kanit-text text-xs sm:text-sm leading-tight break-words">{t.message}</span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -19296,6 +20773,21 @@ export default function App() {
         }
         .toast-animate-in { animation: toastSlideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .toast-animate-out { animation: toastSlideUp 0.3s ease-in forwards; }
+        
+        .toast-wrapper-active {
+            max-height: 100px;
+            opacity: 1;
+            margin-bottom: 0.5rem;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .toast-wrapper-closing {
+            max-height: 0px !important;
+            opacity: 0 !important;
+            margin-bottom: 0px !important;
+            pointer-events: none;
+            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
         
         /* Animation สำหรับกรอบสแกนบัตร */
         @keyframes scanLine {
@@ -19440,12 +20932,12 @@ export default function App() {
         @media (min-width: 1536px) { .is-scrolled .sticky-filter-inner { padding-left: 3rem; padding-right: 3rem; } }
 
         /* --- [NEW] CSS คำนวณระยะกาง Filter ของหน้านัดหมายอัตโนมัติ --- */
-        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 56px); }
+        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 54px); }
         @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 64px); } }
         @media (min-width: 768px) and (max-width: 1023px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 59px); } }
 
         /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก (เพิ่มระยะห่างจากขอบบนเพื่อความสวยงามและไม่โดนบัง) */
-        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 56px); z-index: 40; }
+        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 54px); z-index: 40; }
         @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 64px); } }
         @media (min-width: 768px) and (max-width: 1023px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 59px); } }
       `}} />
