@@ -3990,7 +3990,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     
     let textToSpeak = `ขอเชิญคุณ ${cleanName}`;
     if (roomName) textToSpeak += ` ที่ ${roomName} ค่ะ`;
-    else textToSpeak += ` ที่ห้องตรวจค่ะ`;
+    else textToSpeak += ` ที่เค้าเตอร์ค่ะ`;
     
     const onEnd = () => {
       setIsSpeaking(false);
