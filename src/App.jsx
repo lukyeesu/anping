@@ -1430,6 +1430,26 @@ const getEffectiveApptStatus = (appt) => {
     return effStatus;
 };
 
+const getEffectiveApptDatetimeStr = (appt) => {
+    if (!appt) return '';
+    for (let i = 4; i >= 1; i--) {
+        const pDate = appt[`postpone${i}_date`];
+        if (pDate) return pDate;
+    }
+    if (appt.postponedDate) return appt.postponedDate;
+    return appt.datetime || '';
+};
+
+const getEffectiveApptIsoDate = (appt) => {
+    if (!appt) return '';
+    for (let i = 4; i >= 1; i--) {
+        const pDate = appt[`postpone${i}_date`];
+        if (pDate) return parseThaiDateToISO(pDate) || '';
+    }
+    if (appt.rawPostponedDate) return appt.rawPostponedDate;
+    return appt.rawDeliveryStart || appt.rawDateTime || parseThaiDateToISO(appt.datetime) || '';
+};
+
 const parseThaiDateToISO = (thaiDateTimeStr) => {
     if (!thaiDateTimeStr) return null;
     try {
@@ -2546,7 +2566,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 };
 
 // เพิ่ม prop setPatientsData เพื่อให้สามารถเพิ่มคนไข้ใหม่จากหน้านัดหมายได้
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [] }) => {
+const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -2582,7 +2602,10 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
   const [showPatientSuggest, setShowPatientSuggest] = useState(false);
   const [showDoctorSuggest, setShowDoctorSuggest] = useState(false);
-  const mockDoctors = ['นพ. สมชาย รักษาดี', 'พญ. สมหญิง เก่งกล้า', 'ทพ. ใจดี ยิ้มแย้ม'];
+  const allDoctors = useMemo(() => {
+    return staffData.filter(s => s.role === 'doctor' || s.category === 'doctor');
+  }, [staffData]);
+  const currentUserIsDoctor = currentUser && (currentUser.role === 'doctor' || currentUser.category === 'doctor');
 
   const [apptCalDate, setApptCalDate] = useState(new Date());
   const [apptCalView, setApptCalView] = useState('days');
@@ -2638,7 +2661,10 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   // เปลี่ยนชื่อฟังก์ชันเป็นของ AppointmentManager โดยเฉพาะ ป้องกันการชนกันของ Global Scope
   const handleOpenApptAdd = () => {
     setEditingId(null);
-    setFormData({ ...initialApptState });
+    setFormData({ 
+      ...initialApptState, 
+      doctor: currentUserIsDoctor ? currentUser.name : '' 
+    });
     setIsViewMode(false);
     apptModal.open();
   };
@@ -2650,7 +2676,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         hn: appt.hn || '', 
         patientName: appt.patientName || appt.name || '', 
         searchPatient: appt.hn ? `${appt.hn} - ${appt.patientName || appt.name}` : (appt.patientName || appt.name || ''),
-        doctor: appt.doctor || appt.artist || '', 
+        doctor: appt.doctor || appt.artist || (currentUserIsDoctor ? currentUser.name : ''), 
         datetime: appt.datetime || '', 
         reason: appt.reason || appt.category || '', 
         status: appt.status || appt.dealStatus || 'pending',
@@ -2669,7 +2695,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         postpone3_status: appt.postpone3_status || '',
         postpone4_date: appt.postpone4_date || '',
         postpone4_status: appt.postpone4_status || '',
-        createdAt: appt.createdAt || ''
+        createdAt: appt.createdAt || appt.timestamp || appt.Timestamp || appt.created_at || ''
     });
     setIsViewMode(isView);
     apptModal.open();
@@ -2698,9 +2724,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       const apptStatus = appt.status || appt.dealStatus;
       const isPostponed = apptStatus === 'postponed';
 
-      const oldTime = isPostponed && appt.postponedDate 
-          ? (appt.postponedDate.split(' ')[1] || '09:00 น.') 
-          : appt.datetime ? (appt.datetime.split(' ')[1] || '09:00 น.') : '09:00 น.';
+      const effectiveDt = getEffectiveApptDatetimeStr(appt);
+      const oldTime = effectiveDt ? (effectiveDt.split(' ')[1] || '09:00 น.') : '09:00 น.';
 
       const d = String(newDate.getDate()).padStart(2, '0');
       const m = String(newDate.getMonth() + 1).padStart(2, '0');
@@ -2748,6 +2773,18 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const handleSaveAppt = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
+
+    let doctorName = formData.doctor;
+    if (currentUserIsDoctor) {
+        doctorName = currentUser.name;
+    } else {
+        if (!doctorName) {
+            showToast('กรุณาเลือกแพทย์ผู้นัด', 'warning');
+            setIsProcessing(false);
+            return;
+        }
+    }
+
     let finalHn = formData.hn;
     
     if (!finalHn && formData.patientName) {
@@ -2785,10 +2822,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         } else break;
     }
 
+    const creationTime = editingId ? (formData.createdAt || new Date().toISOString()) : new Date().toISOString();
     const payload = {
-        id: editingId || `APPT${Date.now()}`, hn: finalHn, patientName: formData.patientName, datetime: formData.datetime, doctor: formData.doctor, reason: formData.reason, status: formData.status,
+        id: editingId || `APPT${Date.now()}`, hn: finalHn, patientName: formData.patientName, datetime: formData.datetime, doctor: doctorName, reason: formData.reason, status: formData.status,
         phone: formData.phones, lineId: formData.lineId, facebook: formData.facebook, instagram: formData.instagram, tiktok: formData.tiktok, serviceType: formData.serviceType,
-        rawDeliveryStart: isoDate, rawDateTime: isoDate, name: formData.patientName || finalHn, artist: formData.doctor, category: formData.reason, dealStatus: effectiveStatus,
+        rawDeliveryStart: isoDate, rawDateTime: isoDate, name: formData.patientName || finalHn, artist: doctorName, category: formData.reason, dealStatus: effectiveStatus,
         // ข้อมูลเลื่อนนัด
         postponeCount: calcPostponeCount,
         postpone1_date: formData.postpone1_date || '', postpone1_status: formData.postpone1_status || '',
@@ -2798,7 +2836,13 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         // วันที่ล่าสุดสำหรับปฏิทิน (effective date)
         rawPostponedDate: calcPostponeCount > 0 ? effectiveDate : '',
         // Timestamp วันที่สร้างนัดหมาย
-        createdAt: editingId ? (formData.createdAt || new Date().toISOString()) : new Date().toISOString()
+        createdAt: creationTime,
+        timestamp: creationTime,
+        Timestamp: creationTime,
+        created_at: creationTime,
+        createDate: creationTime,
+        create_date: creationTime,
+        createdAtDate: creationTime
     };
     
     try {
@@ -2835,7 +2879,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       (a.hn && a.hn.includes(search)) || 
       (a.doctor && a.doctor.includes(search)) ||
       (a.reason && a.reason.includes(search))
-    ).sort((a, b) => new Date(b.rawDeliveryStart || 0) - new Date(a.rawDeliveryStart || 0));
+    ).sort((a, b) => {
+      const dateA = getEffectiveApptIsoDate(a);
+      const dateB = getEffectiveApptIsoDate(b);
+      return new Date(dateB || 0) - new Date(dateA || 0);
+    });
   }, [augmentedQueueData, search]);
 
   // --- [NEW] สรุปยอดสำหรับระบบนัดหมาย ---
@@ -2850,7 +2898,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     const todayStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()+543}`;
 
     augmentedQueueData.forEach(appt => {
-        if (appt.datetime && appt.datetime.split(' ')[0] === todayStr) {
+        const effectiveDt = getEffectiveApptDatetimeStr(appt);
+        if (effectiveDt && effectiveDt.split(' ')[0] === todayStr) {
             todayCount++;
         }
         if (appt.status === 'pending' || appt.dealStatus === 'pending') pending++;
@@ -2993,7 +3042,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   // ป้องกันการ Re-render ตารางใหม่ทั้งหมดเมื่อ Header ทำแอนิเมชัน (isApptHeaderScrolled เปลี่ยนค่า)
   const memoizedApptTableRows = useMemo(() => {
     return filteredData.slice(0, visibleCount).map((appt, index) => {
-        const dtParts = (appt.datetime || '').split(' ');
+        const effectiveDt = getEffectiveApptDatetimeStr(appt);
+        const dtParts = effectiveDt.split(' ');
         const datePart = dtParts[0] || '-';
         const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
 
@@ -3048,7 +3098,8 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
   const memoizedApptMobileCards = useMemo(() => {
     return filteredData.slice(0, visibleCount).map((appt, index) => {
-        const dtParts = (appt.datetime || '').split(' ');
+        const effectiveDt = getEffectiveApptDatetimeStr(appt);
+        const dtParts = effectiveDt.split(' ');
         const datePart = dtParts[0] || '-';
         const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
         return (
@@ -3364,6 +3415,12 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                   <h3 className="text-sm sm:text-xl font-bold text-slate-800 kanit-text truncate leading-tight">{isViewMode ? 'รายละเอียดการนัดหมาย' : (editingId ? 'แก้ไขข้อมูลนัดหมาย' : 'เพิ่มนัดหมายใหม่')}</h3>
                   <p className="text-[10px] sm:text-sm text-slate-500 kanit-text truncate leading-tight mt-0.5">{isViewMode ? 'ข้อมูลการนัดหมายสำหรับเรียกดู' : 'ระบุรายละเอียดการนัดหมายคนไข้ล่วงหน้า'}</p>
                 </div>
+                {formData.createdAt && (
+                  <div className="hidden sm:flex text-[11px] font-medium text-slate-500 items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60 kanit-text shadow-sm shrink-0">
+                    <Clock size={14} className="text-slate-400" />
+                    <span>นัดเมื่อ: {formatDateTime(formData.createdAt)}</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 {/* เหลือแค่ปุ่มปิด X ด้านบน */}
@@ -3373,6 +3430,12 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             
             <div className="p-4 sm:p-6 flex-1 bg-slate-50/30 overflow-y-auto custom-scrollbar">
               <form id="appt-form" onSubmit={handleSaveAppt} className="pb-2">
+                {formData.createdAt && (
+                  <div className="mb-4 sm:hidden flex text-[11px] font-medium text-slate-500 items-center justify-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60 kanit-text shadow-sm w-max mx-auto">
+                    <Clock size={14} className="text-slate-400" />
+                    <span>นัดเมื่อ: {formatDateTime(formData.createdAt)}</span>
+                  </div>
+                )}
                 <fieldset disabled={isViewMode} className="space-y-5 border-none p-0 m-0 min-w-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     
@@ -3454,31 +3517,28 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                     <div className="relative">
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">วันที่นัดหมาย <span className="text-rose-500">*</span></label>
                         <div ref={apptDatetimeWrapperRef} className="relative group">
-                          <input required type="text" className="w-full px-4 py-3 pr-12 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.datetime} onChange={(e) => setFormData({...formData, datetime: e.target.value})} placeholder="DD/MM/YYYY HH:mm น." />
-                          <button type="button" onClick={handleOpenApptCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>
+                          <input required type="text" className="w-full px-4 py-3 pr-12 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.datetime} onChange={(e) => setFormData({...formData, datetime: e.target.value})} onClick={() => handleOpenApptCalendar('datetime')} placeholder="DD/MM/YYYY HH:mm น." />
+                          <button type="button" onClick={() => handleOpenApptCalendar('datetime')} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-100 rounded-xl transition-colors"><CalendarIcon size={20} /></button>
                         </div>
                     </div>
 
-                    {/* ค้นหาแพทย์ (เพิ่ม z-index) */}
+                    {/* แพทย์ผู้นัด (เพิ่ม z-index) */}
                     <div className="relative" style={{ zIndex: 10 }}>
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">แพทย์ผู้นัด</label>
-                        <input 
-                            type="text" 
-                            className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" 
-                            value={formData.doctor} 
-                            onChange={(e) => setFormData({...formData, doctor: e.target.value})} 
-                            onFocus={() => setShowDoctorSuggest(true)}
-                            onBlur={() => setTimeout(() => setShowDoctorSuggest(false), 200)}
-                            placeholder="ระบุชื่อแพทย์" 
-                        />
-                        {showDoctorSuggest && (
-                            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
-                                {mockDoctors.filter(d => d.includes(formData.doctor)).map((doc, i) => (
-                                    <div key={i} onMouseDown={() => setFormData({...formData, doctor: doc})} className="px-4 py-3 hover:bg-sky-50 cursor-pointer text-sm text-slate-700 border-b border-slate-50 last:border-0 font-data">
-                                        {doc}
-                                    </div>
-                                ))}
-                            </div>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">แพทย์ผู้นัด <span className="text-rose-500">*</span></label>
+                        {currentUserIsDoctor ? (
+                            <input 
+                                type="text" 
+                                className="w-full px-4 py-3 rounded-2xl bg-slate-100 text-slate-500 cursor-not-allowed border border-slate-200 outline-none text-sm font-data" 
+                                value={currentUser?.name || ''} 
+                                readOnly 
+                            />
+                        ) : (
+                            <CustomSelect 
+                                value={formData.doctor} 
+                                onChange={(val) => setFormData({...formData, doctor: val})} 
+                                options={allDoctors.map(doc => doc.name)} 
+                                placeholder="เลือกแพทย์ผู้นัด"
+                            />
                         )}
                     </div>
                     
@@ -3622,48 +3682,67 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">อาการ</label>
                         <textarea rows="2" className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm resize-none font-data" value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})} placeholder="เช่น ติดตามอาการ, ฟังผลเลือด..."></textarea>
                     </div>
+                </div>
+                </fieldset>
 
-                    {/* กลุ่มข้อมูลติดต่อเพิ่มเติม */}
-                    <div className="md:col-span-2 mt-2 pt-4 border-t border-slate-100">
-                        <h4 className="text-sm font-bold text-sky-600 mb-4 flex items-center gap-2 kanit-text"><Phone size={16} /> ข้อมูลการติดต่อ (Social & Phone)</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2">
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
-                                <div className="space-y-2">
-                                    {formData.phones.map((phone, idx) => (
-                                        <div key={idx} className="flex items-center gap-2">
-                                            <input required type="tel" className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={phone} onChange={(e) => handlePhoneChange(idx, e.target.value)} placeholder="08X-XXX-XXXX" />
-                                            {formData.phones.length > 1 && !isViewMode && (
-                                                <button type="button" onClick={() => removePhone(idx)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={18} /></button>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {!isViewMode && (
-                                        <button type="button" onClick={addPhone} className="text-xs font-medium text-sky-500 hover:text-sky-600 flex items-center gap-1 mt-1 kanit-text"><Plus size={14} /> เพิ่มเบอร์โทรศัพท์</button>
-                                    )}
-                                </div>
+                {/* กลุ่มข้อมูลติดต่อเพิ่มเติม (อยู่นอก fieldset เพื่อให้ลิงก์โทรศัพท์/โซเชียลคลิกได้สมบูรณ์) */}
+                <div className="mt-6 pt-5 border-t border-slate-100">
+                    <h4 className="text-sm font-bold text-sky-600 mb-4 flex items-center gap-2 kanit-text"><Phone size={16} /> ข้อมูลการติดต่อ (Social & Phone)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
+                            <div className="space-y-2">
+                                {formData.phones.map((phone, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        {isViewMode ? (
+                                            phone ? (
+                                                <a 
+                                                    href={`tel:${phone}`} 
+                                                    className="flex-1 flex items-center justify-between px-4 py-2.5 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 hover:text-sky-800 transition-all font-data text-sm font-semibold group"
+                                                >
+                                                    <span>{phone}</span>
+                                                    <span className="flex items-center gap-1.5 text-xs text-sky-500 group-hover:text-sky-600 kanit-text font-medium bg-sky-100/50 px-2.5 py-1 rounded-lg">
+                                                        <Phone size={14} className="animate-pulse" />
+                                                        กดเพื่อโทรออก
+                                                    </span>
+                                                </a>
+                                            ) : (
+                                                <div className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 text-slate-400 border border-slate-200 text-sm font-data italic">ไม่มีข้อมูลเบอร์โทรศัพท์</div>
+                                            )
+                                        ) : (
+                                            <>
+                                                <input required type="tel" className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={phone} onChange={(e) => handlePhoneChange(idx, e.target.value)} placeholder="08X-XXX-XXXX" />
+                                                {formData.phones.length > 1 && (
+                                                    <button type="button" onClick={() => removePhone(idx)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={18} /></button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                ))}
+                                {!isViewMode && (
+                                    <button type="button" onClick={addPhone} className="text-xs font-medium text-sky-500 hover:text-sky-600 flex items-center gap-1 mt-1 kanit-text"><Plus size={14} /> เพิ่มเบอร์โทรศัพท์</button>
+                                )}
                             </div>
-                            
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Line ID</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.lineId} onChange={(e) => setFormData({...formData, lineId: e.target.value})} placeholder="Line ID" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Facebook</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.facebook} onChange={(e) => setFormData({...formData, facebook: e.target.value})} placeholder="ชื่อ Facebook" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Instagram</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.instagram} onChange={(e) => setFormData({...formData, instagram: e.target.value})} placeholder="@username" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">TikTok</label>
-                                <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.tiktok} onChange={(e) => setFormData({...formData, tiktok: e.target.value})} placeholder="@username" />
-                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Line ID</label>
+                            <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" value={formData.lineId} onChange={(e) => setFormData({...formData, lineId: e.target.value})} placeholder="Line ID" disabled={isViewMode} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Facebook</label>
+                            <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" value={formData.facebook} onChange={(e) => setFormData({...formData, facebook: e.target.value})} placeholder="ชื่อ Facebook" disabled={isViewMode} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">Instagram</label>
+                            <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" value={formData.instagram} onChange={(e) => setFormData({...formData, instagram: e.target.value})} placeholder="@username" disabled={isViewMode} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">TikTok</label>
+                            <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" value={formData.tiktok} onChange={(e) => setFormData({...formData, tiktok: e.target.value})} placeholder="@username" disabled={isViewMode} />
                         </div>
                     </div>
                 </div>
-                </fieldset>
               </form>
             </div>
             
@@ -3955,15 +4034,18 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
   // --- Calculate Dashboard Stats ---
   const todayStr = `${d}/${m}/${y}`;
   const todaysQueue = queueData.filter(appt => {
-      if(!appt.datetime) return false;
-      return appt.datetime.split(' ')[0] === todayStr;
+      const effectiveDt = getEffectiveApptDatetimeStr(appt);
+      if(!effectiveDt) return false;
+      return effectiveDt.split(' ')[0] === todayStr;
   });
   const pendingQueue = queueData.filter(appt => appt.status === 'pending' || appt.dealStatus === 'pending');
   
   // เรียงลำดับคิววันนี้ตามเวลา
   const sortedTodaysQueue = [...todaysQueue].sort((a, b) => {
-      const timeA = a.datetime.split(' ')[1] || '00:00';
-      const timeB = b.datetime.split(' ')[1] || '00:00';
+      const effA = getEffectiveApptDatetimeStr(a);
+      const effB = getEffectiveApptDatetimeStr(b);
+      const timeA = effA.split(' ')[1] || '00:00';
+      const timeB = effB.split(' ')[1] || '00:00';
       return timeA.localeCompare(timeB);
   });
 
@@ -4042,7 +4124,8 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                     return <div className="text-center py-10 text-slate-400 text-sm kanit-text bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center gap-2"><Clock className="w-8 h-8 text-slate-300"/> ยังไม่มีคิวที่เข้ารักษาแล้ว</div>;
                  }
                  return finishedTodaysQueue.map((appt, i) => {
-                   const time = appt.datetime.split(' ')[1] ? appt.datetime.split(' ')[1].replace('น.', '').trim() : '-';
+                   const effDt = getEffectiveApptDatetimeStr(appt);
+                   const time = effDt.split(' ')[1] ? effDt.split(' ')[1].replace('น.', '').trim() : '-';
                    return (
                   <div key={appt.id || i} className="flex items-center gap-3 p-3 rounded-2xl transition-all border bg-emerald-50/30 border-emerald-100/50 cursor-default opacity-80">
                     <div className="w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold font-data shrink-0 bg-emerald-100 text-emerald-600">
@@ -4082,7 +4165,8 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                     return <div className="text-center py-10 text-slate-400 text-sm kanit-text bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center gap-2"><CheckCircle2 className="w-8 h-8 text-emerald-400"/> ไม่มีคิวรอเรียกแล้ว</div>;
                  }
                  return activeTodaysQueue.map((appt, i) => {
-                   const time = appt.datetime.split(' ')[1] ? appt.datetime.split(' ')[1].replace('น.', '').trim() : '-';
+                   const effDt = getEffectiveApptDatetimeStr(appt);
+                   const time = effDt.split(' ')[1] ? effDt.split(' ')[1].replace('น.', '').trim() : '-';
                    const isThisSpeaking = speakingId === (appt.id || appt.datetime);
                    return (
                   <div key={appt.id || i} className={`flex items-center gap-3 p-3 rounded-2xl transition-all border ${isThisSpeaking ? 'bg-sky-50 border-sky-300 shadow-md transform scale-[1.02]' : 'hover:bg-slate-50 border-slate-100/50 hover:border-sky-200'} group cursor-default`}>
@@ -20441,7 +20525,7 @@ export default function App() {
   }, [filteredNavItems, currentTab]);
 
   // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า
-  const mobileNavItems = filteredNavItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'settings'].includes(item.id));
+  const mobileNavItems = filteredNavItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'reports'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
 
   if (!isLoggedIn) {
@@ -20806,7 +20890,7 @@ export default function App() {
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} />
+                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} />
                 </div>
             )}
 
