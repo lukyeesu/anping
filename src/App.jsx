@@ -10,7 +10,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key
+  Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -4866,11 +4866,9 @@ const ExecutiveDashboard = ({
   );
 };
 
-// เพิ่ม Props รับข้อมูลคิวและข้อมูลคนไข้เข้ามาคำนวณ
-const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, currentBranch, branchesData = [], staffData = [] }) => {
+const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, currentBranch, branchesData = [], staffData = [], callAppScript, setQueueData, showToast }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const headerRef = React.useRef(null);
-  const [completedQueues, setCompletedQueues] = useState(new Set());
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingId, setSpeakingId] = useState(null);
   const [roomSelectorTarget, setRoomSelectorTarget] = useState(null);
@@ -4927,6 +4925,40 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     };
 
     speak(textToSpeak, onEnd);
+  };
+
+  const handleCompleteQueue = async (appt, e) => {
+    if (e) e.stopPropagation();
+    if (!appt.id) return;
+    
+    const updatedAppt = { ...appt, treated: true };
+    setQueueData(prev => prev.map(item => item.id === appt.id ? updatedAppt : item));
+    
+    try {
+      showToast('กำลังบันทึกสถานะคิว...', 'info');
+      await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
+      showToast('บันทึกสถานะคิวเรียบร้อย', 'success');
+    } catch(err) {
+      console.error(err);
+      showToast('ไม่สามารถซิงค์ข้อมูลกับฐานข้อมูลได้ กรุณาลองใหม่', 'warning');
+    }
+  };
+
+  const handleUndoCompleteQueue = async (appt, e) => {
+    if (e) e.stopPropagation();
+    if (!appt.id) return;
+    
+    const updatedAppt = { ...appt, treated: false };
+    setQueueData(prev => prev.map(item => item.id === appt.id ? updatedAppt : item));
+    
+    try {
+      showToast('กำลังคืนสถานะคิว...', 'info');
+      await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
+      showToast('คืนสถานะคิวเรียบร้อย', 'success');
+    } catch(err) {
+      console.error(err);
+      showToast('ไม่สามารถซิงค์ข้อมูลกับฐานข้อมูลได้ กรุณาลองใหม่', 'warning');
+    }
   };
 
   useEffect(() => {
@@ -5324,7 +5356,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-800 kanit-text flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> รายการคิวที่เข้ารักษาแล้ว</h3>
               {(() => {
-                const finishedTodaysQueue = sortedTodaysQueue.filter(appt => completedQueues.has(appt.id || appt.datetime));
+                const finishedTodaysQueue = sortedTodaysQueue.filter(appt => appt.treated === true);
                 return (
                   <div className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md font-data">{finishedTodaysQueue.length} คิว</div>
                 );
@@ -5334,7 +5366,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
               {isGlobalLoading ? (
                  <div className="text-center py-10 text-slate-400 text-sm kanit-text flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin mx-auto text-sky-500"/> กำลังโหลดข้อมูล...</div>
               ) : (() => {
-                 const finishedTodaysQueue = sortedTodaysQueue.filter(appt => completedQueues.has(appt.id || appt.datetime));
+                 const finishedTodaysQueue = sortedTodaysQueue.filter(appt => appt.treated === true);
                  if (finishedTodaysQueue.length === 0) {
                     return <div className="text-center py-10 text-slate-400 text-sm kanit-text bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center gap-2"><Clock className="w-8 h-8 text-slate-300"/> ยังไม่มีคิวที่เข้ารักษาแล้ว</div>;
                  }
@@ -5352,7 +5384,13 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                       <p className="text-[11px] text-slate-400 flex items-center gap-1.5 font-data mt-1.5 truncate"><Clock size={12} className="text-emerald-400 shrink-0" /> {time} น. <span className="text-slate-300 mx-0.5 shrink-0">|</span> <span className="truncate kanit-text">{appt.reason || appt.category || '-'}</span></p>
                     </div>
                     <div className="shrink-0 flex items-center gap-2 pr-2">
-                      <CheckCircle2 size={20} className="text-emerald-400" />
+                      <button
+                        onClick={(e) => handleUndoCompleteQueue(appt, e)}
+                        className="p-2.5 rounded-xl transition-all bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600 active:scale-95 shadow-sm border border-slate-200 hover:border-rose-200"
+                        title="ดึงกลับไปที่คิววันนี้"
+                      >
+                        <RotateCcw size={16} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -5365,7 +5403,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-800 kanit-text flex items-center gap-2"><List className="w-5 h-5 text-sky-500" /> รายการคิววันนี้</h3>
               {(() => {
-                const activeTodaysQueue = sortedTodaysQueue.filter(appt => !completedQueues.has(appt.id || appt.datetime));
+                const activeTodaysQueue = sortedTodaysQueue.filter(appt => !appt.treated);
                 return (
                   <div className="text-xs font-medium text-sky-600 bg-sky-50 px-2 py-1 rounded-md font-data">เหลือ {activeTodaysQueue.length} คิว</div>
                 );
@@ -5375,7 +5413,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
               {isGlobalLoading ? (
                  <div className="text-center py-10 text-slate-400 text-sm kanit-text flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin mx-auto text-sky-500"/> กำลังโหลดข้อมูล...</div>
               ) : (() => {
-                 const activeTodaysQueue = sortedTodaysQueue.filter(appt => !completedQueues.has(appt.id || appt.datetime));
+                 const activeTodaysQueue = sortedTodaysQueue.filter(appt => !appt.treated);
                  if (activeTodaysQueue.length === 0) {
                     return <div className="text-center py-10 text-slate-400 text-sm kanit-text bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center gap-2"><CheckCircle2 className="w-8 h-8 text-emerald-400"/> ไม่มีคิวรอเรียกแล้ว</div>;
                  }
@@ -22671,6 +22709,9 @@ export default function App() {
                         currentBranch={currentBranch}
                         branchesData={branchesData}
                         staffData={staffData}
+                        callAppScript={callAppScript}
+                        setQueueData={setQueueData}
+                        showToast={showToast}
                     />
                 </div>
             )}
