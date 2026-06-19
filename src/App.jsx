@@ -6091,6 +6091,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }
   }, [recentDoctors]);
 
+  // --- [NEW] State สำหรับระบบจดจำการรักษาล่าสุด (Recent Treatments) ---
+  const [recentTreatments, setRecentTreatments] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem('clinic_recent_treatments');
+        if (saved) return JSON.parse(saved);
+    }
+    return [];
+  });
+
+  // บันทึก Recent Treatments ลง Local Storage เมื่อมีการเปลี่ยนแปลง
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('clinic_recent_treatments', JSON.stringify(recentTreatments));
+    }
+  }, [recentTreatments]);
+
   // ฟังก์ชันจัดการเมื่อเลือกแพทย์
   const handleSelectDoctor = (doctorName) => {
     setNewOpdRecord({...newOpdRecord, doctor: doctorName});
@@ -6099,6 +6115,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     // อัปเดตรายชื่อแพทย์ล่าสุด (เอาไปไว้บนสุด และจำกัดแค่ 3 ชื่อ)
     setRecentDoctors(prev => {
         const newRecents = [doctorName, ...prev.filter(name => name !== doctorName)].slice(0, 3);
+        return newRecents;
+    });
+  };
+
+  // ฟังก์ชันจัดการเมื่อเลือกการรักษา
+  const handleSelectTreatment = (treatmentName, txIndex) => {
+    const updatedTx = [...newOpdRecord.tx];
+    updatedTx[txIndex] = treatmentName;
+    setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+    setOpenTxDropdownIndex(null);
+    
+    // อัปเดตรายการรักษาล่าสุด (เอาไปไว้บนสุด และจำกัดแค่ 5 ชื่อ)
+    setRecentTreatments(prev => {
+        const newRecents = [treatmentName, ...prev.filter(name => name !== treatmentName)].slice(0, 5);
         return newRecents;
     });
   };
@@ -6933,6 +6963,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     
     const updatedFormData = { ...formData, opdRecords: newRecords };
     setFormData(updatedFormData);
+
+    // อัปเดตรายการรักษาล่าสุด (recent treatments)
+    if (newOpdRecord.tx && Array.isArray(newOpdRecord.tx)) {
+      const validTx = newOpdRecord.tx.filter(Boolean);
+      if (validTx.length > 0) {
+        setRecentTreatments(prev => {
+          const updated = [...validTx, ...prev.filter(t => !validTx.includes(t))].slice(0, 5);
+          return updated;
+        });
+      }
+    }
 
     setIsClosingOpdForm(true); 
     setTimeout(() => {
@@ -8145,17 +8186,47 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                   </div>
                                   
                                   {openTxDropdownIndex === txIndex && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top flex flex-col">
+                                      
+                                      {/* ส่วนที่ 1: การรักษาล่าสุด (แสดงเฉพาะตอนที่ยังไม่ได้พิมพ์ค้นหา) */}
+                                      {recentTreatments.length > 0 && !treatment && (
+                                        <div className="flex flex-col">
+                                          <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
+                                            <History size={12} className="text-slate-400" />
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">การรักษาล่าสุด (Recent)</span>
+                                          </div>
+                                          {recentTreatments.map((txName, idx) => (
+                                            <div 
+                                              key={`recent-tx-${idx}`} 
+                                              onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                handleSelectTreatment(txName, txIndex);
+                                              }}
+                                              className="px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors text-slate-700 flex items-center gap-2"
+                                            >
+                                              <Clock size={12} className="text-slate-300" />
+                                              {txName}
+                                            </div>
+                                          ))}
+                                          <div className="h-px bg-slate-200 mx-3 my-1"></div>
+                                        </div>
+                                      )}
+
+                                      {/* ส่วนที่ 2: รายการการรักษาทั้งหมด (Catalog) */}
+                                      {recentTreatments.length > 0 && !treatment && (
+                                        <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
+                                          <Package size={12} className="text-slate-400" />
+                                          <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">รายการทั้งหมด</span>
+                                        </div>
+                                      )}
+
                                       {posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).length > 0 ? (
                                           posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).map(p => (
                                             <div
                                               key={p.id}
                                               onMouseDown={(e) => {
                                                 e.preventDefault();
-                                                const updatedTx = [...newOpdRecord.tx];
-                                                updatedTx[txIndex] = p.name;
-                                                setNewOpdRecord({...newOpdRecord, tx: updatedTx});
-                                                setOpenTxDropdownIndex(null);
+                                                handleSelectTreatment(p.name, txIndex);
                                               }}
                                               className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatment === p.name ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
                                             >
