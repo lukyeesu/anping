@@ -5330,7 +5330,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                 );
               })()}
             </div>
-            <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2 pb-2">
+            <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar p-2">
               {isGlobalLoading ? (
                  <div className="text-center py-10 text-slate-400 text-sm kanit-text flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin mx-auto text-sky-500"/> กำลังโหลดข้อมูล...</div>
               ) : (() => {
@@ -5371,7 +5371,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                 );
               })()}
             </div>
-            <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-2 pb-2">
+            <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar p-2">
               {isGlobalLoading ? (
                  <div className="text-center py-10 text-slate-400 text-sm kanit-text flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin mx-auto text-sky-500"/> กำลังโหลดข้อมูล...</div>
               ) : (() => {
