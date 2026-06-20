@@ -6765,6 +6765,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         return;
     }
 
+    // Freeze the video frame to prevent GPU compositing flickers on mobile
+    if (videoRef.current) {
+        try { videoRef.current.pause(); } catch (e) { console.log(e); }
+    }
+
     setIsScanning(true);
 
     try {
@@ -6784,15 +6789,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         if (data.error) {
             console.error("API Error:", data.error);
             showToast(`API Error: ${data.error.message}`, 'danger');
+            if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         } else if (data.responses && data.responses[0] && data.responses[0].fullTextAnnotation) {
             const text = data.responses[0].fullTextAnnotation.text;
             parseIdCardText(text); // โยนข้อความที่อ่านได้เข้าฟังก์ชันสกัดข้อมูล
         } else {
             showToast('ไม่พบข้อความบนบัตร กรุณาจัดบัตรให้อยู่ในกรอบ แสงสว่างเพียงพอ และสแกนใหม่', 'warning');
+            if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         }
     } catch (error) {
         console.error("OCR Request Error:", error);
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ Google Cloud Vision API', 'danger');
+        if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
     } finally {
         setIsScanning(false);
     }
@@ -16880,6 +16888,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     const base64Image = captureImageToBase64();
     if (!base64Image) { showToast('ไม่สามารถจับภาพได้', 'warning'); return; }
     
+    // Freeze the video frame to prevent GPU compositing flickers on mobile
+    if (videoRef.current) {
+        try { videoRef.current.pause(); } catch (e) { console.log(e); }
+    }
+    
     setIsScanning(true);
     try {
         const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`, { 
@@ -16891,13 +16904,16 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         
         if (data.error) {
             showToast(`API Error: ${data.error.message}`, 'danger');
+            if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         } else if (data.responses && data.responses[0] && data.responses[0].fullTextAnnotation) {
             parseIdCardText(data.responses[0].fullTextAnnotation.text); 
         } else {
             showToast('ไม่พบข้อความ กรุณาจัดบัตรให้ชัดเจนและสแกนใหม่', 'warning');
+            if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         }
     } catch (error) { 
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ Google Cloud Vision API', 'danger'); 
+        if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
     } finally { 
         setIsScanning(false); 
     }
