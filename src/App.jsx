@@ -8917,13 +8917,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                 
                 <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover z-0"></video>
                 
-                {isScanning && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-                        <Loader2 className="w-12 h-12 text-indigo-400 animate-spin mb-3" />
-                        <p className="text-white font-bold kanit-text">กำลังประมวลผล OCR...</p>
-                        <p className="text-indigo-200 text-xs mt-1 kanit-text">กรุณารอสักครู่</p>
-                    </div>
-                )}
+                <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/60 transition-all duration-300 ${isScanning ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                    <Loader2 className="w-12 h-12 text-indigo-400 animate-spin mb-3" />
+                    <p className="text-white font-bold kanit-text">กำลังประมวลผล OCR...</p>
+                    <p className="text-indigo-200 text-xs mt-1 kanit-text">กรุณารอสักครู่</p>
+                </div>
             </div>
             
             <div className="p-5 bg-white flex flex-col gap-3">
@@ -18714,13 +18712,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 
                 <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover z-0"></video>
                 
-                {isScanning && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-                        <Loader2 className="w-12 h-12 text-indigo-400 animate-spin mb-3" />
-                        <p className="text-white font-bold kanit-text">กำลังประมวลผล OCR...</p>
-                        <p className="text-indigo-200 text-xs mt-1 kanit-text">กรุณารอสักครู่</p>
-                    </div>
-                )}
+                <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/60 transition-all duration-300 ${isScanning ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                    <Loader2 className="w-12 h-12 text-indigo-400 animate-spin mb-3" />
+                    <p className="text-white font-bold kanit-text">กำลังประมวลผล OCR...</p>
+                    <p className="text-indigo-200 text-xs mt-1 kanit-text">กรุณารอสักครู่</p>
+                </div>
             </div>
             
             <div className="p-5 bg-white flex flex-col gap-3">
@@ -22469,74 +22465,42 @@ export default function App() {
       );
   };
 
-  // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน และหยุดเวลาชั่วคราวเมื่อชี้เมาส์/แตะจอ
+  // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน
   const [toasts, setToasts] = useState([]);
 
   const showToast = (message, type = 'success') => {
+    const id = 'toast_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     const newToast = {
-      id: 'toast_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      id,
       message,
       type,
-      isClosing: false,
-      paused: false,
-      timeLeft: 3000
+      isClosing: false
     };
 
     setToasts(prev => {
       const updated = [...prev];
       if (updated.length >= 4) {
-        // หากครบ 4 อันแล้ว ให้ตัวแรกสุดเริ่มลบออก (isClosing = true) เพื่อรักษาความสวยงามและไม่ล้นจอ
-        updated[0] = { ...updated[0], isClosing: true, timeLeft: 0, closeStartedAt: Date.now() };
+        // หากครบ 4 อันแล้ว ให้ตัวแรกสุดเริ่มลบออก
+        updated[0] = { ...updated[0], isClosing: true };
       }
       return [...updated, newToast];
     });
+
+    // Auto close after 3 seconds without high-frequency render loops
+    setTimeout(() => {
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, isClosing: true } : t));
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 300);
+    }, 3000);
   };
 
   const dismissToast = (id) => {
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, isClosing: true, closeStartedAt: Date.now(), timeLeft: 0 } : t));
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, isClosing: true } : t));
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 300);
   };
-
-  // Effect สำหรับจัดการนับเวลาถอยหลังทีละ 100ms ของทุก Toast
-  useEffect(() => {
-    if (toasts.length === 0) return;
-
-    const interval = setInterval(() => {
-      setToasts(prev => {
-        let changed = false;
-        const now = Date.now();
-        const updated = prev.map(t => {
-          if (t.paused) return t; // หยุดเวลานับถอยหลังเมื่อเมาส์ชี้อยู่ หรือกดค้าง
-          
-          if (t.timeLeft > 0) {
-            changed = true;
-            const newTime = t.timeLeft - 100;
-            if (newTime <= 0) {
-              return { ...t, timeLeft: 0, isClosing: true, closeStartedAt: now };
-            }
-            return { ...t, timeLeft: newTime };
-          }
-          return t;
-        });
-
-        // ลบ Toast ที่เล่นแอนิเมชันขาออกครบ 300ms แล้วออกจาก DOM
-        const cleaned = updated.filter(t => {
-          if (t.isClosing && !t.closeStartedAt) {
-            t.closeStartedAt = now;
-            changed = true;
-          }
-          if (t.closeStartedAt && now - t.closeStartedAt >= 300) {
-            changed = true;
-            return false;
-          }
-          return true;
-        });
-
-        return changed ? cleaned : prev;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [toasts.length]);
 
   const handleScroll = (e) => {
     setIsScrolled(e.target.scrollTop > 20);
@@ -23528,11 +23492,6 @@ export default function App() {
           {toasts.map((t) => (
             <div 
               key={t.id}
-              onMouseEnter={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: true } : item))}
-              onMouseLeave={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: false } : item))}
-              onTouchStart={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: true } : item))}
-              onTouchEnd={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: false } : item))}
-              onTouchCancel={() => setToasts(prev => prev.map(item => item.id === t.id ? { ...item, paused: false } : item))}
               onClick={() => dismissToast(t.id)}
               className={`pointer-events-auto cursor-pointer ${t.isClosing ? 'toast-wrapper-closing' : 'toast-wrapper-active'}`}
             >
@@ -23542,7 +23501,7 @@ export default function App() {
                   t.type === 'success' ? 'bg-emerald-500/95 border-emerald-400 shadow-emerald-500/20' : 
                   t.type === 'warning' ? 'bg-amber-500/95 border-amber-400 shadow-amber-500/20' : 
                   'bg-rose-500/95 border-rose-400 shadow-rose-500/20'
-                } ${t.isClosing ? 'toast-animate-out' : (t.timeLeft > 2600 ? 'toast-animate-in' : '')}`}
+                } ${t.isClosing ? 'toast-animate-out' : 'toast-animate-in'}`}
               >
                 {t.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
                  t.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
