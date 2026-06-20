@@ -720,6 +720,12 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
     const ageStr = patient.dob ? getAgeString(patient.dob) : '';
     const txText = Array.isArray(record.tx) ? record.tx.filter(t => t).join(', ') : (record.tx || '-');
 
+    // ดึงชื่อแพทย์ประจำเคส หากไม่มีหรือระบุเป็นขีดจะใช้แพทย์ตั้งต้นของคลินิก
+    let doctorNameDisplay = (record && record.doctor || '').trim();
+    if (!doctorNameDisplay || doctorNameDisplay === '-') {
+        doctorNameDisplay = '';
+    }
+
     return `
     <!DOCTYPE html>
     <html lang="th">
@@ -838,7 +844,7 @@ const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], 
                     <img src="${window.location.origin}/Body Diagram.svg" class="body-diagram" alt="Body Diagram" />
                     <div class="signature">
                         <div class="value" style="width: 100%; margin: 0 auto 5px auto;"></div>
-                        (พจ. พงษ์สิทธิ์ แซ่อึ้ง)
+                        (${doctorNameDisplay})
                     </div>
                 </div>
             </div>
