@@ -8890,7 +8890,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
       {/* Modal สำหรับกล้อง (Medical Records Scanner) */}
       {isScannerOpen && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm fade-in">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/75 fade-in">
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
@@ -18687,7 +18687,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
       {/* Modal สำหรับกล้อง (Staff Manager) */}
       {isScannerOpen && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm fade-in">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/75 fade-in">
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
@@ -23827,7 +23827,7 @@ export default function App() {
 
       {/* PDPA QR Code Modal */}
       {pdpaQrModal.isOpen && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200 border border-slate-100">
                   <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
                       <h3 className="font-bold text-lg text-slate-800 kanit-text flex items-center gap-2">
