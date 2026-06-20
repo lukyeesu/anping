@@ -20139,16 +20139,16 @@ const PdpaConsentForm = ({ token, hn }) => {
                                 <p className="text-sm text-slate-500 leading-relaxed">1. ให้คลินิกติดต่อเพื่อแจ้งสิทธิประโยชน์ โปรโมชั่น หรือข่าวสารทางการตลาด</p>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button 
-                                        onClick={() => setMarketingConsent('yes')}
-                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
-                                    >
-                                        <CheckCircle2 size={18} /> ยินยอม
-                                    </button>
-                                    <button 
                                         onClick={() => setMarketingConsent('no')}
                                         className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                                     >
                                         <XCircle size={18} /> ไม่ยินยอม
+                                    </button>
+                                    <button 
+                                        onClick={() => setMarketingConsent('yes')}
+                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                    >
+                                        <CheckCircle2 size={18} /> ยินยอม
                                     </button>
                                 </div>
                             </div>
@@ -20158,16 +20158,16 @@ const PdpaConsentForm = ({ token, hn }) => {
                                 <p className="text-sm text-slate-500 leading-relaxed">2. ให้นำข้อมูลหรือภาพถ่าย (โดยปกปิดตัวตน) ไปใช้เพื่อการศึกษาหรือรีวิวการรักษา</p>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button 
-                                        onClick={() => setReviewConsent('yes')}
-                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
-                                    >
-                                        <CheckCircle2 size={18} /> ยินยอม
-                                    </button>
-                                    <button 
                                         onClick={() => setReviewConsent('no')}
                                         className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                                     >
                                         <XCircle size={18} /> ไม่ยินยอม
+                                    </button>
+                                    <button 
+                                        onClick={() => setReviewConsent('yes')}
+                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                    >
+                                        <CheckCircle2 size={18} /> ยินยอม
                                     </button>
                                 </div>
                             </div>
