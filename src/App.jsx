@@ -8915,7 +8915,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
               <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
                 <ScanText className="text-indigo-500" /> สแกนบัตรประชาชน
               </h3>
-              <button onClick={() => !isScanning && setIsScannerOpen(false)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors" disabled={isScanning}>
+              <button type="button" onClick={() => !isScanning && setIsScannerOpen(false)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors" disabled={isScanning}>
                 <X size={20} />
               </button>
             </div>
@@ -8946,6 +8946,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             <div className="p-5 bg-white flex flex-col gap-3">
               <p className="text-sm text-slate-500 text-center kanit-text">จัดวางบัตรประชาชนให้อยู่ในกรอบ และมีแสงสว่างเพียงพอ</p>
               <button 
+                  type="button"
                   onClick={handleRealScan} 
                   disabled={isScanning}
                   className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 transition-all active:scale-95 flex items-center justify-center gap-2 kanit-text text-lg disabled:opacity-50 disabled:cursor-not-allowed"
@@ -18734,7 +18735,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
               <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
                 <ScanText className="text-indigo-500" /> สแกนบัตรประชาชน
               </h3>
-              <button onClick={() => !isScanning && setIsScannerOpen(false)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors" disabled={isScanning}>
+              <button type="button" onClick={() => !isScanning && setIsScannerOpen(false)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors" disabled={isScanning}>
                 <X size={20} />
               </button>
             </div>
@@ -18765,6 +18766,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
             <div className="p-5 bg-white flex flex-col gap-3">
               <p className="text-sm text-slate-500 text-center kanit-text">จัดวางบัตรประชาชนให้อยู่ในกรอบ และมีแสงสว่างเพียงพอ</p>
               <button 
+                  type="button"
                   onClick={handleRealScan} 
                   disabled={isScanning}
                   className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 transition-all active:scale-95 flex items-center justify-center gap-2 kanit-text text-lg disabled:opacity-50 disabled:cursor-not-allowed"
@@ -22043,6 +22045,87 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
   );
 };
 
+// --- [NEW] Global Toast pub/sub system to isolate rendering from the main App component ---
+const toastSubscribers = new Set();
+let globalToasts = [];
+
+export const triggerGlobalToast = (message, type = 'success') => {
+  const id = 'toast_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  const newToast = { id, message, type, isClosing: false };
+  
+  if (globalToasts.length >= 4) {
+    globalToasts[0] = { ...globalToasts[0], isClosing: true };
+  }
+  globalToasts = [...globalToasts, newToast];
+  
+  toastSubscribers.forEach(callback => callback(globalToasts));
+  
+  setTimeout(() => {
+    globalToasts = globalToasts.map(t => t.id === id ? { ...t, isClosing: true } : t);
+    toastSubscribers.forEach(callback => callback(globalToasts));
+    
+    setTimeout(() => {
+      globalToasts = globalToasts.filter(t => t.id !== id);
+      toastSubscribers.forEach(callback => callback(globalToasts));
+    }, 300);
+  }, 3000);
+};
+
+export const dismissGlobalToast = (id) => {
+  globalToasts = globalToasts.map(t => t.id === id ? { ...t, isClosing: true } : t);
+  toastSubscribers.forEach(callback => callback(globalToasts));
+  
+  setTimeout(() => {
+    globalToasts = globalToasts.filter(t => t.id !== id);
+    toastSubscribers.forEach(callback => callback(globalToasts));
+  }, 300);
+};
+
+const ToastContainer = () => {
+  const [toasts, setToasts] = React.useState([]);
+  
+  React.useEffect(() => {
+    const handleUpdate = (newToasts) => {
+      setToasts(newToasts);
+    };
+    toastSubscribers.add(handleUpdate);
+    setToasts(globalToasts);
+    return () => {
+      toastSubscribers.delete(handleUpdate);
+    };
+  }, []);
+  
+  return createPortal(
+    <div 
+      className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
+      style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+    >
+      {toasts.map((t) => (
+        <div 
+          key={t.id}
+          onClick={() => dismissGlobalToast(t.id)}
+          className={`pointer-events-auto cursor-pointer ${t.isClosing ? 'toast-wrapper-closing' : 'toast-wrapper-active'}`}
+        >
+          <div 
+            key={`inner_${t.id}`}
+            className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full sm:rounded-2xl shadow-xl border text-white ${
+              t.type === 'success' ? 'bg-emerald-600 border-emerald-500 shadow-emerald-500/10' : 
+              t.type === 'warning' ? 'bg-amber-600 border-amber-500 shadow-amber-500/10' : 
+              'bg-rose-600 border-rose-500 shadow-rose-500/10'
+            } ${t.isClosing ? 'toast-animate-out' : 'toast-animate-in'}`}
+          >
+            {t.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
+             t.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
+             <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />}
+            <span className="font-medium kanit-text text-xs sm:text-sm leading-tight break-words">{t.message}</span>
+          </div>
+        </div>
+      ))}
+    </div>,
+    document.body
+  );
+};
+
 // --- [NEW] Restore Mock Data to prevent ReferenceErrors ---
 const mockBranches = [
   { id: 'b1', name: 'สาขาหลัก (กรุงเทพ)' },
@@ -22508,41 +22591,9 @@ export default function App() {
       );
   };
 
-  // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน
-  const [toasts, setToasts] = useState([]);
-
+  // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน (แยก Component เพื่อความปลอดภัยไม่ให้ App re-render)
   const showToast = (message, type = 'success') => {
-    const id = 'toast_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
-    const newToast = {
-      id,
-      message,
-      type,
-      isClosing: false
-    };
-
-    setToasts(prev => {
-      const updated = [...prev];
-      if (updated.length >= 4) {
-        // หากครบ 4 อันแล้ว ให้ตัวแรกสุดเริ่มลบออก
-        updated[0] = { ...updated[0], isClosing: true };
-      }
-      return [...updated, newToast];
-    });
-
-    // Auto close after 3 seconds without high-frequency render loops
-    setTimeout(() => {
-      setToasts(prev => prev.map(t => t.id === id ? { ...t, isClosing: true } : t));
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== id));
-      }, 300);
-    }, 3000);
-  };
-
-  const dismissToast = (id) => {
-    setToasts(prev => prev.map(t => t.id === id ? { ...t, isClosing: true } : t));
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 300);
+    triggerGlobalToast(message, type);
   };
 
   const handleScroll = (e) => {
@@ -23527,35 +23578,7 @@ export default function App() {
 
       </div>
 
-      {toasts.length > 0 && createPortal(
-        <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
-          style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
-        >
-          {toasts.map((t) => (
-            <div 
-              key={t.id}
-              onClick={() => dismissToast(t.id)}
-              className={`pointer-events-auto cursor-pointer ${t.isClosing ? 'toast-wrapper-closing' : 'toast-wrapper-active'}`}
-            >
-              <div 
-                key={`inner_${t.id}`}
-                className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full sm:rounded-2xl shadow-2xl backdrop-blur-xl border text-white ${
-                  t.type === 'success' ? 'bg-emerald-500/95 border-emerald-400 shadow-emerald-500/20' : 
-                  t.type === 'warning' ? 'bg-amber-500/95 border-amber-400 shadow-amber-500/20' : 
-                  'bg-rose-500/95 border-rose-400 shadow-rose-500/20'
-                } ${t.isClosing ? 'toast-animate-out' : 'toast-animate-in'}`}
-              >
-                {t.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
-                 t.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
-                 <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />}
-                <span className="font-medium kanit-text text-xs sm:text-sm leading-tight break-words">{t.message}</span>
-              </div>
-            </div>
-          ))}
-        </div>,
-        document.body
-      )}
+      <ToastContainer />
 
       <style dangerouslySetInnerHTML={{__html: `
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
@@ -23659,18 +23682,17 @@ export default function App() {
         .toast-animate-out { animation: toastSlideUp 0.3s ease-in forwards; }
         
         .toast-wrapper-active {
-            max-height: 100px;
             opacity: 1;
+            transform: translateY(0);
             margin-bottom: 0.5rem;
-            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .toast-wrapper-closing {
-            max-height: 0px !important;
             opacity: 0 !important;
+            transform: translateY(-10px);
             margin-bottom: 0px !important;
             pointer-events: none;
-            transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            overflow: hidden;
+            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         /* Animation สำหรับกรอบสแกนบัตร */
