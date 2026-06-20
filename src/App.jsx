@@ -23484,9 +23484,9 @@ export default function App() {
 
       </div>
 
-      {toasts.length > 0 && (
+      {toasts.length > 0 && createPortal(
         <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[9999] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
+          className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
           style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
         >
           {toasts.map((t) => (
@@ -23510,7 +23510,8 @@ export default function App() {
               </div>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
 
       <style dangerouslySetInnerHTML={{__html: `
