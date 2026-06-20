@@ -1474,6 +1474,66 @@ const parseThaiDateToISO = (thaiDateTimeStr) => {
     }
 };
 
+// --- [NEW] Unified Date Parsing & Comparison to prevent BE/CE mismatch bugs ---
+const parseAnyDate = (dateVal) => {
+    if (!dateVal) return null;
+    if (dateVal instanceof Date) return dateVal;
+    const str = String(dateVal).trim();
+    
+    // Check if it's ISO format first
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+        const parsed = new Date(str);
+        if (!isNaN(parsed.getTime())) return parsed;
+    }
+    
+    // Check if slash format (could be DD/MM/YYYY or YYYY/MM/DD)
+    if (str.includes('/')) {
+        try {
+            const parts = str.split(' ');
+            const dateParts = parts[0].split('/');
+            if (dateParts.length === 3) {
+                let d, m, y;
+                // Check if YYYY/MM/DD
+                if (dateParts[0].length === 4) {
+                    y = parseInt(dateParts[0], 10);
+                    m = parseInt(dateParts[1], 10) - 1;
+                    d = parseInt(dateParts[2], 10);
+                } else {
+                    // DD/MM/YYYY
+                    d = parseInt(dateParts[0], 10);
+                    m = parseInt(dateParts[1], 10) - 1;
+                    y = parseInt(dateParts[2], 10);
+                }
+                if (y > 2400) y -= 543; // BE to CE
+                let h = 0, min = 0;
+                if (parts[1]) {
+                    const timeParts = parts[1].replace('น.', '').trim().split(':');
+                    if (timeParts.length >= 2) {
+                        h = parseInt(timeParts[0], 10);
+                        min = parseInt(timeParts[1], 10);
+                    }
+                }
+                const parsed = new Date(y, m, d, h, min);
+                if (!isNaN(parsed.getTime())) return parsed;
+            }
+        } catch (e) {
+            // fallback
+        }
+    }
+    
+    const parsed = new Date(str);
+    return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isSameDay = (d1, d2) => {
+    const parsed1 = parseAnyDate(d1);
+    const parsed2 = parseAnyDate(d2);
+    if (!parsed1 || !parsed2) return false;
+    return parsed1.getDate() === parsed2.getDate() &&
+           parsed1.getMonth() === parsed2.getMonth() &&
+           parsed1.getFullYear() === parsed2.getFullYear();
+};
+
 const colorPresets = [
   { key: 'amber', name: 'ส้ม/เหลือง', bg: 'bg-amber-500', class: 'bg-amber-100 text-amber-700 border-amber-200', value: 'amber' },
   { key: 'emerald', name: 'เขียว', bg: 'bg-emerald-500', class: 'bg-emerald-100 text-emerald-700 border-emerald-200', value: 'emerald' },
@@ -4087,23 +4147,13 @@ const ExecutiveDashboard = ({
   const parseDate = (dStr) => {
     if (!dStr) return new Date();
     if (dStr instanceof Date) return dStr;
-    if (typeof dStr === 'string' && dStr.includes('/')) {
-      const parts = dStr.split(' ')[0].split('/');
-      if (parts.length === 3) {
-        const d = parseInt(parts[0]);
-        const m = parseInt(parts[1]) - 1;
-        let y = parseInt(parts[2]);
-        if (y > 2400) y -= 543; // convert Buddhist year (BE) to CE
-        return new Date(y, m, d);
-      }
-    }
-    return new Date(dStr);
+    return parseAnyDate(dStr);
   };
 
   // Consolidate POS history as income and finance as income/expenses
   const allTransactions = useMemo(() => {
     const posTx = posHistoryData.map(tx => {
-      const txDate = tx.datetime || tx.timestamp || tx.createdAt || new Date().toISOString();
+      const txDate = tx.datetime || tx.timestamp || tx.createdAt || tx.date || new Date().toISOString();
       return {
         id: tx.id || tx.receiptNo || Math.random().toString(),
         date: txDate,
@@ -4313,38 +4363,203 @@ const ExecutiveDashboard = ({
       .slice(0, 5);
   }, [posHistoryData, selectedBranch, timeRange, customStartDate, customEndDate]);
 
-  // Calculate Monthly Trends (last 6 months)
+  // Calculate Financial Trends based on the selected timeRange and granularity
   const monthlyTrends = useMemo(() => {
-    const trends = [];
     const now = new Date();
+    const trends = [];
+    const thaiDaysShort = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+    const thaiDaysFull = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
     const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-    
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      trends.push({
-        year: d.getFullYear(),
-        month: d.getMonth(),
-        monthLabel: `${thaiMonthsShort[d.getMonth()]} ${String(d.getFullYear() + 543).substring(2)}`,
-        income: 0,
-        expense: 0
-      });
+    const thaiMonthsFull = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+
+    let granularity = 'monthly'; // 'daily' or 'monthly'
+    let pointsCount = 6; // default
+
+    if (timeRange === 'today' || timeRange === 'week') {
+      granularity = 'daily';
+      pointsCount = 7;
+    } else if (timeRange === 'month') {
+      granularity = 'daily';
+      // Number of days in the current calendar month
+      pointsCount = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    } else if (timeRange === 'year') {
+      granularity = 'monthly';
+      pointsCount = 12;
+    } else if (timeRange === 'custom') {
+      if (customStartDate && customEndDate) {
+        const start = new Date(customStartDate);
+        const end = new Date(customEndDate);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (diffDays <= 31) {
+          granularity = 'daily';
+          pointsCount = diffDays;
+        } else {
+          granularity = 'monthly';
+          const yearDiff = end.getFullYear() - start.getFullYear();
+          const monthDiff = end.getMonth() - start.getMonth();
+          pointsCount = Math.max(1, Math.min(24, yearDiff * 12 + monthDiff + 1));
+        }
+      } else {
+        granularity = 'monthly';
+        pointsCount = 6;
+      }
     }
 
+    if (granularity === 'daily') {
+      if (timeRange === 'today' || timeRange === 'week') {
+        // Current calendar week (Monday to Sunday)
+        const startOfWeek = new Date(now);
+        const currentDay = startOfWeek.getDay(); // 0 = Sun, 1 = Mon, etc.
+        const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+        startOfWeek.setDate(startOfWeek.getDate() + distanceToMonday);
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(startOfWeek);
+          d.setDate(startOfWeek.getDate() + i);
+          trends.push({
+            type: 'daily',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            day: d.getDate(),
+            monthLabel: thaiDaysShort[d.getDay()],
+            fullLabel: `${thaiDaysFull[d.getDay()]}ที่ ${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      } else if (timeRange === 'month') {
+        // Calendar month days from day 1 to pointsCount
+        for (let day = 1; day <= pointsCount; day++) {
+          const d = new Date(now.getFullYear(), now.getMonth(), day);
+          // Show labels for day 1, and every 5th day to avoid overlap
+          const showLabel = (day === 1 || day % 5 === 0 || day === pointsCount);
+          trends.push({
+            type: 'daily',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            day: d.getDate(),
+            monthLabel: showLabel ? `${d.getDate()}` : '',
+            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      } else if (timeRange === 'custom' && customStartDate && customEndDate) {
+        // Custom daily range
+        const start = new Date(customStartDate);
+        for (let i = 0; i < pointsCount; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          const showLabel = pointsCount <= 10 || (i === 0 || i === pointsCount - 1 || d.getDate() % 5 === 0);
+          trends.push({
+            type: 'daily',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            day: d.getDate(),
+            monthLabel: showLabel ? `${d.getDate()}/${d.getMonth() + 1}` : '',
+            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      } else {
+        // Fallback: Last N days
+        for (let i = pointsCount - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(now.getDate() - i);
+          trends.push({
+            type: 'daily',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            day: d.getDate(),
+            monthLabel: `${d.getDate()}/${d.getMonth() + 1}`,
+            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      }
+    } else {
+      // Monthly granularity
+      if (timeRange === 'year') {
+        // Current calendar year (January to December)
+        const currentYear = now.getFullYear();
+        for (let mIndex = 0; mIndex < 12; mIndex++) {
+          const d = new Date(currentYear, mIndex, 1);
+          trends.push({
+            type: 'monthly',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            monthLabel: thaiMonthsShort[d.getMonth()],
+            fullLabel: `${thaiMonthsFull[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      } else if (timeRange === 'custom' && customStartDate && customEndDate) {
+        const start = new Date(customStartDate);
+        for (let i = 0; i < pointsCount; i++) {
+          const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+          trends.push({
+            type: 'monthly',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            monthLabel: `${thaiMonthsShort[d.getMonth()]} ${String(d.getFullYear() + 543).substring(2)}`,
+            fullLabel: `${thaiMonthsFull[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      } else {
+        // Default monthly trends (last N months)
+        for (let i = pointsCount - 1; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          trends.push({
+            type: 'monthly',
+            date: d,
+            year: d.getFullYear(),
+            month: d.getMonth(),
+            monthLabel: `${thaiMonthsShort[d.getMonth()]} ${String(d.getFullYear() + 543).substring(2)}`,
+            fullLabel: `${thaiMonthsFull[d.getMonth()]} ${d.getFullYear() + 543}`,
+            income: 0,
+            expense: 0
+          });
+        }
+      }
+    }
+
+    // Now populate income and expense amounts
     allTransactions.forEach(tx => {
       const txDate = parseDate(tx.date);
       if (selectedBranch !== 'all' && tx.branchId !== selectedBranch) return;
       if (tx.status === 'cancelled') return;
 
       trends.forEach(t => {
-        if (txDate.getFullYear() === t.year && txDate.getMonth() === t.month) {
-          if (tx.type === 'income') t.income += tx.amount;
-          else if (tx.type === 'expense') t.expense += tx.amount;
+        if (t.type === 'daily') {
+          if (txDate.getFullYear() === t.year && txDate.getMonth() === t.month && txDate.getDate() === t.day) {
+            if (tx.type === 'income') t.income += tx.amount;
+            else if (tx.type === 'expense') t.expense += tx.amount;
+          }
+        } else {
+          if (txDate.getFullYear() === t.year && txDate.getMonth() === t.month) {
+            if (tx.type === 'income') t.income += tx.amount;
+            else if (tx.type === 'expense') t.expense += tx.amount;
+          }
         }
       });
     });
 
     return trends;
-  }, [allTransactions, selectedBranch]);
+  }, [allTransactions, selectedBranch, timeRange, customStartDate, customEndDate]);
 
   // Calculate branch revenue breakdown
   const branchRevenue = useMemo(() => {
@@ -4408,6 +4623,30 @@ const ExecutiveDashboard = ({
     ...monthlyTrends.map(t => Math.max(t.income, t.expense)),
     10000 // avoid division by 0
   );
+
+  const netProfitPoints = useMemo(() => {
+    return monthlyTrends.map((t, idx) => {
+      const netProfit = t.income - t.expense;
+      const pct = Math.max(0, Math.min(100, (netProfit / maxTrendValue) * 80));
+      // Elevate dot and line slightly above the bar for perfect visibility
+      const dotPct = Math.min(95, pct + 6);
+      const x = (idx + 0.5) * (600 / monthlyTrends.length);
+      const y = 144 - (dotPct / 100) * 144;
+      return { x, y, pct, dotPct, netProfit };
+    });
+  }, [monthlyTrends, maxTrendValue]);
+
+  const financialLinePath = useMemo(() => {
+    return netProfitPoints.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  }, [netProfitPoints]);
+
+  const isCompactFinancial = monthlyTrends.length > 7;
+  const financialBarWidthClass = isCompactFinancial 
+    ? "w-1 sm:w-1.5" 
+    : "w-3.5 sm:w-5";
+  const financialGroupGapClass = isCompactFinancial
+    ? "gap-0.5"
+    : "gap-1 sm:gap-1.5";
 
   return (
     <div className="fade-in pb-10 w-full">
@@ -4562,40 +4801,61 @@ const ExecutiveDashboard = ({
           {/* Trends Chart */}
           <div className={`lg:col-span-2 ${theme.card} flex flex-col`}>
             <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-6 kanit-text flex items-center gap-2">
-              <BarChart3 className="text-emerald-500 w-5 h-5" /> เทรนด์การเงินย้อนหลัง (6 เดือนล่าสุด)
+              <BarChart3 className="text-emerald-500 w-5 h-5" /> เทรนด์การเงินย้อนหลัง ({monthlyTrends.length} {monthlyTrends[0]?.type === 'daily' ? 'วัน' : 'เดือน'}ล่าสุด)
             </h3>
-            <div className="flex-1 flex flex-col justify-end min-h-[220px]">
-              <div className="flex items-end justify-between gap-4 h-48 px-2">
-                {monthlyTrends.map((t, idx) => {
-                  const incomeHeight = `${Math.max(8, (t.income / maxTrendValue) * 100)}%`;
-                  const expenseHeight = `${Math.max(8, (t.expense / maxTrendValue) * 100)}%`;
-                  return (
-                    <div key={idx} className="flex-1 flex flex-col items-center gap-2 group relative">
-                      <div className="flex items-end justify-center gap-1.5 w-full h-full">
+            <div className="flex-1 flex flex-col justify-end min-h-[220px] px-2 pt-8">
+              <div className="h-36 w-full relative">
+                {/* SVG Mixed Line Chart Overlay for Net Profit */}
+                <svg className="absolute left-0 right-0 top-0 h-full w-full pointer-events-none z-20" viewBox="0 0 600 144" preserveAspectRatio="none">
+                  {/* Glow effect for line */}
+                  <path d={financialLinePath} fill="none" stroke="rgba(99, 102, 241, 0.15)" strokeWidth="6" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Main Line */}
+                  <path d={financialLinePath} fill="none" stroke="#6366f1" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+
+                {/* Bars Container */}
+                <div className="flex items-end h-full w-full relative">
+                  {monthlyTrends.map((t, idx) => {
+                    const point = netProfitPoints[idx];
+                    const incomeHeight = `${Math.max(8, (t.income / maxTrendValue) * 80)}%`;
+                    const expenseHeight = `${Math.max(8, (t.expense / maxTrendValue) * 80)}%`;
+                    const netProfitHeight = `${Math.max(8, point.pct)}%`;
+                    return (
+                      <div key={idx} className={`flex-1 flex items-end justify-center ${financialGroupGapClass} h-full relative group cursor-pointer z-10`}>
+                        {/* Beautiful Multi-value Tooltip */}
+                        <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-[10px] p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-md border border-slate-700/50 flex flex-col gap-0.5">
+                          <span className="font-bold text-slate-300 text-center border-b border-slate-700/50 pb-0.5 mb-0.5">{t.fullLabel || t.monthLabel}</span>
+                          <span className="font-semibold text-emerald-400">รายรับ: +{formatMoney(t.income)}</span>
+                          <span className="font-semibold text-rose-400">รายจ่าย: -{formatMoney(t.expense)}</span>
+                          <span className="font-bold text-indigo-300 pt-0.5 border-t border-slate-700/50">กำไรสุทธิ: {formatMoney(t.income - t.expense)}</span>
+                        </div>
+
                         {/* Income bar */}
-                        <div className="flex-1 flex flex-col items-center justify-end h-full">
-                          <div className="w-full max-w-[20px] bg-emerald-500 hover:bg-emerald-600 rounded-t-md transition-colors relative flex items-end" style={{ height: incomeHeight }}>
-                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 font-data font-bold">
-                              + {formatMoney(t.income)}
-                            </div>
-                          </div>
-                        </div>
+                        <div className={`${financialBarWidthClass} bg-emerald-500 hover:bg-emerald-600 rounded-t-[3px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: incomeHeight }}></div>
+
+                        {/* Net Profit bar */}
+                        <div className={`${financialBarWidthClass} bg-indigo-500 hover:bg-indigo-600 rounded-t-[3px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: netProfitHeight }}></div>
+
                         {/* Expense bar */}
-                        <div className="flex-1 flex flex-col items-center justify-end h-full">
-                          <div className="w-full max-w-[20px] bg-rose-500 hover:bg-rose-600 rounded-t-md transition-colors relative flex items-end" style={{ height: expenseHeight }}>
-                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20 font-data font-bold">
-                              - {formatMoney(t.expense)}
-                            </div>
-                          </div>
-                        </div>
+                        <div className={`${financialBarWidthClass} bg-rose-500 hover:bg-rose-600 rounded-t-[3px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: expenseHeight }}></div>
+
+                        {/* Perfect Circle Dot for Net Profit */}
+                        <div className="absolute w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full shadow-sm z-20 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ top: `${100 - point.dotPct}%` }}></div>
                       </div>
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 font-data mt-1">{t.monthLabel}</span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Month Labels Row */}
+              <div className="flex justify-between px-2 mt-2 w-full">
+                {monthlyTrends.map((t, idx) => (
+                  <span key={idx} className="flex-1 text-center text-[10px] sm:text-xs font-bold text-slate-500 font-data shrink-0">{t.monthLabel}</span>
+                ))}
+              </div>
+
               {/* Legend */}
-              <div className="flex justify-center gap-6 mt-6 border-t border-slate-100 pt-4 text-xs font-bold text-slate-500">
+              <div className="flex justify-center flex-wrap gap-6 mt-6 border-t border-slate-100 pt-4 text-xs font-bold text-slate-500">
                 <div className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 bg-emerald-500 rounded-md"></div>
                   <span className="kanit-text">รายรับ</span>
@@ -4603,6 +4863,16 @@ const ExecutiveDashboard = ({
                 <div className="flex items-center gap-2">
                   <div className="w-3.5 h-3.5 bg-rose-500 rounded-md"></div>
                   <span className="kanit-text">รายจ่าย</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 bg-indigo-500 rounded-md"></div>
+                  <span className="kanit-text">กำไรสุทธิ (แท่ง)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-1 bg-indigo-500 rounded-full relative flex items-center justify-center">
+                    <div className="w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full"></div>
+                  </div>
+                  <span className="kanit-text">เทรนด์กำไรสุทธิ (เส้น)</span>
                 </div>
               </div>
             </div>
@@ -4995,11 +5265,9 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
   const y = currentTime.getFullYear() + 543;
 
   // --- Calculate Dashboard Stats ---
-  const todayStr = `${d}/${m}/${y}`;
   const todaysQueue = queueData.filter(appt => {
       const effectiveDt = getEffectiveApptDatetimeStr(appt);
-      if(!effectiveDt) return false;
-      return effectiveDt.split(' ')[0] === todayStr;
+      return isSameDay(effectiveDt, currentTime);
   });
   const pendingQueue = queueData.filter(appt => appt.status === 'pending' || appt.dealStatus === 'pending');
   
@@ -5044,26 +5312,75 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
         <div className={`w-full ${theme.card}`}>
           <h3 className="text-lg font-semibold text-slate-800 mb-4 kanit-text flex items-center gap-2"><BarChart3 className="w-5 h-5 text-sky-500" /> แนวโน้มการนัดหมาย (7 วันย้อนหลัง)</h3>
           <div className="h-64 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 kanit-text relative overflow-hidden">
-            {isGlobalLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : (
-                <div className="flex items-end justify-center gap-2 sm:gap-4 h-full w-full p-6 pt-10">
-                    {[6,5,4,3,2,1,0].map(offset => {
-                        const date = new Date();
-                        date.setDate(date.getDate() - offset);
-                        const loopDateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear() + 543}`;
-                        const count = queueData.filter(q => q.datetime && q.datetime.split(' ')[0] === loopDateStr).length;
-                        const height = count === 0 ? '10%' : `${Math.min(100, Math.max(15, count * 20))}%`;
-                        return (
-                            <div key={offset} className="flex flex-col items-center gap-2 flex-1 max-w-[48px] group">
-                                <div className="w-full bg-sky-100/50 rounded-t-xl relative group-hover:bg-sky-200/80 transition-colors flex items-end justify-center" style={{ height }}>
-                                    <div className="w-full bg-sky-500 rounded-t-xl transition-all shadow-sm" style={{ height: '50%' }}></div>
-                                    <span className="absolute -top-6 text-xs font-bold text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity font-data bg-white px-2 py-0.5 rounded-md shadow-sm">{count}</span>
-                                </div>
-                                <span className={`text-[10px] sm:text-xs font-medium font-data ${offset === 0 ? 'text-sky-600 font-bold' : 'text-slate-500'}`}>{date.getDate()}/{date.getMonth()+1}</span>
+            {isGlobalLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : (() => {
+                const points = [6,5,4,3,2,1,0].map((offset, idx) => {
+                    const date = new Date();
+                    date.setDate(date.getDate() - offset);
+                    const count = queueData.filter(q => {
+                        const effectiveDt = getEffectiveApptDatetimeStr(q);
+                        return isSameDay(effectiveDt, date);
+                    }).length;
+                    const heightPercent = count === 0 ? 8 : Math.min(80, Math.max(12, count * 15));
+                    // Elevate dot and line slightly above the bar volume for perfect visibility
+                    const dotPercent = Math.min(95, heightPercent + 6);
+                    return {
+                        offset,
+                        date,
+                        count,
+                        heightPercent,
+                        dotPercent,
+                        dateStr: `${date.getDate()}/${date.getMonth()+1}`
+                    };
+                });
+                
+                const linePath = points.map((p, idx) => {
+                    const x = idx * 100 + 50;
+                    const y = 160 - (p.dotPercent / 100) * 160;
+                    return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+                }).join(' ');
+
+                return (
+                    <div className="flex flex-col justify-end h-full w-full p-4 sm:p-6 pt-10 relative">
+                        {/* Chart Area */}
+                        <div className="h-40 w-full relative">
+                            {/* SVG Mixed Line Chart Overlay */}
+                            <svg className="absolute left-0 right-0 top-0 h-full w-full pointer-events-none z-20" viewBox="0 0 700 160" preserveAspectRatio="none">
+                                {/* Glow shadow for line */}
+                                <path d={linePath} fill="none" stroke="rgba(14, 165, 233, 0.15)" strokeWidth="6.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                                {/* Main Line */}
+                                <path d={linePath} fill="none" stroke="#0ea5e9" strokeWidth="3.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+
+                            {/* Bar Columns Container */}
+                            <div className="flex items-end h-full w-full relative">
+                                {points.map((p, idx) => (
+                                    <div key={p.offset} className="flex-1 flex items-end justify-center h-full relative group cursor-pointer z-10">
+                                        {/* Beautiful Tooltip */}
+                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-[10px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-md border border-slate-700/50 flex flex-col items-center">
+                                            <span className="font-bold text-slate-300">{p.dateStr}</span>
+                                            <span className="font-semibold text-sky-400">{p.count} นัดหมาย</span>
+                                        </div>
+
+                                        {/* Perfect Circle Dot */}
+                                        <div className="absolute w-2.5 h-2.5 bg-white border-2 border-sky-500 rounded-full shadow-sm z-20 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ top: `${100 - p.dotPercent}%` }}></div>
+
+                                        {/* Solid bar volume */}
+                                        <div className="w-full max-w-[28px] sm:max-w-[36px] bg-sky-500 hover:bg-sky-600 rounded-t-xl transition-all relative" style={{ height: `${p.heightPercent}%` }}>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        );
-                    })}
-                </div>
-            )}
+                        </div>
+
+                        {/* Labels Row */}
+                        <div className="flex justify-between w-full mt-2">
+                            {points.map((p, idx) => (
+                                <span key={p.offset} className={`flex-1 text-center text-[10px] sm:text-xs font-medium font-data shrink-0 ${p.offset === 0 ? 'text-sky-600 font-bold' : 'text-slate-500'}`}>{p.dateStr}</span>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
           </div>
         </div>
 
@@ -21634,6 +21951,18 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
   );
 };
 
+// --- [NEW] Restore Mock Data to prevent ReferenceErrors ---
+const mockBranches = [
+  { id: 'b1', name: 'สาขาหลัก (กรุงเทพ)' },
+  { id: 'b2', name: 'สาขาเชียงใหม่' },
+];
+
+const mockPatients = [
+  { id: 'HN001', name: 'สมชาย ใจดี', phone: '081-234-5678', lastVisit: '2023-10-25', branchId: 'b1' },
+  { id: 'HN002', name: 'สมหญิง รักสวย', phone: '089-876-5432', lastVisit: '2023-10-26', branchId: 'b2' },
+  { id: 'HN003', name: 'มีชัย ทำดี', phone: '082-333-4444', lastVisit: '2023-10-27', branchId: 'b1' },
+];
+
 export default function App() {
 
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
@@ -21695,8 +22024,19 @@ export default function App() {
   const handleLogout = () => {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.removeItem('clinic_isLoggedIn');
+      localStorage.removeItem('clinic_currentUser');
     }
     setIsLoggedIn(false);
+    setCurrentUser({ id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' });
+    setIsDataFetched(false);
+    // ล้างข้อมูลหน้าบ้านทั้งหมดเพื่อความปลอดภัยทางเวชระเบียน
+    setPatientsData([]);
+    setQueueData([]);
+    setInventoryData([]);
+    setInventoryLogsData([]);
+    setPosProducts([]);
+    setPosHistoryData([]);
+    setFinanceData([]);
   };
 
   if (pdpaToken && pdpaHn) {
@@ -22005,6 +22345,7 @@ export default function App() {
 
   const [posProducts, setPosProducts] = useState([]); 
   const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
+  const [isAuthDataFetched, setIsAuthDataFetched] = useState(false);
   const [isDataFetched, setIsDataFetched] = useState(false);
   const [loadedMonths, setLoadedMonths] = useState(new Set()); // ติดตามเดือนที่โหลดแล้ว (YYYY-MM)
   const [isQueueFetching, setIsQueueFetching] = useState(false);
@@ -22199,121 +22540,205 @@ export default function App() {
     }
   };
 
+  const parseSettings = (resSettings) => {
+    if (resSettings?.status === 'success' && Array.isArray(resSettings.data)) {
+      const prefixes = resSettings.data.find(s => s.id === 'staff_prefixes');
+      if (prefixes && Array.isArray(prefixes.values)) {
+        setStaffPrefixes(prefixes.values);
+      }
+      const perms = resSettings.data.find(s => s.id === 'role_permissions');
+      if (perms && perms.values) {
+        setRolePermissions(perms.values);
+        if (perms.labels) {
+          setRoleLabels(perms.labels);
+        }
+      }
+      const staffCats = resSettings.data.find(s => s.id === 'staff_categories');
+      if (staffCats && Array.isArray(staffCats.values)) {
+        setStaffCategories(staffCats.values);
+      }
+      const apptStats = resSettings.data.find(s => s.id === 'appointment_statuses');
+      if (apptStats && Array.isArray(apptStats.values)) {
+        const normalized = apptStats.values.map(item => {
+          if (typeof item === 'string') {
+            let color = 'sky';
+            if (item === 'รอยืนยัน' || item.toLowerCase().includes('pend')) color = 'amber';
+            else if (item === 'ยืนยันแล้ว' || item.toLowerCase().includes('confirm')) color = 'emerald';
+            else if (item === 'ยกเลิก' || item.toLowerCase().includes('cancel')) color = 'rose';
+            return { label: item, color };
+          }
+          return item;
+        });
+        setAppointmentStatuses(normalized);
+      }
+      const intTokens = resSettings.data.find(s => s.id === 'integration_tokens');
+      if (intTokens && intTokens.values) {
+        setIntegrationTokens(intTokens.values);
+      }
+    }
+  };
+
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!GOOGLE_SCRIPT_URL || isDataFetched) return;
-      setIsGlobalLoading(true);
-      try {
-        // ใช้ Promise.all เพื่อดึงข้อมูลทุกอย่างขนานกัน
-        const [
-          resPatients,
-          resPos,
-          resInventory,
-          resInvLogs,
-          resPosItems,
-          resBranches,
-          resFinanceRevenue,
-          resFinanceExpenses,
-          resStaff,
-          resSettings
-        ] = await Promise.all([
-          callAppScript('GET_DATA', 'Patients'),
-          callAppScript('GET_DATA', 'POS_Transactions'),
-          callAppScript('GET_DATA', 'Inventory'),
-          callAppScript('GET_DATA', 'InventoryLogs'),
-          callAppScript('GET_DATA', 'setting_pos'),
-          callAppScript('GET_DATA', 'Branches'),
-          callAppScript('GET_DATA', 'Finance_Revenue'),
-          callAppScript('GET_DATA', 'Finance_Expenses'),
-          callAppScript('GET_DATA', 'Staff'),
-          callAppScript('GET_DATA', 'Settings')
-        ]);
+    const loadInitialData = async () => {
+      if (!GOOGLE_SCRIPT_URL) {
+        setIsAuthDataFetched(true);
+        setIsDataFetched(true);
+        setIsGlobalLoading(false);
+        return;
+      }
 
-        if (resPatients?.status === 'success') { 
-          setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
-        }
+      // กรณีที่ 1: ล็อกอินแล้ว แต่ข้อมูลอื่นๆ ยังไม่โหลด (ทำการดึงข้อมูลเวชระเบียน, สต๊อก, POS, การเงิน)
+      if (isLoggedIn && !isDataFetched) {
+        setIsGlobalLoading(true);
+        try {
+          if (!isAuthDataFetched) {
+            // ดึงทุกอย่างขนานกัน (รวมทั้งสิทธิ์การใช้งานและข้อมูลพนักงาน)
+            const [
+              resPatients,
+              resPos,
+              resInventory,
+              resInvLogs,
+              resPosItems,
+              resBranches,
+              resFinanceRevenue,
+              resFinanceExpenses,
+              resStaff,
+              resSettings
+            ] = await Promise.all([
+              callAppScript('GET_DATA', 'Patients'),
+              callAppScript('GET_DATA', 'POS_Transactions'),
+              callAppScript('GET_DATA', 'Inventory'),
+              callAppScript('GET_DATA', 'InventoryLogs'),
+              callAppScript('GET_DATA', 'setting_pos'),
+              callAppScript('GET_DATA', 'Branches'),
+              callAppScript('GET_DATA', 'Finance_Revenue'),
+              callAppScript('GET_DATA', 'Finance_Expenses'),
+              callAppScript('GET_DATA', 'Staff'),
+              callAppScript('GET_DATA', 'Settings')
+            ]);
 
-        if (resBranches?.status === 'success') {
-          setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
-        }
-
-        if (resPos?.status === 'success') {
-          setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
-        }
-
-        if (resInventory?.status === 'success') {
-          setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
-        }
-
-        if (resInvLogs?.status === 'success') {
-          setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
-        }
-
-        if (resPosItems?.status === 'success') {
-          setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
-        }
-
-        const combinedFinanceData = [];
-        if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
-           combinedFinanceData.push(...resFinanceRevenue.data);
-        }
-        if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
-           combinedFinanceData.push(...resFinanceExpenses.data);
-        }
-        setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
-
-        if (resStaff?.status === 'success') {
-           setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
-        }
-
-        if (resSettings?.status === 'success' && Array.isArray(resSettings.data)) {
-          const prefixes = resSettings.data.find(s => s.id === 'staff_prefixes');
-          if (prefixes && Array.isArray(prefixes.values)) {
-            setStaffPrefixes(prefixes.values);
-          }
-          const perms = resSettings.data.find(s => s.id === 'role_permissions');
-          if (perms && perms.values) {
-            setRolePermissions(perms.values);
-            if (perms.labels) {
-              setRoleLabels(perms.labels);
+            if (resPatients?.status === 'success') { 
+              setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
             }
+            if (resBranches?.status === 'success') {
+              setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
+            }
+            if (resPos?.status === 'success') {
+              setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
+            }
+            if (resInventory?.status === 'success') {
+              setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
+            }
+            if (resInvLogs?.status === 'success') {
+              setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
+            }
+            if (resPosItems?.status === 'success') {
+              setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
+            }
+
+            const combinedFinanceData = [];
+            if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
+               combinedFinanceData.push(...resFinanceRevenue.data);
+            }
+            if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
+               combinedFinanceData.push(...resFinanceExpenses.data);
+            }
+            setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
+
+            if (resStaff?.status === 'success') {
+               setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
+            }
+            parseSettings(resSettings);
+          } else {
+            // มีข้อมูล Auth อยู่แล้ว ดึงเฉพาะข้อมูลคลินิกที่ยังขาด
+            const [
+              resPatients,
+              resPos,
+              resInventory,
+              resInvLogs,
+              resPosItems,
+              resFinanceRevenue,
+              resFinanceExpenses
+            ] = await Promise.all([
+              callAppScript('GET_DATA', 'Patients'),
+              callAppScript('GET_DATA', 'POS_Transactions'),
+              callAppScript('GET_DATA', 'Inventory'),
+              callAppScript('GET_DATA', 'InventoryLogs'),
+              callAppScript('GET_DATA', 'setting_pos'),
+              callAppScript('GET_DATA', 'Finance_Revenue'),
+              callAppScript('GET_DATA', 'Finance_Expenses')
+            ]);
+
+            if (resPatients?.status === 'success') { 
+              setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
+            }
+            if (resPos?.status === 'success') {
+              setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
+            }
+            if (resInventory?.status === 'success') {
+              setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
+            }
+            if (resInvLogs?.status === 'success') {
+              setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
+            }
+            if (resPosItems?.status === 'success') {
+              setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
+            }
+
+            const combinedFinanceData = [];
+            if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
+               combinedFinanceData.push(...resFinanceRevenue.data);
+            }
+            if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
+               combinedFinanceData.push(...resFinanceExpenses.data);
+            }
+            setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
           }
-          const staffCats = resSettings.data.find(s => s.id === 'staff_categories');
-          if (staffCats && Array.isArray(staffCats.values)) {
-            setStaffCategories(staffCats.values);
-          }
-          const apptStats = resSettings.data.find(s => s.id === 'appointment_statuses');
-          if (apptStats && Array.isArray(apptStats.values)) {
-            const normalized = apptStats.values.map(item => {
-              if (typeof item === 'string') {
-                let color = 'sky';
-                if (item === 'รอยืนยัน' || item.toLowerCase().includes('pend')) color = 'amber';
-                else if (item === 'ยืนยันแล้ว' || item.toLowerCase().includes('confirm')) color = 'emerald';
-                else if (item === 'ยกเลิก' || item.toLowerCase().includes('cancel')) color = 'rose';
-                return { label: item, color };
-              }
-              return item;
-            });
-            setAppointmentStatuses(normalized);
-          }
-          const intTokens = resSettings.data.find(s => s.id === 'integration_tokens');
-          if (intTokens && intTokens.values) {
-            setIntegrationTokens(intTokens.values);
-          }
+
+          // โหลดข้อมูล Queue ของเดือนปัจจุบันเริ่มต้น
+          const now = new Date();
+          await fetchQueueForMonth(now.getFullYear(), now.getMonth());
+
+          setIsAuthDataFetched(true);
+          setIsDataFetched(true);
+        } catch (error) { 
+          console.error("Load Clinic Data Error:", error);
+          showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'warning'); 
+        } finally {
+          setIsGlobalLoading(false);
         }
+      }
 
-        // โหลดข้อมูล Queue ของเดือนปัจจุบันเริ่มต้น
-        const now = new Date();
-        await fetchQueueForMonth(now.getFullYear(), now.getMonth());
+      // กรณีที่ 2: ยังไม่ได้ล็อกอิน และยังไม่มีข้อมูล Auth (ดึงเฉพาะข้อมูลล็อกอินเพื่อความเร็ว)
+      if (!isLoggedIn && !isAuthDataFetched) {
+        setIsGlobalLoading(true);
+        try {
+          const [resStaff, resBranches, resSettings] = await Promise.all([
+            callAppScript('GET_DATA', 'Staff'),
+            callAppScript('GET_DATA', 'Branches'),
+            callAppScript('GET_DATA', 'Settings')
+          ]);
 
-      } catch (error) { 
-        console.error("Initial Fetch Error:", error);
-        showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเริ่มต้นได้', 'warning'); 
-      } 
-      finally { setIsDataFetched(true); setIsGlobalLoading(false); }
+          if (resStaff?.status === 'success') {
+             setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
+          }
+          if (resBranches?.status === 'success') {
+            setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
+          }
+          parseSettings(resSettings);
+
+          setIsAuthDataFetched(true);
+        } catch (error) {
+          console.error("Load Auth Data Error:", error);
+          showToast('ไม่สามารถเชื่อมต่อระบบยืนยันตัวตนได้', 'warning');
+        } finally {
+          setIsGlobalLoading(false);
+        }
+      }
     };
-    fetchInitialData();
-  }, [isDataFetched]);
+
+    loadInitialData();
+  }, [isLoggedIn, isAuthDataFetched, isDataFetched]);
 
   const navItems = [
     { id: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
@@ -22389,7 +22814,7 @@ export default function App() {
   const mobileNavItems = filteredNavItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'reports'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
 
-  if (!isLoggedIn) {
+  if (!isLoggedIn || isGlobalLoading) {
       return (
         <>
           <style dangerouslySetInnerHTML={{__html: `
@@ -22417,6 +22842,40 @@ export default function App() {
             }
             .animate-loading-slide {
                 animation: loading-slide 1.5s infinite linear;
+            }
+
+            /* --- Premium Animations for Login Screen --- */
+            @keyframes blob {
+              0% { transform: translate(0px, 0px) scale(1); }
+              33% { transform: translate(30px, -50px) scale(1.1); }
+              66% { transform: translate(-20px, 20px) scale(0.95); }
+              100% { transform: translate(0px, 0px) scale(1); }
+            }
+            .animate-blob {
+              animation: blob 7s infinite alternate ease-in-out;
+            }
+            .animation-delay-2000 {
+              animation-delay: 2s;
+            }
+            .animation-delay-4000 {
+              animation-delay: 4s;
+            }
+
+            @keyframes scale-up {
+              0% { transform: scale(0.95); opacity: 0; }
+              100% { transform: scale(1); opacity: 1; }
+            }
+            .animate-scale-up {
+              animation: scale-up 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            }
+
+            @keyframes shake {
+              0%, 100% { transform: translateX(0); }
+              10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+              20%, 40%, 60%, 80% { transform: translateX(5px); }
+            }
+            .animate-shake {
+              animation: shake 0.6s ease-in-out;
             }
           `}} />
           <LoginScreen onLogin={handleLogin} staffData={staffData} isGlobalLoading={isGlobalLoading} />
