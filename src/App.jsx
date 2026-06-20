@@ -6536,10 +6536,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
   useEffect(() => {
+    let active = true;
     let stream = null;
     if (isScannerOpen && navigator.mediaDevices) {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
         .then(s => {
+          if (!active) {
+            s.getTracks().forEach(track => track.stop());
+            return;
+          }
           stream = s;
           if (videoRef.current) videoRef.current.srcObject = s;
         })
@@ -6549,6 +6554,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         });
     }
     return () => {
+      active = false;
+      if (videoRef.current) {
+          try { videoRef.current.srcObject = null; } catch (e) {}
+      }
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
   }, [isScannerOpen]);
@@ -6748,9 +6757,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         }
     }
 
-    setFormData(prev => ({ ...prev, ...extractedData }));
     setIsScannerOpen(false);
-    showToast('ดึงข้อมูลจากบัตรประชาชน (OCR) สำเร็จ', 'success');
+    setTimeout(() => {
+        setFormData(prev => ({ ...prev, ...extractedData }));
+        showToast('ดึงข้อมูลจากบัตรประชาชน (OCR) สำเร็จ', 'success');
+    }, 300);
   };
 
   const handleRealScan = async () => {
@@ -16462,13 +16473,27 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
   // เปิดกล้องเมื่อเปิด Scanner
   useEffect(() => {
+    let active = true;
     let stream = null;
     if (isScannerOpen && navigator.mediaDevices) {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(s => { stream = s; if (videoRef.current) videoRef.current.srcObject = s; })
+        .then(s => {
+          if (!active) {
+            s.getTracks().forEach(track => track.stop());
+            return;
+          }
+          stream = s;
+          if (videoRef.current) videoRef.current.srcObject = s;
+        })
         .catch(err => { showToast('อุปกรณ์ไม่รองรับ หรือไม่ได้อนุญาตให้ใช้กล้อง', 'warning'); });
     }
-    return () => { if (stream) stream.getTracks().forEach(track => track.stop()); };
+    return () => {
+      active = false;
+      if (videoRef.current) {
+          try { videoRef.current.srcObject = null; } catch (e) {}
+      }
+      if (stream) stream.getTracks().forEach(track => track.stop());
+    };
   }, [isScannerOpen]);
   
   // Form พนักงาน
@@ -16878,9 +16903,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         if (houseMatch) extractedData.address = houseMatch.replace(/^ที่อยู่\s*/, '').trim();
     }
     
-    setFormData(prev => ({ ...prev, ...extractedData }));
     setIsScannerOpen(false);
-    showToast('ดึงข้อมูลจากบัตรประชาชน (OCR) สำเร็จ', 'success');
+    setTimeout(() => {
+        setFormData(prev => ({ ...prev, ...extractedData }));
+        showToast('ดึงข้อมูลจากบัตรประชาชน (OCR) สำเร็จ', 'success');
+    }, 300);
   };
 
   const handleRealScan = async () => {
