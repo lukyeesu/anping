@@ -7,7 +7,13 @@
 const DB_SCHEMA = ['id', 'json_data']; // โครงสร้างตายตัวสำหรับทุกชีต
 
 function doPost(e) {
+  // --- ระบบจัดคิว ป้องกันข้อมูลชนกันเวลาบันทึกพร้อมกันหลายคน ---
+  const lock = LockService.getScriptLock();
+  
   try {
+    // รอคิวสูงสุด 30 วินาที เพื่อให้คำสั่งก่อนหน้าบันทึกเสร็จก่อน (ทำงานจริงใช้เวลาแค่เสี้ยววินาที)
+    lock.waitLock(30000);
+    
     const requestData = JSON.parse(e.postData.contents);
     const { action, sheetName, payload } = requestData;
 
@@ -24,7 +30,7 @@ function doPost(e) {
       case 'GET_DATA':
         response = getData(sheetName);
         break;
-      case 'GET_DATA_BY_MONTH': // <--- ใหม่: โหลดข้อมูลเฉพาะเดือนเพื่อความรวดเร็ว
+      case 'GET_DATA_BY_MONTH': 
         response = getDataByMonth(sheetName, payload.year, payload.month);
         break;
       case 'DELETE_DATA':
@@ -43,6 +49,9 @@ function doPost(e) {
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    // ทำงานเสร็จ ต้องปล่อยคิวให้คนต่อไปเสมอ
+    lock.releaseLock();
   }
 }
 

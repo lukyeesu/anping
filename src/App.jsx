@@ -20715,8 +20715,32 @@ const SettingsManager = ({
   showToast,
   isGlobalLoading
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses' | 'integrations'
+  const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses' | 'integrations' | 'logs'
   const [newPrefix, setNewPrefix] = useState('');
+  const [logsData, setLogsData] = useState([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    if (activeSubTab === 'logs') {
+      let isMounted = true;
+      const fetchLogs = async () => {
+        setIsLoadingLogs(true);
+        try {
+          const res = await callAppScript('GET_DATA', 'Logs');
+          if (isMounted && res.status === 'success') {
+            const sortedLogs = (res.data || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            setLogsData(sortedLogs);
+          }
+        } catch (e) {
+          if (isMounted) showToast('ไม่สามารถดึงข้อมูลประวัติการใช้งานได้', 'error');
+        } finally {
+          if (isMounted) setIsLoadingLogs(false);
+        }
+      };
+      fetchLogs();
+      return () => { isMounted = false; };
+    }
+  }, [activeSubTab]);
   const [newStaffCat, setNewStaffCat] = useState('');
   const [newRoleName, setNewRoleName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -21049,6 +21073,17 @@ const SettingsManager = ({
           >
             <Link size={18} />
             การเชื่อมต่อแจ้งเตือน
+          </button>
+          <button
+            onClick={() => setActiveSubTab('logs')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'logs'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <History size={18} />
+            ประวัติการใช้งาน (Logs)
           </button>
         </div>
 
@@ -21485,6 +21520,100 @@ const SettingsManager = ({
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกการเชื่อมต่อ
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 6: LOGS */}
+            {activeSubTab === 'logs' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 kanit-text">ประวัติการใช้งานระบบ (Logs)</h3>
+                    <p className="text-slate-400 text-xs mt-1 kanit-text">ตรวจสอบการทำรายการ บันทึก ลบ หรือการเข้าสู่ระบบ</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setActiveSubTab('dummy'); 
+                      setTimeout(() => setActiveSubTab('logs'), 10);
+                    }} 
+                    className="p-2 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl transition-colors"
+                    title="รีเฟรชข้อมูล"
+                  >
+                    <RotateCcw size={18} />
+                  </button>
+                </div>
+
+                <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="bg-slate-50/50 border-b border-slate-100">
+                          <th className="px-5 py-4 text-xs font-bold text-slate-500 kanit-text">เวลา (Time)</th>
+                          <th className="px-5 py-4 text-xs font-bold text-slate-500 kanit-text">ผู้ใช้งาน (User)</th>
+                          <th className="px-5 py-4 text-xs font-bold text-slate-500 kanit-text">การกระทำ (Action)</th>
+                          <th className="px-5 py-4 text-xs font-bold text-slate-500 kanit-text">ชีต/เป้าหมาย</th>
+                          <th className="px-5 py-4 text-xs font-bold text-slate-500 kanit-text">รายละเอียด (Detail)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {isLoadingLogs ? (
+                          <tr>
+                            <td colSpan="5" className="px-5 py-12 text-center text-slate-400">
+                              <Loader2 size={24} className="animate-spin mx-auto mb-2 text-sky-500" />
+                              กำลังโหลดประวัติ...
+                            </td>
+                          </tr>
+                        ) : logsData.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="px-5 py-12 text-center text-slate-400 font-medium kanit-text">
+                              ไม่มีประวัติการใช้งาน
+                            </td>
+                          </tr>
+                        ) : (
+                          logsData.map((log) => (
+                            <tr key={log.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                              <td className="px-5 py-4 text-sm font-data text-slate-600 whitespace-nowrap">
+                                {new Date(log.timestamp).toLocaleString('th-TH')}
+                              </td>
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                    {log.user ? log.user.substring(0, 2) : '??'}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-slate-700 text-sm kanit-text">{log.user}</div>
+                                    <div className="text-xs text-slate-400 kanit-text">{log.role}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold kanit-text ${
+                                  log.action === 'LOGIN' ? 'bg-emerald-100 text-emerald-700' :
+                                  log.action === 'SAVE_DATA' ? 'bg-sky-100 text-sky-700' :
+                                  log.action === 'DELETE_DATA' ? 'bg-rose-100 text-rose-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-sm kanit-text font-medium text-slate-600">
+                                {log.targetSheet}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-data text-slate-500">
+                                {log.detail}
+                                {log.targetDataId && log.targetDataId !== 'unknown' && (
+                                  <div className="text-sky-500 mt-0.5 border border-sky-100 inline-block px-1.5 py-0.5 rounded bg-sky-50">
+                                    ID: {log.targetDataId}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
