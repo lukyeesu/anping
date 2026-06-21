@@ -352,6 +352,52 @@ const AnimatedModal = ({ isOpen, isClosing, onClose, title, children, maxWidth =
     return createPortal(modalContent, document.body);
 };
 
+const PortalDropdown = ({ isVisible, children, className }) => {
+    const [rect, setRect] = useState(null);
+    const wrapperRef = useRef(null);
+
+    useEffect(() => {
+        const updateRect = () => {
+            if (isVisible && wrapperRef.current) {
+                const parent = wrapperRef.current.parentElement;
+                if (parent) {
+                    setRect(parent.getBoundingClientRect());
+                }
+            }
+        };
+        updateRect();
+        if (isVisible) {
+            window.addEventListener('scroll', updateRect, true);
+            window.addEventListener('resize', updateRect);
+            return () => {
+                window.removeEventListener('scroll', updateRect, true);
+                window.removeEventListener('resize', updateRect);
+            };
+        }
+    }, [isVisible]);
+
+    if (!isVisible) return <span ref={wrapperRef} style={{display: 'none'}} />;
+    if (!rect) return <span ref={wrapperRef} style={{display: 'none'}} />;
+
+    const shouldDropUp = typeof window !== 'undefined' && window.innerHeight - rect.bottom < 220;
+
+    return createPortal(
+        <div 
+            className={`fixed z-[99999] ${className || ''}`}
+            style={{
+                top: shouldDropUp ? 'auto' : rect.bottom + 4,
+                bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto',
+                left: rect.left,
+                width: rect.width,
+                transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
+            }}
+        >
+            {children}
+        </div>,
+        document.body
+    );
+};
+
 const getPatientLastVisitStr = (p) => {
     const dt = p.opdRecords && p.opdRecords.length > 0 ? p.opdRecords[0].datetime : (p.createdAt || p.lastVisit || '');
     if (!dt) return '000000000000';
@@ -1392,14 +1438,25 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
         if (disabled) return;
         if (!isOpen && containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
+            
+            // Auto flip if there is not enough space below (192px is max-h-48 + padding)
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
+            const shouldDropUp = dropUp || (spaceBelow < 250 && spaceAbove > spaceBelow);
+
+            // Auto adjust left if it goes off screen on the right
+            const isNearRightEdge = rect.right > window.innerWidth - 100;
+
             setDropdownStyle({
                 position: 'fixed',
-                top: dropUp ? 'auto' : rect.bottom + 4,
-                bottom: dropUp ? (window.innerHeight - rect.top + 4) : 'auto',
-                left: rect.left,
+                top: shouldDropUp ? 'auto' : rect.bottom + 4,
+                bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto',
+                left: (compact && isNearRightEdge) ? 'auto' : rect.left,
+                right: (compact && isNearRightEdge) ? (window.innerWidth - rect.right) : 'auto',
                 width: compact && !fullWidth ? 'auto' : rect.width,
                 minWidth: compact && !fullWidth ? rect.width : undefined,
-                zIndex: 99999
+                zIndex: 99999,
+                transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
             });
         }
         setIsOpen(!isOpen);
@@ -18185,20 +18242,33 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                       <div className="relative" style={{ zIndex: 50 }}>
                         <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label>
-                        <div className="relative">
+                        <div className="relative" id="prefix-dropdown-container">
                           <input required type="text" className={`${theme.input} font-data pr-10`} value={formData.prefix} onChange={(e) => setFormData({...formData, prefix: e.target.value})} placeholder="พิมพ์หรือเลือก" onFocus={() => setShowPrefixDropdown(true)} onBlur={() => setTimeout(() => setShowPrefixDropdown(false), 200)} />
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                             <ChevronDown size={18} className={`transition-transform duration-200 ${showPrefixDropdown ? 'rotate-180' : ''}`} />
                           </div>
-                          {showPrefixDropdown && (
-                            <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
-                              {(staffPrefixes || ['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']).map(opt => (
-                                <div key={opt} onMouseDown={(e) => { e.preventDefault(); setFormData({...formData, prefix: opt}); setShowPrefixDropdown(false); }} className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${formData.prefix === opt ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}>
-                                  {opt}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          {showPrefixDropdown && (() => {
+                            const el = document.getElementById('prefix-dropdown-container');
+                            if (!el) return null;
+                            const rect = el.getBoundingClientRect();
+                            const shouldDropUp = window.innerHeight - rect.bottom < 220;
+                            return createPortal(
+                              <div className="fixed z-[99999] bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in duration-200" style={{ 
+                                top: shouldDropUp ? 'auto' : rect.bottom + 4,
+                                bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto', 
+                                left: rect.left,
+                                width: rect.width,
+                                transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
+                              }}>
+                                {(staffPrefixes || ['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']).map(opt => (
+                                  <div key={opt} onMouseDown={(e) => { e.preventDefault(); setFormData({...formData, prefix: opt}); setShowPrefixDropdown(false); }} className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${formData.prefix === opt ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}>
+                                    {opt}
+                                  </div>
+                                ))}
+                              </div>,
+                              document.body
+                            );
+                          })()}
                         </div>
                       </div>
 
