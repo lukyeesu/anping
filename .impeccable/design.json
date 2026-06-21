@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-21T00:34:00Z",
+  "title": "Design System: Anping ClinicHub",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Reassuring Sky Blue", "canonical": "oklch(67.75% 0.187 239.5)", "tonalRamp": ["#0284c7", "#0ea5e9", "#38bdf8", "#7dd3fc", "#bae6fd", "#e0f2fe", "#f0f9ff", "#fafcfe"] },
+      "success": { "role": "success", "displayName": "Clinical Emerald", "canonical": "oklch(69.87% 0.198 149.2)", "tonalRamp": ["#047857", "#10b981", "#34d399", "#6ee7b7", "#a7f3d0", "#d1fae5", "#ecfdf5", "#f9fefc"] },
+      "danger": { "role": "danger", "displayName": "Alert Rose", "canonical": "oklch(60.91% 0.223 15.6)", "tonalRamp": ["#be123c", "#f43f5e", "#fb7185", "#fca5a5", "#fecaca", "#fee2e2", "#fff5f5", "#fffdfd"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Kanit Headings", "purpose": "Section headings and large titles" },
+      "body": { "displayName": "Sarabun Body", "purpose": "Prose, patient tables, and labels" },
+      "mono": { "displayName": "JetBrains Mono", "purpose": "Monospaced codes, timestamps, and numbers" }
+    },
+    "shadows": [
+      { "name": "shadow-sm", "value": "0 1px 2px 0 rgba(0, 0, 0, 0.05)", "purpose": "Soft border support for card modules" },
+      { "name": "glass", "value": "0 8px 32px rgba(0,0,0,0.04)", "purpose": "Ambient backdrop blur overlay shadows" }
+    ],
+    "motion": [
+      { "name": "transition-all", "value": "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Quick active scale-down for responsive buttons" }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard action triggers for adding records, appointments, and confirm billing.",
+      "html": "<button class=\"ds-btn-primary\">เพิ่มประวัติใหม่</button>",
+      "css": ".ds-btn-primary { display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Kanit', sans-serif; font-weight: 600; padding: 12px 24px; border-radius: 16px; background-color: #0ea5e9; color: #ffffff; border: none; cursor: pointer; transition: all 0.2s; } .ds-btn-primary:hover { background-color: #0284c7; } .ds-btn-primary:active { transform: scale(0.95); }"
+    },
+    {
+      "name": "Clinical Card",
+      "kind": "card",
+      "refersTo": "card-base",
+      "description": "White card container for wrapping individual modules on the clinic dashboard.",
+      "html": "<div class=\"ds-card-base\"><h3 class=\"ds-card-title\">หัวข้อโมดูล</h3><p class=\"ds-card-body\">เนื้อหารายละเอียดข้อมูลของคนไข้</p></div>",
+      "css": ".ds-card-base { background-color: #ffffff; border-radius: 24px; border: 1px solid rgba(241, 245, 249, 0.5); padding: 28px; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); } .ds-card-title { font-family: 'Kanit', sans-serif; font-size: 20px; font-weight: 600; color: #1e293b; margin-bottom: 8px; } .ds-card-body { font-family: 'Sarabun', sans-serif; font-size: 15px; color: #475569; line-height: 1.6; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clinical Precision Hub",
+    "overview": "Anping ClinicHub centers around a tactile, highly clean, and density-optimized grid layout. Built to support rapid clinical tasks, EMR reading, and billing flows, the design prioritizes clean cards and clear monospaced numbers. It rejects legibility shortcuts like thin fonts and washed-out colors.",
+    "keyCharacteristics": [
+      "Tactile 16px/24px rounded corners",
+      "High contrast text hierarchy for medical values",
+      "Auto-hiding headers and bottom bars to optimize mobile viewing space"
+    ],
+    "rules": [
+      { "name": "The Reassuring Accent Rule", "body": "Sky Blue accent is reserved for primary actions, selection states, and focus states. It must never exceed 10% of any screen surface.", "section": "colors" },
+      { "name": "The Monospace Contrast Rule", "body": "All alphanumeric codes (HN, Citizen ID, queue index, prices) must use JetBrains Mono or Roboto Mono with high contrast colors to ensure prompt and error-free reading.", "section": "colors" }
+    ],
+    "dos": [
+      "Do use distinct active scale-down (scale-95) transitions on all button triggers.",
+      "Do use readable ink colors (text-slate-800) for body text over white card backgrounds."
+    ],
+    "donts": [
+      "Don't use side-stripe borders (e.g. border-left-4) as indicators on medical files.",
+      "Don't animate image or card thumbnails on hover.",
+      "Don't use thin gray fonts that drop below 4.5:1 contrast ratio."
+    ]
+  }
+}
