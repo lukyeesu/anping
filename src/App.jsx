@@ -21514,13 +21514,13 @@ const LoginScreen = ({ onLogin, staffData = [], isGlobalLoading }) => {
     setTimeout(() => {
       setIsLoading(false);
       
-      if (username === 'admin' && password === '1234') {
+      if (username.trim().toLowerCase() === 'admin' && password === '1234') {
         onLogin({ id: 'admin1', name: 'Admin', role: 'admin', category: 'staff' });
         return;
       }
       
       const matchedStaff = staffData.find(
-        (s) => s.username && s.username.toLowerCase() === username.trim().toLowerCase() && s.password === password
+        (s) => s.username && s.username.trim().toLowerCase() === username.trim().toLowerCase() && s.password === password
       );
       if (matchedStaff) {
           onLogin(matchedStaff);
