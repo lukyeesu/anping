@@ -22165,6 +22165,8 @@ export default function App() {
     return { id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' };
   });
 
+  const [isGlobalLoading, setIsGlobalLoading] = useState(true);
+
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -22422,7 +22424,7 @@ export default function App() {
 
     mainElement.addEventListener('scroll', handleGlobalScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleGlobalScroll);
-  }, [isMobile]);
+  }, [isMobile, isLoggedIn, isGlobalLoading]);
 
   const handleTabClick = (tabId) => {
     if (hasDragged.current) return;
@@ -22438,7 +22440,10 @@ export default function App() {
   // ใช้ useLayoutEffect เพื่อเซ็ตตำแหน่ง Scroll ก่อนเบราว์เซอร์วาดหน้าจอ (ป้องกันภาพกระตุก)
   React.useLayoutEffect(() => {
     if (mainRef.current) {
-      mainRef.current.scrollTop = scrollPositions.current[currentTab] || 0;
+      const targetScroll = scrollPositions.current[currentTab] || 0;
+      mainRef.current.scrollTop = targetScroll;
+      lastScrollY.current = targetScroll;
+      setShowMobileBars(true);
     }
   }, [currentTab]);
 
@@ -22562,7 +22567,6 @@ export default function App() {
     }
   };
 
-  const [isGlobalLoading, setIsGlobalLoading] = useState(true);
 
   // --- ระบบ Global Alert ส่วนกลาง (ทดแทน sweetAlert/medAlert ของแต่ละหน้า) ---
   const globalAlert = useModal();
