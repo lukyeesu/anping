@@ -579,8 +579,20 @@ export default function App() {
   // --- Auto Print OPD from URL (LINE Webhook) ---
   useEffect(() => {
     if (patientsData.length > 0 && !window.__autoPrintDone) {
-      const printOpdHn = urlParams.get('print_opd_hn') || urlParams.get('print_opd');
-      const printOpdDate = urlParams.get('print_opd_date'); // ISO string date 
+      // รองรับทั้งพารามิเตอร์แบบแยกและแบบรวม (เช่น ?print_opd=HN0268_2024-06-22T08:00)
+      let printOpdHn = urlParams.get('print_opd_hn');
+      let printOpdDate = urlParams.get('print_opd_date');
+      const combinedParam = urlParams.get('print_opd');
+      
+      if (combinedParam && !printOpdHn) {
+        if (combinedParam.includes('_')) {
+           const parts = combinedParam.split('_');
+           printOpdHn = parts[0];
+           printOpdDate = parts.slice(1).join('_');
+        } else {
+           printOpdHn = combinedParam;
+        }
+      }
       
       if (printOpdHn) {
         window.__autoPrintDone = true; // prevent loop
@@ -590,7 +602,6 @@ export default function App() {
           let visitNumber = 1;
           
           if (patient.opdRecords && patient.opdRecords.length > 0) {
-            // Find record matching the appointment date closely
             if (printOpdDate) {
                const targetDate = new Date(printOpdDate).toLocaleDateString('th-TH');
                const idx = patient.opdRecords.findIndex(r => {
@@ -606,7 +617,7 @@ export default function App() {
                }
             }
             if (!targetRecord) {
-                 targetRecord = patient.opdRecords[0]; // fallback to latest
+                 targetRecord = patient.opdRecords[0]; // fallback
                  visitNumber = patient.opdRecords.length;
             }
           }
@@ -618,16 +629,13 @@ export default function App() {
           
           const html = globalGenerateOpdHtml(patient, targetRecord, visitNumber, branchesData, currentBranch);
           
-          // Use hidden iframe to bypass popup blockers
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          document.body.appendChild(iframe);
-          iframe.contentDocument.write(html);
-          iframe.contentDocument.close();
+          // เขียนทับหน้าเว็บปัจจุบันให้กลายเป็นหน้าเปล่า (เหมือน about:blank) แล้วสั่งปริ้น
+          document.open();
+          document.write(html);
+          document.close();
           
           setTimeout(() => {
-             iframe.contentWindow.focus();
-             iframe.contentWindow.print();
+             window.print();
           }, 800);
         }
       }

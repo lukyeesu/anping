@@ -258,7 +258,7 @@ function buildPatientCardFlex(patient) {
             "action": {
               "type": "uri",
               "label": "🖨️ พิมพ์ใบ OPD",
-              "uri": `${WEBAPP_URL}?print_opd_hn=${hn}`
+              "uri": `${WEBAPP_URL}?print_opd=${hn}`
             }
           }
         ]
@@ -497,7 +497,7 @@ function buildAppointmentCarousel(appts, titleStr) {
                 "action": {
                   "type": "uri",
                   "label": "🖨️ ปริ้น OPD",
-                  "uri": `${WEBAPP_URL}?print_opd_hn=${hn}&print_opd_date=${appt.date || appt.rawDateTime || appt.datetime || ''}`
+                  "uri": `${WEBAPP_URL}?print_opd=${hn}_${appt.date || appt.rawDateTime || appt.datetime || ''}`
                 }
               },
               {
