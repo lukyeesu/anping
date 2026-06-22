@@ -151,7 +151,9 @@ const POSSystem = ({
   const [isProcessingProduct, setIsProcessingProduct] = useState(false);
   const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1 };
   const [productForm, setProductForm] = useState(initialProductForm);
-      const closeAlert = () => {
+  const [isAlertClosing, setIsAlertClosing] = useState(false);
+
+  const closeAlert = () => {
     setIsAlertClosing(true);
     setTimeout(() => {
         globalAlert.close();

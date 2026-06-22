@@ -74,7 +74,7 @@ const SettingsManager = ({
   const [newApptStatus, setNewApptStatus] = useState('');
   const [selectedColor, setSelectedColor] = useState('sky');
   const [localApptStatuses, setLocalApptStatuses] = useState([]);
-  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', telegram: '', discord: '' });
+  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', lineGroupId: '', telegram: '', discord: '' });
 
   // Sync with props
   useEffect(() => {
@@ -498,7 +498,12 @@ const SettingsManager = ({
                 <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">
                   <table className="table-auto w-full border-collapse text-left text-sm">
                     <thead>
-                      <tr className="bg-slate-50/70 border-b border-slate-100"><th className="w-[50%] p-4 font-bold text-slate-600 kanit-text">ส่วนของระบบ / แท็บการใช้งาน</th><th key={roleKey} className="w-[50%] p-4 font-bold text-slate-600 kanit-text text-center">
+                      <tr className="bg-slate-50/70 border-b border-slate-100">
+                        <th className="w-[50%] p-4 font-bold text-slate-600 kanit-text">ส่วนของระบบ / แท็บการใช้งาน</th>
+                        {Object.entries(localRoleLabels).map(([roleKey, roleLabel]) => {
+                          const isDefaultRole = ['r1', 'r2', 'r3'].includes(roleKey);
+                          return (
+                            <th key={roleKey} className="p-4 font-bold text-slate-600 kanit-text text-center">
                               <div className="flex items-center justify-center gap-1.5">
                                 <span>{roleLabel}</span>
                                 {!isDefaultRole && (
@@ -511,7 +516,10 @@ const SettingsManager = ({
                                   </button>
                                 )}
                               </div>
-                            </th></tr>
+                            </th>
+                          );
+                        })}
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {tabList.map((tab) => (
@@ -791,12 +799,22 @@ const SettingsManager = ({
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Line Notify Token / Line Messaging API Token</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Line Token (Messaging API)</label>
                     <input
                       type="text"
                       value={localIntegrationTokens.line || ''}
                       onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, line: e.target.value })}
                       placeholder="กรอก Line Token"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Line Group ID (สำหรับดึงบอทเข้ากลุ่มแจ้งเตือน)</label>
+                    <input
+                      type="text"
+                      value={localIntegrationTokens.lineGroupId || ''}
+                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, lineGroupId: e.target.value })}
+                      placeholder="กรอก Line Group ID (พิมพ์ /ไอดีกลุ่ม ในกลุ่ม LINE เพื่อดูรหัส)"
                       className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
                     />
                   </div>

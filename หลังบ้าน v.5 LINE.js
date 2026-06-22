@@ -77,6 +77,15 @@ function getLineToken() {
   return ""; 
 }
 
+function getLineGroupId() {
+  const settings = getData('Settings').data || [];
+  const tokenRecord = settings.find(s => s.id === 'integration_tokens');
+  if (tokenRecord && tokenRecord.values && tokenRecord.values.lineGroupId) {
+    return tokenRecord.values.lineGroupId;
+  }
+  return ""; 
+}
+
 const LOGO_URL = "https://cdn-icons-png.flaticon.com/512/2966/2966327.png"; // ⚠️ เปลี่ยนเป็น URL โลโก้ของคลินิกได้
 const WEBAPP_URL = "https://anpingclinic.vercel.app"; // ⚠️ เปลี่ยนเป็น URL หน้าเว็บจริง
 
@@ -86,6 +95,24 @@ function handleLineWebhook(requestData) {
     if (event.type === 'message' && event.message.type === 'text') {
       let userMessage = event.message.text.trim();
       const replyToken = event.replyToken;
+
+      // 0. คำสั่งเช็คไอดีกลุ่ม (เอาไว้ใช้ทำระบบแจ้งเตือน)
+      if (userMessage.toLowerCase() === '/groupid' || userMessage === '/ไอดีกลุ่ม') {
+        const source = event.source;
+        if (source.type === 'group') {
+          replyLineMessage(replyToken, [{ type: "text", text: `📍 Group ID ของกลุ่มนี้คือ:\n${source.groupId}\n\n(นำ ID นี้ไปให้ผู้พัฒนาเพื่อตั้งค่าการแจ้งเตือนได้เลยครับ)` }]);
+        } else {
+          replyLineMessage(replyToken, [{ type: "text", text: `คำสั่งนี้ต้องใช้ใน "กลุ่ม LINE" เท่านั้นครับ!\nรบกวนดึงบอทเข้ากลุ่มแล้วพิมพ์ใหม่อีกครั้งครับ` }]);
+        }
+        return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+      }
+
+      // 0.1 คำสั่ง /help เพื่อดูรายการคำสั่งทั้งหมด
+      if (userMessage.toLowerCase() === '/help') {
+        const helpText = `🤖 รวมคำสั่งแชทบอทคลินิก 🏥\n-------------------------\n🔍 ค้นหาประวัติคนไข้:\nพิมพ์ ชื่อ, นามสกุล, รหัส HN หรือ เบอร์โทร (เช่น สมชาย หรือ HN001)\n\n📅 ดูคิวนัดหมายรวม:\nพิมพ์คำว่า "นัดหมายวันนี้" หรือ "นัดหมายพรุ่งนี้"\n\n👤 ดูนัดหมายรายบุคคล:\nพิมพ์คำว่า "ดูนัดหมาย" ตามด้วย ชื่อ หรือ รหัส HN\n(เช่น ดูนัดหมาย HN001)\n\n💡 พิมพ์ /help เพื่อดูข้อความนี้อีกครั้ง`;
+        replyLineMessage(replyToken, [{ type: "text", text: helpText }]);
+        return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+      }
 
       // 1. เช็คคำสั่ง "นัดหมายวันนี้", "นัดวันนี้มีใครบ้าง" ฯลฯ
       if (userMessage.match(/นัด(หมาย)?(วันนี้|วันนี)/)) {
@@ -162,13 +189,60 @@ function buildPatientCardFlex(patient) {
   const fullName = `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'ไม่ระบุชื่อ';
   const hn = patient.hn || patient.id || '-';
   const phone = patient.phone || '-';
-  const age = patient.age ? `${patient.age} ปี` : '-';
+  let ageStr = '-';
+  if (patient.age) {
+    ageStr = `${patient.age} ปี`;
+  } else if (patient.dob) {
+    // dob is DD/MM/YYYY (Buddhist year)
+    const parts = patient.dob.split('/');
+    if (parts.length === 3) {
+      const birthYearTH = parseInt(parts[2], 10);
+      const currentYearTH = new Date().getFullYear() + 543;
+      const calculatedAge = currentYearTH - birthYearTH;
+      if (!isNaN(calculatedAge) && calculatedAge >= 0) {
+        ageStr = `${calculatedAge} ปี`;
+      }
+    }
+  }
+  
   const gender = patient.gender || '-';
-  const lastVisit = patient.lastVisit || '-';
+  let lastVisit = patient.lastVisit && patient.lastVisit !== '-' ? patient.lastVisit : '';
+
+  if (!lastVisit) {
+    try {
+      const queueData = getData('Queue').data || [];
+      const pId = patient.hn || patient.id;
+      const patientAppts = queueData.filter(q => q.hn === pId || q.patientId === pId);
+      if (patientAppts.length > 0) {
+        // หาคิวที่ผ่านมาแล้วล่าสุด
+        const pastAppts = patientAppts.filter(q => {
+          const d = new Date(q.date || q.rawDateTime || 0);
+          return d.getTime() <= new Date().getTime();
+        });
+        if (pastAppts.length > 0) {
+          pastAppts.sort((a,b) => new Date(b.date || b.rawDateTime || 0) - new Date(a.date || a.rawDateTime || 0));
+          const latest = pastAppts[0];
+          lastVisit = latest.date || latest.rawDateTime || latest.datetime;
+        }
+      }
+    } catch(e) {}
+  }
+
+  if (lastVisit && lastVisit !== '-') {
+    try {
+      // พยายามแปลงเป็น format สวยๆ (23 มิ.ย. 2569)
+      const d = new Date(lastVisit.includes('/') ? lastVisit.split('/').reverse().join('-') : lastVisit);
+      if (!isNaN(d.getTime())) {
+        lastVisit = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+      }
+    } catch(e) {}
+  } else {
+    lastVisit = '-';
+  }
 
   return {
     "type": "flex",
-    "altText": `ระเบียนประวัติ: ${fullName}`,
+    "altText": `เวชระเบียน: ${fullName}`,
     "contents": {
       "type": "bubble",
       "size": "kilo",
@@ -180,7 +254,7 @@ function buildPatientCardFlex(patient) {
         "contents": [
           {
             "type": "text",
-            "text": "ระเบียนประวัติคนไข้",
+            "text": "เวชระเบียน",
             "color": "#ffffff",
             "weight": "bold",
             "size": "sm"
@@ -230,14 +304,14 @@ function buildPatientCardFlex(patient) {
                 "layout": "horizontal",
                 "contents": [
                   { "type": "text", "text": "อายุ/เพศ", "size": "sm", "color": "#64748b", "flex": 1 },
-                  { "type": "text", "text": `${age} / ${gender}`, "size": "sm", "color": "#334155", "flex": 2 }
+                  { "type": "text", "text": `${ageStr} / ${gender}`, "size": "sm", "color": "#334155", "flex": 2 }
                 ]
               },
               {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "มาล่าสุด", "size": "sm", "color": "#64748b", "flex": 1 },
+                  { "type": "text", "text": "รักษาล่าสุด", "size": "sm", "color": "#64748b", "flex": 1 },
                   { "type": "text", "text": lastVisit, "size": "sm", "color": "#334155", "flex": 2 }
                 ]
               }
@@ -268,7 +342,7 @@ function buildPatientCardFlex(patient) {
             "height": "sm",
             "action": {
               "type": "uri",
-              "label": "🖨️ พิมพ์ใบ OPD",
+              "label": "พิมพ์ใบ OPD",
               "uri": `${WEBAPP_URL}?print_opd=${hn}${idCard4}${formatCompactDate(new Date().toISOString())}`
             }
           }
@@ -318,7 +392,8 @@ function getAppointmentsForDay(dayOffset) {
 
     const patientsData = getData('Patients').data || [];
     appts.forEach(appt => {
-      const p = patientsData.find(pat => pat.hn === appt.patientId || pat.id === appt.patientId);
+      const pId = appt.hn || appt.patientId;
+      const p = patientsData.find(pat => pat.hn === pId || pat.id === pId);
       let idc = p && p.idCard ? String(p.idCard).replace(/\D/g, '') : "0000";
       if (idc.length < 4) idc = "0000";
       appt._idCard4 = idc.slice(-4);
@@ -326,9 +401,24 @@ function getAppointmentsForDay(dayOffset) {
     return buildAppointmentCarousel(appts, dayOffset === 0 ? 'นัดหมายวันนี้' : 'นัดหมายพรุ่งนี้');
 }
 
-function getAppointmentsForPatient(hn) {
-  const queueData = getData('Queue').data || [];
-  const appts = queueData.filter(q => q.patientId === hn);
+function getAppointmentsForPatient(keyword) {
+    const kw = keyword.toLowerCase();
+    const queueData = getData('Queue').data || [];
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const appts = queueData.filter(q => {
+        const id = q.hn || q.patientId || '';
+        if (!id.toLowerCase().includes(kw)) return false;
+        if (!q.date && !q.rawDateTime) return false;
+        
+        try {
+            const apptDate = new Date(q.date || q.rawDateTime);
+            apptDate.setHours(0, 0, 0, 0);
+            return apptDate.getTime() >= today.getTime();
+        } catch(e) { return false; }
+    });
   
   if (appts.length === 0) {
     return {
@@ -340,17 +430,26 @@ function getAppointmentsForPatient(hn) {
           "type": "box",
           "layout": "vertical",
           "contents": [
-            { "type": "text", "text": `ไม่พบนัดหมายของรหัส ${hn}`, "color": "#64748b" }
+            { "type": "text", "text": `ไม่พบนัดหมายของรหัส ${keyword}`, "color": "#64748b" }
           ]
         }
       }
     };
   }
 
-  // เรียงลำดับคิวใหม่สุดขึ้นก่อน
-  appts.sort((a,b) => new Date(b.date || b.rawDateTime || 0) - new Date(a.date || a.rawDateTime || 0));
+  // เรียงลำดับคิวจากวันนี้ไปอนาคต (ใกล้สุดขึ้นก่อน)
+  appts.sort((a,b) => new Date(a.date || a.rawDateTime || 0) - new Date(b.date || b.rawDateTime || 0));
 
-  return buildAppointmentCarousel(appts.slice(0, 5), `ประวัตินัดหมาย ${hn}`); // แสดงสูงสุด 5 คิว
+  const patientsData = getData('Patients').data || [];
+  appts.forEach(appt => {
+    const pId = appt.hn || appt.patientId;
+    const p = patientsData.find(pat => pat.hn === pId || pat.id === pId);
+    let idc = p && p.idCard ? String(p.idCard).replace(/\D/g, '') : "0000";
+    if (idc.length < 4) idc = "0000";
+    appt._idCard4 = idc.slice(-4);
+  });
+
+  return buildAppointmentCarousel(appts.slice(0, 5), `ประวัตินัดหมาย ${keyword}`); // แสดงสูงสุด 5 คิว
 }
 
 function buildAppointmentCarousel(appts, titleStr) {
@@ -375,25 +474,35 @@ function buildAppointmentCarousel(appts, titleStr) {
       }
     }
 
-    let dateStr = appt.datetime || appt.date || appt.rawDateTime || "-";
+    let dateStr = appt.rawDateTime || appt.datetime || appt.date || "-";
     let timeStr = appt.time || "-";
     let finalDateStr = "-";
     
     if (dateStr && dateStr !== "-") {
       try {
         const d = new Date(dateStr);
-        if (!isNaN(d.getTime())) { // Check for Invalid Date
+        if (!isNaN(d.getTime())) { 
           if (dateStr.includes('T') || dateStr.includes(' ')) {
             const t = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
             if (t !== "00:00") timeStr = t;
           }
           finalDateStr = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
         } else {
-          finalDateStr = dateStr; // fallback to raw string if cannot parse
+          let parts = dateStr.split(' ');
+          if (parts.length >= 2) {
+            finalDateStr = parts[0];
+            timeStr = parts.slice(1).join(' ').replace('น.', '').trim();
+          } else {
+            finalDateStr = dateStr; 
+          }
         }
       } catch(e) {
         finalDateStr = dateStr;
       }
+    }
+
+    if (timeStr && timeStr !== "-" && !timeStr.includes("น.")) {
+      timeStr = `${timeStr} น.`;
     }
 
     const hn = appt.hn || appt.patientId || "-";
@@ -503,33 +612,15 @@ function buildAppointmentCarousel(appts, titleStr) {
             }
           },
           {
-            "type": "box",
-            "layout": "horizontal",
-            "spacing": "sm",
-            "contents": [
-              {
-                "type": "button",
-                "style": "primary",
-                "color": "#0284c7", // ฟ้า
-                "height": "sm",
-                "action": {
-                  "type": "uri",
-                  "label": "🖨️ ปริ้น OPD",
-                  "uri": `${WEBAPP_URL}?print_opd=${hn}${appt._idCard4 || "0000"}${formatCompactDate(appt.date || appt.rawDateTime || appt.datetime)}`
-                }
-              },
-              {
-                "type": "button",
-                "style": "primary",
-                "color": "#10b981", // เขียวโทร
-                "height": "sm",
-                "action": {
-                  "type": "uri",
-                  "label": "📞 โทร",
-                  "uri": phone && phone !== '-' ? `tel:${phone}` : `tel:0000`
-                }
-              }
-            ]
+            "type": "button",
+            "style": "primary",
+            "color": "#0ea5e9", // สีฟ้าเหมือนปุ่มพิมพ์
+            "height": "sm",
+            "action": {
+              "type": "uri",
+              "label": "โทร",
+              "uri": phone && phone !== '-' ? `tel:${phone}` : `tel:0000`
+            }
           }
         ]
       }
@@ -563,6 +654,27 @@ function replyLineMessage(replyToken, messages) {
     })
   };
   UrlFetchApp.fetch(url, options);
+}
+
+function pushLineMessage(to, messages) {
+  const lineToken = getLineToken();
+  if (!lineToken || !to) return; 
+
+  const url = "https://api.line.me/v2/bot/message/push";
+  const options = {
+    method: "post",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + lineToken
+    },
+    payload: JSON.stringify({
+      to: to,
+      messages: messages
+    })
+  };
+  try {
+    UrlFetchApp.fetch(url, options);
+  } catch(e) {}
 }
 
 // สร้างชีตและหัวคอลัมน์ให้อัตโนมัติ หากยังไม่มีชีตนั้นๆ อยู่
@@ -602,6 +714,18 @@ function saveData(sheetName, payload) {
 
   payload.createdAt = new Date().toISOString();
   sheet.appendRow([idToSave, JSON.stringify(payload)]);
+
+  // แจ้งเตือนถ้านัดหมายใหม่
+  if (sheetName === 'Queue') {
+    try {
+      const groupId = getLineGroupId();
+      if (groupId) {
+        const msg = `🚨 มีการเพิ่มนัดหมายใหม่!\n\nผู้ป่วย: ${payload.patientName || payload.name || '-'}\nรหัส: ${idToSave}\nวัน-เวลา: ${payload.datetime || '-'}\nหมอ: ${payload.doctor || payload.artist || '-'}\nสาเหตุ: ${payload.reason || payload.category || '-'}`;
+        pushLineMessage(groupId, [{ type: "text", text: msg }]);
+      }
+    } catch(e) {}
+  }
+
   return { status: 'success', message: 'Data created successfully', data: payload };
 }
 

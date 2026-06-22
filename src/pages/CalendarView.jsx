@@ -19,6 +19,11 @@ import { theme } from '../global/theme';
 
 const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading, roleLabels = {}, staffCategories = [] }) => {
   const [viewDate, setViewDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('month'); 
+  const [selectedDayDetails, setSelectedDayDetails] = useState(null); 
+  const [isDayModalClosing, setIsDayModalClosing] = useState(false); 
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffModalDate, setStaffModalDate] = useState(null);
 
   const handleDayClick = React.useCallback((day, events) => {
       const date = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
@@ -58,12 +63,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       onMonthChange(viewDate.getFullYear(), viewDate.getMonth());
     }
   }, [viewDate.getFullYear(), viewDate.getMonth(), onMonthChange]);
-  const [viewMode, setViewMode] = useState('month'); 
-  const [selectedDayDetails, setSelectedDayDetails] = useState(null); 
-  const [isDayModalClosing, setIsDayModalClosing] = useState(false); 
-  
-  const [showStaffModal, setShowStaffModal] = useState(false);
-  const [staffModalDate, setStaffModalDate] = useState(null);
+  const [viewModeState, setViewModeState] = useState('month'); // Fallback if name conflict
   
   const closeStaffModal = () => setShowStaffModal(false);
   const staffSwipeHandlers = useSwipeDown(closeStaffModal);

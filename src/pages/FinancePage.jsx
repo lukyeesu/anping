@@ -111,9 +111,9 @@ const FinancePage = ({
   // Detail Modal States
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [isDetailClosing, setIsDetailClosing] = useState(false);
+  const [isDetailClosing, setIsDetailClosing] = useState(false);  const [isAlertClosing, setIsAlertClosing] = useState(false);
 
-        const closeFinAlert = () => {
+  const closeFinAlert = () => {
       setIsAlertClosing(true);
       setTimeout(() => {
           globalAlert.close();
