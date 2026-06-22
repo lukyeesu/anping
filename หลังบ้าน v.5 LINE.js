@@ -120,8 +120,24 @@ function handleLineWebhook(requestData) {
         replyLineMessage(replyToken, [flexMsg]);
         return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
       }
-      if (userMessage.match(/นัด(หมาย)?พรุ่งนี้/)) {
+      if (userMessage.match(/นัด(หมาย)?พรุ(่|้)งนี้/)) {
         const flexMsg = getAppointmentsForDay(1);
+        replyLineMessage(replyToken, [flexMsg]);
+        return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+      }
+
+      const dateMatch = userMessage.match(/^นัด(หมาย)?\s*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (dateMatch) {
+        const day = parseInt(dateMatch[2], 10);
+        const month = parseInt(dateMatch[3], 10) - 1; 
+        let year = parseInt(dateMatch[4], 10);
+        
+        if (year > 2400) year -= 543;
+
+        const targetDate = new Date(year, month, day);
+        const dateStrForLabel = `วันที่ ${day.toString().padStart(2, '0')}/${(month+1).toString().padStart(2, '0')}/${year+543}`;
+        
+        const flexMsg = getAppointmentsForDate(targetDate, dateStrForLabel);
         replyLineMessage(replyToken, [flexMsg]);
         return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
       }
@@ -355,14 +371,11 @@ function buildPatientCardFlex(patient) {
 // -------------------------------------------------------------
 // ค้นหาและสร้างการ์ดนัดหมาย
 // -------------------------------------------------------------
-function getAppointmentsForDay(dayOffset) {
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + dayOffset);
+function getAppointmentsForDate(targetDate, labelText) {
   const targetDateStr = targetDate.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
   const queueData = getData('Queue').data || [];
   
-  // กรองหานัดที่ตรงกับวันที่ต้องการ
   const appts = queueData.filter(q => {
     if (!q.date && !q.rawDateTime) return false;
     try {
@@ -373,32 +386,38 @@ function getAppointmentsForDay(dayOffset) {
   });
 
   if (appts.length === 0) {
-    const dayText = dayOffset === 0 ? 'วันนี้' : 'พรุ่งนี้';
     return {
       "type": "flex",
-      "altText": `ไม่มีนัดหมาย${dayText}`,
+      "altText": `ไม่มีนัดหมายสำหรับ${labelText}`,
       "contents": {
         "type": "bubble",
         "body": {
           "type": "box",
           "layout": "vertical",
           "contents": [
-            { "type": "text", "text": `ไม่มีนัดหมายสำหรับ${dayText}ค่ะ`, "color": "#64748b" }
+            { "type": "text", "text": `ไม่มีนัดหมายสำหรับ${labelText}ค่ะ`, "color": "#64748b" }
           ]
         }
       }
     };
   }
 
-    const patientsData = getData('Patients').data || [];
-    appts.forEach(appt => {
-      const pId = appt.hn || appt.patientId;
-      const p = patientsData.find(pat => pat.hn === pId || pat.id === pId);
-      let idc = p && p.idCard ? String(p.idCard).replace(/\D/g, '') : "0000";
-      if (idc.length < 4) idc = "0000";
-      appt._idCard4 = idc.slice(-4);
-    });
-    return buildAppointmentCarousel(appts, dayOffset === 0 ? 'นัดหมายวันนี้' : 'นัดหมายพรุ่งนี้');
+  const patientsData = getData('Patients').data || [];
+  appts.forEach(appt => {
+    const pId = appt.hn || appt.patientId;
+    const p = patientsData.find(pat => pat.hn === pId || pat.id === pId);
+    let idc = p && p.idCard ? String(p.idCard).replace(/\D/g, '') : "0000";
+    if (idc.length < 4) idc = "0000";
+    appt._idCard4 = idc.slice(-4);
+  });
+  return buildAppointmentCarousel(appts, `นัดหมาย${labelText}`);
+}
+
+function getAppointmentsForDay(dayOffset) {
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + dayOffset);
+  const dayText = dayOffset === 0 ? 'วันนี้' : 'พรุ่งนี้';
+  return getAppointmentsForDate(targetDate, dayText);
 }
 
 function getAppointmentsForPatient(keyword) {
@@ -452,27 +471,22 @@ function getAppointmentsForPatient(keyword) {
   return buildAppointmentCarousel(appts.slice(0, 5), `ประวัตินัดหมาย ${keyword}`); // แสดงสูงสุด 5 คิว
 }
 
+function extractFirstPhone(phoneStr) {
+  if (!phoneStr || phoneStr === "-") return "-";
+  const str = String(phoneStr);
+  const parts = str.split(/[,/]|หรือ|และ|and|&/);
+  const firstPhone = parts[0].replace(/\D/g, "");
+  return firstPhone.length >= 9 ? firstPhone : "-";
+}
+
 function buildAppointmentCarousel(appts, titleStr) {
+  const mapStatusInfo = getGlobalStatusMapping();
+
   const bubbles = appts.map(appt => {
     let rawStatus = appt.status || appt.dealStatus || "pending";
-    let statusColor = "#94a3b8"; // สีเทาตั้งต้น
-    let statusText = rawStatus;
-    
-    // แปลงสถานะภาษาอังกฤษเป็นภาษาไทย และกำหนดสีให้ตรงกับหน้าเว็บ
-    if (rawStatus === 'pending') { statusText = 'รอยืนยัน'; statusColor = "#f59e0b"; } // amber
-    else if (rawStatus === 'confirmed') { statusText = 'ยืนยันแล้ว'; statusColor = "#0284c7"; } // sky/blue
-    else if (rawStatus === 'cancelled') { statusText = 'ยกเลิก'; statusColor = "#ef4444"; } // red/rose
-    else if (rawStatus === 'postponed') { statusText = 'เลื่อนนัด'; statusColor = "#8b5cf6"; } // violet
-    else {
-      // ดักเคสอื่น (เช่น สถานะจากหน้าเวชระเบียน)
-      if (statusText.includes('สำเร็จ') || statusText.includes('เสร็จ') || statusText.includes('ชำระเงิน')) {
-        statusColor = "#10b981"; // emerald/green
-      } else if (statusText.includes('ตรวจ')) {
-        statusColor = "#0ea5e9";
-      } else if (statusText.includes('รอคิว')) {
-        statusColor = "#f59e0b";
-      }
-    }
+    const statusInfo = mapStatusInfo(rawStatus);
+    const statusText = statusInfo.label;
+    const statusColor = getColorHex(statusInfo.colorKey);
 
     let dateStr = appt.rawDateTime || appt.datetime || appt.date || "-";
     let timeStr = appt.time || "-";
@@ -509,16 +523,16 @@ function buildAppointmentCarousel(appts, titleStr) {
     const patientName = appt.patientName || appt.name || "ไม่ระบุชื่อ";
     const doctor = appt.doctor || appt.doctorName || appt.artist || "-";
     const reason = appt.reason || appt.category || "-";
-    const phone = appt.phone || "-"; 
+    const phone = extractFirstPhone(appt.phone || "-"); 
 
     return {
       "type": "bubble",
-      "size": "micro",
+      "size": "kilo",
       "header": {
         "type": "box",
         "layout": "vertical",
         "backgroundColor": statusColor,
-        "paddingAll": "sm",
+        "paddingAll": "md",
         "contents": [
           {
             "type": "text",
@@ -532,20 +546,20 @@ function buildAppointmentCarousel(appts, titleStr) {
       "body": {
         "type": "box",
         "layout": "vertical",
-        "paddingAll": "md",
+        "paddingAll": "lg",
         "contents": [
           {
             "type": "text",
             "text": patientName,
             "weight": "bold",
-            "size": "md",
+            "size": "lg",
             "color": "#0f172a",
             "wrap": true
           },
           {
             "type": "text",
             "text": hn,
-            "size": "xs",
+            "size": "sm",
             "color": "#64748b",
             "margin": "xs"
           },
@@ -557,38 +571,38 @@ function buildAppointmentCarousel(appts, titleStr) {
             "type": "box",
             "layout": "vertical",
             "margin": "md",
-            "spacing": "xs",
+            "spacing": "sm",
             "contents": [
               {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "วันที่", "size": "xs", "color": "#64748b", "flex": 1 },
-                  { "type": "text", "text": finalDateStr, "size": "xs", "color": "#334155", "flex": 2, "weight": "bold" }
+                  { "type": "text", "text": "วันที่", "size": "sm", "color": "#64748b", "flex": 1 },
+                  { "type": "text", "text": finalDateStr, "size": "sm", "color": "#334155", "flex": 2, "weight": "bold" }
                 ]
               },
               {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "เวลา", "size": "xs", "color": "#64748b", "flex": 1 },
-                  { "type": "text", "text": timeStr, "size": "xs", "color": "#334155", "flex": 2, "weight": "bold" }
+                  { "type": "text", "text": "เวลา", "size": "sm", "color": "#64748b", "flex": 1 },
+                  { "type": "text", "text": timeStr, "size": "sm", "color": "#334155", "flex": 2, "weight": "bold" }
                 ]
               },
               {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "สาเหตุ", "size": "xs", "color": "#64748b", "flex": 1 },
-                  { "type": "text", "text": reason, "size": "xs", "color": "#334155", "flex": 2, "wrap": true }
+                  { "type": "text", "text": "อาการ", "size": "sm", "color": "#64748b", "flex": 1 },
+                  { "type": "text", "text": reason, "size": "sm", "color": "#334155", "flex": 2, "wrap": true }
                 ]
               },
               {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "แพทย์", "size": "xs", "color": "#64748b", "flex": 1 },
-                  { "type": "text", "text": doctor, "size": "xs", "color": "#334155", "flex": 2, "wrap": true }
+                  { "type": "text", "text": "แพทย์", "size": "sm", "color": "#64748b", "flex": 1 },
+                  { "type": "text", "text": doctor, "size": "sm", "color": "#334155", "flex": 2, "wrap": true }
                 ]
               }
             ]
@@ -696,6 +710,268 @@ function initSheet(sheetName) {
 // ฟังก์ชันจัดการข้อมูล (CRUD) รูปแบบ JSON สากล
 // ==========================================
 
+function getColorHex(colorKey) {
+  const map = {
+    'amber': '#f59e0b',
+    'emerald': '#10b981',
+    'rose': '#f43f5e',
+    'sky': '#0ea5e9',
+    'violet': '#8b5cf6',
+    'indigo': '#6366f1',
+    'teal': '#14b8a6',
+    'fuchsia': '#d946ef',
+    'slate': '#64748b'
+  };
+  return map[colorKey] || '#0ea5e9'; // default blue
+}
+
+function formatNotificationDate(dateStr, timeStr) {
+  let finalDateStr = "-";
+  let finalTimeStr = timeStr || "-";
+  if (dateStr && dateStr !== "-") {
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) { 
+        if (dateStr.includes('T') || dateStr.includes(' ')) {
+          const t = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          if (t !== "00:00") finalTimeStr = t;
+        }
+        finalDateStr = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+      } else {
+        let parts = dateStr.split(' ');
+        if (parts.length >= 2) {
+          finalDateStr = parts[0];
+          finalTimeStr = parts.slice(1).join(' ').replace('น.', '').trim();
+        } else {
+          finalDateStr = dateStr; 
+        }
+      }
+    } catch(e) {
+      finalDateStr = dateStr;
+    }
+  }
+  if (finalTimeStr && finalTimeStr !== "-" && !finalTimeStr.includes("น.")) {
+    finalTimeStr = `${finalTimeStr} น.`;
+  }
+  return { date: finalDateStr, time: finalTimeStr };
+}
+
+function getGlobalStatusMapping() {
+  let statuses = [];
+  try {
+    const settingsObj = getData('Settings').data || [];
+    const statusesRecord = settingsObj.find(s => s.id === 'appointment_statuses');
+    statuses = (statusesRecord && statusesRecord.values) ? statusesRecord.values : [];
+  } catch(e) {}
+  
+  return (s) => {
+    if (!s) return { label: 'รอยืนยัน', colorKey: 'amber' };
+    
+    if (s.startsWith('custom_')) {
+       const idx = parseInt(s.split('_')[1], 10);
+       if (!isNaN(idx) && statuses[idx]) {
+          const st = statuses[idx];
+          return { label: st.label || s, colorKey: st.color || 'sky' };
+       }
+    }
+    const matched = statuses.find(st => st.label === s || st.value === s);
+    if (matched) return { label: matched.label, colorKey: matched.color || 'sky' };
+    
+    if (s === 'pending') return { label: 'รอยืนยัน', colorKey: 'amber' };
+    if (s === 'confirmed') return { label: 'ยืนยันแล้ว', colorKey: 'emerald' };
+    if (s === 'cancelled') return { label: 'ยกเลิก', colorKey: 'rose' };
+    if (s === 'postponed' || s.includes('เลื่อน')) return { label: 'เลื่อนนัด', colorKey: 'violet' };
+    
+    if (s.includes('สำเร็จ') || s.includes('เสร็จ') || s.includes('ชำระเงิน')) return { label: s, colorKey: 'emerald' };
+    if (s.includes('ตรวจ')) return { label: s, colorKey: 'sky' };
+    if (s.includes('รอคิว')) return { label: s, colorKey: 'amber' };
+
+    return { label: s, colorKey: 'slate' };
+  };
+}
+
+function sendQueueNotification(groupId, payload, idToSave, titleText, headerColor, noteText = "", oldDateTimeStr = null, statusColor = null) {
+  const finalStatusColor = statusColor || headerColor;
+  
+  const { date: finalDateStr, time: timeStr } = formatNotificationDate(
+    payload.rawDateTime || payload.datetime || payload.date || "-", 
+    payload.time || "-"
+  );
+
+  const hn = payload.hn || payload.patientId || "-";
+  const patientName = payload.patientName || payload.name || "ไม่ระบุชื่อ";
+  const doctor = payload.doctor || payload.artist || "-";
+  const reason = payload.reason || payload.category || "-";
+  const phone = extractFirstPhone(payload.phone || "-");
+
+  const contentsArray = [];
+  
+  if (oldDateTimeStr) {
+    contentsArray.push({
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "จากเดิม", "size": "sm", "color": "#ef4444", "flex": 1, "weight": "bold" },
+        { "type": "text", "text": oldDateTimeStr, "size": "sm", "color": "#ef4444", "flex": 2, "weight": "bold", "wrap": true }
+      ]
+    });
+    contentsArray.push({
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "นัดใหม่", "size": "sm", "color": "#10b981", "flex": 1, "weight": "bold" },
+        { "type": "text", "text": finalDateStr, "size": "sm", "color": "#10b981", "flex": 2, "weight": "bold" }
+      ]
+    });
+    contentsArray.push({
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "เวลา", "size": "sm", "color": "#10b981", "flex": 1, "weight": "bold" },
+        { "type": "text", "text": timeStr, "size": "sm", "color": "#10b981", "flex": 2, "weight": "bold" }
+      ]
+    });
+  } else {
+    contentsArray.push({
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "วันที่", "size": "sm", "color": "#64748b", "flex": 1 },
+        { "type": "text", "text": finalDateStr, "size": "sm", "color": "#334155", "flex": 2, "weight": "bold" }
+      ]
+    });
+    contentsArray.push({
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "เวลา", "size": "sm", "color": "#64748b", "flex": 1 },
+        { "type": "text", "text": timeStr, "size": "sm", "color": "#334155", "flex": 2, "weight": "bold" }
+      ]
+    });
+  }
+
+  contentsArray.push(
+    {
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "อาการ", "size": "sm", "color": "#64748b", "flex": 1 },
+        { "type": "text", "text": reason, "size": "sm", "color": "#334155", "flex": 2, "wrap": true }
+      ]
+    },
+    {
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "แพทย์", "size": "sm", "color": "#64748b", "flex": 1 },
+        { "type": "text", "text": doctor, "size": "sm", "color": "#334155", "flex": 2, "wrap": true }
+      ]
+    }
+  );
+
+  if (noteText) {
+    contentsArray.unshift({
+      "type": "box",
+      "layout": "horizontal",
+      "margin": "sm",
+      "contents": [
+        { "type": "text", "text": "สถานะ", "size": "sm", "color": finalStatusColor, "flex": 1, "weight": "bold" },
+        { "type": "text", "text": noteText, "size": "sm", "color": finalStatusColor, "flex": 2, "wrap": true, "weight": "bold" }
+      ]
+    });
+  }
+
+  const bubble = {
+    "type": "bubble",
+    "size": "kilo",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": headerColor, 
+      "paddingAll": "md",
+      "contents": [
+        {
+          "type": "text",
+          "text": titleText,
+          "color": "#ffffff",
+          "weight": "bold",
+          "size": "sm"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "lg",
+      "contents": [
+        {
+          "type": "text",
+          "text": patientName,
+          "weight": "bold",
+          "size": "lg",
+          "color": "#0f172a",
+          "wrap": true
+        },
+        {
+          "type": "text",
+          "text": hn,
+          "size": "sm",
+          "color": "#64748b",
+          "margin": "xs"
+        },
+        {
+          "type": "separator",
+          "margin": "md"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "margin": "md",
+          "spacing": "sm",
+          "contents": contentsArray
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "contents": [
+        {
+          "type": "button",
+          "style": "secondary",
+          "color": "#e0f2fe",
+          "height": "sm",
+          "action": {
+            "type": "message",
+            "label": "ดูประวัติ",
+            "text": `ค้นหา ${hn}`
+          }
+        },
+        {
+          "type": "button",
+          "style": "primary",
+          "color": "#0ea5e9",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "โทร",
+            "uri": phone && phone !== '-' ? `tel:${phone}` : `tel:0000`
+          }
+        }
+      ]
+    }
+  };
+
+  const flexMsg = {
+    "type": "flex",
+    "altText": `${titleText}: ${patientName}`,
+    "contents": bubble
+  };
+  
+  pushLineMessage(groupId, [flexMsg]);
+}
+
 function saveData(sheetName, payload) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   const data = sheet.getDataRange().getValues();
@@ -707,7 +983,57 @@ function saveData(sheetName, payload) {
 
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === idToSave) {
+      let oldPayload = {};
+      if (sheetName === 'Queue') {
+        try { oldPayload = JSON.parse(data[i][1]); } catch(e) {}
+      }
+
       sheet.getRange(i + 1, 2).setValue(JSON.stringify(payload)); 
+
+      if (sheetName === 'Queue') {
+        try {
+          const groupId = getLineGroupId();
+          if (groupId && Object.keys(oldPayload).length > 0) {
+             const oldDate = oldPayload.rawDateTime || oldPayload.datetime || oldPayload.date || "";
+             const newDate = payload.rawDateTime || payload.datetime || payload.date || "";
+             const oldTime = oldPayload.time || "";
+             const newTime = payload.time || "";
+             const oldStatus = oldPayload.status || oldPayload.dealStatus || "";
+             const newStatus = payload.status || payload.dealStatus || "";
+
+             let titleText = "";
+             let headerColor = "";
+             let noteText = "";
+
+             const statusChanged = oldStatus !== newStatus;
+             const timeChanged = oldDate !== newDate || oldTime !== newTime;
+
+             if (statusChanged || timeChanged) {
+                 let oldDateTimeStr = null;
+                 const mapStatusInfo = getGlobalStatusMapping();
+                 const newStatusInfo = mapStatusInfo(newStatus);
+                 noteText = newStatusInfo.label; 
+                 const actualStatusColor = getColorHex(newStatusInfo.colorKey);
+
+                 if (statusChanged) {
+                    headerColor = actualStatusColor;
+                    titleText = `อัปเดตสถานะ: ${noteText}`;
+                 } else { 
+                    headerColor = "#3b82f6"; // ฟ้า
+                    titleText = "🔄 เปลี่ยนแปลงวัน/เวลานัด";
+                 }
+
+                 if (timeChanged) {
+                    const oldFmt = formatNotificationDate(oldDate, oldTime);
+                    oldDateTimeStr = `${oldFmt.date} ${oldFmt.time}`;
+                 }
+
+                 sendQueueNotification(groupId, payload, idToSave, titleText, headerColor, noteText, oldDateTimeStr, actualStatusColor);
+             }
+          }
+        } catch(e) {}
+      }
+
       return { status: 'success', message: 'Data updated successfully', data: payload };
     }
   }
@@ -715,13 +1041,11 @@ function saveData(sheetName, payload) {
   payload.createdAt = new Date().toISOString();
   sheet.appendRow([idToSave, JSON.stringify(payload)]);
 
-  // แจ้งเตือนถ้านัดหมายใหม่
   if (sheetName === 'Queue') {
     try {
       const groupId = getLineGroupId();
       if (groupId) {
-        const msg = `🚨 มีการเพิ่มนัดหมายใหม่!\n\nผู้ป่วย: ${payload.patientName || payload.name || '-'}\nรหัส: ${idToSave}\nวัน-เวลา: ${payload.datetime || '-'}\nหมอ: ${payload.doctor || payload.artist || '-'}\nสาเหตุ: ${payload.reason || payload.category || '-'}`;
-        pushLineMessage(groupId, [{ type: "text", text: msg }]);
+        sendQueueNotification(groupId, payload, idToSave, "🚨 นัดหมายใหม่เข้าสู่ระบบ", "#10b981", "");
       }
     } catch(e) {}
   }
