@@ -257,8 +257,8 @@ function buildPatientCardFlex(patient) {
             "height": "sm",
             "action": {
               "type": "uri",
-              "label": "พิมพ์ใบ OPD",
-              "uri": `${WEBAPP_URL}?print_opd=${hn}`
+              "label": "🖨️ พิมพ์ใบ OPD",
+              "uri": `${WEBAPP_URL}?print_opd_hn=${hn}`
             }
           }
         ]

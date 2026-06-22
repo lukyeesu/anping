@@ -579,7 +579,7 @@ export default function App() {
   // --- Auto Print OPD from URL (LINE Webhook) ---
   useEffect(() => {
     if (patientsData.length > 0 && !window.__autoPrintDone) {
-      const printOpdHn = urlParams.get('print_opd_hn');
+      const printOpdHn = urlParams.get('print_opd_hn') || urlParams.get('print_opd');
       const printOpdDate = urlParams.get('print_opd_date'); // ISO string date 
       
       if (printOpdHn) {
@@ -617,12 +617,18 @@ export default function App() {
           }
           
           const html = globalGenerateOpdHtml(patient, targetRecord, visitNumber, branchesData, currentBranch);
-          const printWindow = window.open('', '_blank');
-          if (printWindow) {
-            printWindow.document.write(html);
-            printWindow.document.close();
-            setTimeout(() => { printWindow.print(); }, 800);
-          }
+          
+          // Use hidden iframe to bypass popup blockers
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          document.body.appendChild(iframe);
+          iframe.contentDocument.write(html);
+          iframe.contentDocument.close();
+          
+          setTimeout(() => {
+             iframe.contentWindow.focus();
+             iframe.contentWindow.print();
+          }, 800);
         }
       }
     }
