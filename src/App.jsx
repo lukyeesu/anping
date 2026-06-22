@@ -36,11 +36,8 @@ const POS_ICONS = {
   List, ShoppingCart, Truck
 };
 
-// -------------------------------------------------------------------------
-// --- 1. ย้ายฟังก์ชันและ Component ย่อยออกมาไว้ด้านนอก เพื่อป้องกันการ Unmount ---
-// -------------------------------------------------------------------------
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyu6OHkP7SYE9iDmA2XW5ErVAx0w8n99Kj_ZOocZgi-LcIEMsbfYqtRmbkCOhW1r1aoow/exec"; 
-const VISION_API_KEY = "AIzaSyAlp6qqbUh0ti4fJ4ozGvqoIAOI0coRQBM"; 
+const GOOGLE_SCRIPT_URL = "/api/db"; 
+// VISION_API_KEY ถูกย้ายไปเก็บที่ Vercel Environment Variables แล้ว
 
 // --- เพิ่มตัวแปร Global สำหรับชื่อเดือนภาษาไทย ---
 const monthsTH = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
@@ -6882,10 +6879,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   };
 
   const handleRealScan = async () => {
-    if (!VISION_API_KEY) {
-        showToast('กรุณาตั้งค่า VISION_API_KEY ที่ส่วนบนของไฟล์ App.jsx ก่อนใช้งานระบบสแกน OCR', 'warning');
-        return;
-    }
 
     const base64Image = captureImageToBase64();
     if (!base64Image) {
@@ -6901,7 +6894,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     setIsScanning(true);
 
     try {
-        const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`, {
+        const response = await fetch('/api/vision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -17033,7 +17026,6 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   };
 
   const handleRealScan = async () => {
-    if (!VISION_API_KEY) { showToast('กรุณาตั้งค่า VISION_API_KEY ก่อนใช้งานระบบ OCR', 'warning'); return; }
     const base64Image = captureImageToBase64();
     if (!base64Image) { showToast('ไม่สามารถจับภาพได้', 'warning'); return; }
     
@@ -17044,7 +17036,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     
     setIsScanning(true);
     try {
-        const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`, { 
+        const response = await fetch('/api/vision', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }] }] }) 
