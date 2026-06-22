@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'; 
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
@@ -260,6 +260,59 @@ export default function App() {
   });
 
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
+
+  // --- Auto Print OPD from URL (LINE Webhook) ---
+  useEffect(() => {
+    if (patientsData.length > 0 && !window.__autoPrintDone) {
+      const printOpdHn = urlParams.get('print_opd_hn');
+      const printOpdDate = urlParams.get('print_opd_date'); // ISO string date 
+      
+      if (printOpdHn) {
+        window.__autoPrintDone = true; // prevent loop
+        const patient = patientsData.find(p => p.hn === printOpdHn || p.id === printOpdHn);
+        if (patient) {
+          let targetRecord = null;
+          let visitNumber = 1;
+          
+          if (patient.opdRecords && patient.opdRecords.length > 0) {
+            // Find record matching the appointment date closely
+            if (printOpdDate) {
+               const targetDate = new Date(printOpdDate).toLocaleDateString('th-TH');
+               const idx = patient.opdRecords.findIndex(r => {
+                  try {
+                    const rDateStr = new Date(r.date || r.createdAt).toLocaleDateString('th-TH');
+                    return rDateStr === targetDate;
+                  } catch(e) { return false; }
+               });
+               
+               if (idx !== -1) {
+                 targetRecord = patient.opdRecords[idx];
+                 visitNumber = patient.opdRecords.length - idx;
+               }
+            }
+            if (!targetRecord) {
+                 targetRecord = patient.opdRecords[0]; // fallback to latest
+                 visitNumber = patient.opdRecords.length;
+            }
+          }
+          
+          if (!targetRecord) {
+             targetRecord = { date: printOpdDate || new Date().toISOString() };
+             visitNumber = 1;
+          }
+          
+          const html = globalGenerateOpdHtml(patient, targetRecord, visitNumber, branchesData, currentBranch);
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => { printWindow.print(); }, 800);
+          }
+        }
+      }
+    }
+  }, [patientsData, branchesData, currentBranch]);
+
 
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 

@@ -1,0 +1,192 @@
+// ==========================================
+// Universal JSON Backend (Google Apps Script) v.2
+// รองรับทุกระบบ: เวชระเบียน, POS, คลังสินค้า, คิว ฯลฯ
+// เพิ่มฟีเจอร์: GET_DATA_BY_MONTH สำหรับโหลดข้อมูลตามช่วงเวลา
+// ==========================================
+
+const DB_SCHEMA = ['id', 'json_data']; // โครงสร้างตายตัวสำหรับทุกชีต
+
+function doPost(e) {
+  // --- ระบบจัดคิว ป้องกันข้อมูลชนกันเวลาบันทึกพร้อมกันหลายคน ---
+  const lock = LockService.getScriptLock();
+  
+  try {
+    // รอคิวสูงสุด 30 วินาที เพื่อให้คำสั่งก่อนหน้าบันทึกเสร็จก่อน (ทำงานจริงใช้เวลาแค่เสี้ยววินาที)
+    lock.waitLock(30000);
+    
+    const requestData = JSON.parse(e.postData.contents);
+    const { action, sheetName, payload } = requestData;
+
+    if (!sheetName) throw new Error("Missing 'sheetName' in request.");
+    initSheet(sheetName); // เตรียมชีตอัตโนมัติ
+
+    let response = {};
+
+    // ใช้คำสั่งสากล เพื่อให้รองรับทุกระบบ (Patients, Queue, POS, Inventory ฯลฯ)
+    switch (action) {
+      case 'SAVE_DATA': // จัดการได้ทั้ง เพิ่ม (Create) และ แก้ไข (Update)
+        response = saveData(sheetName, payload);
+        break;
+      case 'GET_DATA':
+        response = getData(sheetName);
+        break;
+      case 'GET_DATA_BY_MONTH': 
+        response = getDataByMonth(sheetName, payload.year, payload.month);
+        break;
+      case 'DELETE_DATA':
+        response = deleteData(sheetName, payload.id);
+        break;
+      case 'UPLOAD_FILE':
+        response = uploadFile(payload);
+        break;
+      default:
+        response = { status: 'error', message: 'Action not found' };
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    // ทำงานเสร็จ ต้องปล่อยคิวให้คนต่อไปเสมอ
+    lock.releaseLock();
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: 'Universal JSON API v.2 is running.' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// สร้างชีตและหัวคอลัมน์ให้อัตโนมัติ หากยังไม่มีชีตนั้นๆ อยู่
+function initSheet(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    const range = sheet.getRange(1, 1, 1, 2);
+    range.setValues([DB_SCHEMA]);
+    range.setFontWeight("bold").setBackground("#f0f8ff");
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(2, 500); // ขยายช่องให้กว้างเพื่อเก็บ JSON
+  }
+}
+
+// ==========================================
+// ฟังก์ชันจัดการข้อมูล (CRUD) รูปแบบ JSON สากล
+// ==========================================
+
+function saveData(sheetName, payload) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const data = sheet.getDataRange().getValues();
+  
+  const idToSave = payload.id || payload.hn; 
+  if (!idToSave) return { status: 'error', message: 'ID is required' };
+
+  payload.updatedAt = new Date().toISOString();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === idToSave) {
+      sheet.getRange(i + 1, 2).setValue(JSON.stringify(payload)); 
+      return { status: 'success', message: 'Data updated successfully', data: payload };
+    }
+  }
+
+  payload.createdAt = new Date().toISOString();
+  sheet.appendRow([idToSave, JSON.stringify(payload)]);
+  return { status: 'success', message: 'Data created successfully', data: payload };
+}
+
+function getData(sheetName) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow <= 1) return { status: 'success', data: [] }; 
+  
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  
+  const records = values.map(row => {
+    try {
+      return JSON.parse(row[1]); 
+    } catch(e) {
+      return null;
+    }
+  }).filter(r => r !== null);
+  
+  return { status: 'success', data: records };
+}
+
+/**
+ * ฟังก์ชันใหม่: ดึงข้อมูลเฉพาะเดือนและปีที่ระบุ
+ * ช่วยลดภาระการโหลดข้อมูลมหาศาล (Infinity Monthly Loading)
+ */
+function getDataByMonth(sheetName, year, month) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow <= 1) return { status: 'success', data: [] }; 
+  
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  
+  const records = values.map(row => {
+    try {
+      return JSON.parse(row[1]);
+    } catch(e) {
+      return null;
+    }
+  }).filter(r => {
+    if (r === null) return false;
+    
+    // ตรวจสอบฟิลด์วันที่ที่มีโอกาสพบในระบบ (Appointment/Queue)
+    const dateStr = r.rawDeliveryStart || r.rawDeliveryDateTime || r.rawDateTime || r.date;
+    if (!dateStr) return false;
+    
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    
+    // กรองเอาเฉพาะข้อมูลที่ตรงกับปีและเดือน (month ที่ส่งมาเป็น 1-12)
+    return d.getFullYear() === year && (d.getMonth() + 1) === month;
+  });
+  
+  return { status: 'success', data: records };
+}
+
+function deleteData(sheetName, id) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === id) {
+      sheet.deleteRow(i + 1);
+      return { status: 'success', message: 'Data deleted successfully' };
+    }
+  }
+  return { status: 'error', message: 'ID not found' };
+}
+
+function uploadFile(payload) {
+  try {
+    const { folderId, fileName, mimeType, data } = payload;
+    if (!folderId || !data) return { status: 'error', message: 'Missing folderId or data' };
+
+    const folder = DriveApp.getFolderById(folderId);
+    const decodedData = Utilities.base64Decode(data);
+    const blob = Utilities.newBlob(decodedData, mimeType, fileName);
+    const file = folder.createFile(blob);
+
+    const fileId = file.getId();
+    const directUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+
+    return { 
+      status: 'success', 
+      message: 'File uploaded successfully',
+      fileUrl: directUrl, 
+      fileId: fileId 
+    };
+  } catch (error) {
+    return { status: 'error', message: 'Upload failed: ' + error.toString() };
+  }
+}
