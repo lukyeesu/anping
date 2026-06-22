@@ -597,15 +597,11 @@ export default function App() {
            }
         } else {
            const matchDate = combinedParam.match(/(\d{4})(\d{14})$/);
-           const matchNoDate = combinedParam.match(/(\d{4})$/);
            if (matchDate) {
                 printOpdHn = combinedParam.slice(0, -18);
                 printOpdId4 = matchDate[1];
                 const dstr = matchDate[2];
                 printOpdDate = `${dstr.slice(0,4)}-${dstr.slice(4,6)}-${dstr.slice(6,8)}T${dstr.slice(8,10)}:${dstr.slice(10,12)}:${dstr.slice(12,14)}`;
-           } else if (matchNoDate) {
-                printOpdHn = combinedParam.slice(0, -4);
-                printOpdId4 = matchNoDate[1];
            } else {
                 printOpdHn = combinedParam;
            }
