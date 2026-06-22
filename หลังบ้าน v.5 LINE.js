@@ -269,7 +269,7 @@ function buildPatientCardFlex(patient) {
             "action": {
               "type": "uri",
               "label": "🖨️ พิมพ์ใบ OPD",
-              "uri": `${WEBAPP_URL}?print_opd=${hn}${idCard4}`
+              "uri": `${WEBAPP_URL}?print_opd=${hn}${idCard4}${formatCompactDate(new Date().toISOString())}`
             }
           }
         ]

@@ -776,7 +776,7 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
                 <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${patient.allergies || 'ไม่มี'}</span>
             </div>
             <div class="vitals">
-                T: <span class="val-box">${record.temp || ''}</span> ?C &nbsp;&nbsp;&nbsp;
+                T: <span class="val-box">${record.temp || ''}</span> &deg;C &nbsp;&nbsp;&nbsp;
                 P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
                 BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
                 น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
