@@ -21,7 +21,7 @@ const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, ha
         <td className="p-4 pl-6 text-left">
             <div className="flex flex-col items-start">
                 <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
-                <span className="text-xs font-data text-slate-500 mt-0.5">{formatFinTime(tx.date)} ¹.</span>
+                <span className="text-xs font-data text-slate-500 mt-0.5">{formatFinTime(tx.date)} ï¿½.</span>
             </div>
         </td>
         <td className="p-4">
