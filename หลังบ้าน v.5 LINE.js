@@ -130,6 +130,14 @@ function handleLineWebhook(requestData) {
 }
 
 // -------------------------------------------------------------
+function formatCompactDate(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+// -------------------------------------------------------------
 // ค้นหาและสร้างการ์ดคนไข้
 // -------------------------------------------------------------
 function searchPatientFlex(keyword) {
@@ -148,6 +156,9 @@ function searchPatientFlex(keyword) {
 }
 
 function buildPatientCardFlex(patient) {
+  let idc = patient.idCard ? String(patient.idCard).replace(/\D/g, "") : "0000";
+  if (idc.length < 4) idc = "0000";
+  const idCard4 = idc.slice(-4);
   const fullName = `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'ไม่ระบุชื่อ';
   const hn = patient.hn || patient.id || '-';
   const phone = patient.phone || '-';
@@ -258,7 +269,7 @@ function buildPatientCardFlex(patient) {
             "action": {
               "type": "uri",
               "label": "🖨️ พิมพ์ใบ OPD",
-              "uri": `${WEBAPP_URL}?print_opd=${hn}`
+              "uri": `${WEBAPP_URL}?print_opd=${hn}${idCard4}`
             }
           }
         ]
@@ -305,7 +316,14 @@ function getAppointmentsForDay(dayOffset) {
     };
   }
 
-  return buildAppointmentCarousel(appts, dayOffset === 0 ? 'นัดหมายวันนี้' : 'นัดหมายพรุ่งนี้');
+    const patientsData = getData('Patients').data || [];
+    appts.forEach(appt => {
+      const p = patientsData.find(pat => pat.hn === appt.patientId || pat.id === appt.patientId);
+      let idc = p && p.idCard ? String(p.idCard).replace(/\D/g, '') : "0000";
+      if (idc.length < 4) idc = "0000";
+      appt._idCard4 = idc.slice(-4);
+    });
+    return buildAppointmentCarousel(appts, dayOffset === 0 ? 'นัดหมายวันนี้' : 'นัดหมายพรุ่งนี้');
 }
 
 function getAppointmentsForPatient(hn) {
@@ -497,7 +515,7 @@ function buildAppointmentCarousel(appts, titleStr) {
                 "action": {
                   "type": "uri",
                   "label": "🖨️ ปริ้น OPD",
-                  "uri": `${WEBAPP_URL}?print_opd=${hn}_${appt.date || appt.rawDateTime || appt.datetime || ''}`
+                  "uri": `${WEBAPP_URL}?print_opd=${hn}${appt._idCard4 || "0000"}${formatCompactDate(appt.date || appt.rawDateTime || appt.datetime)}`
                 }
               },
               {
