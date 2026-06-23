@@ -339,9 +339,45 @@ export default function App() {
     setFinanceData([]);
   };
 
-
-
-  
+  // --------------------------------------------------------------------------
+  // ตรวจสอบความถูกต้องของเซสชันผู้ใช้งานกับฐานข้อมูลล่าสุด (Auto-Logout & Data Sync)
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (isLoggedIn && isAuthDataFetched && currentUser && currentUser.id !== 'admin1') {
+       // เมื่อดึงข้อมูลพนักงาน (staffData) จากฐานข้อมูลเสร็จแล้ว
+       // ตรวจสอบว่าบัญชีผู้ใช้งานคนนี้ยังคงมีอยู่ในระบบหรือไม่
+       const matchedUser = staffData.find(s => s.id === currentUser.id);
+       
+       if (!matchedUser) {
+           // กรณีที่ 1: บัญชีถูกลบออกจากฐานข้อมูล
+           showGlobalAlert({
+               type: 'error',
+               title: 'ระงับการเข้าถึง',
+               text: 'บัญชีผู้ใช้งานนี้ถูกลบออกจากระบบ หรือถูกระงับสิทธิ์การใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
+               onConfirm: () => {
+                   handleLogout();
+               }
+           });
+       } else if (matchedUser.password !== currentUser.password) {
+           // กรณีที่ 2: รหัสผ่านถูกเปลี่ยนแปลง (จากเครื่องอื่น หรือโดยแอดมิน)
+           showGlobalAlert({
+               type: 'warning',
+               title: 'เซสชันหมดอายุ',
+               text: 'มีการเปลี่ยนแปลงรหัสผ่านสำหรับบัญชีนี้ กรุณาเข้าสู่ระบบใหม่อีกครั้งเพื่อความปลอดภัย',
+               onConfirm: () => {
+                   handleLogout();
+               }
+           });
+       } else if (JSON.stringify(currentUser) !== JSON.stringify(matchedUser)) {
+           // กรณีที่ 3: มีการอัปเดตข้อมูลอื่น (เช่น เปลี่ยนชื่อ, เปลี่ยนตำแหน่ง, เปลี่ยนสิทธิ์ Role)
+           // ให้อัปเดตข้อมูลในระบบให้ตรงกับฐานข้อมูลล่าสุดทันทีแบบเรียลไทม์
+           setCurrentUser(matchedUser);
+           if (typeof window !== 'undefined' && window.localStorage) {
+               localStorage.setItem('clinic_currentUser', JSON.stringify(matchedUser));
+           }
+       }
+    }
+  }, [isLoggedIn, isAuthDataFetched, staffData, currentUser]);
 
   const location = useLocation();
   const navigate = useNavigate();
