@@ -1358,21 +1358,21 @@ function handleConfirmResetPassword(payload) {
 // =========================================================================================
 
 
+
 function handleVerifyResetToken(payload) {
   try {
     var token = payload.token;
-    if (!token) return ContentService.createTextOutput(JSON.stringify({status: 'error', message: '��辺 Token'})).setMimeType(ContentService.MimeType.JSON);
+    if (!token) return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ไม่พบ Token'})).setMimeType(ContentService.MimeType.JSON);
     
     var cache = CacheService.getScriptCache();
     var rowStr = cache.get('RESET_' + token);
     
     if (!rowStr) {
-      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: '�ԧ���������ʼ�ҹ������� ���Ͷ١��ҹ�����'})).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ลิงก์รีเซ็ตรหัสผ่านหมดอายุ หรือถูกใช้งานไปแล้ว'})).setMimeType(ContentService.MimeType.JSON);
     }
     
-    return ContentService.createTextOutput(JSON.stringify({status: 'success', message: '�ԧ��١��ͧ'})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'ลิงก์ถูกต้อง'})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({status: 'error', message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
   }
 }
-
