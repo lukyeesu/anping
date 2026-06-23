@@ -30,6 +30,8 @@ const SettingsManager = ({
   setAppointmentStatuses,
   integrationTokens = {},
   setIntegrationTokens,
+  gdriveTokens = {},
+  setGdriveTokens,
   callAppScript,
   showToast,
   isGlobalLoading
@@ -74,7 +76,8 @@ const SettingsManager = ({
   const [newApptStatus, setNewApptStatus] = useState('');
   const [selectedColor, setSelectedColor] = useState('sky');
   const [localApptStatuses, setLocalApptStatuses] = useState([]);
-  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', lineGroupId: '', telegram: '', discord: '', generalDriveFolderId: '', pdpaDriveFolderId: '' });
+  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', lineGroupId: '', telegram: '', discord: '' });
+  const [localGdriveTokens, setLocalGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
   // Sync with props
   useEffect(() => {
@@ -100,6 +103,10 @@ const SettingsManager = ({
   useEffect(() => {
     if (integrationTokens) setLocalIntegrationTokens({ ...integrationTokens });
   }, [integrationTokens]);
+
+  useEffect(() => {
+    if (gdriveTokens) setLocalGdriveTokens({ ...gdriveTokens });
+  }, [gdriveTokens]);
 
   const addPrefix = () => {
     const trimmed = newPrefix.trim();
@@ -298,6 +305,19 @@ const SettingsManager = ({
       await callAppScript('SAVE_DATA', 'Settings', { id: 'integration_tokens', values: localIntegrationTokens });
       setIntegrationTokens(localIntegrationTokens);
       showToast('บันทึกการเชื่อมต่อสำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveGdriveTokens = async () => {
+    setIsSaving(true);
+    try {
+      await callAppScript('SAVE_DATA', 'Settings', { id: 'gdrive_tokens', values: localGdriveTokens });
+      setGdriveTokens(localGdriveTokens);
+      showToast('บันทึกการตั้งค่า GDrive สำเร็จ', 'success');
     } catch (e) {
       showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
     } finally {
@@ -876,8 +896,8 @@ const SettingsManager = ({
                     <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Google Drive Folder ID (ทั่วไป)</label>
                     <input
                       type="text"
-                      value={localIntegrationTokens.generalDriveFolderId || ''}
-                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, generalDriveFolderId: e.target.value })}
+                      value={localGdriveTokens.generalDriveFolderId || ''}
+                      onChange={(e) => setLocalGdriveTokens({ ...localGdriveTokens, generalDriveFolderId: e.target.value })}
                       placeholder="ตัวอย่าง: 1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4"
                       className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
                     />
@@ -886,8 +906,8 @@ const SettingsManager = ({
                     <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Google Drive Folder ID (เอกสาร PDPA)</label>
                     <input
                       type="text"
-                      value={localIntegrationTokens.pdpaDriveFolderId || ''}
-                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, pdpaDriveFolderId: e.target.value })}
+                      value={localGdriveTokens.pdpaDriveFolderId || ''}
+                      onChange={(e) => setLocalGdriveTokens({ ...localGdriveTokens, pdpaDriveFolderId: e.target.value })}
                       placeholder="ตัวอย่าง: 1UX-E1SB7qSEq2yK9e8gBZsNj13W2F92R"
                       className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
                     />
@@ -896,7 +916,7 @@ const SettingsManager = ({
 
                 <div className="border-t border-slate-100 pt-6 mt-8 flex justify-end">
                   <button
-                    onClick={saveIntegrations}
+                    onClick={saveGdriveTokens}
                     disabled={isSaving}
                     className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
                   >

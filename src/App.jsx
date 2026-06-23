@@ -691,7 +691,8 @@ export default function App() {
     { label: 'เลื่อนนัด', color: 'violet' },
     { label: 'ยกเลิก', color: 'rose' }
   ]);
-  const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '', generalDriveFolderId: '', pdpaDriveFolderId: '' });
+  const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '', lineGroupId: '' });
+  const [gdriveTokens, setGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
   const speak = (text, onEnd) => {
@@ -805,7 +806,7 @@ export default function App() {
                 <button onClick={globalAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">
                   ยกเลิก
                 </button>
-                <button onClick={() => { if (globalAlertConfig.onConfirm) globalAlertConfig.onConfirm(); }} className={`flex-1 py-3.5 text-white rounded-2xl font-semibold transition-colors shadow-lg kanit-text ${globalAlertConfig.type === 'info' ? 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30'}`}>
+                <button onClick={() => { if (globalAlertConfig.onConfirm) globalAlertConfig.onConfirm(); globalAlert.close(); }} className={`flex-1 py-3.5 text-white rounded-2xl font-semibold transition-colors shadow-lg kanit-text ${globalAlertConfig.type === 'info' ? 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30'}`}>
                   ยืนยัน
                 </button>
               </div>
@@ -937,6 +938,10 @@ export default function App() {
       const intTokens = resSettings.data.find(s => s.id === 'integration_tokens');
       if (intTokens && intTokens.values) {
         setIntegrationTokens(intTokens.values);
+      }
+      const gdTokens = resSettings.data.find(s => s.id === 'gdrive_tokens');
+      if (gdTokens && gdTokens.values) {
+        setGdriveTokens(gdTokens.values);
       }
     }
   };
@@ -1178,7 +1183,7 @@ export default function App() {
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
 
   if (pdpaToken && pdpaHn) {
-      return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} integrationTokens={integrationTokens} />;
+      return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} gdriveTokens={gdriveTokens} isAuthDataFetched={isAuthDataFetched} />;
   }
 
   if (!isLoggedIn || isGlobalLoading) {
@@ -1725,7 +1730,7 @@ export default function App() {
                        staffPrefixes={staffPrefixes}
                        staffCategories={staffCategories}
                        roleLabels={roleLabels}
-                       integrationTokens={integrationTokens}
+                       gdriveTokens={gdriveTokens}
                     />
                 </div>
             )}
@@ -1738,7 +1743,7 @@ export default function App() {
                         callAppScript={callAppScript} 
                         isGlobalLoading={isGlobalLoading} 
                         showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} 
-                        integrationTokens={integrationTokens}
+                        gdriveTokens={gdriveTokens}
                     />
                 </div>
             )}
@@ -1773,6 +1778,8 @@ export default function App() {
                         setAppointmentStatuses={setAppointmentStatuses}
                         integrationTokens={integrationTokens}
                         setIntegrationTokens={setIntegrationTokens}
+                        gdriveTokens={gdriveTokens}
+                        setGdriveTokens={setGdriveTokens}
                         callAppScript={callAppScript}
                         showToast={showToast}
                         isGlobalLoading={isGlobalLoading}
@@ -1793,6 +1800,7 @@ export default function App() {
                         isGlobalLoading={isGlobalLoading}
                         roleLabels={roleLabels}
                         integrationTokens={integrationTokens}
+                        gdriveTokens={gdriveTokens}
                     />
                 </div>
             )}

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {}, integrationTokens }) => {
+const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {}, gdriveTokens }) => {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   
@@ -788,6 +788,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB', 'warning');
         return;
       }
+
+      if (!gdriveTokens?.generalDriveFolderId) {
+        showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเพื่อจัดเก็บหลักฐานได้ กรุณาตั้งค่าการเชื่อมต่อในหน้า Settings ก่อน', 'danger');
+        return;
+      }
+
       setIsProcessing(true);
       showToast('กำลังอัปโหลดรูปภาพ...', 'success');
       
@@ -802,7 +808,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 mimeType: file.type,
                 data: base64Data,
                 // กำหนด ID ของโฟลเดอร์ Google Drive ปลายทาง
-                folderId: integrationTokens?.generalDriveFolderId || '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+                folderId: gdriveTokens.generalDriveFolderId
             });
 
             if (response.status === 'success' && response.fileUrl) {

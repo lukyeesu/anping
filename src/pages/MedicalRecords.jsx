@@ -1079,7 +1079,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             title: 'สร้างลิงก์ขออนุญาตใหม่?',
             text: 'ผู้ป่วยรายนี้ได้ให้ความยินยอม (หรือปฏิเสธ) ไปแล้ว คุณแน่ใจหรือไม่ว่าต้องการสร้างลิงก์ให้ผู้ป่วยทำรายการใหม่? ข้อมูลความยินยอมเดิมจะถูกลบและรอการยืนยันใหม่',
             onConfirm: () => {
-                globalAlert.setIsOpen(false);
                 proceedGenerateLink(patient);
             }
         });

@@ -17,12 +17,14 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
+const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
     const [status, setStatus] = useState('loading'); // loading, pending, consented, declined, invalid, saving
     const [patient, setPatient] = useState(null);
     const [step, setStep] = useState(1);
     const [page1Agreed, setPage1Agreed] = useState(false);
     const [marketingConsent, setMarketingConsent] = useState(null);
+    const [errorMessage, setErrorMessage] = useState('');
+    const [patientDataReady, setPatientDataReady] = useState(false);
     const [reviewConsent, setReviewConsent] = useState(null);
     
     // Set to true by default to read inline continuously as requested
@@ -178,7 +180,7 @@ const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
                     if (found) {
                         if (found.pdpaToken === token && found.pdpaExpires && new Date().getTime() <= found.pdpaExpires) {
                             setPatient(found);
-                            setStatus('pending');
+                            setPatientDataReady(true);
                         } else {
                             setStatus('invalid');
                         }
@@ -194,27 +196,33 @@ const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
             }
         };
         fetchPatient();
-    }, [token, hn]);
+    }, [hn, token]);
+
+    useEffect(() => {
+        if (patientDataReady && isAuthDataFetched && status === 'loading') {
+            setStatus('pending');
+        }
+    }, [patientDataReady, isAuthDataFetched, status]);
 
     const handleSubmit = async () => {
         if (marketingConsent === null || reviewConsent === null) {
-            alert('กรุณาเลือกความยินยอมให้ครบถ้วนในหน้า 2 ก่อน');
+            setErrorMessage('กรุณาเลือกความยินยอมให้ครบถ้วนในหน้า 2 ก่อน');
             setStep(2);
             return;
         }
 
         if (signerType === 'representative' && (!representativeName.trim() || !relationship.trim())) {
-            alert('กรุณากรอกข้อมูลผู้แทนโดยชอบธรรมและความเกี่ยวข้องกับผู้ป่วยให้ครบถ้วน');
+            setErrorMessage('กรุณากรอกข้อมูลผู้แทนโดยชอบธรรมและความเกี่ยวข้องกับผู้ป่วยให้ครบถ้วน');
             return;
         }
 
         if (!riskAgreed || !voluntaryAgreed) {
-            alert('กรุณกดยินยอมรับทราบความเสี่ยงและสมัครใจรับการรักษาให้ครบถ้วน');
+            setErrorMessage('กรุณกดยินยอมรับทราบความเสี่ยงและสมัครใจรับการรักษาให้ครบถ้วน');
             return;
         }
 
         if (isEmpty) {
-            alert('กรุณาลงลายมือชื่อของท่านในช่องลงนาม');
+            setErrorMessage('กรุณาลงลายมือชื่อของท่านในช่องลงนาม');
             return;
         }
 
@@ -223,14 +231,25 @@ const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
         try {
             const canvas = canvasRef.current;
             if (!canvas) {
-                alert('ไม่พบช่องลงนาม กรุณาลองใหม่อีกครั้ง');
+                setErrorMessage('ไม่พบช่องลงนาม กรุณาลองใหม่อีกครั้ง');
                 return;
             }
             const dataUrl = canvas.toDataURL("image/png");
             base64Data = dataUrl.split(',')[1]; // Remove data url header
         } catch (canvasErr) {
             console.error('Canvas export error:', canvasErr);
-            alert('เกิดข้อผิดพลาดในการประมวลผลลายเซ็น: ' + canvasErr.message);
+            setErrorMessage('เกิดข้อผิดพลาดในการประมวลผลลายเซ็น: ' + canvasErr.message);
+            return;
+        }
+
+        if (!isAuthDataFetched) {
+            setErrorMessage('ระบบกำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่ (ประมาณ 1-2 วินาที) แล้วกดบันทึกอีกครั้งครับ');
+            return;
+        }
+
+        if (!gdriveTokens?.pdpaDriveFolderId) {
+            setErrorMessage('ไม่สามารถเชื่อมต่อกับฐานข้อมูลเพื่อจัดเก็บหลักฐานได้ กรุณาติดต่อเจ้าหน้าที่คลินิก');
+            setStatus('error');
             return;
         }
         
@@ -256,7 +275,7 @@ const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
                     action: 'UPLOAD_FILE', 
                     sheetName: 'Patients', 
                     payload: {
-                        folderId: integrationTokens?.pdpaDriveFolderId || '1UX-E1SB7qSEq2yK9e8gBZsNj13W2F92R',
+                        folderId: gdriveTokens.pdpaDriveFolderId,
                         fileName: fileName,
                         mimeType: 'image/png',
                         data: base64Data
@@ -845,6 +864,29 @@ const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
                     100% { transform: translateX(200%); }
                 }
             `}} />
+            {errorMessage && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in-up">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <AlertCircle size={32} />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800 kanit-text mb-2">แจ้งเตือน</h3>
+                            <p className="text-slate-600 text-sm kanit-text">
+                                {errorMessage}
+                            </p>
+                        </div>
+                        <div className="p-4 bg-slate-50">
+                            <button
+                                onClick={() => setErrorMessage('')}
+                                className="w-full py-3 bg-slate-800 text-white rounded-xl kanit-text font-bold hover:bg-slate-700 transition-colors"
+                            >
+                                ปิด
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

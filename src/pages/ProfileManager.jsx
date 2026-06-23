@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffData, branchesData = [], callAppScript, showToast, isGlobalLoading, roleLabels = {}, integrationTokens }) => {
+const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffData, branchesData = [], callAppScript, showToast, isGlobalLoading, roleLabels = {}, gdriveTokens }) => {
   const [formData, setFormData] = useState({
     id: '', name: '', prefix: '', firstName: '', lastName: '', nickname: '', phone: '', email: '', gender: '', photo: '',
     address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '',
@@ -111,6 +111,12 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
         showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB', 'warning');
         return;
       }
+
+      if (!gdriveTokens?.generalDriveFolderId) {
+        showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเพื่อจัดเก็บหลักฐานได้ กรุณาตั้งค่าการเชื่อมต่อในหน้า Settings ก่อน', 'danger');
+        return;
+      }
+
       setIsProcessing(true);
       showToast('กำลังอัปโหลดรูปภาพโปรไฟล์...', 'success');
       
@@ -123,7 +129,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                 fileName: `STAFF_${Date.now()}_${file.name}`,
                 mimeType: file.type,
                 data: base64Data,
-                folderId: integrationTokens?.generalDriveFolderId || '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+                folderId: gdriveTokens.generalDriveFolderId
             });
 
             if (response.status === 'success' && response.fileUrl) {

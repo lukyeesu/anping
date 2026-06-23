@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert, integrationTokens }) => {
+const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert, gdriveTokens }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
@@ -58,6 +58,12 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
         showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB', 'warning');
         return;
       }
+
+      if (!gdriveTokens?.generalDriveFolderId) {
+        showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลเพื่อจัดเก็บหลักฐานได้ กรุณาตั้งค่าการเชื่อมต่อในหน้า Settings ก่อน', 'danger');
+        return;
+      }
+
       setIsProcessing(true);
       showToast('กำลังอัปโหลดโลโก้...', 'success');
       
@@ -70,7 +76,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                 fileName: `LOGO_${Date.now()}_${file.name}`,
                 mimeType: file.type,
                 data: base64Data,
-                folderId: integrationTokens?.generalDriveFolderId || '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+                folderId: gdriveTokens.generalDriveFolderId
             });
 
             if (response.status === 'success' && response.fileUrl) {
