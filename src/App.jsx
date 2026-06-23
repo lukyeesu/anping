@@ -311,23 +311,25 @@ export default function App() {
     setCurrentUser(staff);
 
     // --- บันทึก Log การ Login ---
-    const logPayload = {
-      id: `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      timestamp: new Date().toISOString(),
-      user: staff?.name || 'Unknown',
-      userId: staff?.id || 'unknown',
-      role: staff?.role || 'unknown',
-      action: 'LOGIN',
-      targetSheet: 'System',
-      targetDataId: staff?.id || 'unknown',
-      detail: `User ${staff?.name || 'Unknown'} logged into the system`
-    };
-    fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: token || localStorage.getItem('clinic_session_token') || '' }),
-      redirect: 'follow'
-    }).catch(err => console.error("Login Log failed:", err));
+    if (token !== 'recovery-token') {
+        const logPayload = {
+          id: `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          timestamp: new Date().toISOString(),
+          user: staff?.name || 'Unknown',
+          userId: staff?.id || 'unknown',
+          role: staff?.role || 'unknown',
+          action: 'LOGIN',
+          targetSheet: 'System',
+          targetDataId: staff?.id || 'unknown',
+          detail: `User ${staff?.name || 'Unknown'} logged into the system`
+        };
+        fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: token || localStorage.getItem('clinic_session_token') || '' }),
+          redirect: 'follow'
+        }).catch(err => console.error("Login Log failed:", err));
+    }
     // ----------------------------
   };
 
@@ -891,7 +893,8 @@ export default function App() {
   const callAppScript = async (action, sheetName, data = null) => {
     try {
       // --- ระบบบันทึก Log การใช้งาน ---
-      if (sheetName !== 'Logs' && (action === 'SAVE_DATA' || action === 'DELETE_DATA')) {
+      const currentToken = localStorage.getItem('clinic_session_token');
+      if (sheetName !== 'Logs' && (action === 'SAVE_DATA' || action === 'DELETE_DATA') && currentToken !== 'recovery-token') {
         // ใส่ชื่อ user ลงไปใน data ตรงๆ ด้วย เพื่อให้ข้อมูลในชีตนั้นๆ รู้ว่าใครเป็นคนทำ
         if (data && typeof data === 'object') {
             data.updatedBy = currentUser?.name || 'Unknown';
@@ -912,7 +915,7 @@ export default function App() {
         fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: localStorage.getItem('clinic_session_token') || '' }),
+          body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: currentToken || '' }),
           redirect: 'follow'
         }).catch(err => console.error("Logging failed:", err));
       }
