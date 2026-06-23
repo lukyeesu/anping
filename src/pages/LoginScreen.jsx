@@ -127,20 +127,23 @@ const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form action="#" method="POST" onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                    <label className="block text-sm font-bold text-slate-700 kanit-text mb-1.5 ml-1">ชื่อผู้ใช้งาน (Username)</label>
+                    <label className="block text-sm font-bold text-slate-700 kanit-text mb-1.5 ml-1">ชื่อผู้ใช้งาน (ล็อกอินไอดี)</label>
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                             <User size={18} />
                         </div>
-                        <input 
-                            type="text" 
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all font-data text-slate-700 outline-none"
-                            placeholder="Username..."
-                            value={username}
-                            onChange={(e) => {setUsername(e.target.value); setError('');}}
-                        />
+                            <input 
+                                type="text" 
+                                id="username"
+                                name="username"
+                                autoComplete="username"
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all font-data text-slate-700 outline-none"
+                                placeholder="Username"
+                                value={username}
+                                onChange={(e) => {setUsername(e.target.value); setError('');}}
+                            />
                     </div>
                 </div>
                 <div>
@@ -149,13 +152,16 @@ const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                             <ShieldCheck size={18} />
                         </div>
-                        <input 
-                            type="password" 
-                            className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all font-data text-slate-700 outline-none"
-                            placeholder="••••••••"
-                            value={password}
-                            onChange={(e) => {setPassword(e.target.value); setError('');}}
-                        />
+                            <input 
+                                type="password" 
+                                id="password"
+                                name="password"
+                                autoComplete="current-password"
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all font-data text-slate-700 outline-none"
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => {setPassword(e.target.value); setError('');}}
+                            />
                     </div>
                 </div>
 

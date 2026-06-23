@@ -53,6 +53,7 @@ function doPost(e) {
 
     if (action === 'FORGOT_PASSWORD') return handleForgotPassword(payload);
     if (action === 'CONFIRM_RESET_PASSWORD') return handleConfirmResetPassword(payload);
+    if (action === 'VERIFY_RESET_TOKEN') return handleVerifyResetToken(payload);
 
     // --- เธ•เธฃเธงเธเธชเธญเธ Token (AUTHENTICATION CHECK) ---
     let isValidToken = false;
@@ -1355,4 +1356,23 @@ function handleConfirmResetPassword(payload) {
 
 */
 // =========================================================================================
+
+
+function handleVerifyResetToken(payload) {
+  try {
+    var token = payload.token;
+    if (!token) return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ไม่พบ Token'})).setMimeType(ContentService.MimeType.JSON);
+    
+    var cache = CacheService.getScriptCache();
+    var rowStr = cache.get('RESET_' + token);
+    
+    if (!rowStr) {
+      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ลิงก์รีเซ็ตรหัสผ่านหมดอายุ หรือถูกใช้งานไปแล้ว'})).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'ลิงก์ถูกต้อง'})).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status: 'error', message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
 
