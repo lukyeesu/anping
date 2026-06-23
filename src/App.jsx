@@ -691,7 +691,7 @@ export default function App() {
     { label: 'เลื่อนนัด', color: 'violet' },
     { label: 'ยกเลิก', color: 'rose' }
   ]);
-  const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '' });
+  const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '', generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
   const speak = (text, onEnd) => {
@@ -1178,7 +1178,7 @@ export default function App() {
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
 
   if (pdpaToken && pdpaHn) {
-      return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} />;
+      return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} integrationTokens={integrationTokens} />;
   }
 
   if (!isLoggedIn || isGlobalLoading) {
@@ -1725,6 +1725,7 @@ export default function App() {
                        staffPrefixes={staffPrefixes}
                        staffCategories={staffCategories}
                        roleLabels={roleLabels}
+                       integrationTokens={integrationTokens}
                     />
                 </div>
             )}
@@ -1736,7 +1737,9 @@ export default function App() {
                         showToast={showToast} 
                         callAppScript={callAppScript} 
                         isGlobalLoading={isGlobalLoading} 
-                    showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
+                        showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} 
+                        integrationTokens={integrationTokens}
+                    />
                 </div>
             )}
 
@@ -1789,6 +1792,7 @@ export default function App() {
                         showToast={showToast}
                         isGlobalLoading={isGlobalLoading}
                         roleLabels={roleLabels}
+                        integrationTokens={integrationTokens}
                     />
                 </div>
             )}

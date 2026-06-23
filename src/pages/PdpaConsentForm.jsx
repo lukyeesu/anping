@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const PdpaConsentForm = ({ token, hn }) => {
+const PdpaConsentForm = ({ token, hn, integrationTokens }) => {
     const [status, setStatus] = useState('loading'); // loading, pending, consented, declined, invalid, saving
     const [patient, setPatient] = useState(null);
     const [step, setStep] = useState(1);
@@ -256,7 +256,7 @@ const PdpaConsentForm = ({ token, hn }) => {
                     action: 'UPLOAD_FILE', 
                     sheetName: 'Patients', 
                     payload: {
-                        folderId: '1UX-E1SB7qSEq2yK9e8gBZsNj13W2F92R',
+                        folderId: integrationTokens?.pdpaDriveFolderId || '1UX-E1SB7qSEq2yK9e8gBZsNj13W2F92R',
                         fileName: fileName,
                         mimeType: 'image/png',
                         data: base64Data

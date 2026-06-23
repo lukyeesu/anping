@@ -13,7 +13,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Cloud
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
@@ -74,7 +74,7 @@ const SettingsManager = ({
   const [newApptStatus, setNewApptStatus] = useState('');
   const [selectedColor, setSelectedColor] = useState('sky');
   const [localApptStatuses, setLocalApptStatuses] = useState([]);
-  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', lineGroupId: '', telegram: '', discord: '' });
+  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', lineGroupId: '', telegram: '', discord: '', generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
   // Sync with props
   useEffect(() => {
@@ -392,6 +392,17 @@ const SettingsManager = ({
           >
             <Link size={18} />
             การเชื่อมต่อแจ้งเตือน
+          </button>
+          <button
+            onClick={() => setActiveSubTab('gdrive')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'gdrive'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <Cloud size={18} />
+            เชื่อมต่อ GDrive
           </button>
           <button
             onClick={() => setActiveSubTab('logs')}
@@ -848,6 +859,49 @@ const SettingsManager = ({
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกการเชื่อมต่อ
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeSubTab === 'gdrive' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text">เชื่อมต่อ Google Drive</h3>
+                  <p className="text-slate-400 text-xs mt-1 kanit-text">ตั้งค่ารหัสโฟลเดอร์สำหรับเก็บไฟล์ภาพและเอกสารต่างๆ</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Google Drive Folder ID (ทั่วไป)</label>
+                    <input
+                      type="text"
+                      value={localIntegrationTokens.generalDriveFolderId || ''}
+                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, generalDriveFolderId: e.target.value })}
+                      placeholder="ตัวอย่าง: 1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Google Drive Folder ID (เอกสาร PDPA)</label>
+                    <input
+                      type="text"
+                      value={localIntegrationTokens.pdpaDriveFolderId || ''}
+                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, pdpaDriveFolderId: e.target.value })}
+                      placeholder="ตัวอย่าง: 1UX-E1SB7qSEq2yK9e8gBZsNj13W2F92R"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6 mt-8 flex justify-end">
+                  <button
+                    onClick={saveIntegrations}
+                    disabled={isSaving}
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกการตั้งค่า GDrive
                   </button>
                 </div>
               </div>

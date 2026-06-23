@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {} }) => {
+const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {}, integrationTokens }) => {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   
@@ -802,7 +802,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 mimeType: file.type,
                 data: base64Data,
                 // กำหนด ID ของโฟลเดอร์ Google Drive ปลายทาง
-                folderId: '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+                folderId: integrationTokens?.generalDriveFolderId || '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
             });
 
             if (response.status === 'success' && response.fileUrl) {

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert }) => {
+const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert, integrationTokens }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
@@ -70,7 +70,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                 fileName: `LOGO_${Date.now()}_${file.name}`,
                 mimeType: file.type,
                 data: base64Data,
-                folderId: '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
+                folderId: integrationTokens?.generalDriveFolderId || '1WwPiD2WQLbHK7xnFPW-GnJQj16-NrNb4' 
             });
 
             if (response.status === 'success' && response.fileUrl) {
