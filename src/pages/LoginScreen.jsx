@@ -33,18 +33,20 @@ const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
     
     // Secure Fallback: Compare SHA-256 hash instead of plain text
     try {
-        const msgUint8 = new TextEncoder().encode((username.trim().toLowerCase() + ':' + password));
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        
-        // This hash represents the emergency recovery credentials
-        if (hashHex === '73d2d42825f16c12972037ef5d3af93dfc8c733921aca072046a5f0063f35cdf') {
-            setTimeout(() => {
-                setIsLoading(false);
-                onLogin({ id: 'admin1', name: 'Admin (Recovery)', role: 'admin', category: 'staff' }, 'recovery-token');
-            }, 600);
-            return;
+        if (window.crypto && window.crypto.subtle) {
+            const msgUint8 = new TextEncoder().encode((username.trim().toLowerCase() + ':' + password));
+            const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            // This hash represents the emergency recovery credentials
+            if (hashHex === '73d2d42825f16c12972037ef5d3af93dfc8c733921aca072046a5f0063f35cdf') {
+                setTimeout(() => {
+                    setIsLoading(false);
+                    onLogin({ id: 'admin1', name: 'Admin (Recovery)', role: 'admin', category: 'staff' }, 'recovery-token');
+                }, 600);
+                return;
+            }
         }
 
         const res = await callAppScript('LOGIN', 'Staff', { username: username.trim(), password: password });
