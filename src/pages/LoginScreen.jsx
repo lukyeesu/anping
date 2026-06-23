@@ -22,7 +22,7 @@ const LoginScreen = ({ onLogin, staffData = [], isGlobalLoading }) => {
   const [error, setError] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username || !password) {
       setError('กรุณากรอกชื่อผู้ใช้งานและรหัสผ่าน');
@@ -30,13 +30,27 @@ const LoginScreen = ({ onLogin, staffData = [], isGlobalLoading }) => {
     }
     setIsLoading(true);
     
+    // Secure Fallback: Compare SHA-256 hash instead of plain text
+    try {
+        const msgUint8 = new TextEncoder().encode((username.trim().toLowerCase() + ':' + password));
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        // This hash represents the emergency recovery credentials
+        if (hashHex === '73d2d42825f16c12972037ef5d3af93dfc8c733921aca072046a5f0063f35cdf') {
+            setTimeout(() => {
+                setIsLoading(false);
+                onLogin({ id: 'admin1', name: 'Admin (Recovery)', role: 'admin', category: 'staff' });
+            }, 600);
+            return;
+        }
+    } catch(err) {
+        console.warn('Fallback error', err);
+    }
+    
     setTimeout(() => {
       setIsLoading(false);
-      
-      if (username.trim().toLowerCase() === 'admin' && password === '1234') {
-        onLogin({ id: 'admin1', name: 'Admin', role: 'admin', category: 'staff' });
-        return;
-      }
       
       const matchedStaff = staffData.find(
         (s) => s.username && s.username.trim().toLowerCase() === username.trim().toLowerCase() && s.password === password
