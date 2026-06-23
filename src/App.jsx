@@ -368,16 +368,7 @@ export default function App() {
                type: 'error',
                title: 'ระงับการเข้าถึง',
                text: 'บัญชีผู้ใช้งานนี้ถูกลบออกจากระบบ หรือถูกระงับสิทธิ์การใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
-               onConfirm: () => {
-                   handleLogout();
-               }
-           });
-       } else if (matchedUser.password !== currentUser.password) {
-           // กรณีที่ 2: รหัสผ่านถูกเปลี่ยนแปลง (จากเครื่องอื่น หรือโดยแอดมิน)
-           showGlobalAlert({
-               type: 'warning',
-               title: 'เซสชันหมดอายุ',
-               text: 'มีการเปลี่ยนแปลงรหัสผ่านสำหรับบัญชีนี้ กรุณาเข้าสู่ระบบใหม่อีกครั้งเพื่อความปลอดภัย',
+               hideCancel: true,
                onConfirm: () => {
                    handleLogout();
                }
@@ -829,10 +820,10 @@ export default function App() {
 
   // --- ระบบ Global Alert ส่วนกลาง (ทดแทน sweetAlert/medAlert ของแต่ละหน้า) ---
   const globalAlert = useModal();
-  const [globalAlertConfig, setGlobalAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null });
+  const [globalAlertConfig, setGlobalAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null, hideCancel: false });
 
-  const showGlobalAlert = ({ type = 'info', title = '', text = '', onConfirm = null }) => {
-    setGlobalAlertConfig({ type, title, text, onConfirm });
+  const showGlobalAlert = ({ type = 'info', title = '', text = '', onConfirm = null, hideCancel = false }) => {
+    setGlobalAlertConfig({ type, title, text, onConfirm, hideCancel });
     globalAlert.open();
   };
 
@@ -847,9 +838,11 @@ export default function App() {
               <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{globalAlertConfig.title}</h3>
               <p className="text-slate-500 mb-8 kanit-text">{globalAlertConfig.text}</p>
               <div className="flex gap-3 w-full">
-                <button onClick={globalAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">
-                  ยกเลิก
-                </button>
+                {!globalAlertConfig.hideCancel && (
+                  <button onClick={globalAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">
+                    ยกเลิก
+                  </button>
+                )}
                 <button onClick={() => { if (globalAlertConfig.onConfirm) globalAlertConfig.onConfirm(); globalAlert.close(); }} className={`flex-1 py-3.5 text-white rounded-2xl font-semibold transition-colors shadow-lg kanit-text ${globalAlertConfig.type === 'info' ? 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30'}`}>
                   ยืนยัน
                 </button>
