@@ -209,7 +209,6 @@ const theme = {
 // --- [NEW] ระบบรายงานและศูนย์รวมเอกสาร (Reports & Documents Manager) ---
 
 
-
 // ==========================================
 // ส่วนจัดการตั้งค่าระบบ (Settings Manager)
 // ==========================================
@@ -250,6 +249,14 @@ export default function App() {
     }
     return false;
   });
+
+  const [posProducts, setPosProducts] = useState([]); 
+  const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
+  const [isAuthDataFetched, setIsAuthDataFetched] = useState(false);
+  const [isDataFetched, setIsDataFetched] = useState(false);
+  const [loadedMonths, setLoadedMonths] = useState(new Set()); // ติดตามเดือนที่โหลดแล้ว (YYYY-MM)
+  const [isQueueFetching, setIsQueueFetching] = useState(false);
+  const fetchingMonthsRef = useRef(new Set()); // ใช้ Ref ติดตามการโหลดที่กำลังดำเนินอยู่เพื่อป้องกันโหลดซ้ำซ้อน
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -292,10 +299,13 @@ export default function App() {
     return () => document.removeEventListener('click', handleOutsideClick);
   }, [isMobileProfileDropdownOpen]);
 
-  const handleLogin = (staff) => {
+  const handleLogin = (staff, token) => {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem('clinic_isLoggedIn', 'true');
       localStorage.setItem('clinic_currentUser', JSON.stringify(staff));
+      if (token) {
+          localStorage.setItem('clinic_session_token', token);
+      }
     }
     setIsLoggedIn(true);
     setCurrentUser(staff);
@@ -315,16 +325,20 @@ export default function App() {
     fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload }),
+      body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: token || localStorage.getItem('clinic_session_token') || '' }),
       redirect: 'follow'
     }).catch(err => console.error("Login Log failed:", err));
     // ----------------------------
   };
 
   const handleLogout = () => {
+    // แจ้งให้หลังบ้านทำลาย Token ถาวร
+    callAppScript('LOGOUT', 'System').catch(() => {});
+
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.removeItem('clinic_isLoggedIn');
       localStorage.removeItem('clinic_currentUser');
+      localStorage.removeItem('clinic_session_token');
     }
     setIsLoggedIn(false);
     setCurrentUser({ id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' });
@@ -780,13 +794,7 @@ export default function App() {
     }
   };
 
-  const [posProducts, setPosProducts] = useState([]); 
-  const [staffData, setStaffData] = useState([]); // เพิ่ม State ข้อมูลพนักงาน
-  const [isAuthDataFetched, setIsAuthDataFetched] = useState(false);
-  const [isDataFetched, setIsDataFetched] = useState(false);
-  const [loadedMonths, setLoadedMonths] = useState(new Set()); // ติดตามเดือนที่โหลดแล้ว (YYYY-MM)
-  const [isQueueFetching, setIsQueueFetching] = useState(false);
-  const fetchingMonthsRef = useRef(new Set()); // ใช้ Ref ติดตามการโหลดที่กำลังดำเนินอยู่เพื่อป้องกันโหลดซ้ำซ้อน
+
 
   const fetchQueueForMonth = async (year, month) => {
     const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -911,7 +919,7 @@ export default function App() {
         fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload }),
+          body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: localStorage.getItem('clinic_session_token') || '' }),
           redirect: 'follow'
         }).catch(err => console.error("Logging failed:", err));
       }
@@ -920,7 +928,7 @@ export default function App() {
       const response = await fetch(GOOGLE_SCRIPT_URL, { 
           method: 'POST', 
           headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
-          body: JSON.stringify({ action, sheetName, payload: data }), 
+          body: JSON.stringify({ action, sheetName, payload: data, token: localStorage.getItem('clinic_session_token') || '' }), 
           redirect: 'follow' 
       });
       
@@ -1115,29 +1123,9 @@ export default function App() {
 
       // กรณีที่ 2: ยังไม่ได้ล็อกอิน และยังไม่มีข้อมูล Auth (ดึงเฉพาะข้อมูลล็อกอินเพื่อความเร็ว)
       if (!isLoggedIn && !isAuthDataFetched) {
-        setIsGlobalLoading(true);
-        try {
-          const [resStaff, resBranches, resSettings] = await Promise.all([
-            callAppScript('GET_DATA', 'Staff'),
-            callAppScript('GET_DATA', 'Branches'),
-            callAppScript('GET_DATA', 'Settings')
-          ]);
-
-          if (resStaff?.status === 'success') {
-             setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
-          }
-          if (resBranches?.status === 'success') {
-            setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
-          }
-          parseSettings(resSettings);
-
-          setIsAuthDataFetched(true);
-        } catch (error) {
-          console.error("Load Auth Data Error:", error);
-          showToast('ไม่สามารถเชื่อมต่อระบบยืนยันตัวตนได้', 'warning');
-        } finally {
-          setIsGlobalLoading(false);
-        }
+        // ปิดการดึงข้อมูลอัตโนมัติก่อนล็อกอิน เพื่อความปลอดภัย (ไม่ให้โดนแฮกข้อมูลด้วย F12)
+        setIsGlobalLoading(false);
+        setIsAuthDataFetched(true);
       }
     };
 
@@ -1286,7 +1274,7 @@ export default function App() {
               animation: shake 0.6s ease-in-out;
             }
           `}} />
-          <LoginScreen onLogin={handleLogin} staffData={staffData} isGlobalLoading={isGlobalLoading} />
+          <LoginScreen onLogin={handleLogin} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} />
         </>
       );
   }

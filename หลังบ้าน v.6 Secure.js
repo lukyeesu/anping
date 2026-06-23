@@ -25,46 +25,7 @@ function doPost(e) {
     // ==========================================
     // 🔵 โค้ดเดิมสำหรับจัดการ API จาก Web App 
     // ==========================================
-    const { action, sheetName, payload, token } = requestData;
-
-    // --- ระบบล็อกอิน (LOGIN) สร้าง Token แบบถาวร ---
-    if (action === 'LOGIN') {
-        const staffObj = getData('Staff').data || [];
-        const matched = staffObj.find(s => s.username && payload.username && s.username.toLowerCase() === payload.username.toLowerCase() && s.password === payload.password);
-        
-        if (matched) {
-            delete matched.password; // ลบรหัสผ่านทิ้งก่อนส่งกลับไปหน้าเว็บ
-            const newToken = Utilities.getUuid();
-            // ใช้ PropertiesService เก็บ Token แบบถาวร (จนกว่าจะ Logout) ไม่หมดอายุใน 6 ชม.
-            PropertiesService.getScriptProperties().setProperty('session_' + newToken, matched.id); 
-            return ContentService.createTextOutput(JSON.stringify({ status: 'success', data: { staff: matched, token: newToken } })).setMimeType(ContentService.MimeType.JSON);
-        } else {
-            return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' })).setMimeType(ContentService.MimeType.JSON);
-        }
-    }
-
-    // --- ระบบออกจากระบบ (LOGOUT) ลบ Token ถาวรทิ้ง ---
-    if (action === 'LOGOUT') {
-        if (token) {
-            PropertiesService.getScriptProperties().deleteProperty('session_' + token);
-        }
-        return ContentService.createTextOutput(JSON.stringify({ status: 'success' })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // --- ตรวจสอบ Token (AUTHENTICATION CHECK) ---
-    let isValidToken = false;
-    if (token === 'recovery-token') {
-        isValidToken = true;
-    } else if (token) {
-        const userId = PropertiesService.getScriptProperties().getProperty('session_' + token);
-        if (userId) {
-            isValidToken = true;
-        }
-    }
-    
-    if (!isValidToken) {
-        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized: Invalid or missing token' })).setMimeType(ContentService.MimeType.JSON);
-    }
+    const { action, sheetName, payload } = requestData;
 
     if (!sheetName) throw new Error("Missing 'sheetName' in request.");
     initSheet(sheetName); // เตรียมชีตอัตโนมัติ

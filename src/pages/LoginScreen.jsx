@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const LoginScreen = ({ onLogin, staffData = [], isGlobalLoading }) => {
+const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
@@ -29,6 +29,7 @@ const LoginScreen = ({ onLogin, staffData = [], isGlobalLoading }) => {
       return;
     }
     setIsLoading(true);
+    setError('');
     
     // Secure Fallback: Compare SHA-256 hash instead of plain text
     try {
@@ -41,26 +42,23 @@ const LoginScreen = ({ onLogin, staffData = [], isGlobalLoading }) => {
         if (hashHex === '73d2d42825f16c12972037ef5d3af93dfc8c733921aca072046a5f0063f35cdf') {
             setTimeout(() => {
                 setIsLoading(false);
-                onLogin({ id: 'admin1', name: 'Admin (Recovery)', role: 'admin', category: 'staff' });
+                onLogin({ id: 'admin1', name: 'Admin (Recovery)', role: 'admin', category: 'staff' }, 'recovery-token');
             }, 600);
             return;
         }
+
+        const res = await callAppScript('LOGIN', 'Staff', { username: username.trim(), password: password });
+        if (res.status === 'success') {
+            onLogin(res.data.staff, res.data.token);
+        } else {
+            setError(res.message || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
+        }
     } catch(err) {
-        console.warn('Fallback error', err);
+        console.error('Login error', err);
+        setError(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบ');
+    } finally {
+        setIsLoading(false);
     }
-    
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      const matchedStaff = staffData.find(
-        (s) => s.username && s.username.trim().toLowerCase() === username.trim().toLowerCase() && s.password === password
-      );
-      if (matchedStaff) {
-          onLogin(matchedStaff);
-      } else {
-          setError('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
-      }
-    }, 600);
   };
 
   if (isGlobalLoading) {
