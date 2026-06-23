@@ -629,10 +629,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     });
 
     setTimeout(() => {
-        if (mainElement && headerRef.current) {
-            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-            else headerRef.current.classList.remove('is-scrolled');
+        // ล้างคลาสที่อาจค้างอยู่จากการสลับหน้าจอ (Tab switching) 
+        if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
+        if (filterRef.current) {
+            filterRef.current.classList.remove('is-scrolled');
+            if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
         }
+        // บังคับให้เกิด Event Scroll 1 ครั้ง เพื่อให้ handleScroll คำนวณขนาดและตำแหน่งใหม่ให้ถูกต้อง
+        if (mainElement) mainElement.dispatchEvent(new Event('scroll'));
     }, 50);
 
     mainElement.addEventListener('scroll', handleScroll, { passive: true });

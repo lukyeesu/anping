@@ -90,7 +90,12 @@ const InventoryManager = ({
     });
 
     setTimeout(() => {
-        if (mainElement) handleScroll({ target: mainElement });
+        if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
+        if (filterRef.current) {
+            filterRef.current.classList.remove('is-scrolled');
+            if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
+        }
+        if (mainElement) mainElement.dispatchEvent(new Event('scroll'));
     }, 50);
 
     mainElement.addEventListener('scroll', handleScroll, { passive: true });

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'; 
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
 import { ToastContainer } from './global/helpers';
 import { triggerGlobalToast } from './global/helpers';
+import ResetPasswordScreen from './pages/ResetPasswordScreen';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -242,6 +243,7 @@ export default function App() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const pdpaToken = urlParams.get('pdpa');
   const pdpaHn = urlParams.get('hn');
+  const resetToken = urlParams.get('reset_token');
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -1119,9 +1121,22 @@ export default function App() {
 
       // กรณีที่ 2: ยังไม่ได้ล็อกอิน และยังไม่มีข้อมูล Auth (ดึงเฉพาะข้อมูลล็อกอินเพื่อความเร็ว)
       if (!isLoggedIn && !isAuthDataFetched) {
-        // ปิดการดึงข้อมูลอัตโนมัติก่อนล็อกอิน เพื่อความปลอดภัย (ไม่ให้โดนแฮกข้อมูลด้วย F12)
-        setIsGlobalLoading(false);
-        setIsAuthDataFetched(true);
+        if (pdpaToken) {
+          setIsGlobalLoading(true);
+          try {
+            const resSettings = await callAppScript('GET_DATA', 'Settings');
+            parseSettings(resSettings);
+            setIsAuthDataFetched(true);
+          } catch(e) { 
+            console.error(e); 
+          } finally {
+            setIsGlobalLoading(false);
+          }
+        } else {
+          // ปิดการดึงข้อมูลอัตโนมัติก่อนล็อกอิน เพื่อความปลอดภัย (ไม่ให้โดนแฮกข้อมูลด้วย F12)
+          setIsGlobalLoading(false);
+          // ไม่เซ็ต setIsAuthDataFetched(true) ที่นี่ เพื่อให้ไปโหลด Staff หลังล็อกอินเสร็จ
+        }
       }
     };
 
@@ -1204,6 +1219,10 @@ export default function App() {
 
   if (pdpaToken && pdpaHn) {
       return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} gdriveTokens={gdriveTokens} isAuthDataFetched={isAuthDataFetched} />;
+  }
+
+  if (resetToken) {
+      return <ResetPasswordScreen token={resetToken} callAppScript={callAppScript} showToast={showToast} />;
   }
 
   if (!isLoggedIn || isGlobalLoading) {
@@ -2120,14 +2139,12 @@ export default function App() {
         @media (min-width: 1536px) { .is-scrolled .sticky-filter-inner { padding-left: 3rem; padding-right: 3rem; } }
 
         /* --- [NEW] CSS คำนวณระยะกาง Filter ของหน้านัดหมายอัตโนมัติ --- */
-        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 54px); }
-        @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 64px); } }
-        @media (min-width: 768px) and (max-width: 1023px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 59px); } }
+        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 52px); }
+        @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 60px); } }
 
         /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก (เพิ่มระยะห่างจากขอบบนเพื่อความสวยงามและไม่โดนบัง) */
-        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 54px); z-index: 40; }
-        @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 64px); } }
-        @media (min-width: 768px) and (max-width: 1023px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 59px); } }
+        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 52px); z-index: 40; }
+        @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 60px); } }
       `}} />
 
       {/* PDPA QR Code Modal */}

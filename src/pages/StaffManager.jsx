@@ -28,6 +28,37 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   const scheduleModal = useModal();
   const payrollModal = useModal();
       const [editingId, setEditingId] = useState(null);
+
+      const handleSendResetLink = async () => {
+          if (!formData.email) {
+              showToast('กรุณาระบุอีเมลพนักงานในช่องอีเมลก่อนทำการส่งลิงก์', 'error');
+              return;
+          }
+          
+          showGlobalAlert({
+              type: 'warning',
+              title: 'ยืนยันการส่งลิงก์รีเซ็ตรหัสผ่าน',
+              message: `คุณต้องการส่งลิงก์ตั้งรหัสผ่านใหม่ไปยังอีเมล ${formData.email} ใช่หรือไม่? (ลิงก์เก่าจะถูกยกเลิกทันที)`,
+              onConfirm: async () => {
+                  setIsProcessing(true);
+                  try {
+                      const resetUrl = window.location.origin;
+                      const res = await callAppScript('FORGOT_PASSWORD', 'Staff', { username: formData.username || formData.email, resetUrl });
+                      if (res.status === 'success') {
+                          showToast('ระบบได้ส่งลิงก์รีเซ็ตรหัสผ่าน (อายุ 15 นาที) ไปยังอีเมลพนักงานแล้ว', 'success');
+                      } else {
+                          showToast(res.message || 'ไม่สามารถส่งลิงก์ได้', 'error');
+                      }
+                  } catch(err) {
+                      console.error('Forgot password error', err);
+                      showToast(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบ', 'error');
+                  } finally {
+                      setIsProcessing(false);
+                  }
+              }
+          });
+      };
+
   
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffModalDate, setStaffModalDate] = useState(null);
@@ -734,7 +765,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                                               {s.photo ? (
                                                                   <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0 shadow-sm" />
                                                               ) : (
-                                                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm text-lg ${roleKey==='doctor'?'bg-indigo-400':roleKey==='nurse'?'bg-emerald-400':roleKey==='sale'?'bg-amber-400':'bg-slate-400'}`}>{s.name.charAt(0)}</div>
+                                                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm text-lg ${roleKey==='doctor'?'bg-indigo-400':roleKey==='nurse'?'bg-emerald-400':roleKey==='sale'?'bg-amber-400':'bg-slate-400'}`}>{(s.name || '').charAt(0)}</div>
                                                               )}
                                                               <div className="min-w-0">
                                                                   <p className="font-bold text-slate-800 kanit-text text-sm truncate leading-tight">{s.name}</p>
@@ -1040,7 +1071,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
   const filteredStaff = useMemo(() => {
     return staffData.filter(s => {
-      const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || (s.phone && s.phone.includes(search));
+      const matchSearch = (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.phone && String(s.phone).includes(search));
       const matchRole = filterRole === 'all' || s.role === filterRole;
       return matchSearch && matchRole;
     });
@@ -1456,7 +1487,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                         }
                     }
 
-                    const shortName = s.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
+                    const shortName = (s.name || '').replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
                     if (isWorking) workingList.push({ id: s.id, name: shortName, timeStr, role: s.role, otHours });
                     else if (isExplicitlyOff) offList.push({ id: s.id, name: shortName });
                 });
@@ -1604,7 +1635,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                                         <img src={ws.photo} className="w-8 h-8 rounded-full object-cover border border-slate-200" alt="Profile"/>
                                                     ) : (
                                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${ws.role==='doctor'?'bg-indigo-400':ws.role==='nurse'?'bg-emerald-400':ws.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
-                                                            {ws.name.charAt(0)}
+                                                            {(ws.name || '').charAt(0)}
                                                         </div>
                                                     )}
                                                     <div className="min-w-0 flex-1">
@@ -1907,7 +1938,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                            <img src={s.photo} alt={s.name} onClick={(e) => { e.stopPropagation(); setViewImageSrc(s.photo); }} className="w-10 h-10 rounded-full object-cover shadow-sm border border-slate-200 hover:scale-110 transition-transform cursor-zoom-in" />
                                        ) : (
                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm ${s.role==='doctor'?'bg-indigo-400':s.role==='nurse'?'bg-emerald-400':s.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
-                                               {s.name.charAt(0)}
+                                               {(s.name || '').charAt(0)}
                                            </div>
                                        )}
                                        <div>
@@ -2008,7 +2039,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                        <img src={s.photo} alt={s.name} onClick={(e) => { e.stopPropagation(); setViewImageSrc(s.photo); }} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover shadow-sm border border-slate-200 shrink-0 hover:scale-105 transition-transform cursor-zoom-in" />
                                    ) : (
                                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center font-bold text-xl text-white shadow-sm shrink-0 ${s.role==='doctor'?'bg-indigo-400':s.role==='nurse'?'bg-emerald-400':s.role==='sale'?'bg-amber-400':'bg-slate-400'}`}>
-                                           {s.name.charAt(0)}
+                                           {(s.name || '').charAt(0)}
                                        </div>
                                    )}
                                    <div className="flex flex-col">
@@ -2116,7 +2147,8 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                           <div>
                               {editingId ? (
                                   <div className="flex flex-col h-full justify-end">
-                                      <button type="button" onClick={() => showToast('ระบบได้ส่งลิงก์รีเซ็ตรหัสผ่าน (Token 15 นาที) ไปยังอีเมลพนักงานแล้ว', 'success')} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-sky-600 hover:bg-sky-50 rounded-xl font-bold kanit-text text-[13px] transition-colors shadow-sm">
+                                      <button type="button" onClick={handleSendResetLink} disabled={isProcessing} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-sky-600 hover:bg-sky-50 rounded-xl font-bold kanit-text text-[13px] transition-colors shadow-sm disabled:opacity-50 flex justify-center items-center gap-2">
+                                          {isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
                                           ส่งลิงก์รีเซ็ตรหัสผ่าน
                                       </button>
                                   </div>
@@ -3176,7 +3208,19 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         document.body
       )}
 
-      {/* --- Alert Modal --- */}
+      {/* --- Image Viewer Modal --- */}
+      {viewImageSrc && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center p-4 sm:p-8" style={{ zIndex: 99999 }}>
+            <div className={`absolute inset-0 bg-slate-900/90 backdrop-blur-sm transition-opacity duration-300 ${isImageClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeImageViewer} />
+            <div className={`relative max-w-4xl max-h-full flex flex-col items-center justify-center transition-all duration-300 ${isImageClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}>
+                <button onClick={closeImageViewer} className="absolute -top-12 right-0 sm:-top-6 sm:-right-12 w-10 h-10 bg-white/20 hover:bg-white/30 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-colors z-10 border border-white/30 shadow-lg">
+                    <X size={20} />
+                </button>
+                <img src={viewImageSrc} alt="Full screen preview" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl ring-2 ring-white/20" />
+            </div>
+        </div>,
+        document.body
+      )}
       
     </div>
   );

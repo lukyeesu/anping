@@ -51,6 +51,9 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ status: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'FORGOT_PASSWORD') return handleForgotPassword(payload);
+    if (action === 'CONFIRM_RESET_PASSWORD') return handleConfirmResetPassword(payload);
+
     // --- ตรวจสอบ Token (AUTHENTICATION CHECK) ---
     let isValidToken = false;
     if (token === 'recovery-token') {
@@ -1182,3 +1185,174 @@ function uploadFile(payload) {
     return { status: 'error', message: 'Upload failed: ' + error.toString() };
   }
 }
+
+// =========================================================================================
+// 1. นำโค้ด 2 ฟังก์ชันนี้ (handleForgotPassword และ handleConfirmResetPassword) ไปวางต่อท้ายไฟล์ .gs ใน Apps Script ของคุณ
+// =========================================================================================
+
+function handleForgotPassword(payload) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Staff');
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'Sheet Staff not found'})).setMimeType(ContentService.MimeType.JSON);
+    
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ไม่พบข้อมูลในระบบ'})).setMimeType(ContentService.MimeType.JSON);
+    
+    var values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    var targetUsername = String(payload.username).trim().toLowerCase();
+    
+    var userRow = -1;
+    var userObj = null;
+    
+    for (var i = 0; i < values.length; i++) {
+      try {
+        var obj = JSON.parse(values[i][1]);
+        var rowUsername = String(obj.username || '').trim().toLowerCase();
+        var rowEmail = String(obj.email || '').trim().toLowerCase();
+        
+        if ((rowUsername && rowUsername === targetUsername) || (rowEmail && rowEmail === targetUsername)) {
+          userRow = i + 2;
+          userObj = obj;
+          break;
+        }
+      } catch(e) {}
+    }
+    
+    if (userRow === -1 || !userObj) {
+      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ไม่พบผู้ใช้งานหรืออีเมลนี้ในระบบ'})).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    if (!userObj.email) {
+      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'บัญชีนี้ยังไม่ได้ลงทะเบียนอีเมลไว้ ไม่สามารถรีเซ็ตรหัสผ่านได้ กรุณาติดต่อผู้ดูแลระบบ'})).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var cache = CacheService.getScriptCache();
+    var oldTokenKey = cache.get('USER_RESET_' + userRow);
+    if (oldTokenKey) {
+      cache.remove(oldTokenKey);
+    }
+    
+    var token = Utilities.getUuid();
+    var newTokenKey = 'RESET_' + token;
+    cache.put(newTokenKey, userRow.toString(), 900); // 15 mins
+    cache.put('USER_RESET_' + userRow, newTokenKey, 900);
+    
+    var resetUrl = payload.resetUrl || 'http://localhost:5173';
+    var link = resetUrl + '?reset_token=' + token;
+    var userName = userObj.name || 'ผู้ใช้งาน';
+    
+    var logoUrl = "https://cdn-icons-png.flaticon.com/512/2966/2966327.png"; // Default
+    try {
+      var branchSheet = ss.getSheetByName('Branches');
+      if (branchSheet) {
+        var branchLastRow = branchSheet.getLastRow();
+        if (branchLastRow > 1) {
+          var branchValues = branchSheet.getRange(2, 1, branchLastRow - 1, 2).getValues();
+          for (var j = 0; j < branchValues.length; j++) {
+            try {
+              var bObj = JSON.parse(branchValues[j][1]);
+              if (bObj.id === 'b1' && bObj.logo) {
+                logoUrl = bObj.logo;
+                break;
+              }
+            } catch(ex) {}
+          }
+        }
+      }
+    } catch(e) {}
+    
+    var htmlBody = `
+      <div style="font-family: 'Kanit', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8fafc; padding: 20px; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 30px; background-color: white; padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <!-- ใช้ลิงก์รูปภาพออนไลน์แทน cid:logo -->
+          <!-- หากต้องการใช้โลโก้ตัวเอง ให้อัปโหลดรูปขึ้นเว็บฝากรูป (เช่น Imgur) หรือ Google Drive แบบ Public แล้วเอาลิงก์ตรงมาวางแทนที่ลิงก์ด้านล่างนี้ครับ -->
+          <img src="${logoUrl}" alt="Anping Clinic Logo" style="width: 100px; height: 100px; border-radius: 50%; border: 4px solid #e0f2fe; margin-bottom: 15px;" />
+          <h1 style="color: #0284c7; margin: 0; font-size: 26px; font-weight: bold;">อันผิงคลินิก (Anping Clinic)</h1>
+          <p style="color: #64748b; margin: 5px 0 0 0; font-size: 15px;">ระบบจัดการคลินิกอัจฉริยะ</p>
+        </div>
+        
+        <div style="background-color: white; padding: 35px 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">คำขอรีเซ็ตรหัสผ่าน 🔑</h2>
+          <p style="color: #334155; line-height: 1.7; font-size: 15px;">สวัสดีคุณ <strong>${userName}</strong>,</p>
+          <p style="color: #334155; line-height: 1.7; font-size: 15px;">เราได้รับคำขอให้รีเซ็ตรหัสผ่านสำหรับบัญชีผู้ใช้งาน <strong>${userObj.username}</strong> ของคุณ</p>
+          <p style="color: #334155; line-height: 1.7; font-size: 15px;">หากคุณเป็นผู้ดำเนินการ กรุณาคลิกที่ปุ่มด้านล่างเพื่อตั้งค่ารหัสผ่านใหม่ของคุณครับ</p>
+          
+          <div style="text-align: center; margin: 40px 0;">
+            <a href="${link}" style="background-color: #0ea5e9; color: white; padding: 14px 32px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px 0 rgba(14, 165, 233, 0.39);">ตั้งค่ารหัสผ่านใหม่</a>
+          </div>
+          
+          <div style="background-color: #fff1f2; border: 1px solid #ffe4e6; padding: 12px; border-radius: 8px; margin-bottom: 25px;">
+            <p style="color: #e11d48; font-size: 13px; text-align: center; margin: 0; font-weight: 500;">⚠️ ลิงก์นี้จะหมดอายุภายใน 15 นาที เพื่อความปลอดภัย</p>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px dashed #cbd5e1;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0; line-height: 1.6;">หากคุณไม่ได้ร้องขอการรีเซ็ตรหัสผ่านนี้ โปรดละเว้นอีเมลฉบับนี้ รหัสผ่านเดิมของคุณจะยังคงใช้งานได้ตามปกติ หรือคุณสามารถติดต่อผู้ดูแลระบบได้ทันที</p>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    MailApp.sendEmail({
+      to: userObj.email,
+      subject: "คำขอรีเซ็ตรหัสผ่าน - อันผิงคลินิก (Anping Clinic)",
+      body: "สวัสดีคุณ " + userName + "\n\nเราได้รับคำขอให้รีเซ็ตรหัสผ่านสำหรับบัญชีผู้ใช้งานของคุณ หากคุณเป็นผู้ดำเนินการ กรุณาคลิกลิงก์ด้านล่างเพื่อตั้งค่ารหัสผ่านใหม่:\n" + link + "\n\nลิงก์นี้จะหมดอายุภายใน 15 นาทีเพื่อความปลอดภัย",
+      htmlBody: htmlBody
+    });
+    
+    return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'Sent email'})).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status: 'error', message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleConfirmResetPassword(payload) {
+  try {
+    var token = payload.token;
+    var newPassword = payload.newPassword;
+    
+    if (!token || !newPassword) {
+      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ข้อมูลไม่ครบถ้วน'})).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var cache = CacheService.getScriptCache();
+    var rowStr = cache.get('RESET_' + token);
+    
+    if (!rowStr) {
+      return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'ลิงก์รีเซ็ตรหัสผ่านหมดอายุหรือไม่ถูกต้อง'})).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var rowNum = parseInt(rowStr);
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Staff');
+    
+    var jsonStr = sheet.getRange(rowNum, 2).getValue();
+    var obj = JSON.parse(jsonStr);
+    obj.password = newPassword;
+    sheet.getRange(rowNum, 2).setValue(JSON.stringify(obj));
+    
+    cache.remove('RESET_' + token);
+    
+    return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'เปลี่ยนรหัสผ่านสำเร็จ'})).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status: 'error', message: err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// 2. ไปที่ฟังก์ชัน doPost(e) ที่มีอยู่เดิมของคุณ แล้วเพิ่มเงื่อนไข IF สองบรรทัดนี้เข้าไปในนั้น:
+/*
+
+  if (action === 'FORGOT_PASSWORD') {
+    return handleForgotPassword(payload);
+  }
+  
+  if (action === 'CONFIRM_RESET_PASSWORD') {
+    return handleConfirmResetPassword(payload);
+  }
+
+*/
+// =========================================================================================
+

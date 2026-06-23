@@ -373,15 +373,12 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
     // --- เพิ่มการเช็คสถานะทันทีเมื่อโหลด Component ---
     setTimeout(() => {
-        if (mainElement && headerRef.current) {
-            if (mainElement.scrollTop > 20) {
-                headerRef.current.classList.add('is-scrolled');
-                if (filterRef.current) filterRef.current.classList.add('is-scrolled');
-            } else {
-                headerRef.current.classList.remove('is-scrolled');
-                if (filterRef.current) filterRef.current.classList.remove('is-scrolled');
-            }
+        if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
+        if (filterRef.current) {
+            filterRef.current.classList.remove('is-scrolled');
+            if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
         }
+        if (mainElement) mainElement.dispatchEvent(new Event('scroll'));
     }, 50);
 
     const handleScroll = rAFThrottle((e) => {
