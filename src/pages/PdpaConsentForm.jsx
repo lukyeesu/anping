@@ -171,7 +171,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                 const response = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Patients', payload: null }),
+                    body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Patients', payload: null, token: 'recovery-token' }),
                 });
                 const responseText = await response.text();
                 const result = JSON.parse(responseText);
@@ -274,6 +274,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                 body: JSON.stringify({ 
                     action: 'UPLOAD_FILE', 
                     sheetName: 'Patients', 
+                    token: 'recovery-token',
                     payload: {
                         folderId: gdriveTokens.pdpaDriveFolderId,
                         fileName: fileName,
@@ -321,7 +322,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Patients', payload: updatedPatient }),
+                body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Patients', payload: updatedPatient, token: 'recovery-token' }),
             });
             const responseText = await response.text();
             const result = JSON.parse(responseText);

@@ -1272,14 +1272,14 @@ const POSSystem = ({
                         <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 shrink-0 relative mb-4">
                             <div className="absolute inset-0 border-2 border-sky-400 rounded-xl animate-pulse opacity-40 pointer-events-none"></div>
                             <img 
-                               src={`https://promptpay.io/0926321039/${grandTotal}.png`} 
+                               src={`https://promptpay.io/0631434927/${grandTotal}.png`} 
                                alt="PromptPay QR" 
                                className="w-48 h-48 sm:w-56 sm:h-56 object-contain pointer-events-none select-none relative z-10" 
                             />
                         </div>
                         <div className="text-center flex flex-col items-center w-full">
-                            <h4 className="text-lg sm:text-xl font-black text-sky-700 kanit-text leading-tight mb-1">นาย พงษ์สิทธิ์ แซ่อึ้ง</h4>
-                            <p className="text-xs sm:text-sm text-slate-500 font-data mb-3">เบอร์พร้อมเพย์: 092-632-1039</p>
+                            <h4 className="text-lg sm:text-xl font-black text-sky-700 kanit-text leading-tight mb-1">นาย พุทธินัทธ์ จงเจริญเลิศสิน</h4>
+                            <p className="text-xs sm:text-sm text-slate-500 font-data mb-3">เบอร์พร้อมเพย์: 063-143-4927</p>
                             <div className="bg-white px-5 py-3 rounded-2xl border border-sky-100 shadow-sm w-full max-w-[240px]">
                                <p className="text-[10px] sm:text-xs text-slate-400 font-bold kanit-text mb-0.5">ยอดชำระสุทธิ</p>
                                <p className="text-xl sm:text-2xl font-black text-sky-600 font-data leading-none">{formatCurrency(grandTotal)}</p>

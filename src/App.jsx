@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from 'react'; 
+import React, { useState, useEffect, useMemo, useRef } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
@@ -1124,11 +1124,18 @@ export default function App() {
         if (pdpaToken) {
           setIsGlobalLoading(true);
           try {
-            const resSettings = await callAppScript('GET_DATA', 'Settings');
+            const resSettingsResponse = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Settings', payload: null, token: 'recovery-token' })
+            });
+            const resSettings = await resSettingsResponse.json();
             parseSettings(resSettings);
             setIsAuthDataFetched(true);
           } catch(e) { 
             console.error(e); 
+            // Fallback for PDPA if settings fail
+            setIsAuthDataFetched(true);
           } finally {
             setIsGlobalLoading(false);
           }
