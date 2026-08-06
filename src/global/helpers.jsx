@@ -43,6 +43,45 @@ export const formatStatNumber = (val) => {
   return Number(val).toLocaleString('th-TH');
 };
 
+export const formatTreatmentRecord = (t) => {
+  if (!t) return null;
+  const vs = typeof t.vital_signs === 'object' && t.vital_signs ? t.vital_signs : (typeof t.vital_signs === 'string' ? (JSON.parse(t.vital_signs || '{}')) : (t.vitalSigns || {}));
+  const txArr = Array.isArray(t.prescription) ? t.prescription : (Array.isArray(t.tx) ? t.tx : (typeof t.prescription === 'string' ? (JSON.parse(t.prescription || '[]')) : []));
+  let attachArr = [];
+  if (Array.isArray(t.attachments)) {
+    attachArr = t.attachments;
+  } else if (typeof t.attachments === 'string') {
+    try { attachArr = JSON.parse(t.attachments || '[]'); } catch (e) {}
+  }
+  return {
+    ...t,
+    id: t.id,
+    patient_id: t.patient_id || t.patientId,
+    patientId: t.patient_id || t.patientId,
+    datetime: t.datetime || `${t.date || ''} ${t.time || ''}`.trim(),
+    date: t.date || (t.datetime ? t.datetime.split(' ')[0] : ''),
+    time: t.time || (t.datetime ? t.datetime.split(' ')[1] || '' : ''),
+    doctor: t.doctor || '',
+    chiefComplaint: t.chief_complaint || t.chiefComplaint || t.cc || '',
+    cc: t.chief_complaint || t.chiefComplaint || t.cc || '',
+    diagnosis: t.diagnosis || t.dx || '',
+    dx: t.diagnosis || t.dx || '',
+    treatmentDetail: t.treatment_detail || t.treatmentDetail || t.note || '',
+    note: t.treatment_detail || t.treatmentDetail || t.note || '',
+    prescription: txArr,
+    tx: txArr,
+    vitalSigns: vs,
+    bp: t.bp || vs.bp || '',
+    pulse: t.pulse || vs.pulse || '',
+    temp: t.temp || vs.temp || '',
+    weight: t.weight || vs.weight || '',
+    height: t.height || vs.height || '',
+    attachments: attachArr,
+    cost: Number(t.cost || 0),
+    branchId: t.branch_id || t.branchId
+  };
+};
+
 export const getDynamicTextSize = (valStr) => {
   const len = String(valStr).length;
   // ยิ่งเลขยาว ฟอนต์ยิ่งเล็กลง และบีบระยะห่าง (tracking-tighter) เพื่อให้พอดีการ์ด
@@ -1558,4 +1597,69 @@ export const ToastContainer = () => {
     </>,
     document.body
   );
+};
+
+export const isDoctorStaff = (s) => {
+    if (!s) return false;
+    const r = String(s.role || '').trim().toLowerCase();
+    const c = String(s.category || '').trim().toLowerCase();
+    return r === 'doctor' || c === 'doctor' || r.includes('แพทย์') || c.includes('แพทย์') || r.includes('หมอ') || c.includes('หมอ');
+};
+
+export const getStaffScheduleActiveStatus = (schedule, dateObj) => {
+    if (!schedule) return false;
+    const d = dateObj.getDate();
+    const m = dateObj.getMonth() + 1;
+    const y = dateObj.getFullYear();
+    const dayOfWeek = dateObj.getDay();
+
+    const thaiPadded = `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y + 543}`;
+    const thaiShort = `${d}/${m}/${y + 543}`;
+    const isoDate = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    let item = undefined;
+    if (schedule[thaiPadded] !== undefined) item = schedule[thaiPadded];
+    else if (schedule[thaiShort] !== undefined) item = schedule[thaiShort];
+    else if (schedule[isoDate] !== undefined) item = schedule[isoDate];
+    else if (typeof schedule === 'object' && schedule[dayOfWeek] !== undefined) item = schedule[dayOfWeek];
+    else if (typeof schedule === 'object' && schedule[String(dayOfWeek)] !== undefined) item = schedule[String(dayOfWeek)];
+
+    if (item !== undefined && item !== null) {
+        return typeof item === 'boolean' ? item : !!item.active;
+    }
+    if (Array.isArray(schedule)) return schedule.includes(dayOfWeek);
+    return false;
+};
+
+export const getStaffScheduleInfo = (schedule, dateObj) => {
+    if (!schedule) return { isWorking: false, isExplicitlyOff: false, data: null };
+    const d = dateObj.getDate();
+    const m = dateObj.getMonth() + 1;
+    const y = dateObj.getFullYear();
+    const dayOfWeek = dateObj.getDay();
+
+    const thaiPadded = `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y + 543}`;
+    const thaiShort = `${d}/${m}/${y + 543}`;
+    const isoDate = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    let item = undefined;
+    let isSpecificDate = false;
+    if (schedule[thaiPadded] !== undefined) { item = schedule[thaiPadded]; isSpecificDate = true; }
+    else if (schedule[thaiShort] !== undefined) { item = schedule[thaiShort]; isSpecificDate = true; }
+    else if (schedule[isoDate] !== undefined) { item = schedule[isoDate]; isSpecificDate = true; }
+    else if (typeof schedule === 'object' && schedule[dayOfWeek] !== undefined) item = schedule[dayOfWeek];
+    else if (typeof schedule === 'object' && schedule[String(dayOfWeek)] !== undefined) item = schedule[String(dayOfWeek)];
+
+    if (item !== undefined && item !== null) {
+        if (typeof item === 'boolean') {
+            return { isWorking: item, isExplicitlyOff: !item, data: null, isSpecificDate };
+        }
+        const active = !!item.active;
+        return { isWorking: active, isExplicitlyOff: !active, data: item, isSpecificDate };
+    }
+    if (Array.isArray(schedule)) {
+        const isWorking = schedule.includes(dayOfWeek);
+        return { isWorking, isExplicitlyOff: !isWorking, data: null, isSpecificDate: false };
+    }
+    return { isWorking: false, isExplicitlyOff: false, data: null, isSpecificDate: false };
 };

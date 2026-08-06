@@ -232,7 +232,7 @@ const POSSystem = ({
   };
 
   // ดึงรายการหมวดหมู่ที่มีทั้งหมดจากข้อมูล Products
-  const categories = ['ทั้งหมด', ...new Set(products.map(p => p.type))];
+  const categories = Array.from(new Set(['ทั้งหมด', ...products.map(p => p.type || 'ไม่ระบุหมวดหมู่')]));
 
   // กรองสินค้าตามคำค้นหาและหมวดหมู่
   const filteredProducts = useMemo(() => {
@@ -1615,5 +1615,5 @@ const POSSystem = ({
   );
 };
 
-export default POSSystem;
+export default React.memo(POSSystem);
 

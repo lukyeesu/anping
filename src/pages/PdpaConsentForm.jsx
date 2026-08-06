@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import CalendarDay from './CalendarDay';
 import { GOOGLE_SCRIPT_URL } from '../global/constants';
+import { callSupabase, supabase } from '../lib/supabase';
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -168,22 +169,29 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
     useEffect(() => {
         const fetchPatient = async () => {
             try {
-                const response = await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Patients', payload: null, token: 'recovery-token' }),
-                });
-                const responseText = await response.text();
-                const result = JSON.parse(responseText);
-                if (result.status === 'success') {
-                    const found = result.data.find(p => (p.hn || p.id) === hn);
-                    if (found) {
-                        if (found.pdpaToken === token && found.pdpaExpires && new Date().getTime() <= found.pdpaExpires) {
-                            setPatient(found);
-                            setPatientDataReady(true);
-                        } else {
-                            setStatus('invalid');
-                        }
+                let found = null;
+                if (supabase) {
+                    const res = await callSupabase('GET_DATA', 'Patients');
+                    if (res.status === 'success' && Array.isArray(res.data)) {
+                        found = res.data.find(p => String(p.hn || p.id).trim() === String(hn).trim());
+                    }
+                } else {
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action: 'GET_DATA', sheetName: 'Patients', payload: null, token: 'recovery-token' }),
+                    });
+                    const responseText = await response.text();
+                    const result = JSON.parse(responseText);
+                    if (result.status === 'success' && Array.isArray(result.data)) {
+                        found = result.data.find(p => String(p.hn || p.id).trim() === String(hn).trim());
+                    }
+                }
+
+                if (found) {
+                    if (found.pdpaToken === token && found.pdpaExpires && new Date().getTime() <= Number(found.pdpaExpires)) {
+                        setPatient(found);
+                        setPatientDataReady(true);
                     } else {
                         setStatus('invalid');
                     }
@@ -319,14 +327,22 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
             };
 
             // 5. Save Patient data
-            const response = await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Patients', payload: updatedPatient, token: 'recovery-token' }),
-            });
-            const responseText = await response.text();
-            const result = JSON.parse(responseText);
-            if (result.status === 'success') {
+            let isSavedSuccess = false;
+            if (supabase) {
+                const res = await callSupabase('SAVE_DATA', 'Patients', updatedPatient);
+                if (res.status === 'success') isSavedSuccess = true;
+            } else {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Patients', payload: updatedPatient, token: 'recovery-token' }),
+                });
+                const responseText = await response.text();
+                const result = JSON.parse(responseText);
+                if (result.status === 'success') isSavedSuccess = true;
+            }
+
+            if (isSavedSuccess) {
                 setStatus('consented');
             } else {
                 alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่');

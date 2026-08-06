@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'; 
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
+import { callSupabase, supabase, jsToRow, rowToJS } from './lib/supabase';
 import { ToastContainer } from './global/helpers';
 import { triggerGlobalToast } from './global/helpers';
 import ResetPasswordScreen from './pages/ResetPasswordScreen';
@@ -15,11 +16,11 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from './global/helpers';
+import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, formatTreatmentRecord, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from './global/helpers';
 import ProfileManager from './pages/ProfileManager';
 import LoginScreen from './pages/LoginScreen';
 import SettingsManager from './pages/SettingsManager';
@@ -309,11 +310,17 @@ export default function App() {
           localStorage.setItem('clinic_session_token', token);
       }
     }
+    
+    // ตั้งค่าสถานะ Loading ก่อน เพื่อไม่ให้ UI กระตุกหรือเรนเดอร์ Dashboard ไปดึงข้อมูลที่ยังไม่มี
+    setIsDataFetched(false);
+    setIsGlobalLoading(true);
+    
     setIsLoggedIn(true);
     setCurrentUser(staff);
 
-    // --- บันทึก Log การ Login ---
-    if (token !== 'recovery-token') {
+    // --- บันทึก Log การ Login (ข้ามหากเป็น Super Admin หรือ Special Monitor User) ---
+    const isMonitorUser = staff?.isSpecialMonitor || staff?.role === 'superadmin' || staff?.username === 'superadmin' || staff?.id === 'admin1';
+    if (!isMonitorUser && token !== 'recovery-token') {
         const logPayload = {
           id: `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
           timestamp: new Date().toISOString(),
@@ -335,26 +342,348 @@ export default function App() {
     // ----------------------------
   };
 
-  const handleLogout = () => {
-    // แจ้งให้หลังบ้านทำลาย Token ถาวร
-    callAppScript('LOGOUT', 'System').catch(() => {});
+  const isLoggingOutRef = useRef(false);
 
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem('clinic_isLoggedIn');
-      localStorage.removeItem('clinic_currentUser');
-      localStorage.removeItem('clinic_session_token');
+  const handleLogout = () => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+
+    try {
+      if (globalAlert && typeof globalAlert.close === 'function') {
+        globalAlert.close();
+      }
+      
+      if (supabase && supabase.auth) {
+        supabase.auth.signOut().catch(() => {});
+      }
+      
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem('clinic_isLoggedIn');
+        localStorage.removeItem('clinic_currentUser');
+        localStorage.removeItem('clinic_session_token');
+        try {
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('sb-') || key.includes('auth-token')) {
+              localStorage.removeItem(key);
+            }
+          });
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.error('[App.jsx] Logout error:', e);
+    } finally {
+      setIsLoggedIn(false);
+      setCurrentUser({ id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' });
+      setIsDataFetched(false);
+      setPatientsData([]);
+      setQueueData([]);
+      setInventoryData([]);
+      setInventoryLogsData([]);
+      setPosProducts([]);
+      setPosHistoryData([]);
+      setFinanceData([]);
+      setStaffData([]);
+
+      setTimeout(() => {
+        isLoggingOutRef.current = false;
+      }, 1000);
     }
-    setIsLoggedIn(false);
-    setCurrentUser({ id: 'admin1', name: 'Admin User', role: 'admin', category: 'staff' });
-    setIsDataFetched(false);
-    // ล้างข้อมูลหน้าบ้านทั้งหมดเพื่อความปลอดภัยทางเวชระเบียน
-    setPatientsData([]);
-    setQueueData([]);
-    setInventoryData([]);
-    setInventoryLogsData([]);
-    setPosProducts([]);
-    setPosHistoryData([]);
-    setFinanceData([]);
+  };
+
+  const [isSyncingGasToSupabase, setIsSyncingGasToSupabase] = useState(false);
+
+  const handleSyncGasToSupabase = async () => {
+    if (!supabase) {
+      triggerGlobalToast('กรุณาตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ใน .env.local ก่อนดึงข้อมูล', 'error');
+      return;
+    }
+
+    const confirmSync = window.confirm('คุณต้องการดึงข้อมูลทั้งหมดจาก Google Sheets มาบันทึกลงใน Supabase ใช่หรือไม่?');
+    if (!confirmSync) return;
+
+    const clearExisting = window.confirm('คุณต้องการ "ล้างข้อมูลตัวอย่างเดิม" ใน Supabase ออกทั้งหมดก่อนดึงข้อมูลจริงใช่หรือไม่?');
+
+    setIsSyncingGasToSupabase(true);
+    triggerGlobalToast('กำลังเริ่มกระบวนการดึงข้อมูลจาก Google Sheets ลง Supabase...', 'info');
+
+    const sheets = [
+      { name: 'Patients', table: 'patients' },
+      { name: 'Branches', table: 'branches' },
+      { name: 'Queue', table: 'queue' },
+      { name: 'POS_Transactions', table: 'pos_transactions' },
+      { name: 'Inventory', table: 'inventory' },
+      { name: 'InventoryLogs', table: 'inventory_logs' },
+      { name: 'setting_pos', table: 'setting_pos' },
+      { name: 'Finance_Revenue', table: 'finance_revenue' },
+      { name: 'Finance_Expenses', table: 'finance_expenses' },
+      { name: 'Staff', table: 'staff' },
+      { name: 'Settings', table: 'settings' },
+      { name: 'Logs', table: 'logs' }
+    ];
+
+    let totalSuccess = 0;
+    try {
+      let sheetIndex = 0;
+      for (const s of sheets) {
+        sheetIndex++;
+        try {
+          if (clearExisting) {
+            triggerGlobalToast(`[${sheetIndex}/${sheets.length}] 🧹 กำลังล้างตาราง ${s.table}...`, 'info');
+            await supabase.from(s.table).delete().neq('id', '___impossible_dummy_id___');
+          }
+
+          triggerGlobalToast(`[${sheetIndex}/${sheets.length}] 📦 กำลังดึงข้อมูลจาก ${s.name}...`, 'info');
+
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'GET_DATA', sheetName: s.name })
+          });
+          const text = await response.text();
+          if (text.trim().startsWith('<') || text.includes('<!DOCTYPE html>')) {
+            triggerGlobalToast(`[${sheetIndex}/${sheets.length}] ❌ ไม่สามารถอ่าน ${s.name} จาก Google Sheets ได้`, 'error');
+            continue;
+          }
+          const result = JSON.parse(text);
+          if (result.status === 'success' && Array.isArray(result.data)) {
+            let sheetSaved = 0;
+            for (const item of result.data) {
+              const row = jsToRow(item, s.table);
+              const { error } = await supabase.from(s.table).upsert(row);
+              if (!error) {
+                totalSuccess++;
+                sheetSaved++;
+
+                // 🌟 ดึงประวัติการรักษา (opdRecords) จากคนไข้ไปบันทึกลงตาราง treatments โดยอัตโนมัติ (รองรับทั้ง Array และ String)
+                if (s.name === 'Patients' && item.opdRecords) {
+                  const patientId = String(item.hn || item.id);
+                  let opdList = [];
+                  if (Array.isArray(item.opdRecords)) {
+                    opdList = item.opdRecords;
+                  } else if (typeof item.opdRecords === 'string' && item.opdRecords.trim().startsWith('[')) {
+                    try { opdList = JSON.parse(item.opdRecords); } catch (e) {}
+                  }
+
+                  for (let idx = 0; idx < opdList.length; idx++) {
+                    const opd = opdList[idx];
+                    const treatmentRow = {
+                      id: String(opd.id || `TRT_${patientId}_${idx + 1}`),
+                      patient_id: patientId,
+                      datetime: String(opd.datetime || opd.date || new Date().toISOString()),
+                      date: String(opd.date || (opd.datetime ? opd.datetime.split(' ')[0] : '')),
+                      time: String(opd.time || (opd.datetime ? opd.datetime.split(' ')[1] || '' : '')),
+                      doctor: String(opd.doctor || opd.doctorName || ''),
+                      chief_complaint: String(opd.cc || opd.chiefComplaint || opd.symptoms || ''),
+                      diagnosis: String(opd.dx || opd.diagnosis || ''),
+                      treatment_detail: String(opd.note || opd.treatmentDetail || opd.detail || ''),
+                      prescription: Array.isArray(opd.tx) ? opd.tx : (opd.prescription || opd.medications || []),
+                      vital_signs: opd.vitalSigns || { bp: opd.bp || '', pulse: opd.pulse || '', temp: opd.temp || '', weight: opd.weight || '', height: opd.height || '' },
+                      attachments: opd.attachments || opd.images || [],
+                      cost: Number(opd.cost || opd.totalAmount || 0),
+                      branch_id: String(opd.branchId || item.branchId || ''),
+                      updated_at: new Date().toISOString()
+                    };
+                    const { error: trtErr } = await supabase.from('treatments').upsert(treatmentRow);
+                    if (trtErr) {
+                      console.error(`Error saving treatment ${treatmentRow.id} to treatments table:`, trtErr.message);
+                    }
+                  }
+                }
+              } else {
+                console.error(`Error saving to ${s.table}:`, error.message);
+              }
+            }
+            triggerGlobalToast(`[${sheetIndex}/${sheets.length}] ⚡ บันทึกลง Supabase (${s.table}): ${sheetSaved} รายการ!`, 'success');
+          } else {
+            triggerGlobalToast(`[${sheetIndex}/${sheets.length}] ⚠️ ${s.name}: ${result.message || 'ไม่พบข้อมูล'}`, 'warning');
+          }
+        } catch (e) {
+          console.error(`Sync error for ${s.name}`, e);
+        }
+      }
+
+      triggerGlobalToast(`🎉 ดึงและบันทึกข้อมูลลง Supabase สำเร็จทั้งหมด ${totalSuccess} รายการ!`, 'success');
+      await reloadAllClinicData();
+    } catch (err) {
+      console.error('Sync failed', err);
+      triggerGlobalToast('เกิดข้อผิดพลาดในการดึงข้อมูล: ' + err.message, 'error');
+    } finally {
+      setIsSyncingGasToSupabase(false);
+    }
+  };
+
+  const reloadAllClinicData = async () => {
+    try {
+      setIsGlobalLoading(true);
+      const [
+        resPatients,
+        resPos,
+        resInventory,
+        resInvLogs,
+        resPosItems,
+        resBranches,
+        resFinanceRevenue,
+        resFinanceExpenses,
+        resStaff,
+        resSettings,
+        resStaffSchedules
+      ] = await Promise.all([
+        callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset: 0, limit: 20 }).catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'POS_Transactions').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Inventory').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'InventoryLogs').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'setting_pos').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Branches').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Finance_Revenue').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Finance_Expenses').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Staff').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Settings').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Staff_Schedules').catch(err => ({ status: 'error', data: [], message: err?.message }))
+      ]);
+
+      if (resPatients?.status === 'success') { 
+        const rawPatients = Array.isArray(resPatients.data) ? resPatients.data : [];
+        const patientIds = rawPatients.map(p => p.id || p.hn).filter(Boolean);
+
+        // 🌟 ดึงข้อมูลประวัติการรักษาเฉพาะกลุ่มคนไข้ 20 รายแรก (ประหยัด Egress 95%)
+        const treatmentsMap = new Map();
+        if (patientIds.length > 0) {
+          const resTrts = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds }).catch(() => ({ status: 'error', data: [] }));
+          if (resTrts?.status === 'success' && Array.isArray(resTrts.data)) {
+            resTrts.data.forEach(t => {
+              const formatted = formatTreatmentRecord(t);
+              if (formatted) {
+                const pid = String(formatted.patient_id || formatted.patientId || '').trim().toLowerCase();
+                if (pid) {
+                  if (!treatmentsMap.has(pid)) treatmentsMap.set(pid, []);
+                  treatmentsMap.get(pid).push(formatted);
+                }
+              }
+            });
+          }
+        }
+
+        const patientsWithOpd = rawPatients.map(patient => {
+          const pid = String(patient.id || '').trim().toLowerCase();
+          const phn = String(patient.hn || '').trim().toLowerCase();
+
+          const trtList = (pid && treatmentsMap.get(pid)) || (phn && treatmentsMap.get(phn)) || [];
+          trtList.sort((a, b) => new Date(b.datetime || b.date || 0) - new Date(a.datetime || a.date || 0));
+
+          let legacyOpd = [];
+          if (Array.isArray(patient.opdRecords)) {
+            legacyOpd = patient.opdRecords;
+          } else if (typeof patient.opdRecords === 'string' && patient.opdRecords.trim().startsWith('[')) {
+            try { legacyOpd = JSON.parse(patient.opdRecords); } catch (e) {}
+          }
+
+          const finalOpdRecords = trtList.length > 0 ? trtList : legacyOpd;
+
+          return {
+            ...patient,
+            opdRecords: finalOpdRecords
+          };
+        });
+
+        setPatientsData(patientsWithOpd.length > 0 ? [...patientsWithOpd] : []); 
+      }
+      if (resBranches?.status === 'success') {
+        setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
+      }
+      if (resPos?.status === 'success') {
+        setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
+      }
+      if (resInventory?.status === 'success') {
+        setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
+      }
+      if (resInvLogs?.status === 'success') {
+        setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
+      }
+      if (resPosItems?.status === 'success') {
+        setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
+      }
+
+      const combinedFinanceData = [];
+      if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
+          combinedFinanceData.push(...resFinanceRevenue.data);
+      }
+      if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
+          combinedFinanceData.push(...resFinanceExpenses.data);
+      }
+      setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
+
+      let staffSchedulesList = Array.isArray(resStaffSchedules?.data) ? resStaffSchedules.data : [];
+      if (resStaff?.status === 'success') {
+          const rawStaff = Array.isArray(resStaff.data) ? resStaff.data : [];
+          const staffWithSchedules = rawStaff.map(s => {
+            let schedObj = s.schedule;
+            if (typeof schedObj === 'string') {
+              try { schedObj = JSON.parse(schedObj); } catch (e) {}
+            }
+            if (!schedObj || typeof schedObj !== 'object') {
+              schedObj = {};
+            } else {
+              schedObj = { ...schedObj };
+            }
+
+            if (staffSchedulesList.length > 0) {
+              const staffShifts = staffSchedulesList.filter(sh => String(sh.staff_id || sh.staffId || '').trim() === String(s.id).trim());
+              staffShifts.forEach(sh => {
+                let otHours = 0;
+                let isPaid = false;
+                if (sh.notes) {
+                  try {
+                    const parsedNotes = typeof sh.notes === 'string' ? JSON.parse(sh.notes) : sh.notes;
+                    otHours = parsedNotes.otHours || 0;
+                    isPaid = !!parsedNotes.isPaid;
+                  } catch (e) {}
+                }
+
+                const shiftData = {
+                  active: sh.is_active !== undefined ? !!sh.is_active : !!sh.isActive,
+                  start: sh.start_time || sh.startTime || '09:00',
+                  end: sh.end_time || sh.endTime || '20:00',
+                  otHours,
+                  isPaid
+                };
+
+                if (sh.date) {
+                  schedObj[sh.date] = shiftData;
+                  const dateParts = String(sh.date).split('-');
+                  if (dateParts.length === 3) {
+                    const yBE = parseInt(dateParts[0], 10) + 543;
+                    const thaiBEKey = `${dateParts[2].padStart(2,'0')}/${dateParts[1].padStart(2,'0')}/${yBE}`;
+                    schedObj[thaiBEKey] = shiftData;
+                  }
+                }
+
+                const dayKey = sh.day_of_week !== undefined ? sh.day_of_week : sh.dayOfWeek;
+                if (dayKey !== undefined && dayKey !== null) {
+                  schedObj[dayKey] = shiftData;
+                  schedObj[String(dayKey)] = shiftData;
+                }
+              });
+            }
+
+            return {
+              ...s,
+              schedule: schedObj
+            };
+          });
+          setStaffData(staffWithSchedules.length > 0 ? [...staffWithSchedules].reverse() : []);
+      }
+      parseSettings(resSettings);
+
+      const now = new Date();
+      await fetchQueueForMonth(now.getFullYear(), now.getMonth());
+
+      setIsAuthDataFetched(true);
+      setIsDataFetched(true);
+    } catch (err) {
+      console.error("Reload clinic data error:", err);
+    } finally {
+      setIsGlobalLoading(false);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -362,31 +691,64 @@ export default function App() {
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (isLoggedIn && isAuthDataFetched && currentUser && currentUser.id !== 'admin1') {
-       // เมื่อดึงข้อมูลพนักงาน (staffData) จากฐานข้อมูลเสร็จแล้ว
-       // ตรวจสอบว่าบัญชีผู้ใช้งานคนนี้ยังคงมีอยู่ในระบบหรือไม่
-       const matchedUser = staffData.find(s => s.id === currentUser.id);
+       const matchedUser = staffData.find(s => 
+         String(s.id).toLowerCase() === String(currentUser.id).toLowerCase() || 
+         (s.email && currentUser.email && String(s.email).toLowerCase() === String(currentUser.email).toLowerCase()) ||
+         (s.username && currentUser.username && String(s.username).toLowerCase() === String(currentUser.username).toLowerCase())
+       );
+
+       // หากเป็น User ที่ไม่มีในตาราง staff (สร้างมาเพื่อ Monitor) ให้ข้ามการเช็คสิทธิ์ตารางไปเลย
+       if (!matchedUser && (currentUser.isSpecialMonitor || currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
+         return;
+       }
        
-       if (!matchedUser) {
-           // กรณีที่ 1: บัญชีถูกลบออกจากฐานข้อมูล
-           showGlobalAlert({
-               type: 'error',
-               title: 'ระงับการเข้าถึง',
-               text: 'บัญชีผู้ใช้งานนี้ถูกลบออกจากระบบ หรือถูกระงับสิทธิ์การใช้งาน กรุณาติดต่อผู้ดูแลระบบ',
-               hideCancel: true,
-               onConfirm: () => {
-                   handleLogout();
-               }
-           });
-       } else if (JSON.stringify(currentUser) !== JSON.stringify(matchedUser)) {
-           // กรณีที่ 3: มีการอัปเดตข้อมูลอื่น (เช่น เปลี่ยนชื่อ, เปลี่ยนตำแหน่ง, เปลี่ยนสิทธิ์ Role)
-           // ให้อัปเดตข้อมูลในระบบให้ตรงกับฐานข้อมูลล่าสุดทันทีแบบเรียลไทม์
+       // รอให้ดึงข้อมูลใหม่เสร็จก่อน ค่อยตรวจสอบ
+       if (!isDataFetched) return;
+
+       const isSuspended = currentUser.role === 'suspended' || (matchedUser && matchedUser.role === 'suspended');
+
+       if ((!matchedUser || isSuspended) && staffData.length > 0) {
+           handleLogout();
+       } else if (matchedUser && JSON.stringify(currentUser) !== JSON.stringify(matchedUser)) {
            setCurrentUser(matchedUser);
            if (typeof window !== 'undefined' && window.localStorage) {
                localStorage.setItem('clinic_currentUser', JSON.stringify(matchedUser));
            }
        }
     }
-  }, [isLoggedIn, isAuthDataFetched, staffData, currentUser]);
+   }, [isLoggedIn, isAuthDataFetched, staffData, currentUser]);
+
+  // --------------------------------------------------------------------------
+  // เฝ้าฟังการเปลี่ยน Auth State & ตรวจสอบการโดนลบบัญชีบน Supabase Auth Dashboard แบบ Realtime
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!supabase || !isLoggedIn || !currentUser || currentUser.id === 'admin1') return;
+
+    // 1. ฟัง Auth State Change จาก Supabase
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || (!session && isLoggedIn)) {
+        handleLogout();
+      }
+    });
+
+    // 2. Heartbeat ตรวจเช็คความคงอยู่ของ Auth User กับ Supabase ทุกๆ 5 วินาที
+    const authHeartbeat = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data?.user) {
+          clearInterval(authHeartbeat);
+          handleLogout();
+        }
+      } catch (err) {
+        console.warn('Auth heartbeat check note:', err);
+      }
+    }, 5000);
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      clearInterval(authHeartbeat);
+    };
+  }, [isLoggedIn, currentUser]);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -721,13 +1083,15 @@ export default function App() {
     admin: ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings'],
     doctor: ['dashboard', 'records', 'queue'],
     nurse: ['records', 'queue'],
-    sale: ['pos', 'catalog']
+    sale: ['pos', 'catalog'],
+    suspended: []
   });
   const [roleLabels, setRoleLabels] = useState({
     admin: 'แอดมิน (Admin)',
     doctor: 'แพทย์ (Doctor)',
     nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
-    sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+    sale: 'พนักงานขาย/ที่ปรึกษา (Sale)',
+    suspended: '⛔ ระงับบัญชี (Suspended)'
   });
   const [staffCategories, setStaffCategories] = useState(['แพทย์', 'สต๊าฟ/พนักงาน']);
   const [appointmentStatuses, setAppointmentStatuses] = useState([
@@ -891,55 +1255,483 @@ export default function App() {
     setTimeout(() => { printWindow.print(); }, 800); // เผื่อเวลาโหลดฟอนต์
   };
 
-  // --- ปรับปรุงฟังก์ชันป้องกัน Error HTML แบบ 100% ---
+  // --- [NEW] ดึงข้อมูลคนไข้แบบ Paginated (Server-side Infinite Loading) พร้อม Treatments เฉพาะกลุ่ม ---
+  const fetchPatientsPaginated = useCallback(async ({ offset = 0, limit = 20, search = '', sortKey = 'createdAt', sortDir = 'desc' } = {}) => {
+    try {
+      const resPatients = await callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset, limit, search, sortKey, sortDir });
+      if (resPatients?.status === 'success' && Array.isArray(resPatients.data)) {
+        const rawPatients = resPatients.data;
+        const patientIds = rawPatients.map(p => p.id || p.hn).filter(Boolean);
+
+        let treatmentsMap = new Map();
+        if (patientIds.length > 0) {
+          const resTrts = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds }).catch(() => ({ status: 'error', data: [] }));
+          if (resTrts?.status === 'success' && Array.isArray(resTrts.data)) {
+            resTrts.data.forEach(t => {
+              const formatted = formatTreatmentRecord(t);
+              if (formatted) {
+                const pid = String(formatted.patient_id || formatted.patientId || '').trim().toLowerCase();
+                if (pid) {
+                  if (!treatmentsMap.has(pid)) treatmentsMap.set(pid, []);
+                  treatmentsMap.get(pid).push(formatted);
+                }
+              }
+            });
+          }
+        }
+
+        const patientsWithOpd = rawPatients.map(patient => {
+          const pid = String(patient.id || '').trim().toLowerCase();
+          const phn = String(patient.hn || '').trim().toLowerCase();
+
+          const trtList = (pid && treatmentsMap.get(pid)) || (phn && treatmentsMap.get(phn)) || [];
+          trtList.sort((a, b) => new Date(b.datetime || b.date || 0) - new Date(a.datetime || a.date || 0));
+
+          let legacyOpd = [];
+          if (Array.isArray(patient.opdRecords)) {
+            legacyOpd = patient.opdRecords;
+          } else if (typeof patient.opdRecords === 'string' && patient.opdRecords.trim().startsWith('[')) {
+            try { legacyOpd = JSON.parse(patient.opdRecords); } catch (e) {}
+          }
+
+          return {
+            ...patient,
+            opdRecords: trtList.length > 0 ? trtList : legacyOpd
+          };
+        });
+
+        return {
+          status: 'success',
+          patients: patientsWithOpd,
+          totalCount: resPatients.totalCount || patientsWithOpd.length,
+          hasMore: resPatients.hasMore
+        };
+      }
+    } catch (e) {
+      console.error("fetchPatientsPaginated error:", e);
+    }
+    return { status: 'error', patients: [], totalCount: 0, hasMore: false };
+  }, []);
+
+  const fetchPatientStats = useCallback(async () => {
+    try {
+      const res = await callAppScript('GET_PATIENT_STATS', 'Patients');
+      if (res?.status === 'success' && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      console.error('fetchPatientStats error:', e);
+    }
+    return { total: 0, male: 0, female: 0 };
+  }, []);
+
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const res = await callAppScript('GET_DASHBOARD_STATS', 'System');
+      if (res?.status === 'success' && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      console.error('fetchDashboardStats error:', e);
+    }
+    return { totalPatients: 0, todaysQueue: 0, pendingQueue: 0, activeBranches: 1 };
+  }, []);
+
+  const fetchAppointmentStats = useCallback(async () => {
+    try {
+      const res = await callAppScript('GET_APPOINTMENT_STATS', 'Queue');
+      if (res?.status === 'success' && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      console.error('fetchAppointmentStats error:', e);
+    }
+    return { total: 0, completed: 0, pending: 0, cancelled: 0 };
+  }, []);
+
+  const fetchInventoryStats = useCallback(async () => {
+    try {
+      const res = await callAppScript('GET_INVENTORY_STATS', 'Inventory');
+      if (res?.status === 'success' && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      console.error('fetchInventoryStats error:', e);
+    }
+    return { totalItems: 0, outOfStock: 0 };
+  }, []);
+
+  const fetchFinanceStats = useCallback(async () => {
+    try {
+      const res = await callAppScript('GET_FINANCE_STATS', 'Finance');
+      if (res?.status === 'success' && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      console.error('fetchFinanceStats error:', e);
+    }
+    return { revenueCount: 0, expenseCount: 0, posCount: 0 };
+  }, []);
+
+  const fetchStaffStats = useCallback(async () => {
+    try {
+      const res = await callAppScript('GET_STAFF_STATS', 'Staff');
+      if (res?.status === 'success' && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      console.error('fetchStaffStats error:', e);
+    }
+    return { totalStaff: 0, activeStaff: 0 };
+  }, []);
+
+  // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
+  const fetchPatientTreatments = async (patientId) => {
+    if (!patientId) return [];
+    try {
+      const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { patientId });
+      if (res?.status === 'success' && Array.isArray(res.data)) {
+        const formattedTreatments = res.data.map(t => {
+          const vs = typeof t.vital_signs === 'object' && t.vital_signs ? t.vital_signs : (typeof t.vital_signs === 'string' ? (JSON.parse(t.vital_signs || '{}')) : (t.vitalSigns || {}));
+          const txArr = Array.isArray(t.prescription) ? t.prescription : (Array.isArray(t.tx) ? t.tx : (typeof t.prescription === 'string' ? (JSON.parse(t.prescription || '[]')) : []));
+          return {
+            ...t,
+            id: t.id,
+            datetime: t.datetime || `${t.date || ''} ${t.time || ''}`.trim(),
+            date: t.date,
+            time: t.time,
+            doctor: t.doctor,
+            chiefComplaint: t.chief_complaint || t.chiefComplaint || t.cc || '',
+            cc: t.chief_complaint || t.chiefComplaint || t.cc || '',
+            diagnosis: t.diagnosis || t.dx || '',
+            dx: t.diagnosis || t.dx || '',
+            treatmentDetail: t.treatment_detail || t.treatmentDetail || t.note || '',
+            note: t.treatment_detail || t.treatmentDetail || t.note || '',
+            prescription: txArr,
+            tx: txArr,
+            vitalSigns: vs,
+            bp: t.bp || vs.bp || '',
+            pulse: t.pulse || vs.pulse || '',
+            temp: t.temp || vs.temp || '',
+            weight: t.weight || vs.weight || '',
+            height: t.height || vs.height || '',
+            attachments: Array.isArray(t.attachments) ? t.attachments : [],
+            cost: Number(t.cost || 0),
+            branchId: t.branch_id || t.branchId
+          };
+        });
+        
+        setPatientsData(prev => prev.map(p => {
+          if (String(p.id || p.hn).trim().toLowerCase() === String(patientId).trim().toLowerCase()) {
+            return { ...p, opdRecords: formattedTreatments };
+          }
+          return p;
+        }));
+        return formattedTreatments;
+      }
+    } catch (e) {
+      console.error("fetchPatientTreatments error:", e);
+    }
+    return [];
+  };
+
+  // --- ระบบ Realtime Sync ช่วยอัปเดต State หน้าเว็บทันทีเมื่อเพิ่ม/แก้ไข/ลบข้อมูล ---
+  const syncLocalStateOnSave = (sheetName, payload) => {
+    if (!payload) return;
+    const targetId = String(payload.id || payload.hn || '').trim();
+    const targetName = String(payload.name || payload.patientName || payload.title || '').trim().toLowerCase();
+
+    if (sheetName === 'Patients') {
+      setPatientsData(prev => {
+        const idx = prev.findIndex(p => 
+          (targetId && String(p.id || p.hn || '').trim() === targetId) ||
+          (targetName && String(p.name || '').trim().toLowerCase() === targetName)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'Queue') {
+      setQueueData(prev => {
+        const idx = prev.findIndex(q => 
+          (targetId && String(q.id || '').trim() === targetId) ||
+          (q.patientId && String(q.patientId) === String(payload.patientId) && q.date === payload.date && q.time === payload.time)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'Inventory') {
+      setInventoryData(prev => {
+        const idx = prev.findIndex(i => 
+          (targetId && String(i.id || i.code || '').trim() === targetId) ||
+          (targetName && String(i.name || '').trim().toLowerCase() === targetName)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'InventoryLogs') {
+      setInventoryLogsData(prev => {
+        const idx = prev.findIndex(l => targetId && String(l.id || '').trim() === targetId);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'setting_pos') {
+      setPosProducts(prev => {
+        const idx = prev.findIndex(i => 
+          (targetId && String(i.id || i.code || '').trim() === targetId) ||
+          (targetName && String(i.name || '').trim().toLowerCase() === targetName)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'Branches') {
+      setBranchesData(prev => {
+        const idx = prev.findIndex(b => 
+          (targetId && String(b.id || '').trim() === targetId) ||
+          (targetName && String(b.name || '').trim().toLowerCase() === targetName)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [...prev, payload];
+      });
+    } else if (sheetName === 'POS_Transactions') {
+      setPosHistoryData(prev => {
+        const receiptNo = String(payload.receipt_no || payload.receiptNo || '').trim();
+        const idx = prev.findIndex(t => 
+          (targetId && String(t.id || '').trim() === targetId) ||
+          (receiptNo && String(t.receiptNo || t.receipt_no || '').trim() === receiptNo) ||
+          (t.date === payload.date && t.time === payload.time && String(t.hn || t.patient_name) === String(payload.hn || payload.patient_name))
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'Staff') {
+      setStaffData(prev => {
+        const idx = prev.findIndex(s => 
+          (targetId && String(s.id || '').trim() === targetId) ||
+          (targetName && String(s.name || '').trim().toLowerCase() === targetName)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'Staff_Schedules') {
+      const staffId = String(payload.staff_id || payload.staffId || '').trim();
+      if (staffId) {
+        setStaffData(prev => prev.map(s => {
+          if (String(s.id).trim() !== staffId) return s;
+          const updatedSched = { ...(s.schedule || {}) };
+
+          let otHours = 0;
+          let isPaid = false;
+          if (payload.notes) {
+            try {
+              const parsedNotes = typeof payload.notes === 'string' ? JSON.parse(payload.notes) : payload.notes;
+              otHours = parsedNotes.otHours || 0;
+              isPaid = !!parsedNotes.isPaid;
+            } catch (e) {}
+          }
+
+          const shiftData = {
+            active: payload.is_active !== undefined ? !!payload.is_active : !!payload.isActive,
+            start: payload.start_time || payload.startTime || '09:00',
+            end: payload.end_time || payload.endTime || '20:00',
+            otHours,
+            isPaid
+          };
+
+          if (payload.date) {
+            updatedSched[payload.date] = shiftData;
+            const dateParts = String(payload.date).split('-');
+            if (dateParts.length === 3) {
+              const yBE = parseInt(dateParts[0], 10) + 543;
+              const thaiBEKey = `${dateParts[2].padStart(2,'0')}/${dateParts[1].padStart(2,'0')}/${yBE}`;
+              updatedSched[thaiBEKey] = shiftData;
+            }
+          }
+          const dayKey = payload.day_of_week !== undefined ? payload.day_of_week : payload.dayOfWeek;
+          if (dayKey !== undefined && dayKey !== null) {
+            updatedSched[dayKey] = shiftData;
+            updatedSched[String(dayKey)] = shiftData;
+          }
+
+          return { ...s, schedule: updatedSched };
+        }));
+      }
+    } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {
+      setFinanceData(prev => {
+        const idx = prev.findIndex(f => 
+          (targetId && String(f.id || '').trim() === targetId) ||
+          (f.date === payload.date && Number(f.amount) === Number(payload.amount) && f.category === payload.category)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    } else if (sheetName === 'Treatments') {
+      const patientId = String(payload.patient_id || payload.patientId || payload.hn || '').trim();
+      if (patientId) {
+        setPatientsData(prev => {
+          return prev.map(p => {
+            if (String(p.id || p.hn).trim().toLowerCase() === patientId.toLowerCase()) {
+              const existingOpd = p.opdRecords || [];
+              const targetTrtId = String(payload.id || '').trim();
+              const targetDatetime = payload.datetime || `${payload.date || ''} ${payload.time || ''}`.trim();
+              
+              const idx = existingOpd.findIndex(t => 
+                (targetTrtId && String(t.id || '').trim() === targetTrtId) ||
+                (targetDatetime && t.datetime === targetDatetime && t.doctor === payload.doctor)
+              );
+              const formattedTrt = formatTreatmentRecord(payload);
+              let updatedOpd;
+              if (idx >= 0) {
+                updatedOpd = [...existingOpd];
+                updatedOpd[idx] = { ...updatedOpd[idx], ...formattedTrt };
+              } else {
+                updatedOpd = [formattedTrt, ...existingOpd];
+              }
+              updatedOpd.sort((a, b) => new Date(b.datetime || b.date || 0) - new Date(a.datetime || a.date || 0));
+              return { ...p, opdRecords: updatedOpd };
+            }
+            return p;
+          });
+        });
+      }
+    }
+  };
+
+  const syncLocalStateOnDelete = (sheetName, payload) => {
+    if (!payload) return;
+    const targetId = String(payload.id || payload.hn || '').trim();
+
+    if (sheetName === 'Patients') {
+      setPatientsData(prev => prev.filter(p => String(p.id || p.hn) !== targetId));
+    } else if (sheetName === 'Queue') {
+      setQueueData(prev => prev.filter(q => String(q.id) !== targetId));
+    } else if (sheetName === 'Inventory') {
+      setInventoryData(prev => prev.filter(i => String(i.id) !== targetId));
+    } else if (sheetName === 'setting_pos') {
+      setPosProducts(prev => prev.filter(i => String(i.id) !== targetId));
+    } else if (sheetName === 'Branches') {
+      setBranchesData(prev => prev.filter(b => String(b.id) !== targetId));
+    } else if (sheetName === 'POS_Transactions') {
+      setPosHistoryData(prev => prev.filter(t => String(t.id) !== targetId));
+    } else if (sheetName === 'Staff') {
+      setStaffData(prev => prev.filter(s => String(s.id) !== targetId));
+    } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {
+      setFinanceData(prev => prev.filter(f => String(f.id) !== targetId));
+    } else if (sheetName === 'Treatments') {
+      setPatientsData(prev => prev.map(p => {
+        if (p.opdRecords && p.opdRecords.some(t => String(t.id || '').trim() === targetId)) {
+          return {
+            ...p,
+            opdRecords: p.opdRecords.filter(t => String(t.id || '').trim() !== targetId)
+          };
+        }
+        return p;
+      }));
+    }
+  };
+
+  // --- ปรับปรุงฟังก์ชันป้องกัน Error HTML แบบ 100% และรองรับ Supabase ---
   const callAppScript = async (action, sheetName, data = null) => {
     try {
-      // --- ระบบบันทึก Log การใช้งาน ---
-      const currentToken = localStorage.getItem('clinic_session_token');
-      if (sheetName !== 'Logs' && (action === 'SAVE_DATA' || action === 'DELETE_DATA') && currentToken !== 'recovery-token') {
-        // ใส่ชื่อ user ลงไปใน data ตรงๆ ด้วย เพื่อให้ข้อมูลในชีตนั้นๆ รู้ว่าใครเป็นคนทำ
-        if (data && typeof data === 'object') {
-            data.updatedBy = currentUser?.name || 'Unknown';
-            data.updatedById = currentUser?.id || 'unknown';
+      let result;
+      // หากตั้งค่า Supabase ไว้ ให้เรียกใช้งานผ่าน Supabase Adapter โดยตรง
+      if (supabase) {
+        result = await callSupabase(action, sheetName, data);
+      } else {
+        // --- ระบบบันทึก Log การใช้งาน (กรณีใช้ Google Apps Script เดิม) ---
+        const currentToken = localStorage.getItem('clinic_session_token');
+        const isMonitorUser = currentUser?.isSpecialMonitor || currentUser?.role === 'superadmin' || currentUser?.username === 'superadmin' || currentUser?.id === 'admin1';
+        if (!isMonitorUser && sheetName !== 'Logs' && (action === 'SAVE_DATA' || action === 'DELETE_DATA') && currentToken !== 'recovery-token') {
+          if (data && typeof data === 'object') {
+              data.updatedBy = currentUser?.name || 'Unknown';
+              data.updatedById = currentUser?.id || 'unknown';
+          }
+          
+          const logPayload = {
+            id: `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            timestamp: new Date().toISOString(),
+            user: currentUser?.name || 'Unknown',
+            userId: currentUser?.id || 'unknown',
+            role: currentUser?.role || 'unknown',
+            action: action,
+            targetSheet: sheetName,
+            targetDataId: data?.id || data?.hn || 'unknown',
+            detail: `User ${currentUser?.name || 'Unknown'} performed ${action} on ${sheetName}`
+          };
+          fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: currentToken || '' }),
+            redirect: 'follow'
+          }).catch(err => console.error("Logging failed:", err));
         }
+        // -------------------------------
+
+        const rawToken = localStorage.getItem('clinic_session_token') || 'recovery-token';
+        const gasToken = (rawToken.startsWith('ey') || rawToken.startsWith('supa') || rawToken.startsWith('sec')) ? 'recovery-token' : rawToken;
+
+        const response = await fetch(GOOGLE_SCRIPT_URL, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+            body: JSON.stringify({ action, sheetName, payload: data, token: gasToken }), 
+            redirect: 'follow' 
+        });
         
-        const logPayload = {
-          id: `LOG_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          timestamp: new Date().toISOString(),
-          user: currentUser?.name || 'Unknown',
-          userId: currentUser?.id || 'unknown',
-          role: currentUser?.role || 'unknown',
-          action: action,
-          targetSheet: sheetName,
-          targetDataId: data?.id || data?.hn || 'unknown',
-          detail: `User ${currentUser?.name || 'Unknown'} performed ${action} on ${sheetName}`
-        };
-        fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'SAVE_DATA', sheetName: 'Logs', payload: logPayload, token: currentToken || '' }),
-          redirect: 'follow'
-        }).catch(err => console.error("Logging failed:", err));
-      }
-      // -------------------------------
+        const responseText = await response.text();
+        
+        if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE html>')) {
+            console.error("ได้รับ HTML แทนที่จะเป็น JSON:", responseText.substring(0, 200));
+            throw new Error("สิทธิ์การเข้าถึงฐานข้อมูลไม่ถูกต้อง กรุณาตั้งค่า Google Apps Script ให้ 'ทุกคน' เข้าถึงได้");
+        }
 
-      const response = await fetch(GOOGLE_SCRIPT_URL, { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
-          body: JSON.stringify({ action, sheetName, payload: data, token: localStorage.getItem('clinic_session_token') || '' }), 
-          redirect: 'follow' 
-      });
-      
-      const responseText = await response.text();
-      
-      // ดักจับกรณีที่ Google ส่งหน้าเว็บ HTML กลับมา (เช่น ติดหน้า Login หรือสิทธิ์ไม่ถูกต้อง)
-      if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE html>')) {
-          console.error("ได้รับ HTML แทนที่จะเป็น JSON (สิทธิ์การเข้าถึง Google Apps Script ไม่ถูกต้อง):", responseText.substring(0, 200));
-          throw new Error("สิทธิ์การเข้าถึงฐานข้อมูลไม่ถูกต้อง กรุณาตั้งค่า Google Apps Script ให้ 'ทุกคน' เข้าถึงได้");
+        result = JSON.parse(responseText);
+        if (result.status === 'error') throw new Error(result.message);
       }
 
-      const result = JSON.parse(responseText);
-      if (result.status === 'error') throw new Error(result.message);
+      // --- อัปเดต React State สดๆ ทันทีเมื่อ SAVE_DATA หรือ DELETE_DATA สำเร็จ ---
+      if (result && result.status === 'success') {
+        if (action === 'SAVE_DATA' && data) {
+          syncLocalStateOnSave(sheetName, data);
+        } else if (action === 'DELETE_DATA' && data) {
+          syncLocalStateOnDelete(sheetName, data);
+        }
+      }
+
       return result;
     } catch (error) { 
         throw error; 
@@ -1001,119 +1793,14 @@ export default function App() {
       if (isLoggedIn && !isDataFetched) {
         setIsGlobalLoading(true);
         try {
-          if (!isAuthDataFetched) {
-            // ดึงทุกอย่างขนานกัน (รวมทั้งสิทธิ์การใช้งานและข้อมูลพนักงาน)
-            const [
-              resPatients,
-              resPos,
-              resInventory,
-              resInvLogs,
-              resPosItems,
-              resBranches,
-              resFinanceRevenue,
-              resFinanceExpenses,
-              resStaff,
-              resSettings
-            ] = await Promise.all([
-              callAppScript('GET_DATA', 'Patients'),
-              callAppScript('GET_DATA', 'POS_Transactions'),
-              callAppScript('GET_DATA', 'Inventory'),
-              callAppScript('GET_DATA', 'InventoryLogs'),
-              callAppScript('GET_DATA', 'setting_pos'),
-              callAppScript('GET_DATA', 'Branches'),
-              callAppScript('GET_DATA', 'Finance_Revenue'),
-              callAppScript('GET_DATA', 'Finance_Expenses'),
-              callAppScript('GET_DATA', 'Staff'),
-              callAppScript('GET_DATA', 'Settings')
-            ]);
-
-            if (resPatients?.status === 'success') { 
-              setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
-            }
-            if (resBranches?.status === 'success') {
-              setBranchesData(Array.isArray(resBranches.data) && resBranches.data.length > 0 ? resBranches.data : mockBranches);
-            }
-            if (resPos?.status === 'success') {
-              setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
-            }
-            if (resInventory?.status === 'success') {
-              setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
-            }
-            if (resInvLogs?.status === 'success') {
-              setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
-            }
-            if (resPosItems?.status === 'success') {
-              setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
-            }
-
-            const combinedFinanceData = [];
-            if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
-               combinedFinanceData.push(...resFinanceRevenue.data);
-            }
-            if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
-               combinedFinanceData.push(...resFinanceExpenses.data);
-            }
-            setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
-
-            if (resStaff?.status === 'success') {
-               setStaffData(Array.isArray(resStaff.data) && resStaff.data.length > 0 ? [...resStaff.data].reverse() : []);
-            }
-            parseSettings(resSettings);
-          } else {
-            // มีข้อมูล Auth อยู่แล้ว ดึงเฉพาะข้อมูลคลินิกที่ยังขาด
-            const [
-              resPatients,
-              resPos,
-              resInventory,
-              resInvLogs,
-              resPosItems,
-              resFinanceRevenue,
-              resFinanceExpenses
-            ] = await Promise.all([
-              callAppScript('GET_DATA', 'Patients'),
-              callAppScript('GET_DATA', 'POS_Transactions'),
-              callAppScript('GET_DATA', 'Inventory'),
-              callAppScript('GET_DATA', 'InventoryLogs'),
-              callAppScript('GET_DATA', 'setting_pos'),
-              callAppScript('GET_DATA', 'Finance_Revenue'),
-              callAppScript('GET_DATA', 'Finance_Expenses')
-            ]);
-
-            if (resPatients?.status === 'success') { 
-              setPatientsData(Array.isArray(resPatients.data) && resPatients.data.length > 0 ? [...resPatients.data].reverse() : []); 
-            }
-            if (resPos?.status === 'success') {
-              setPosHistoryData(Array.isArray(resPos.data) && resPos.data.length > 0 ? [...resPos.data].reverse() : []);
-            }
-            if (resInventory?.status === 'success') {
-              setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
-            }
-            if (resInvLogs?.status === 'success') {
-              setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
-            }
-            if (resPosItems?.status === 'success') {
-              setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
-            }
-
-            const combinedFinanceData = [];
-            if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
-               combinedFinanceData.push(...resFinanceRevenue.data);
-            }
-            if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
-               combinedFinanceData.push(...resFinanceExpenses.data);
-            }
-            setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
-          }
-
-          // โหลดข้อมูล Queue ของเดือนปัจจุบันเริ่มต้น
+          await reloadAllClinicData();
           const now = new Date();
           await fetchQueueForMonth(now.getFullYear(), now.getMonth());
-
           setIsAuthDataFetched(true);
           setIsDataFetched(true);
         } catch (error) { 
           console.error("Load Clinic Data Error:", error);
-          showToast('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'warning'); 
+          triggerGlobalToast('ไม่สามารถเชื่อมต่อฐานข้อมูลได้', 'warning'); 
         } finally {
           setIsGlobalLoading(false);
         }
@@ -1149,6 +1836,54 @@ export default function App() {
 
     loadInitialData();
   }, [isLoggedIn, isAuthDataFetched, isDataFetched]);
+
+  // --- Supabase Realtime Listener (ฟังการเพิ่ม/แก้ไข/ลบจากทุกเครื่องแบบ Realtime) ---
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (payload) => {
+          const { eventType, new: newRow, old: oldRow, table } = payload;
+          const mapTableToSheet = {
+            patients: 'Patients',
+            treatments: 'Treatments',
+            branches: 'Branches',
+            queue: 'Queue',
+            pos_transactions: 'POS_Transactions',
+            inventory: 'Inventory',
+            inventory_logs: 'InventoryLogs',
+            setting_pos: 'setting_pos',
+            finance_revenue: 'Finance_Revenue',
+            finance_expenses: 'Finance_Expenses',
+            staff: 'Staff',
+            staff_schedules: 'Staff_Schedules',
+            settings: 'Settings'
+          };
+          const sheetName = mapTableToSheet[table];
+          if (!sheetName) return;
+
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            if (newRow) {
+              const jsRow = rowToJS(newRow);
+              syncLocalStateOnSave(sheetName, jsRow);
+            }
+          } else if (eventType === 'DELETE') {
+            if (oldRow && oldRow.id) {
+              syncLocalStateOnDelete(sheetName, { id: oldRow.id });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const navItems = [
     { id: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
@@ -1382,16 +2117,18 @@ export default function App() {
           }}
           className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} ${!isDraggingSidebar ? 'transition-[width] duration-300 ease-in-out' : ''} ${theme.glassPanel} border-r border-slate-200/50 z-[52]`}
         >
-          <div className="p-6 flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0">
-            <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
-              <Stethoscope size={24} />
+          <div className="flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0">
+            <div className="w-[80px] shrink-0 flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
+                <Stethoscope size={24} />
+              </div>
             </div>
             <div 
               style={{ opacity: 'var(--drag-progress)', transform: `translateX(calc((1 - var(--drag-progress)) * -20px))` }}
               className={`whitespace-nowrap min-w-[150px] ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
             >
-              <h2 className="font-bold text-slate-800 leading-tight kanit-text ml-3">Clinic<span className="text-sky-500">Hub</span></h2>
-              <p className="text-xs text-slate-400 kanit-text ml-3">Management System</p>
+              <h2 className="font-bold text-slate-800 leading-tight kanit-text">Clinic<span className="text-sky-500">Hub</span></h2>
+              <p className="text-xs text-slate-400 kanit-text">Management System</p>
             </div>
           </div>
 
@@ -1418,22 +2155,21 @@ export default function App() {
               </div>
             </div>
 
-            <nav className="flex-1 px-3 py-2 flex flex-col overflow-y-auto overflow-x-hidden relative gap-1 custom-scrollbar">
+            <nav className="flex-1 px-3.5 py-2 flex flex-col overflow-y-auto overflow-x-hidden relative gap-1 custom-scrollbar">
               {filteredNavItems.map((item) => (
                 <button 
                   key={item.id} 
                   onClick={() => handleTabClick(item.id)} 
                   title={!isSidebarExpanded && !isDraggingSidebar ? item.label : undefined}
-                  className={`flex items-center py-3 rounded-2xl transition-all duration-200 kanit-text overflow-hidden ${isSidebarExpanded || isDraggingSidebar ? 'w-full px-3' : 'w-[52px] justify-center mx-auto'} ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+                  className={`w-full flex items-center h-11 rounded-2xl transition-colors duration-200 kanit-text overflow-hidden shrink-0 ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
                 >
-                  <div className="shrink-0 w-6 flex items-center justify-center">
+                  <div className="w-[52px] shrink-0 h-11 flex items-center justify-center">
                     <item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />
                   </div>
                   <span 
                     style={{ 
                       opacity: 'var(--drag-progress)', 
-                      maxWidth: 'calc(var(--drag-progress) * 200px)', 
-                      marginLeft: 'calc(var(--drag-progress) * 12px)' 
+                      transform: `translateX(calc((1 - var(--drag-progress)) * -10px))`
                     }}
                     className={`whitespace-nowrap overflow-hidden flex items-center text-left ${!isDraggingSidebar ? 'transition-all duration-300' : ''}`}
                   >
@@ -1467,7 +2203,25 @@ export default function App() {
                     <span>โปรไฟล์</span>
                   </button>
 
-                  {/* Row 3: ออกจากระบบ */}
+                  {/* Row 3: ดึงข้อมูล GAS -> Supabase */}
+                  <button 
+                    disabled={isSyncingGasToSupabase}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsProfileDropdownOpen(false);
+                      handleSyncGasToSupabase();
+                    }}
+                    className="w-full text-left px-3 py-2.5 text-xs text-sky-700 hover:bg-sky-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSyncingGasToSupabase ? (
+                      <Loader2 size={14} className="animate-spin text-sky-600 shrink-0" />
+                    ) : (
+                      <CloudDownload size={14} className="text-sky-600 shrink-0" />
+                    )}
+                    <span className="truncate">ดึงข้อมูล Sheets ➔ Supabase</span>
+                  </button>
+
+                  {/* Row 4: ออกจากระบบ */}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1484,7 +2238,7 @@ export default function App() {
 
               {/* Dropdown Menu (Collapsed) */}
               {isProfileDropdownOpen && !isSidebarExpanded && (
-                <div className="absolute bottom-20 left-4 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/50 p-2 z-[999] animate-scale-up text-left space-y-1">
+                <div className="absolute bottom-20 left-4 w-52 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/50 p-2 z-[999] animate-scale-up text-left space-y-1">
                   {/* Row 1: ชื่อและตำแหน่ง */}
                   <div className="px-3 py-2.5 border-b border-slate-100/50 select-none text-left">
                     <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
@@ -1504,7 +2258,25 @@ export default function App() {
                     <span>โปรไฟล์</span>
                   </button>
 
-                  {/* Row 3: ออกจากระบบ */}
+                  {/* Row 3: ดึงข้อมูล GAS -> Supabase */}
+                  <button 
+                    disabled={isSyncingGasToSupabase}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsProfileDropdownOpen(false);
+                      handleSyncGasToSupabase();
+                    }}
+                    className="w-full text-left px-3 py-2.5 text-xs text-sky-700 hover:bg-sky-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSyncingGasToSupabase ? (
+                      <Loader2 size={14} className="animate-spin text-sky-600 shrink-0" />
+                    ) : (
+                      <CloudDownload size={14} className="text-sky-600 shrink-0" />
+                    )}
+                    <span className="truncate">ดึงข้อมูล Sheets ➔ Supabase</span>
+                  </button>
+
+                  {/* Row 4: ออกจากระบบ */}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1519,7 +2291,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* Clickable Profile Bar */}
+              {/* Single Unified Profile Bar */}
               <div 
                 onClick={() => {
                   if (!isSidebarExpanded) {
@@ -1529,36 +2301,27 @@ export default function App() {
                     setIsProfileDropdownOpen(!isProfileDropdownOpen);
                   }
                 }}
-                className={`absolute w-full px-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50/80 py-2.5 rounded-2xl transition-all ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${!isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
-                style={{ opacity: 'var(--drag-progress)' }}
+                className="w-full flex items-center cursor-pointer hover:bg-slate-50/80 py-2 rounded-2xl transition-colors no-drag-zone select-none"
               >
-                {currentUser.photo ? (
-                  <img src={currentUser.photo} className="w-8 h-8 shrink-0 rounded-full object-cover border border-slate-200/60 shadow-sm" alt={currentUser.name} />
-                ) : (
-                  <div className="w-8 h-8 shrink-0 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><Users size={16} /></div>
-                )}
-                <div className="text-left flex-1 min-w-0">
+                <div className="w-[52px] shrink-0 flex items-center justify-center">
+                  {currentUser.photo ? (
+                    <img src={currentUser.photo} className="w-9 h-9 rounded-full object-cover border border-slate-200 ring-2 ring-white shadow-sm" alt={currentUser.name} />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 ring-2 ring-white shadow-sm">
+                      <User size={18} />
+                    </div>
+                  )}
+                </div>
+                <div 
+                  style={{ 
+                    opacity: 'var(--drag-progress)', 
+                    transform: `translateX(calc((1 - var(--drag-progress)) * -10px))`
+                  }}
+                  className={`text-left flex-1 min-w-0 pr-2 ${!isDraggingSidebar ? 'transition-all duration-300' : ''}`}
+                >
                   <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
                   <p className="text-[11px] font-medium text-emerald-600 kanit-text mt-0.5 truncate">{currentUser.position || roleLabels[currentUser.role] || currentUser.category || 'ออนไลน์'}</p>
                 </div>
-              </div>
-
-              {/* Collapsed Sidebar View (just user avatar) */}
-              <div 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsProfileDropdownOpen(!isProfileDropdownOpen);
-                }}
-                className={`absolute cursor-pointer hover:scale-105 transition-transform ${!isDraggingSidebar ? 'transition-all duration-300' : ''} ${isSidebarExpanded && !isDraggingSidebar ? 'pointer-events-none' : ''}`}
-                style={{ opacity: 'calc(1 - var(--drag-progress))' }}
-              >
-                {currentUser.photo ? (
-                  <img src={currentUser.photo} className="w-10 h-10 rounded-full object-cover border border-slate-200 ring-2 ring-white shadow-sm" alt={currentUser.name} />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 ring-2 ring-white shadow-sm">
-                    <User size={18} />
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1623,7 +2386,25 @@ export default function App() {
                   <span>โปรไฟล์</span>
                 </button>
 
-                {/* Row 3: ออกจากระบบ */}
+                {/* Row 3: ดึงข้อมูล GAS -> Supabase */}
+                <button 
+                  disabled={isSyncingGasToSupabase}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMobileProfileDropdownOpen(false);
+                    handleSyncGasToSupabase();
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs text-sky-700 hover:bg-sky-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSyncingGasToSupabase ? (
+                    <Loader2 size={14} className="animate-spin text-sky-600 shrink-0" />
+                  ) : (
+                    <CloudDownload size={14} className="text-sky-600 shrink-0" />
+                  )}
+                  <span className="truncate">ดึงข้อมูล Sheets ➔ Supabase</span>
+                </button>
+
+                {/* Row 4: ออกจากระบบ */}
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1660,6 +2441,7 @@ export default function App() {
                         callAppScript={callAppScript}
                         setQueueData={setQueueData}
                         showToast={showToast}
+                        fetchDashboardStats={fetchDashboardStats}
                     />
                 </div>
             )}
@@ -1682,13 +2464,13 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} />
                 </div>
             )}
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} />
+                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} />
                 </div>
             )}
 
@@ -1739,6 +2521,7 @@ export default function App() {
                      setStaffData={setStaffData}
                      handlePrintReceipt={handlePrintReceipt}
                      showGlobalAlert={showGlobalAlert} globalAlert={globalAlert}
+                     fetchFinanceStats={fetchFinanceStats}
                    />
                 </div>
             )}
@@ -1756,6 +2539,7 @@ export default function App() {
                         callAppScript={callAppScript} 
                         isGlobalLoading={isGlobalLoading} 
                         currentBranch={currentBranch}
+                        fetchInventoryStats={fetchInventoryStats}
                     />
                 </div>
             )}
@@ -1777,6 +2561,9 @@ export default function App() {
                        staffCategories={staffCategories}
                        roleLabels={roleLabels}
                        gdriveTokens={gdriveTokens}
+                       fetchStaffStats={fetchStaffStats}
+                       currentUser={currentUser}
+                       handleLogout={handleLogout}
                     />
                 </div>
             )}

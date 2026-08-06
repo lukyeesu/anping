@@ -383,5 +383,5 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
   );
 };
 
-export default BranchManager;
+export default React.memo(BranchManager);
 

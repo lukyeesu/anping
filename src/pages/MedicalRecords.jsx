@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -28,6 +28,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const [isViewMode, setIsViewMode] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalServerPatients, setTotalServerPatients] = useState(null);
+  const [isServerSearching, setIsServerSearching] = useState(false);
+  const [serverStats, setServerStats] = useState(null);
 
   // --- States สำหรับระบบสแกนบัตร ปชช. ---
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -102,49 +106,85 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const headerRef = React.useRef(null);
   const filterRef = React.useRef(null); // --- [NEW] เพิ่ม Ref สำหรับ Filter เพื่อให้มันขยายตัวได้ ---
 
+  useEffect(() => {
+    if (fetchPatientStats) {
+      fetchPatientStats().then(res => {
+        if (res) setServerStats(res);
+      }).catch(err => console.error(err));
+    }
+  }, [fetchPatientStats]);
+
   // --- 2. Derived State (Memos & Filtering) ---
   const stats = useMemo(() => {
-    let total = patientsData.length;
-    let newThisMonth = 0;
+    if (serverStats) {
+      return {
+        total: totalServerPatients !== null ? totalServerPatients : (serverStats.total || 0),
+        male: serverStats.male || 0,
+        female: serverStats.female || 0
+      };
+    }
+
+    let total = totalServerPatients !== null ? totalServerPatients : patientsData.length;
     let male = 0;
     let female = 0;
-    let visitedToday = 0;
-
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    const todayStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()+543}`;
 
     patientsData.forEach(p => {
-      // ผู้ป่วยใหม่เดือนนี้
-      if (p.createdAt) {
-        const createdDate = new Date(p.createdAt);
-        if (createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear) {
-          newThisMonth++;
-        }
-      }
-      
-      // สถิติเพศ
       if (p.gender === 'ชาย') male++;
       else if (p.gender === 'หญิง') female++;
-
-      // รับบริการวันนี้ (เช็คจากประวัติ OPD)
-      if (p.opdRecords && p.opdRecords.length > 0) {
-        const lastOpdDate = p.opdRecords[0].datetime.split(' ')[0];
-        if (lastOpdDate === todayStr) {
-          visitedToday++;
-        }
-      }
     });
 
-    return { total, newThisMonth, male, female, visitedToday };
-  }, [patientsData]);
+    return { total, male, female };
+  }, [patientsData, totalServerPatients, serverStats]);
+
+  const isLoadingRef = useRef(false);
+  const isInitialMountRef = useRef(true);
+  const prevSearchRef = useRef(search);
+  const prevSortRef = useRef(sortConfig);
+
+  // Server-side debounced search & sort (only runs when search or sort REALLY changes)
+  useEffect(() => {
+    if (!fetchPatientsPaginated) return;
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    // Skip if search term and sort configuration have not changed
+    if (
+      prevSearchRef.current === search &&
+      prevSortRef.current.key === sortConfig.key &&
+      prevSortRef.current.direction === sortConfig.direction
+    ) {
+      return;
+    }
+
+    prevSearchRef.current = search;
+    prevSortRef.current = sortConfig;
+
+    const timer = setTimeout(async () => {
+      setIsServerSearching(true);
+      const res = await fetchPatientsPaginated({
+        offset: 0,
+        limit: 20,
+        search,
+        sortKey: sortConfig.key,
+        sortDir: sortConfig.direction
+      });
+      if (res.status === 'success') {
+        setPatientsData(res.patients);
+        setHasMore(res.hasMore);
+        if (res.totalCount !== undefined) setTotalServerPatients(res.totalCount);
+      }
+      setIsServerSearching(false);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [search, sortConfig.key, sortConfig.direction, fetchPatientsPaginated]);
 
   const filteredPatients = useMemo(() => {
     return patientsData.filter(p => {
       const s = search.toLowerCase();
-      // ค้นหาให้ครอบคลุม (Case-insensitive)
-      return ((p.firstName && p.firstName.toLowerCase().includes(s)) || (p.lastName && p.lastName.toLowerCase().includes(s)) || (p.id && p.id.toLowerCase().includes(s)) || (p.hn && p.hn.toLowerCase().includes(s)) || (p.idCard && p.idCard.includes(s)) || (p.phone && p.phone.includes(s)));
+      // ค้นหาให้ครอบคลุม (Case-insensitive) รวมชื่อเล่น
+      return ((p.firstName && p.firstName.toLowerCase().includes(s)) || (p.lastName && p.lastName.toLowerCase().includes(s)) || (p.nickname && p.nickname.toLowerCase().includes(s)) || (p.nickName && p.nickName.toLowerCase().includes(s)) || (p.id && p.id.toLowerCase().includes(s)) || (p.hn && p.hn.toLowerCase().includes(s)) || (p.idCard && p.idCard.includes(s)) || (p.phone && p.phone.includes(s)));
     });
   }, [patientsData, search]);
 
@@ -219,6 +259,33 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const [formData, setFormData] = useState(initialFormState);
   
   const initialOpdState = { datetime: '', doctor: '', branchId: '', temp: '', pulse: '', bp: '', weight: '', height: '', cc: '', dx: '', tx: [''], advice: '', note: '' };
+  
+  const getSortedOpdRecords = (records = []) => {
+    if (!Array.isArray(records) || records.length === 0) return [];
+    return [...records].sort((a, b) => {
+      const parseDateVal = (item) => {
+        const str = item?.datetime || `${item?.date || ''} ${item?.time || ''}`.trim();
+        if (!str) return 0;
+        if (str.includes('/')) {
+          const parts = str.split(' ');
+          const dateParts = parts[0].split('/');
+          const timeStr = parts[1] || '00:00';
+          if (dateParts.length === 3) {
+            let day = parseInt(dateParts[0], 10);
+            let month = parseInt(dateParts[1], 10) - 1;
+            let year = parseInt(dateParts[2], 10);
+            if (year > 2500) year -= 543;
+            const [h, m] = timeStr.split(':').map(n => parseInt(n, 10) || 0);
+            return new Date(year, month, day, h, m).getTime();
+          }
+        }
+        const t = new Date(str).getTime();
+        return isNaN(t) ? 0 : t;
+      };
+      return parseDateVal(b) - parseDateVal(a);
+    });
+  };
+
   const [showOpdForm, setShowOpdForm] = useState(false);
   const [isClosingOpdForm, setIsClosingOpdForm] = useState(false);
   const [newOpdRecord, setNewOpdRecord] = useState(initialOpdState);
@@ -616,32 +683,41 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
           }
       }
       
-      // เช็คว่าเลื่อนลงมาเกือบถึงล่างสุดหรือยัง (เหลืออีก 100px)
-      if (scrollTop + clientHeight >= scrollHeight - 100) {
-        if (visibleCount < sortedPatients.length && !isLoadingMore) {
-           setIsLoadingMore(true);
-           setTimeout(() => {
-              setVisibleCount(prev => prev + 10);
-              setIsLoadingMore(false);
-           }, 1000);
+      // เช็คว่าเลื่อนลงมาเกือบถึงล่างสุดหรือยัง (เหลืออีก 80px)
+      if (scrollTop + clientHeight >= scrollHeight - 80) {
+        if (fetchPatientsPaginated && hasMore && !isLoadingRef.current) {
+          isLoadingRef.current = true;
+          setIsLoadingMore(true);
+          fetchPatientsPaginated({
+            offset: patientsData.length,
+            limit: 20,
+            search,
+            sortKey: sortConfig.key,
+            sortDir: sortConfig.direction
+          }).then(res => {
+            if (res.status === 'success' && res.patients.length > 0) {
+              setPatientsData(prev => {
+                const existingIds = new Set(prev.map(p => String(p.id || p.hn || '').trim().toLowerCase()));
+                const newItems = res.patients.filter(p => !existingIds.has(String(p.id || p.hn || '').trim().toLowerCase()));
+                return [...prev, ...newItems];
+              });
+              setHasMore(res.hasMore);
+              if (res.totalCount !== undefined) setTotalServerPatients(res.totalCount);
+            } else {
+              setHasMore(false);
+            }
+          }).catch(err => console.error(err))
+          .finally(() => {
+            isLoadingRef.current = false;
+            setIsLoadingMore(false);
+          });
         }
       }
     });
 
-    setTimeout(() => {
-        // ล้างคลาสที่อาจค้างอยู่จากการสลับหน้าจอ (Tab switching) 
-        if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
-        if (filterRef.current) {
-            filterRef.current.classList.remove('is-scrolled');
-            if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
-        }
-        // บังคับให้เกิด Event Scroll 1 ครั้ง เพื่อให้ handleScroll คำนวณขนาดและตำแหน่งใหม่ให้ถูกต้อง
-        if (mainElement) mainElement.dispatchEvent(new Event('scroll'));
-    }, 50);
-
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, [visibleCount, sortedPatients.length, isLoadingMore]);
+  }, [hasMore, fetchPatientsPaginated, patientsData.length, search, sortConfig]);
 
   useEffect(() => {
     if (calView === 'years') setYearPageStart(Math.floor((calDate.getFullYear() + 543) / 12) * 12);
@@ -674,7 +750,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     closeMedCalendar();
   };
 
-  const handleOpenEdit = (patient, isView = false) => {
+  const handleOpenEdit = async (patient, isView = false) => {
     setEditingId(patient.id || patient.hn);
 
     // ใช้ฟังก์ชันอัจฉริยะวิเคราะห์ชื่อเผื่อข้อมูลในอดีตไม่มีการแยกช่องมาให้
@@ -691,6 +767,26 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }
     if (loadedPhones.length === 0) loadedPhones = [''];
     
+    let parsedOpd = [];
+    if (Array.isArray(patient.opdRecords)) {
+      parsedOpd = patient.opdRecords;
+    } else if (typeof patient.opdRecords === 'string' && patient.opdRecords.trim().startsWith('[')) {
+      try { parsedOpd = JSON.parse(patient.opdRecords); } catch (e) {}
+    }
+    
+    // 🌟 ดึงข้อมูลประวัติการรักษาเฉพาะคนไข้คนนี้จาก Supabase บน demand ทันทีเมื่อเปิด Modal (Lazy Loading)
+    if (fetchPatientTreatments && parsedOpd.length === 0) {
+      const patientId = patient.id || patient.hn;
+      if (patientId) {
+        const fetchedTreatments = await fetchPatientTreatments(patientId);
+        if (fetchedTreatments && fetchedTreatments.length > 0) {
+          parsedOpd = fetchedTreatments;
+        }
+      }
+    }
+
+    const sortedOpd = getSortedOpdRecords(parsedOpd);
+
     setFormData({ 
       ...initialFormState, ...patient, hn: patient.hn || patient.id,
       prefix: patient.prefix || parsed.prefix,
@@ -698,7 +794,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       lastName: patient.lastName || parsed.lastName, 
       gender: patient.gender || parsed.gender,
       phones: loadedPhones,
-      createdAt: patient.createdAt || new Date().toISOString(), opdRecords: patient.opdRecords || []
+      createdAt: patient.createdAt || new Date().toISOString(), opdRecords: sortedOpd
     });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(isView); medModal.open();
     
@@ -939,9 +1035,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         showToast('กรุณาเลือกสาขาที่รับบริการ', 'warning');
         return;
     }
+    setIsProcessing(true);
     let newRecords = [...(formData.opdRecords || [])];
     if (editingOpdIndex !== null) newRecords[editingOpdIndex] = newOpdRecord;
     else newRecords = [newOpdRecord, ...newRecords];
+    
+    newRecords = getSortedOpdRecords(newRecords);
     
     const updatedFormData = { ...formData, opdRecords: newRecords };
     setFormData(updatedFormData);
@@ -957,36 +1056,56 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       }
     }
 
-    setIsClosingOpdForm(true); 
-    setTimeout(() => {
-      setShowOpdForm(false);
-      setEditingOpdIndex(null);
-      setIsClosingOpdForm(false);
-    }, 250);
-    
-    setIsProcessing(true);
-
-    setTimeout(() => {
-      if (opdSectionRef.current) {
-        opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 50);
-
-    const combinedData = {
+      const combinedData = {
       ...updatedFormData,
       name: `${updatedFormData.prefix}${updatedFormData.firstName} ${updatedFormData.lastName}`.trim(),
-      phone: updatedFormData.phones && updatedFormData.phones.length > 0 ? updatedFormData.phones[0] : '', // อัปเดตการดึง phone
+      phone: updatedFormData.phones && updatedFormData.phones.length > 0 ? updatedFormData.phones[0] : '',
       id: editingId || updatedFormData.hn
     };
 
     try {
       await callAppScript('SAVE_DATA', 'Patients', combinedData);
+
+      // 🌟 บันทึกลงตาราง treatments โดยตรง
+      if (newOpdRecord) {
+        const patientId = String(editingId || updatedFormData.hn || '').trim();
+        const treatmentRow = {
+          id: String(newOpdRecord.id || `TRT_${patientId}_${Date.now()}`),
+          patient_id: patientId,
+          datetime: String(newOpdRecord.datetime || new Date().toISOString()),
+          date: String(newOpdRecord.date || (newOpdRecord.datetime ? newOpdRecord.datetime.split(' ')[0] : '')),
+          time: String(newOpdRecord.time || (newOpdRecord.datetime ? newOpdRecord.datetime.split(' ')[1] || '' : '')),
+          doctor: String(newOpdRecord.doctor || ''),
+          chief_complaint: String(newOpdRecord.chiefComplaint || newOpdRecord.cc || ''),
+          diagnosis: String(newOpdRecord.diagnosis || newOpdRecord.dx || ''),
+          treatment_detail: String(newOpdRecord.treatmentDetail || newOpdRecord.note || ''),
+          prescription: newOpdRecord.prescription || newOpdRecord.tx || [],
+          vital_signs: newOpdRecord.vitalSigns || { bp: newOpdRecord.bp, pulse: newOpdRecord.pulse, weight: newOpdRecord.weight, temp: newOpdRecord.temp },
+          attachments: newOpdRecord.attachments || [],
+          cost: Number(newOpdRecord.cost || 0),
+          branch_id: String(newOpdRecord.branchId || currentBranch?.id || '')
+        };
+        await callAppScript('SAVE_DATA', 'Treatments', treatmentRow).catch(console.error);
+      }
+
       setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));
-      setIsProcessing(false);
+      
+      setIsClosingOpdForm(true); 
+      setTimeout(() => {
+        setShowOpdForm(false);
+        setEditingOpdIndex(null);
+        setIsClosingOpdForm(false);
+        // เลื่อนกลับไปที่ตารางประวัติการรักษาหลังจาก Spinner หมุนบันทึกเสร็จเรียบร้อยแล้วเท่านั้น
+        if (opdSectionRef.current) {
+          opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+
       showToast('บันทึกประวัติการรักษาเรียบร้อยแล้ว', 'success');
     } catch (error) {
-      setIsProcessing(false);
       showToast('เกิดข้อผิดพลาดในการบันทึกประวัติการรักษา', 'warning');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -999,6 +1118,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         globalAlert.setIsOpen(false);
         setIsProcessing(true);
         
+        const targetOpd = formData.opdRecords ? formData.opdRecords[index] : null;
         const newRecords = [...(formData.opdRecords || [])];
         newRecords.splice(index, 1);
         
@@ -1014,6 +1134,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
         try {
           await callAppScript('SAVE_DATA', 'Patients', combinedData);
+          if (targetOpd && targetOpd.id) {
+            await callAppScript('DELETE_DATA', 'Treatments', { id: targetOpd.id }).catch(console.error);
+          }
           setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));
           setIsProcessing(false);
           showToast('ลบประวัติการรักษาเรียบร้อยแล้ว', 'danger');
@@ -1250,9 +1373,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   // การใช้ useMemo ห่อหุ้มการเรนเดอร์ตาราง จะทำหน้าที่เหมือน React.memo และแยก Component ออกมาในตัว
   // เพื่อป้องกันไม่ให้เบราว์เซอร์ต้องวาดข้อมูล 600 แถวใหม่ทุกครั้งที่ Header มีการขยับ (isRecordsScrolled เปลี่ยน)
   const memoizedPatientTableRows = useMemo(() => {
-    return sortedPatients.slice(0, visibleCount).map((patient, index) => (
+    return sortedPatients.map((patient, index) => (
       <tr key={`${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation">
-        <td className="py-4 pl-6 font-medium text-sky-600 kanit-text">{getPatientId(patient)}</td><td className="py-4 text-slate-700 font-medium font-data">{getPatientFullName(patient)}</td>
+        <td className="py-4 pl-6 font-medium text-sky-600 kanit-text">{getPatientId(patient)}</td>
+        <td className="py-4 text-slate-700 font-medium font-data">{getPatientFullName(patient)}</td>
+        <td className="py-4 text-slate-600 font-medium font-data">{patient.nickname || '-'}</td>
         <td className="py-4 text-slate-500">{patient.gender || '-'}</td><td className="py-4 text-slate-500">{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
         <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
         <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
@@ -1267,10 +1392,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         </td>
       </tr>
     ));
-  }, [sortedPatients, visibleCount, isProcessing, processingPdpaHn]); // อัปเดตตารางเฉพาะตอนข้อมูลเปลี่ยนหรือเลื่อนโหลดเพิ่มเท่านั้น (Virtualization Concept)
+  }, [sortedPatients, isProcessing, processingPdpaHn]); // อัปเดตตารางเฉพาะตอนข้อมูลเปลี่ยนหรือเลื่อนโหลดเพิ่มเท่านั้น (Virtualization Concept)
 
   const memoizedPatientMobileCards = useMemo(() => {
-    return sortedPatients.slice(0, visibleCount).map((patient, index) => {
+    return sortedPatients.map((patient, index) => {
         const phoneNum = patient.phone || patient.phone1;
         const ageStr = patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-';
         const lastVisitStr = patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit);
@@ -1298,7 +1423,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
                 {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
                 <div className="mb-3">
-                    <h4 className="font-bold text-slate-800 text-lg font-data leading-tight">{getPatientFullName(patient)}</h4>
+                    <h4 className="font-bold text-slate-800 text-lg font-data leading-tight">{getPatientFullName(patient)} {patient.nickname && <span className="text-sm font-medium text-sky-600 font-data ml-1">({patient.nickname})</span>}</h4>
                     <div className="mt-1.5">
                         {phoneNum ? (
                             <a href={`tel:${phoneNum}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
@@ -1362,7 +1487,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             </div>
         );
     });
-  }, [sortedPatients, visibleCount, isProcessing, processingPdpaHn]);
+  }, [sortedPatients, isProcessing, processingPdpaHn]);
 
   return (
     <>
@@ -1438,7 +1563,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
           <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
             <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
               <div className="relative w-full">
-                <input type="text" placeholder="ค้นหาชื่อ, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" />
+                <input type="text" placeholder="ค้นหาชื่อ, ชื่อเล่น, รหัส HN, เบอร์โทร หรือเลขบัตรประชาชน..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" />
                 <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
               </div>
             </div>
@@ -1455,7 +1580,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                 <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
                   <table className="w-full text-left border-collapse min-w-[1100px] table-auto">
                       <thead>
-                        <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[15%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อคนไข้</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">เพศ</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">อายุ</th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[13%]" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[10%]" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th><th className="w-[140px] pt-6 pb-4 font-medium text-right pr-4 kanit-text">จัดการ</th></tr>
+                        <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[14%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อคนไข้</th><th className="w-[8%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อเล่น</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">เพศ</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">อายุ</th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[13%]" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[10%]" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th><th className="w-[140px] pt-6 pb-4 font-medium text-right pr-4 kanit-text">จัดการ</th></tr>
                     </thead>
                     <tbody>
                       {isGlobalLoading ? (
@@ -2238,9 +2363,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                       </div>
                       
                       <div className="flex flex-row justify-end gap-2 mt-4 pt-4 border-t border-slate-200 w-full">
-                        <button type="button" onClick={handleCancelOpdForm} className="flex-1 sm:flex-none px-2 sm:px-4 py-2 text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors kanit-text truncate">ยกเลิก</button>
-                        <button type="button" onClick={handleSaveOpdRecord} className="flex-1 sm:flex-none px-2 sm:px-4 py-2 text-sm text-white bg-sky-500 hover:bg-sky-600 rounded-xl font-medium shadow-md transition-colors kanit-text truncate">
-                          {editingOpdIndex !== null ? 'บันทึกการแก้ไข' : 'ยืนยันการเพิ่ม'}
+                        <button type="button" onClick={handleCancelOpdForm} disabled={isProcessing} className="flex-1 sm:flex-none px-2 sm:px-4 py-2 text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors kanit-text truncate">ยกเลิก</button>
+                        <button type="button" onClick={handleSaveOpdRecord} disabled={isProcessing} className="flex-1 sm:flex-none px-2 sm:px-4 py-2 text-sm text-white bg-sky-500 hover:bg-sky-600 disabled:bg-sky-300 disabled:cursor-not-allowed rounded-xl font-medium shadow-md transition-all kanit-text truncate flex items-center justify-center gap-2">
+                          {isProcessing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-white" />
+                              <span>กำลังบันทึก...</span>
+                            </>
+                          ) : (
+                            <span>{editingOpdIndex !== null ? 'บันทึกการแก้ไข' : 'ยืนยันการเพิ่ม'}</span>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -2253,60 +2385,83 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                       <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
                         <table className="table-auto w-full text-left border-collapse min-w-[800px] text-sm">
                           <thead>
-                            <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 kanit-text"><th className="w-[14%] p-3 font-medium">วันที่/เวลา</th><th className="w-[12%] p-3 font-medium">สาขา</th><th className="w-[12%] p-3 font-medium">Vitals</th><th className="w-[24%] p-3 font-medium">อาการ/วินิจฉัย</th><th className="w-[12%] p-3 font-medium">การรักษา</th><th className="w-[18%] p-3 font-medium">แพทย์</th><th className="w-[120px] p-3 font-medium text-right">จัดการ</th></tr>
-                            </thead>
-                            <tbody>
-                            {formData.opdRecords.map((record, index) => (
-                              <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top font-data">
-                                <td className="p-3 text-slate-700 whitespace-nowrap"><div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div><div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div></td>
-                                <td className="p-3 text-slate-700 whitespace-nowrap">
-                                  <div className="text-xs font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded border border-sky-100 w-fit">
-                                    {branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}
-                                  </div>
-                                </td>
-                                <td className="p-3 text-slate-500 text-[11px] whitespace-nowrap">                                  T: <span className="font-data font-semibold text-slate-700">{record.temp || '-'}</span> | PR: <span className="font-data font-semibold text-slate-700">{record.pulse || '-'}</span> | BP: <span className="font-data font-semibold text-slate-700">{record.bp || '-'}</span><br/>
-                                  W: <span className="font-data font-semibold text-slate-700">{record.weight || '-'}</span> | H: <span className="font-data font-semibold text-slate-700">{record.height || '-'}</span>
-                                </td>
-                                <td className="p-3 text-slate-700 max-w-[150px]">
-                                  <div className="text-sm font-semibold truncate" title={record.cc}>{record.cc || '-'}</div>
-                                  <div className="text-xs text-sky-600 font-medium truncate mt-0.5" title={record.dx}>{record.dx || '-'}</div>
-                                </td>
-                                <td className="p-3 text-slate-600 text-xs max-w-[150px]">
-                                  {Array.isArray(record.tx) ? (
-                                    record.tx.filter(t => t).map((t, idx) => (
-                                      <span key={idx} className="inline-block px-2 py-1 bg-sky-50 text-sky-600 rounded-md mb-1 mr-1">{t}</span>
-                                    ))
-                                  ) : (
-                                    <span className="inline-block px-2 py-1 bg-sky-50 text-sky-600 rounded-md mb-1">{record.tx || '-'}</span>
-                                  )}
-                                  {record.note && <div className="truncate text-slate-400 mt-0.5" title={record.note}>* {record.note}</div>}
-                                </td>
-                                <td className="p-3 text-slate-700 whitespace-nowrap">{record.doctor || '-'}</td>
-                                <td className="p-3 text-right">
-                                  <div className="flex justify-end gap-1">
-                                    <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="text-sky-600 p-1.5 bg-sky-50 border border-sky-100 rounded-lg shadow-sm transition-colors hover:bg-sky-100" title="พิมพ์ใบ OPD">
-                                      <Printer size={16} />
-                                    </button>
-                                    <button type="button" onClick={() => handlePrintMedicalCertificate(record, index)} className="text-emerald-600 p-1.5 bg-emerald-50 border border-emerald-100 rounded-lg shadow-sm transition-colors hover:bg-emerald-100" title="พิมพ์ใบรับรองแพทย์">
-                                      <FileText size={16} />
-                                    </button>
-                                    <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="text-slate-400 hover:text-sky-600 p-1.5 bg-white hover:bg-sky-50 border border-slate-100 rounded-lg shadow-sm transition-colors" title="แก้ไข">
-                                      <Pencil size={16} />
-                                    </button>
-                                    <button type="button" onClick={() => handleDeleteOpdRecord(index)} className="text-rose-400 hover:text-rose-600 p-1.5 bg-white hover:bg-rose-50 border border-slate-100 rounded-lg shadow-sm transition-colors" title="ลบ">
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                            <tr className="bg-slate-50 text-slate-500 border-b border-slate-100 kanit-text">
+                              <th className="w-[11%] p-3 font-medium">วันที่/เวลา</th>
+                              <th className="w-[7%] p-3 font-medium">สาขา</th>
+                              <th className="w-[11%] p-3 font-medium">Vitals</th>
+                              <th className="w-[18%] p-3 font-medium">อาการ/วินิจฉัย</th>
+                              <th className="w-[25%] p-3 font-medium">การรักษา</th>
+                              <th className="w-[20%] p-3 font-medium">แพทย์</th>
+                              <th className="w-[70px] p-3 font-medium text-right">จัดการ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getSortedOpdRecords(formData.opdRecords).map((record, index) => {
+                              const docParts = (record.doctor || '').trim().split(/\s+/);
+                              const docFirst = docParts.length > 1 ? docParts.slice(0, docParts.length - 1).join(' ') : (record.doctor || '-');
+                              const docLast = docParts.length > 1 ? docParts[docParts.length - 1] : '';
+
+                              return (
+                                <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top font-data">
+                                  <td className="p-3 text-slate-700 whitespace-nowrap"><div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div><div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div></td>
+                                  <td className="p-3 text-slate-700 whitespace-nowrap">
+                                    <div className="text-[11px] font-semibold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100/80 w-fit">
+                                      {branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-slate-500 text-[11px] whitespace-nowrap">                                  T: <span className="font-data font-semibold text-slate-700">{record.temp || '-'}</span> | PR: <span className="font-data font-semibold text-slate-700">{record.pulse || '-'}</span> | BP: <span className="font-data font-semibold text-slate-700">{record.bp || '-'}</span><br/>
+                                    W: <span className="font-data font-semibold text-slate-700">{record.weight || '-'}</span> | H: <span className="font-data font-semibold text-slate-700">{record.height || '-'}</span>
+                                  </td>
+                                  <td className="p-3 text-slate-700 max-w-[160px]">
+                                    <div className="text-sm font-semibold truncate" title={record.cc}>{record.cc || '-'}</div>
+                                    <div className="text-xs text-sky-600 font-medium truncate mt-0.5" title={record.dx}>{record.dx || '-'}</div>
+                                  </td>
+                                  <td className="p-3 text-slate-600 text-xs">
+                                    {Array.isArray(record.tx) ? (
+                                      record.tx.filter(t => t).map((t, idx) => (
+                                        <span key={idx} className="inline-flex items-center px-1.5 py-0.5 text-[11px] bg-sky-50 text-sky-600 border border-sky-100/80 rounded mb-1 mr-1 font-medium leading-tight">{t}</span>
+                                      ))
+                                    ) : (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 text-[11px] bg-sky-50 text-sky-600 border border-sky-100/80 rounded mb-1 font-medium leading-tight">{record.tx || '-'}</span>
+                                    )}
+                                    {record.note && <div className="text-slate-400 mt-0.5 leading-snug" title={record.note}>* {record.note}</div>}
+                                  </td>
+                                  <td className="p-3 text-slate-700 leading-tight whitespace-nowrap">
+                                    <div className="font-semibold text-slate-800 text-xs">{docFirst}</div>
+                                    {docLast && <div className="text-[11px] text-slate-500 font-normal mt-0.5">{docLast}</div>}
+                                  </td>
+                                  <td className="p-2 text-right whitespace-nowrap">
+                                    <div className="flex flex-col items-end gap-1.5 w-fit ml-auto">
+                                      {/* แถวบน: ปุ่มปริ้น OPD (สีฟ้า) & ปุ่มพิมพ์ใบรับรองแพทย์ (สีเขียว) */}
+                                      <div className="flex items-center gap-1.5">
+                                        <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="w-7 h-7 flex items-center justify-center text-sky-600 bg-sky-50 border border-sky-200/80 rounded-lg shadow-sm hover:bg-sky-100 transition-all hover:scale-105 active:scale-95" title="พิมพ์ใบ OPD">
+                                          <Printer size={14} />
+                                        </button>
+                                        <button type="button" onClick={() => handlePrintMedicalCertificate(record, index)} className="w-7 h-7 flex items-center justify-center text-emerald-600 bg-emerald-50 border border-emerald-200/80 rounded-lg shadow-sm hover:bg-emerald-100 transition-all hover:scale-105 active:scale-95" title="พิมพ์ใบรับรองแพทย์">
+                                          <FileText size={14} />
+                                        </button>
+                                      </div>
+                                      {/* แถวล่าง: ปุ่มแก้ไข (สีส้ม) & ปุ่มลบ (สีแดง) */}
+                                      <div className="flex items-center gap-1.5">
+                                        <button type="button" onClick={() => handleOpenOpdForm(index, record)} className="w-7 h-7 flex items-center justify-center text-amber-600 bg-amber-50 border border-amber-200/80 rounded-lg shadow-sm hover:bg-amber-100 transition-all hover:scale-105 active:scale-95" title="แก้ไขประวัติ">
+                                          <Pencil size={14} />
+                                        </button>
+                                        <button type="button" onClick={() => handleDeleteOpdRecord(index)} className="w-7 h-7 flex items-center justify-center text-rose-600 bg-rose-50 border border-rose-200/80 rounded-lg shadow-sm hover:bg-rose-100 transition-all hover:scale-105 active:scale-95" title="ลบประวัติ">
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
 
                       {/* --- Mobile View (Cards) --- */}
                       <div className="lg:hidden flex flex-col divide-y divide-slate-100">
-                          {formData.opdRecords.map((record, index) => (
+                          {getSortedOpdRecords(formData.opdRecords).map((record, index) => (
                               <div key={`opd-mobile-${index}`} className="p-4 flex flex-col gap-3 hover:bg-slate-50 transition-colors space-row-animation" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
                                   <div className="flex justify-between items-start">
                                       <div>
@@ -2596,7 +2751,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   );
 };
 
-export default MedicalRecords;
+export default React.memo(MedicalRecords);
 
 
 

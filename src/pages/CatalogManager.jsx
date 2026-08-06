@@ -568,5 +568,5 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   );
 };
 
-export default CatalogManager;
+export default React.memo(CatalogManager);
 

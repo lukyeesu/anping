@@ -2664,5 +2664,5 @@ const FinancePage = ({
   );
 };
 
-export default FinancePage;
+export default React.memo(FinancePage);
 

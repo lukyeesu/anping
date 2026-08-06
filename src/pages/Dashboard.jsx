@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import StatCard from './StatCard';
 import CalendarDay from './CalendarDay';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, isDoctorStaff, getStaffScheduleActiveStatus } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, currentBranch, branchesData = [], staffData = [], callAppScript, setQueueData, showToast }) => {
+const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, currentBranch, branchesData = [], staffData = [], callAppScript, setQueueData, showToast, fetchDashboardStats }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const headerRef = React.useRef(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -25,6 +25,15 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
   const [roomSelectorTarget, setRoomSelectorTarget] = useState(null);
   const [isRoomModalClosing, setIsRoomModalClosing] = useState(false);
   const [overviewDate, setOverviewDate] = useState(new Date());
+  const [dashStats, setDashStats] = useState(null);
+
+  useEffect(() => {
+    if (fetchDashboardStats) {
+      fetchDashboardStats().then(res => {
+        if (res) setDashStats(res);
+      }).catch(err => console.error(err));
+    }
+  }, [fetchDashboardStats]);
 
   const activeBranch = branchesData.find(b => b.id === currentBranch);
   const availableRooms = activeBranch ? (activeBranch.rooms || []) : [];
@@ -185,10 +194,10 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard title="คนไข้ทั้งหมด" value={isGlobalLoading ? "-" : patientsData.length} icon={Users} color="sky" />
-          <StatCard title="นัดหมายวันนี้" value={isGlobalLoading ? "-" : todaysQueue.length} icon={CalendarRange} color="emerald" />
-          <StatCard title="รอยืนยัน" value={isGlobalLoading ? "-" : pendingQueue.length} icon={Clock} color="amber" />
-          <StatCard title="สาขาที่เปิด" value="1" icon={Building2} color="slate" />
+          <StatCard title="คนไข้ทั้งหมด" value={isGlobalLoading ? "-" : (dashStats ? dashStats.totalPatients : patientsData.length)} icon={Users} color="sky" />
+          <StatCard title="นัดหมายวันนี้" value={isGlobalLoading ? "-" : (dashStats ? dashStats.todaysQueue : todaysQueue.length)} icon={CalendarRange} color="emerald" />
+          <StatCard title="รอยืนยัน" value={isGlobalLoading ? "-" : (dashStats ? dashStats.pendingQueue : pendingQueue.length)} icon={Clock} color="amber" />
+          <StatCard title="สาขาที่เปิด" value={isGlobalLoading ? "-" : (dashStats ? dashStats.activeBranches : 1)} icon={Building2} color="slate" />
         </div>
         
         <div className={`w-full ${theme.card}`}>
@@ -305,32 +314,28 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
 
                 staffData.forEach(s => {
                     if (!s.schedule) return;
-                    const specificData = s.schedule[dateStr];
-                    let isWorking = false;
-                    let timeStr = '';
+                    const isWorking = getStaffScheduleActiveStatus(s.schedule, currentDate);
+                    let timeStr = 'ปกติ';
                     let otHours = 0;
 
-                    if (specificData !== undefined) {
-                        isWorking = specificData.active;
-                        if (isWorking) {
+                    const d = currentDate.getDate();
+                    const m = currentDate.getMonth() + 1;
+                    const y = currentDate.getFullYear();
+                    const thaiBE = `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y + 543}`;
+                    const iso = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dow = currentDate.getDay();
+
+                    const specificData = s.schedule[thaiBE] || s.schedule[iso] || (typeof s.schedule === 'object' ? s.schedule[dow] || s.schedule[String(dow)] : null);
+                    if (specificData && typeof specificData === 'object') {
+                        if (specificData.start && specificData.end) {
                             timeStr = `${specificData.start}-${specificData.end}`;
-                            otHours = specificData.otHours || 0;
                         }
-                    } else {
-                        if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
-                            isWorking = s.schedule[dayOfWeek].active;
-                            if (isWorking) {
-                                timeStr = `${s.schedule[dayOfWeek].start}-${s.schedule[dayOfWeek].end}`;
-                                otHours = s.schedule[dayOfWeek].otHours || 0;
-                            }
-                        } else if (Array.isArray(s.schedule) && s.schedule.includes(dayOfWeek)) {
-                            isWorking = true;
-                            timeStr = 'ปกติ';
-                        }
+                        otHours = specificData.otHours || 0;
                     }
 
-                    const shortName = s.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
-                    if (isWorking) workingList.push({ id: s.id, name: shortName, timeStr, role: s.role, otHours });
+                    const safeName = s.name || s.username || s.email || 'Staff';
+                    const shortName = safeName.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
+                    if (isWorking) workingList.push({ id: s.id, name: shortName, timeStr, role: s.role || s.category, otHours });
                 });
 
                 return (
@@ -367,30 +372,23 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                 const workingList = [];
                 staffData.forEach(s => {
                     if (!s.schedule) return;
-                    const specificData = s.schedule[dateStr];
-                    let isWorking = false;
+                    const isWorking = getStaffScheduleActiveStatus(s.schedule, overviewDate);
                     let start = '09:00';
                     let end = '20:00';
                     let otHours = 0;
 
-                    if (specificData !== undefined) {
-                        isWorking = specificData.active;
-                        if (isWorking) { 
-                           start = specificData.start || '09:00'; 
-                           end = specificData.end || '20:00'; 
-                           otHours = specificData.otHours || 0;
-                        }
-                    } else {
-                        if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
-                            isWorking = s.schedule[dayOfWeek].active;
-                            if (isWorking) { 
-                               start = s.schedule[dayOfWeek].start || '09:00'; 
-                               end = s.schedule[dayOfWeek].end || '20:00'; 
-                               otHours = s.schedule[dayOfWeek].otHours || 0;
-                            }
-                        } else if (Array.isArray(s.schedule) && s.schedule.includes(dayOfWeek)) {
-                            isWorking = true;
-                        }
+                    const d = overviewDate.getDate();
+                    const m = overviewDate.getMonth() + 1;
+                    const y = overviewDate.getFullYear();
+                    const thaiBE = `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y + 543}`;
+                    const iso = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dow = overviewDate.getDay();
+
+                    const specificData = s.schedule[thaiBE] || s.schedule[iso] || (typeof s.schedule === 'object' ? s.schedule[dow] || s.schedule[String(dow)] : null);
+                    if (specificData && typeof specificData === 'object') {
+                        start = specificData.start || '09:00';
+                        end = specificData.end || '20:00';
+                        otHours = specificData.otHours || 0;
                     }
 
                     if (isWorking) {
@@ -437,7 +435,8 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                                             const endPercent = Math.max(0, Math.min(100, ((endHour - 6 + (endMin / 60)) / 18) * 100));
                                             const widthPercent = Math.max(2, endPercent - startPercent);
 
-                                            const shortName = s.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim();
+                                            const safeName = s.name || s.username || s.email || 'Staff';
+                                            const shortName = safeName.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim();
                                             const colorBarClass = s.role === 'doctor' ? 'bg-indigo-500 shadow-indigo-200' : s.role === 'nurse' ? 'bg-emerald-500 shadow-emerald-200' : 'bg-sky-500 shadow-sky-200';
 
                                             return (
@@ -711,5 +710,5 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
   );
 };
 
-export default Dashboard;
+export default React.memo(Dashboard);
 

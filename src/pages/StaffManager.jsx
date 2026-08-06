@@ -4,7 +4,7 @@ import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
 import AnimatedModal from './AnimatedModal';
 import { daysTH } from '../global/constants';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, getStaffScheduleInfo, getStaffScheduleActiveStatus } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {}, gdriveTokens }) => {
+const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinanceData, posHistoryData = [], branchesData = [], callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, staffPrefixes = [], staffCategories = [], roleLabels = {}, gdriveTokens, currentUser, handleLogout }) => {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   
@@ -552,19 +552,71 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   // Form ตารางงาน
   const initialSchedule = {
       0: { active: false, start: '09:00', end: '20:00' },
-      1: { active: true, start: '09:00', end: '20:00' },
-      2: { active: true, start: '09:00', end: '20:00' },
-      3: { active: true, start: '09:00', end: '20:00' },
-      4: { active: true, start: '09:00', end: '20:00' },
-      5: { active: true, start: '09:00', end: '20:00' },
+      1: { active: false, start: '09:00', end: '20:00' },
+      2: { active: false, start: '09:00', end: '20:00' },
+      3: { active: false, start: '09:00', end: '20:00' },
+      4: { active: false, start: '09:00', end: '20:00' },
+      5: { active: false, start: '09:00', end: '20:00' },
       6: { active: false, start: '09:00', end: '20:00' }
   };
   const [selectedScheduleStaff, setSelectedScheduleStaff] = useState(null);
   const [scheduleForm, setScheduleForm] = useState(initialSchedule);
 
-  // --- States สำหรับปฏิทินตารางงานพิเศษ ---
+  // --- States สำหรับปฏิทินตารางงานพิเศษ (รองรับ Date Range Selection) ---
   const [schedCalDate, setSchedCalDate] = useState(new Date());
   const [schedSelectedDate, setSchedSelectedDate] = useState(new Date());
+  const [schedRangeStart, setSchedRangeStart] = useState(null);
+  const [schedRangeEnd, setSchedRangeEnd] = useState(null);
+
+  const handleSchedDateClick = (dObj) => {
+    const target = new Date(dObj);
+    target.setHours(0,0,0,0);
+    setSchedSelectedDate(target);
+
+    if (!schedRangeStart || (schedRangeStart && schedRangeEnd)) {
+      setSchedRangeStart(target);
+      setSchedRangeEnd(null);
+    } else {
+      const start = new Date(schedRangeStart);
+      start.setHours(0,0,0,0);
+      if (target < start) {
+        setSchedRangeStart(target);
+        setSchedRangeEnd(null);
+      } else if (target.getTime() === start.getTime()) {
+        setSchedRangeStart(target);
+        setSchedRangeEnd(null);
+      } else {
+        setSchedRangeEnd(target);
+      }
+    }
+  };
+
+  const applyShiftToSelectedRange = (updateObj) => {
+    let sD = schedRangeStart || schedSelectedDate;
+    let eD = schedRangeEnd || sD;
+    if (!sD) return;
+
+    if (sD > eD) { const temp = sD; sD = eD; eD = temp; }
+
+    setScheduleForm(prev => {
+      const next = { ...prev };
+      const d = new Date(sD);
+      d.setHours(0,0,0,0);
+      const last = new Date(eD);
+      last.setHours(0,0,0,0);
+
+      while (d <= last) {
+        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+        if (updateObj === null) {
+          delete next[dateStr];
+        } else {
+          next[dateStr] = { ...(next[dateStr] || {}), ...updateObj };
+        }
+        d.setDate(d.getDate() + 1);
+      }
+      return next;
+    });
+  };
   const [overviewDate, setOverviewDate] = useState(new Date()); // เพิ่มตัวแปรนี้สำหรับปฏิทินภาพรวมรายเดือน
   const [overviewViewMode, setOverviewViewMode] = useState('month'); // 'month' หรือ 'week'
 
@@ -681,11 +733,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       // ดึงพนักงาน "ทั้งหมด" ที่ตั้งค่าว่าทำงานในวันนี้
       const workingStaff = staffData.filter(s => {
           if (!s.schedule) return false;
-          const specificData = s.schedule[dateStr];
-          if (specificData !== undefined) return specificData.active;
-          if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
-          if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
-          return false;
+          return getStaffScheduleActiveStatus(s.schedule, staffModalDate);
       });
 
       // จัดกลุ่มพนักงานตามตำแหน่ง
@@ -1038,13 +1086,15 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       'nurse': { label: 'พยาบาล/ผู้ช่วย (Nurse)', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: HeartPulse || Plus },
       'sale': { label: 'พนักงานขาย (Sale)', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: Tag },
       'admin': { label: 'แอดมิน (Admin)', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Settings },
+      'suspended': { label: '⛔ ระงับบัญชี (Suspended)', color: 'bg-rose-50 text-rose-600 border-rose-200', icon: AlertOctagon },
     };
     const map = {};
     Object.entries(roleLabels || {
       admin: 'แอดมิน (Admin)',
       doctor: 'แพทย์ (Doctor)',
       nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
-      sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+      sale: 'พนักงานขาย/ที่ปรึกษา (Sale)',
+      suspended: '⛔ ระงับบัญชี (Suspended)'
     }).forEach(([key, label]) => {
       if (defaultMap[key]) {
         map[key] = defaultMap[key];
@@ -1091,33 +1141,45 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   // --- Handlers ---
   const handleOpenAdd = () => {
     setEditingId(null);
-    
-    // คำนวณรหัสพนักงานอัตโนมัติ (EM001, EM002...)
-    let maxNum = 0;
-    staffData.forEach(s => {
-        if (s.empCode && s.empCode.toUpperCase().startsWith('EM')) {
-            const numMatch = s.empCode.match(/\d+$/);
-            if (numMatch) {
-                const num = parseInt(numMatch[0], 10);
-                if (num > maxNum) maxNum = num;
-            }
-        }
-    });
-    const nextEmpCode = `EM${String(maxNum + 1).padStart(3, '0')}`;
-    
-    setFormData({ ...initialForm, empCode: nextEmpCode });
+    setFormData({ ...initialForm });
     staffModal.open();
   };
 
   const handleOpenEdit = (staff) => {
     setEditingId(staff.id);
     const parsed = parsePatientName(staff.name || '');
+    const fallbackUsername = staff.username || (staff.email ? staff.email.split('@')[0] : '') || staff.id || '';
+    const cleanUser = String(fallbackUsername).includes('@') ? String(fallbackUsername).split('@')[0] : String(fallbackUsername);
+    const computedEmail = staff.email || (cleanUser ? `${cleanUser.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@anping.com` : '');
+
     setFormData({ 
        ...initialForm, 
        ...staff, 
+       empCode: staff.empCode || staff.emp_code || '',
+       username: cleanUser,
+       email: computedEmail,
+       password: staff.password || '123456',
        prefix: staff.prefix || parsed.prefix,
        firstName: staff.firstName || parsed.firstName,
        lastName: staff.lastName || parsed.lastName,
+       address: staff.address || staff.curAddress || staff.cur_address || '',
+       moo: staff.moo || staff.curMoo || staff.cur_moo || '',
+       road: staff.road || staff.curRoad || staff.cur_road || '',
+       subDistrict: staff.subDistrict || staff.sub_district || staff.curSubDistrict || staff.cur_sub_district || '',
+       district: staff.district || staff.curDistrict || staff.cur_district || '',
+       province: staff.province || staff.curProvince || staff.cur_province || '',
+       zipcode: staff.zipcode || staff.curZipcode || staff.cur_zipcode || '',
+       curAddress: staff.curAddress || staff.cur_address || staff.address || '',
+       curMoo: staff.curMoo || staff.cur_moo || staff.moo || '',
+       curRoad: staff.curRoad || staff.cur_road || staff.road || '',
+       curSubDistrict: staff.curSubDistrict || staff.cur_sub_district || staff.subDistrict || staff.sub_district || '',
+       curDistrict: staff.curDistrict || staff.cur_district || staff.district || '',
+       curProvince: staff.curProvince || staff.cur_province || staff.province || '',
+       curZipcode: staff.curZipcode || staff.cur_zipcode || staff.zipcode || '',
+       emName: staff.emName || staff.em_name || '',
+       emRelation: staff.emRelation || staff.em_relation || '',
+       emPhone: staff.emPhone || staff.em_phone || '',
+       emAddress: staff.emAddress || staff.em_address || '',
        employmentType: staff.employmentType || 'monthly',
        baseSalary: staff.baseSalary || 0, 
        commissionRate: staff.commissionRate || 0,
@@ -1128,14 +1190,57 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
   const handleSaveStaff = async (e) => {
     e.preventDefault();
+
+    const rawUsername = (formData.username || '').trim();
+    const cleanUsername = rawUsername.includes('@') ? rawUsername.split('@')[0] : rawUsername;
+    const cleanUsernameLower = cleanUsername.toLowerCase();
+
+    if (!cleanUsernameLower) {
+      showToast('กรุณาระบุ ID พนักงาน (Username) สำหรับเข้าสู่ระบบ', 'warning');
+      return;
+    }
+
+    if (formData.password && formData.password.length < 6) {
+      showToast('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร (ตามข้อกำหนดของระบบ Auth)', 'warning');
+      return;
+    }
+
+    // ตรวจสอบ Username ซ้ำก่อนสร้าง/บันทึกพนักงานใหม่
+    const isDuplicate = staffData.some(s => {
+      if (editingId && String(s.id) === String(editingId)) return false;
+
+      const existingUser = String(s.username || '').trim().toLowerCase();
+      const existingCleanUser = existingUser.includes('@') ? existingUser.split('@')[0] : existingUser;
+      const existingEmail = String(s.email || '').trim().toLowerCase();
+      const existingEmailUser = existingEmail.includes('@') ? existingEmail.split('@')[0] : existingEmail;
+
+      return (
+        existingCleanUser === cleanUsernameLower ||
+        existingUser === cleanUsernameLower ||
+        existingEmailUser === cleanUsernameLower
+      );
+    });
+
+    if (isDuplicate) {
+      showToast(`ID พนักงาน (Username) "${cleanUsername}" มีอยู่ในระบบแล้ว กรุณาใช้ Username อื่น`, 'warning');
+      return;
+    }
+
     setIsProcessing(true);
     
     const finalId = editingId || `STF${Date.now()}`;
     const fullName = `${formData.prefix}${formData.firstName} ${formData.lastName}`.trim();
-    
+
+    const computedEmail = cleanUsername 
+      ? `${cleanUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@anping.com` 
+      : (formData.email || '');
+
     const payload = {
        ...formData,
        id: finalId,
+       empCode: formData.empCode || '',
+       username: cleanUsername || rawUsername,
+       email: computedEmail,
        name: fullName || formData.name,
        employmentType: formData.employmentType,
        baseSalary: Number(formData.baseSalary),
@@ -1145,20 +1250,32 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     };
 
     try {
+      console.log('[StaffManager] 1. เริ่มการบันทึกข้อมูล payload:', payload);
       if (callAppScript) {
+        console.log('[StaffManager] 2. กำลังส่งข้อมูลไปยัง callAppScript...');
         await callAppScript('SAVE_DATA', 'Staff', payload);
+        console.log('[StaffManager] 3. callAppScript ทำงานเสร็จสิ้น');
       }
       if (editingId) {
-         setStaffData(prev => prev.map(s => s.id === editingId ? payload : s));
+         console.log('[StaffManager] 4. กำลังอัปเดต setStaffData แบบแก้ไข (editingId:', editingId, ')');
+         setStaffData(prev => prev.map(s => String(s.id).toLowerCase() === String(editingId).toLowerCase() ? payload : s));
          showToast('อัปเดตข้อมูลพนักงานสำเร็จ', 'success');
       } else {
-         setStaffData(prev => [payload, ...prev]);
+         console.log('[StaffManager] 4. กำลังอัปเดต setStaffData แบบเพิ่มใหม่');
+         setStaffData(prev => {
+           const exists = prev.some(s => String(s.id).toLowerCase() === String(payload.id).toLowerCase());
+           return exists ? prev : [payload, ...prev];
+         });
          showToast('เพิ่มพนักงานใหม่สำเร็จ', 'success');
       }
+      console.log('[StaffManager] 5. กำลังปิด Modal staffModal.close()');
       staffModal.close();
+      console.log('[StaffManager] 6. ปิด Modal สำเร็จ');
     } catch(err) {
-      showToast('เกิดข้อผิดพลาดในการบันทึก', 'danger');
+      console.error('[StaffManager] ERROR จับข้อผิดพลาดได้:', err);
+      showToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึก', 'danger');
     } finally {
+      console.log('[StaffManager] 7. จบการทำงาน finally ปรับ setIsProcessing(false)');
       setIsProcessing(false);
     }
   };
@@ -1177,20 +1294,37 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
            }
            setStaffData(prev => prev.filter(s => s.id !== staff.id));
            showToast('ลบพนักงานสำเร็จ', 'danger');
+
+           // หากเป็นบัญชีที่กำลังใช้งานอยู่ ให้บังคับ Logout และพาไปหน้า Login ทันที
+           const isSelf = currentUser && (
+             String(staff.id).toLowerCase() === String(currentUser.id).toLowerCase() ||
+             (staff.username && currentUser.username && String(staff.username).toLowerCase() === String(currentUser.username).toLowerCase()) ||
+             (staff.email && currentUser.email && String(staff.email).toLowerCase() === String(currentUser.email).toLowerCase())
+           );
+
+           if (isSelf && handleLogout) {
+             setTimeout(() => {
+               handleLogout();
+             }, 300);
+           }
          } catch(err) {
-           showToast('ลบไม่สำเร็จ กรุณาลองใหม่', 'warning');
+           showToast(err?.message || 'ลบไม่สำเร็จ กรุณาลองใหม่', 'warning');
          } finally {
            setIsProcessing(false);
          }
       }
     });
-      };
+  };
 
   // --- Schedule ---
   const handleOpenSchedule = (staff) => {
     setSelectedScheduleStaff(staff);
+    const today = new Date();
+    today.setHours(0,0,0,0);
     setSchedCalDate(new Date());
-    setSchedSelectedDate(new Date());
+    setSchedSelectedDate(today);
+    setSchedRangeStart(today);
+    setSchedRangeEnd(null);
     if (Array.isArray(staff.schedule)) {
         let converted = { ...initialSchedule };
         Object.keys(converted).forEach(day => { converted[day].active = false; });
@@ -1209,13 +1343,51 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     const updatedStaff = { ...selectedScheduleStaff, schedule: scheduleForm };
     try {
       if (callAppScript) {
+        // 1. บันทึกข้อมูลหลักพนักงานลงตาราง Staff
         await callAppScript('SAVE_DATA', 'Staff', updatedStaff);
+
+        // 2. บันทึกข้อมูลตารางกะรายวันลงตาราง staff_schedules
+        const dateKeys = Object.keys(scheduleForm).filter(k => String(k).includes('/'));
+        if (dateKeys.length > 0 && selectedScheduleStaff) {
+          const schedulePromises = dateKeys.map(dateStr => {
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            let year = parseInt(parts[2], 10);
+            if (year > 2400) year -= 543;
+            const isoDate = `${year}-${month}-${day}`;
+            const dObj = new Date(year, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            const dayOfWeek = dObj.getDay(); // Integer 0..6 for PostgreSQL integer column type
+
+            const schedObj = scheduleForm[dateStr];
+            if (!schedObj) return null;
+
+            const scheduleItemPayload = {
+              id: `SCHED_${selectedScheduleStaff.id}_${isoDate}`,
+              staffId: selectedScheduleStaff.id,
+              staffName: selectedScheduleStaff.name,
+              date: isoDate,
+              dayOfWeek: dayOfWeek,
+              shiftType: schedObj.active ? 'work' : 'off',
+              startTime: schedObj.start || '09:00',
+              endTime: schedObj.end || '20:00',
+              isActive: !!schedObj.active,
+              branchId: selectedScheduleStaff.branchId || selectedScheduleStaff.branch_id || '1',
+              notes: JSON.stringify({ otHours: schedObj.otHours || 0, isPaid: !!schedObj.isPaid })
+            };
+            return callAppScript('SAVE_DATA', 'Staff_Schedules', scheduleItemPayload);
+          }).filter(Boolean);
+
+          await Promise.all(schedulePromises);
+        }
       }
       setStaffData(prev => prev.map(s => s.id === updatedStaff.id ? updatedStaff : s));
       showToast('อัปเดตตารางงานสำเร็จ', 'success');
       scheduleModal.close();
     } catch(err) {
-      showToast('เกิดข้อผิดพลาด', 'danger');
+      console.error('Save schedule error:', err);
+      showToast('เกิดข้อผิดพลาดในการบันทึกตารางงาน', 'danger');
     } finally {
       setIsProcessing(false);
     }
@@ -1461,35 +1633,23 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                 staffData.forEach(s => {
                     if (!s.schedule) return;
-                    const specificData = s.schedule[dateStr];
-                    let isWorking = false;
-                    let isExplicitlyOff = false;
-                    let timeStr = '';
-                    let otHours = 0; // เพิ่มตัวแปรดึงค่า OT
-
-                    if (specificData !== undefined) {
-                        isWorking = specificData.active;
-                        isExplicitlyOff = !specificData.active;
-                        if (isWorking) {
-                            timeStr = `${specificData.start}-${specificData.end}`;
-                            otHours = specificData.otHours || 0;
-                        }
-                    } else {
-                        if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
-                            isWorking = s.schedule[dayOfWeek].active;
-                            if (isWorking) {
-                                timeStr = `${s.schedule[dayOfWeek].start}-${s.schedule[dayOfWeek].end}`;
-                                otHours = s.schedule[dayOfWeek].otHours || 0;
-                            }
-                        } else if (Array.isArray(s.schedule) && s.schedule.includes(dayOfWeek)) {
-                            isWorking = true;
-                            timeStr = 'ปกติ';
-                        }
-                    }
-
+                    const info = getStaffScheduleInfo(s.schedule, currentDate);
                     const shortName = (s.name || '').replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
-                    if (isWorking) workingList.push({ id: s.id, name: shortName, timeStr, role: s.role, otHours });
-                    else if (isExplicitlyOff) offList.push({ id: s.id, name: shortName });
+                    if (info.isWorking) {
+                        let timeStr = 'ปกติ';
+                        let otHours = 0;
+                        let start = '09:00';
+                        let end = '20:00';
+                        if (info.data && typeof info.data === 'object') {
+                            if (info.data.start && info.data.end) timeStr = `${info.data.start}-${info.data.end}`;
+                            start = info.data.start || '09:00';
+                            end = info.data.end || '20:00';
+                            otHours = info.data.otHours || 0;
+                        }
+                        workingList.push({ id: s.id, name: shortName, timeStr, role: s.role, otHours, start, end });
+                    } else if (info.isExplicitlyOff) {
+                        offList.push({ id: s.id, name: shortName });
+                    }
                 });
 
                 return (
@@ -1545,33 +1705,16 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 const workingList = [];
                 staffData.forEach(s => {
                     if (!s.schedule) return;
-                    const specificData = s.schedule[dateStr];
-                    let isWorking = false;
-                    let start = '09:00';
-                    let end = '20:00';
-                    let otHours = 0; // เพิ่มตัวแปรสำหรับเก็บชั่วโมง OT
-
-                    if (specificData !== undefined) {
-                        isWorking = specificData.active;
-                        if (isWorking) { 
-                           start = specificData.start || '09:00'; 
-                           end = specificData.end || '20:00'; 
-                           otHours = specificData.otHours || 0;
+                    const info = getStaffScheduleInfo(s.schedule, overviewDate);
+                    if (info.isWorking) {
+                        let start = '09:00';
+                        let end = '20:00';
+                        let otHours = 0;
+                        if (info.data && typeof info.data === 'object') {
+                            start = info.data.start || '09:00';
+                            end = info.data.end || '20:00';
+                            otHours = info.data.otHours || 0;
                         }
-                    } else {
-                        if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) {
-                            isWorking = s.schedule[dayOfWeek].active;
-                            if (isWorking) { 
-                               start = s.schedule[dayOfWeek].start || '09:00'; 
-                               end = s.schedule[dayOfWeek].end || '20:00'; 
-                               otHours = s.schedule[dayOfWeek].otHours || 0;
-                            }
-                        } else if (Array.isArray(s.schedule) && s.schedule.includes(dayOfWeek)) {
-                            isWorking = true;
-                        }
-                    }
-
-                    if (isWorking) {
                         workingList.push({ ...s, start, end, otHours });
                     }
                 });
@@ -1859,15 +2002,23 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
              <CustomSelect 
                 value={filterRole} 
                 onChange={(val) => setFilterRole(val)} 
-                options={[
-                  {value: 'all', label: 'ทุกตำแหน่ง'},
-                  ...Object.entries(roleLabels || {
+                options={(() => {
+                  const rawMap = roleLabels || {
                     admin: 'แอดมิน (Admin)',
                     doctor: 'แพทย์ (Doctor)',
                     nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
                     sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
-                  }).map(([key, label]) => ({ value: key, label: label }))
-                ]}
+                  };
+                  const filteredRoles = Object.entries(rawMap)
+                    .filter(([k]) => k !== 'suspended')
+                    .map(([key, label]) => ({ value: key, label: label }));
+
+                  return [
+                    {value: 'all', label: 'ทุกตำแหน่ง'},
+                    ...filteredRoles,
+                    {value: 'suspended', label: '⛔ ระงับบัญชี (Suspended)'}
+                  ];
+                })()}
                 compact fullWidth className="w-full"
              />
            </div>
@@ -2142,18 +2293,49 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full">
                       {/* บัญชีผู้ใช้ */}
                       <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                          <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">รหัสพนักงาน</label><input type="text" className={`${theme.input} !py-2.5 font-data bg-slate-100 text-slate-500 cursor-not-allowed`} value={formData.empCode || ''} disabled readOnly placeholder="ระบบจะสร้างให้อัตโนมัติ" /></div>
-                          <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">ID พนักงาน (Username)</label><input type="text" className={`${theme.input} !py-2.5 font-data`} value={formData.username || ''} onChange={(e) => setFormData({...formData, username: e.target.value})} placeholder="สำหรับเข้าสู่ระบบ" /></div>
+                          <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">รหัสพนักงาน</label><input type="text" className={`${theme.input} !py-2.5 font-data bg-slate-100 text-slate-500 cursor-not-allowed`} value={formData.id || ''} disabled readOnly placeholder="ระบบจะสร้างให้อัตโนมัติ" /></div>
                           <div>
-                              {editingId ? (
-                                  <div className="flex flex-col h-full justify-end">
-                                      <button type="button" onClick={handleSendResetLink} disabled={isProcessing} className="w-full py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-sky-600 hover:bg-sky-50 rounded-xl font-bold kanit-text text-[13px] transition-colors shadow-sm disabled:opacity-50 flex justify-center items-center gap-2">
-                                          {isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
-                                          ส่งลิงก์รีเซ็ตรหัสผ่าน
-                                      </button>
+                              <label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">
+                                  <span>ID พนักงาน (Username) <span className="text-rose-500">*</span></span>
+                                  
+                              </label>
+                              <input 
+                                  type="text" 
+                                  className={`${theme.input} !py-2.5 font-data ${editingId ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' : ''}`} 
+                                  value={formData.username || ''} 
+                                  disabled={Boolean(editingId)}
+                                  readOnly={Boolean(editingId)}
+                                  onChange={(e) => {
+                                      if (editingId) return;
+                                      const val = e.target.value;
+                                      const cleanUser = val.includes('@') ? val.split('@')[0] : val;
+                                      const autoEmail = cleanUser ? `${cleanUser.toLowerCase().replace(/[^a-z0-9._-]/g, '')}@anping.com` : '';
+                                      setFormData({
+                                          ...formData, 
+                                          username: val,
+                                          email: autoEmail || formData.email
+                                      });
+                                  }} 
+                                  placeholder="สำหรับเข้าสู่ระบบ (เช่น somchai)" 
+                              />
+                              
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">
+                                  รหัสผ่าน (Password) <span className="text-rose-500">*</span>
+                              </label>
+                              <input 
+                                  required 
+                                  type="text" 
+                                  className={`${theme.input} !py-2.5 font-data`} 
+                                  value={formData.password || ''} 
+                                  onChange={(e) => setFormData({...formData, password: e.target.value})} 
+                                  placeholder="กำหนดรหัสผ่าน" 
+                              />
+                              {editingId && (
+                                  <div className="mt-1 text-[11px] text-slate-400 font-medium kanit-text">
+                                      พิมพ์เพื่อเปลี่ยนรหัสผ่านใหม่ หรือใช้อันเดิม
                                   </div>
-                              ) : (
-                                  <div><label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">รหัสผ่านเริ่มต้น <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} !py-2.5 font-data`} value={formData.password || ''} onChange={(e) => setFormData({...formData, password: e.target.value})} placeholder="กำหนดรหัสผ่าน" /></div>
                               )}
                           </div>
                       </div>
@@ -2205,12 +2387,26 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                       <div className="relative" style={{ zIndex: 38 }}>
                         <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">สิทธิ์เข้าระบบ <span className="text-rose-500">*</span></label>
-                        <CustomSelect value={formData.role} onChange={(val) => setFormData({...formData, role: val})} options={Object.entries(roleLabels || {
-                          admin: 'แอดมิน (Admin)',
-                          doctor: 'แพทย์ (Doctor)',
-                          nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
-                          sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
-                        }).map(([key, label]) => ({ value: key, label: label }))} />
+                        <CustomSelect 
+                          value={formData.role} 
+                          onChange={(val) => setFormData({...formData, role: val})} 
+                          options={(() => {
+                            const rawMap = roleLabels || {
+                              admin: 'แอดมิน (Admin)',
+                              doctor: 'แพทย์ (Doctor)',
+                              nurse: 'พยาบาล/ผู้ช่วย (Nurse)',
+                              sale: 'พนักงานขาย/ที่ปรึกษา (Sale)'
+                            };
+                            const filteredRoles = Object.entries(rawMap)
+                              .filter(([k]) => k !== 'suspended')
+                              .map(([key, label]) => ({ value: key, label: label }));
+                            
+                            return [
+                              ...filteredRoles,
+                              { value: 'suspended', label: '⛔ ระงับบัญชี (Suspended)' }
+                            ];
+                          })()} 
+                        />
                       </div>
                       
                       <div className="relative" style={{ zIndex: 35 }}><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input required type="tel" className={`${theme.input} font-data`} value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} /></div>
@@ -2238,13 +2434,13 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
               <div className="mb-6">
                 <h5 className="font-semibold text-slate-700 mb-3 kanit-text">ที่อยู่ตามบัตรประชาชน</h5>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน</label><input type="text" className={`${theme.input} font-data`} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.moo} onChange={(e) => setFormData({...formData, moo: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.road} onChange={(e) => setFormData({...formData, road: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.subDistrict} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.district} onChange={(e) => setFormData({...formData, district: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.province} onChange={(e) => setFormData({...formData, province: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.zipcode} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" /></div>
+                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน</label><input type="text" className={`${theme.input} font-data`} value={formData.address || ''} onChange={(e) => setFormData({...formData, address: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.moo || ''} onChange={(e) => setFormData({...formData, moo: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.road || ''} onChange={(e) => setFormData({...formData, road: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.subDistrict || ''} onChange={(e) => setFormData({...formData, subDistrict: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.district || ''} onChange={(e) => setFormData({...formData, district: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.province || ''} onChange={(e) => setFormData({...formData, province: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.zipcode || ''} onChange={(e) => setFormData({...formData, zipcode: e.target.value})} maxLength="5" /></div>
                 </div>
               </div>
               <div className="h-px w-full bg-slate-100 my-6"></div>
@@ -2254,13 +2450,13 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                   <button type="button" onClick={copyAddressToCurrent} className="text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 px-3 py-1.5 rounded-lg kanit-text transition-colors font-medium flex items-center justify-center gap-1.5 w-full sm:w-auto"><MapPin size={14} /> ใช้ที่อยู่เดียวกับบัตรประชาชน</button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน</label><input type="text" className={`${theme.input} font-data`} value={formData.curAddress} onChange={(e) => setFormData({...formData, curAddress: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.curMoo} onChange={(e) => setFormData({...formData, curMoo: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.curRoad} onChange={(e) => setFormData({...formData, curRoad: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.curSubDistrict} onChange={(e) => setFormData({...formData, curSubDistrict: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.curDistrict} onChange={(e) => setFormData({...formData, curDistrict: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.curProvince} onChange={(e) => setFormData({...formData, curProvince: e.target.value})} /></div>
-                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.curZipcode} onChange={(e) => setFormData({...formData, curZipcode: e.target.value})} maxLength="5" /></div>
+                  <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ (เลขที่) / ชื่อหมู่บ้าน</label><input type="text" className={`${theme.input} font-data`} value={formData.curAddress || ''} onChange={(e) => setFormData({...formData, curAddress: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมู่ที่</label><input type="text" className={`${theme.input} font-data`} value={formData.curMoo || ''} onChange={(e) => setFormData({...formData, curMoo: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ซอย/ถนน</label><input type="text" className={`${theme.input} font-data`} value={formData.curRoad || ''} onChange={(e) => setFormData({...formData, curRoad: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">แขวง/ตำบล</label><input type="text" className={`${theme.input} font-data`} value={formData.curSubDistrict || ''} onChange={(e) => setFormData({...formData, curSubDistrict: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เขต/อำเภอ</label><input type="text" className={`${theme.input} font-data`} value={formData.curDistrict || ''} onChange={(e) => setFormData({...formData, curDistrict: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">จังหวัด</label><input type="text" className={`${theme.input} font-data`} value={formData.curProvince || ''} onChange={(e) => setFormData({...formData, curProvince: e.target.value})} /></div>
+                  <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">รหัสไปรษณีย์</label><input type="text" className={`${theme.input} font-data`} value={formData.curZipcode || ''} onChange={(e) => setFormData({...formData, curZipcode: e.target.value})} maxLength="5" /></div>
                 </div>
               </div>
            </div>
@@ -2268,10 +2464,10 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-[30]">
               <h4 className="text-lg font-bold text-sky-600 border-b border-sky-100 pb-3 mb-5 flex items-center gap-2 kanit-text"><Phone size={20} /> ผู้ติดต่อกรณีฉุกเฉิน</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อผู้ติดต่อ</label><input type="text" className={`${theme.input} font-data`} value={formData.emName} onChange={(e) => setFormData({...formData, emName: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เกี่ยวข้องเป็น</label><input type="text" className={`${theme.input} font-data`} value={formData.emRelation} onChange={(e) => setFormData({...formData, emRelation: e.target.value})} /></div>
-                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input type="tel" className={`${theme.input} font-data`} value={formData.emPhone} onChange={(e) => setFormData({...formData, emPhone: e.target.value})} /></div>
-                <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ที่ติดต่อได้</label><input type="text" className={`${theme.input} font-data`} value={formData.emAddress} onChange={(e) => setFormData({...formData, emAddress: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ชื่อผู้ติดต่อ</label><input type="text" className={`${theme.input} font-data`} value={formData.emName || ''} onChange={(e) => setFormData({...formData, emName: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เกี่ยวข้องเป็น</label><input type="text" className={`${theme.input} font-data`} value={formData.emRelation || ''} onChange={(e) => setFormData({...formData, emRelation: e.target.value})} /></div>
+                <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label><input type="tel" className={`${theme.input} font-data`} value={formData.emPhone || ''} onChange={(e) => setFormData({...formData, emPhone: e.target.value})} /></div>
+                <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ที่อยู่ที่ติดต่อได้</label><input type="text" className={`${theme.input} font-data`} value={formData.emAddress || ''} onChange={(e) => setFormData({...formData, emAddress: e.target.value})} /></div>
               </div>
            </div>
 
@@ -2414,9 +2610,23 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                        <div className="grid grid-cols-7 gap-1 sm:gap-1.5 lg:gap-2">
                            {Array.from({ length: new Date(schedCalDate.getFullYear(), schedCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="aspect-square"></div>)}
                            {Array.from({ length: new Date(schedCalDate.getFullYear(), schedCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                               const currD = new Date(schedCalDate.getFullYear(), schedCalDate.getMonth(), day);
+                               currD.setHours(0,0,0,0);
+
+                               let startD = schedRangeStart ? new Date(schedRangeStart) : null;
+                               if (startD) startD.setHours(0,0,0,0);
+                               let endD = schedRangeEnd ? new Date(schedRangeEnd) : null;
+                               if (endD) endD.setHours(0,0,0,0);
+
+                               if (startD && endD && startD > endD) {
+                                   const temp = startD; startD = endD; endD = temp;
+                               }
+
+                               const isRangeStart = startD && currD.getTime() === startD.getTime();
+                               const isRangeEnd = endD && currD.getTime() === endD.getTime();
+                               const isRangeMiddle = startD && endD && currD > startD && currD < endD;
+
                                const dateStr = `${String(day).padStart(2,'0')}/${String(schedCalDate.getMonth()+1).padStart(2,'0')}/${schedCalDate.getFullYear()+543}`;
-                               const isSelected = schedSelectedDate.getDate() === day && schedSelectedDate.getMonth() === schedCalDate.getMonth() && schedSelectedDate.getFullYear() === schedCalDate.getFullYear();
-                               
                                const sData = scheduleForm[dateStr];
                                
                                let isWorking = false;
@@ -2431,58 +2641,70 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                    isPaid = sData.isPaid;
                                }
 
-                               let btnClass = 'bg-slate-50 border-slate-100 text-slate-600 hover:border-slate-300 hover:bg-slate-100';
+                               let btnClass = 'bg-slate-50 border-slate-100 text-slate-600 hover:border-slate-300 hover:bg-slate-100 rounded-xl';
                                let dotClass = '';
-                               if (isWorking) {
-                                   if (isPaid) {
-                                       btnClass = 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'; // Paid
-                                       dotClass = 'bg-emerald-500';
-                                   } else {
-                                       const dObj = new Date(schedCalDate.getFullYear(), schedCalDate.getMonth(), day);
-                                       const today = new Date();
-                                       today.setHours(0,0,0,0);
-                                       if (dObj <= today) {
-                                           btnClass = 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'; // Unpaid, Past/Today
-                                           dotClass = 'bg-amber-500';
+                               let modifierClass = '';
+                               let ariaSelected = false;
+
+                               if (isRangeStart && isRangeEnd) {
+                                   modifierClass = 'range_start range_end bg-indigo-600 text-white font-bold rounded-xl z-10 shadow-md ring-2 ring-indigo-400 border-transparent';
+                                   ariaSelected = true;
+                               } else if (isRangeStart) {
+                                   modifierClass = 'range_start bg-indigo-600 text-white font-bold rounded-l-xl rounded-r-none z-10 shadow-md ring-2 ring-indigo-400 border-transparent';
+                                   ariaSelected = true;
+                               } else if (isRangeEnd) {
+                                   modifierClass = 'range_end bg-indigo-600 text-white font-bold rounded-r-xl rounded-l-none z-10 shadow-md ring-2 ring-indigo-400 border-transparent';
+                                   ariaSelected = true;
+                               } else if (isRangeMiddle) {
+                                   modifierClass = 'range_middle bg-indigo-100/90 text-indigo-900 font-bold rounded-none border-y border-indigo-200/80';
+                               } else if (startD && !endD && isRangeStart) {
+                                   modifierClass = 'range_start bg-indigo-600 text-white font-bold rounded-xl z-10 shadow-md ring-2 ring-indigo-400 border-transparent';
+                                   ariaSelected = true;
+                               } else {
+                                   if (isWorking) {
+                                       if (isPaid) {
+                                           btnClass = 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-xl';
+                                           dotClass = 'bg-emerald-500';
                                        } else {
-                                           btnClass = 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'; // Future
-                                           dotClass = 'bg-indigo-500';
+                                           const today = new Date(); today.setHours(0,0,0,0);
+                                           if (currD <= today) {
+                                               btnClass = 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 rounded-xl';
+                                               dotClass = 'bg-amber-500';
+                                           } else {
+                                               btnClass = 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-xl';
+                                               dotClass = 'bg-indigo-500';
+                                           }
                                        }
+                                   } else if (isExplicitlyOff) {
+                                       btnClass = 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl';
+                                       dotClass = 'bg-rose-500';
                                    }
                                }
-                               else if (isExplicitlyOff) {
-                                   btnClass = 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100';
-                                   dotClass = 'bg-rose-500';
-                               }
-
-                               if (isSelected) btnClass += ' ring-2 ring-indigo-500 shadow-md scale-[1.08] sm:scale-105 z-10 border-transparent';
 
                                return (
                                    <button 
                                        key={day} type="button" 
+                                       aria-selected={ariaSelected ? "true" : undefined}
                                        onClick={() => {
-                                           setSchedSelectedDate(new Date(schedCalDate.getFullYear(), schedCalDate.getMonth(), day));
-                                           // เลื่อนลงไปที่ Editor อัตโนมัติบนหน้าจอมือถือ
+                                           handleSchedDateClick(currD);
                                            if (window.innerWidth < 1024) {
                                                setTimeout(() => {
                                                    document.getElementById('schedule-editor-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                                }, 100);
                                            }
                                        }}
-                                       className={`aspect-square w-full rounded-xl flex flex-col items-center justify-center relative transition-all border ${btnClass}`}
+                                       className={`aspect-square w-full flex flex-col items-center justify-center relative transition-all border ${modifierClass || btnClass}`}
                                    >
-                                       <span className={`font-black text-sm sm:text-base font-data leading-none ${isSelected ? 'text-indigo-700' : ''}`}>{day}</span>
+                                       <span className={`font-black text-sm sm:text-base font-data leading-none ${ariaSelected ? 'text-white' : isRangeMiddle ? 'text-indigo-900' : ''}`}>{day}</span>
                                        
-                                       {/* แสดงข้อความเวลาบน PC */}
                                        {(isWorking || isExplicitlyOff) && (
-                                           <span className={`hidden sm:inline-block text-[9px] font-bold kanit-text mt-1 px-1 rounded ${isPaid ? 'bg-emerald-500 text-white' : isWorking ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600'}`}>
+                                           <span className={`hidden sm:inline-block text-[9px] font-bold kanit-text mt-1 px-1 rounded ${ariaSelected ? 'bg-white/30 text-white' : isPaid ? 'bg-emerald-500 text-white' : isWorking ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600'}`}>
                                               {timeStr}
                                            </span>
                                        )}
 
-                                       {/* แสดงจุดสี (Dot) บนหน้าจอมือถือแทนข้อความเพื่อความประหยัดพื้นที่ */}
                                        {(isWorking || isExplicitlyOff) && (
-                                           <span className={`sm:hidden w-1.5 h-1.5 rounded-full mt-1 ${dotClass}`}></span>
+                                           <span className={`sm:hidden w-1.5 h-1.5 rounded-full mt-1 ${ariaSelected ? 'bg-white' : dotClass}`}></span>
                                        )}
                                    </button>
                                );
@@ -2502,6 +2724,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 {/* Right Panel: Editor */}
                 <div id="schedule-editor-panel" className="flex-[2] p-4 sm:p-6 lg:bg-white flex flex-col min-h-fit lg:min-h-0 lg:overflow-y-auto custom-scrollbar pb-8 lg:pb-6 relative z-0">
                    {(() => {
+                       let sD = schedRangeStart || schedSelectedDate;
+                       let eD = schedRangeEnd || sD;
+                       if (sD && eD && sD > eD) { const temp = sD; sD = eD; eD = temp; }
+                       const hasRange = sD && eD && sD.getTime() !== eD.getTime();
+
                        const dateStr = `${String(schedSelectedDate.getDate()).padStart(2,'0')}/${String(schedSelectedDate.getMonth()+1).padStart(2,'0')}/${schedSelectedDate.getFullYear()+543}`;
                        const sData = scheduleForm[dateStr];
 
@@ -2521,37 +2748,45 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                            if (sData.isPaid) currentIsPaid = sData.isPaid;
                        }
 
+                       let headerTitle = `จัดการวันที่ ${schedSelectedDate.getDate()}`;
+                       let subTitle = `${thaiMonths[schedSelectedDate.getMonth()]} ${schedSelectedDate.getFullYear() + 543}`;
+                       if (hasRange) {
+                           const daysCount = Math.round((eD - sD) / (1000 * 60 * 60 * 24)) + 1;
+                           headerTitle = `จัดการช่วงวันที่ ${sD.getDate()} - ${eD.getDate()}`;
+                           subTitle = `${thaiMonths[sD.getMonth()]} - ${thaiMonths[eD.getMonth()]} ${eD.getFullYear() + 543} (${daysCount} วัน)`;
+                       }
+
                        return (
                            <div className="flex flex-col h-full bg-white lg:bg-transparent p-5 lg:p-0 rounded-[1.5rem] shadow-sm lg:shadow-none border border-slate-100 lg:border-none">
                                <div className="text-center mb-5 sm:mb-6 pb-4 border-b border-slate-100 shrink-0">
                                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
                                        <CalendarDays size={24} className="sm:w-7 sm:h-7" />
                                    </div>
-                                   <h4 className="font-bold text-slate-800 text-base sm:text-lg kanit-text leading-tight">จัดการวันที่ {schedSelectedDate.getDate()}</h4>
-                                   <p className="text-xs sm:text-sm text-slate-500 kanit-text">{thaiMonths[schedSelectedDate.getMonth()]} {schedSelectedDate.getFullYear() + 543}</p>
+                                   <h4 className="font-bold text-slate-800 text-base sm:text-lg kanit-text leading-tight">{headerTitle}</h4>
+                                   <p className="text-xs sm:text-sm text-slate-500 kanit-text">{subTitle}</p>
                                    
                                    {currentIsPaid && (
                                        <div className="mt-3 text-[10px] sm:text-xs bg-emerald-50 text-emerald-600 p-2 rounded-lg border border-emerald-100 flex items-center gap-1.5 justify-center kanit-text font-bold">
-                                           <CheckCircle2 size={14} /> วันนี้ทำจ่ายเงินเดือนไปแล้ว (หากแก้ไขจะไม่มีผลย้อนหลัง)
+                                           <CheckCircle2 size={14} /> มีรายการจ่ายเงินเดือนในสองช่วงนี้ไปแล้ว (หากแก้ไขจะไม่มีผลย้อนหลัง)
                                        </div>
                                    )}
                                </div>
 
                                <div className="space-y-4 sm:space-y-5 shrink-0">
                                    <div>
-                                       <label className="block text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest kanit-text text-center mb-2 sm:mb-3">กำหนดสถานะการทำงาน</label>
+                                       <label className="block text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest kanit-text text-center mb-2 sm:mb-3">กำหนดสถานะการทำงาน{hasRange ? ' สำหรับช่วงนี้' : ''}</label>
                                        
                                        <div className="grid grid-cols-2 gap-2 sm:gap-3">
                                           <button 
                                              type="button"
-                                             onClick={() => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: currentStart, end: currentEnd, otHours: currentOtHours, isPaid: currentIsPaid }}))}
+                                             onClick={() => applyShiftToSelectedRange({ active: true, start: currentStart, end: currentEnd, otHours: currentOtHours, isPaid: currentIsPaid })}
                                              className={`py-3 sm:py-4 rounded-xl font-bold text-xs sm:text-sm kanit-text transition-all border-2 flex flex-col items-center justify-center gap-1.5 active:scale-95 ${currentActive ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/30' : 'bg-white text-emerald-600 border-emerald-100 hover:bg-emerald-50'}`}
                                           >
                                              <CheckCircle2 size={20} className="sm:w-6 sm:h-6" /> เข้างาน (ทำกะ)
                                           </button>
                                           <button 
                                              type="button"
-                                             onClick={() => setScheduleForm(prev => ({...prev, [dateStr]: { active: false, isPaid: currentIsPaid }}))}
+                                             onClick={() => applyShiftToSelectedRange({ active: false, isPaid: currentIsPaid })}
                                              className={`py-3 sm:py-4 rounded-xl font-bold text-xs sm:text-sm kanit-text transition-all border-2 flex flex-col items-center justify-center gap-1.5 active:scale-95 ${currentExplicitlyOff ? 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-500/30' : 'bg-white text-rose-500 border-rose-100 hover:bg-rose-50'}`}
                                           >
                                              <XCircle size={20} className="sm:w-6 sm:h-6" /> วันหยุดพัก
@@ -2568,7 +2803,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                                    <input 
                                                        type="time" className={`${theme.input} !py-3 font-data text-sm sm:text-base font-bold text-center bg-white border-slate-200 focus:border-sky-400 w-full`}
                                                        value={currentStart}
-                                                       onChange={(e) => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: e.target.value, end: currentEnd, otHours: currentOtHours, isPaid: currentIsPaid }}))}
+                                                       onChange={(e) => applyShiftToSelectedRange({ active: true, start: e.target.value, end: currentEnd, otHours: currentOtHours, isPaid: currentIsPaid })}
                                                    />
                                                </div>
                                                <span className="text-slate-300 font-bold hidden sm:block">-</span>
@@ -2577,7 +2812,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                                    <input 
                                                        type="time" className={`${theme.input} !py-3 font-data text-sm sm:text-base font-bold text-center bg-white border-slate-200 focus:border-sky-400 w-full`}
                                                        value={currentEnd}
-                                                       onChange={(e) => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: currentStart, end: e.target.value, otHours: currentOtHours, isPaid: currentIsPaid }}))}
+                                                       onChange={(e) => applyShiftToSelectedRange({ active: true, start: currentStart, end: e.target.value, otHours: currentOtHours, isPaid: currentIsPaid })}
                                                    />
                                                </div>
                                            </div>
@@ -2589,7 +2824,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                                <input 
                                                    type="number" min="0" step="0.5" className={`${theme.input} !py-3 font-data text-sm sm:text-base font-bold text-center bg-white border-amber-200 focus:border-amber-400 w-full`}
                                                    value={currentOtHours || ''}
-                                                   onChange={(e) => setScheduleForm(prev => ({...prev, [dateStr]: { active: true, start: currentStart, end: currentEnd, otHours: e.target.value, isPaid: currentIsPaid }}))}
+                                                   onChange={(e) => applyShiftToSelectedRange({ active: true, start: currentStart, end: currentEnd, otHours: e.target.value, isPaid: currentIsPaid })}
                                                    placeholder="เช่น 1.5, 2"
                                                />
                                                <span className="text-amber-600 font-bold kanit-text whitespace-nowrap">ชั่วโมง</span>
@@ -2600,14 +2835,10 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                                <div className="pt-4 mt-6 sm:mt-auto border-t border-slate-100 shrink-0">
                                    <button 
-                                      onClick={() => {
-                                          const newForm = {...scheduleForm};
-                                          delete newForm[dateStr];
-                                          setScheduleForm(newForm);
-                                      }}
+                                      onClick={() => applyShiftToSelectedRange(null)}
                                       className={`w-full py-3 sm:py-3.5 border font-bold kanit-text text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 ${!currentActive && !currentExplicitlyOff ? 'bg-slate-50 text-slate-300 border-transparent pointer-events-none' : 'bg-white border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 shadow-sm active:scale-95'}`}
                                    >
-                                     <Trash2 size={16} /> ล้างค่าในวันนี้ (ไม่ระบุสถานะ)
+                                     <Trash2 size={16} /> {hasRange ? 'ล้างค่าในช่วงนี้ (ไม่ระบุสถานะ)' : 'ล้างค่าในวันนี้ (ไม่ระบุสถานะ)'}
                                    </button>
                                </div>
                            </div>
@@ -3079,7 +3310,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-5 gap-x-4 pl-1">
                                     <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">รหัสพนักงาน</p>
-                                        <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.empCode || '-'}</p>
+                                        <p className="text-sm font-black text-slate-700 font-data">{viewProfileStaff.id || '-'}</p>
                                     </div>
                                     <div className="col-span-1 sm:col-span-2">
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest kanit-text mb-1">อีเมล</p>

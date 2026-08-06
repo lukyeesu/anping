@@ -87,7 +87,19 @@ const CalendarDay = React.memo(({
         prevProps.onShowStaff === nextProps.onShowStaff &&
         prevProps.renderEventItem === nextProps.renderEventItem &&
         prevProps.events.length === nextProps.events.length &&
-        prevProps.events.every((ev, i) => ev.id === nextProps.events[i].id && ev.dealStatus === nextProps.events[i].dealStatus && ev.name === nextProps.events[i].name) &&
+        prevProps.events.every((ev, i) => 
+            ev.id === nextProps.events[i].id && 
+            ev.dealStatus === nextProps.events[i].dealStatus && 
+            ev.status === nextProps.events[i].status &&
+            ev.name === nextProps.events[i].name &&
+            ev.category === nextProps.events[i].category &&
+            ev.artist === nextProps.events[i].artist &&
+            ev.rawDeliveryStart === nextProps.events[i].rawDeliveryStart &&
+            ev.rawDateTime === nextProps.events[i].rawDateTime &&
+            ev.postponeCount === nextProps.events[i].postponeCount &&
+            ev.postponedDate === nextProps.events[i].postponedDate &&
+            ev.postpone1_date === nextProps.events[i].postpone1_date
+        ) &&
         prevProps.docsOnThisDay.length === nextProps.docsOnThisDay.length &&
         prevProps.docsOnThisDay.every((doc, i) => doc.id === nextProps.docsOnThisDay[i].id)
     );

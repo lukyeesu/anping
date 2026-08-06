@@ -18,12 +18,21 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser }) => {
+const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
+  const [serverApptStats, setServerApptStats] = useState(null);
+
+  useEffect(() => {
+    if (fetchAppointmentStats) {
+      fetchAppointmentStats().then(res => {
+        if (res) setServerApptStats(res);
+      }).catch(err => console.error(err));
+    }
+  }, [fetchAppointmentStats]);
 
   // --- ใช้ Custom Hook แทนการประกาศ State แยกเอง ---
   const apptModal = useModal();
@@ -50,6 +59,34 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     postpone4_date: '', postpone4_status: '',
     createdAt: ''
   };
+
+  const formatPhoneDisplay = (phoneVal) => {
+    if (!phoneVal) return '';
+    let raw = phoneVal;
+    if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+      try { raw = JSON.parse(raw); } catch (e) {}
+    }
+    if (Array.isArray(raw)) {
+      const first = raw.find(p => p && String(p).trim() !== '') || raw[0] || '';
+      return String(first).replace(/[\[\]"']/g, '').trim();
+    }
+    return String(raw).replace(/[\[\]"']/g, '').trim();
+  };
+
+  const parsePhones = (phoneInput) => {
+    if (!phoneInput) return [''];
+    let raw = phoneInput;
+    if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+      try { raw = JSON.parse(raw); } catch (e) {}
+    }
+    if (Array.isArray(raw)) {
+      const cleaned = raw.map(p => String(p || '').replace(/[\[\]"']/g, '').trim()).filter(Boolean);
+      return cleaned.length > 0 ? cleaned : [''];
+    }
+    const cleanStr = String(raw).replace(/[\[\]"']/g, '').trim();
+    return cleanStr ? [cleanStr] : [''];
+  };
+
   const [formData, setFormData] = useState(initialApptState);
 
   const [showPatientSuggest, setShowPatientSuggest] = useState(false);
@@ -132,7 +169,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         datetime: appt.datetime || '', 
         reason: appt.reason || appt.category || '', 
         status: appt.status || appt.dealStatus || 'pending',
-        phones: appt.phone ? (Array.isArray(appt.phone) ? appt.phone : [appt.phone]) : [''],
+        phones: parsePhones(appt.phone),
         lineId: appt.lineId || '',
         facebook: appt.facebook || '',
         instagram: appt.instagram || '',
@@ -275,9 +312,12 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     }
 
     const creationTime = editingId ? (formData.createdAt || new Date().toISOString()) : new Date().toISOString();
+    const cleanPhones = formData.phones.map(p => String(p || '').trim()).filter(Boolean);
+    const phonePayload = cleanPhones.length === 1 ? cleanPhones[0] : (cleanPhones.length > 1 ? cleanPhones : '');
+
     const payload = {
         id: editingId || `APPT${Date.now()}`, hn: finalHn, patientName: formData.patientName, datetime: formData.datetime, doctor: doctorName, reason: formData.reason, status: formData.status,
-        phone: formData.phones, lineId: formData.lineId, facebook: formData.facebook, instagram: formData.instagram, tiktok: formData.tiktok, serviceType: formData.serviceType,
+        phone: phonePayload, lineId: formData.lineId, facebook: formData.facebook, instagram: formData.instagram, tiktok: formData.tiktok, serviceType: formData.serviceType,
         rawDeliveryStart: isoDate, rawDateTime: isoDate, name: formData.patientName || finalHn, artist: doctorName, category: formData.reason, dealStatus: effectiveStatus,
         // ข้อมูลเลื่อนนัด
         postponeCount: calcPostponeCount,
@@ -299,8 +339,14 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     
     try {
         await callAppScript('SAVE_DATA', 'Queue', payload); 
-        if (editingId) setQueueData(queueData.map(a => a.id === editingId ? payload : a));
-        else setQueueData([payload, ...queueData]);
+        
+        // อัปเดตข้อมูลใน UI ทันทีไม่ต้องรอโหลดใหม่
+        if (editingId) {
+            setQueueData(prev => prev.map(appt => appt.id === editingId ? { ...appt, ...payload } : appt));
+        } else {
+            setQueueData(prev => [...prev, payload]);
+        }
+        
         apptModal.close(); 
         showToast(editingId ? 'แก้ไขนัดหมายสำเร็จ' : 'เพิ่มนัดหมายสำเร็จ', 'success');
     } catch(e) { showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'warning'); }
@@ -340,11 +386,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
   // --- [NEW] สรุปยอดสำหรับระบบนัดหมาย ---
   const stats = useMemo(() => {
-    let total = augmentedQueueData.length;
     let todayCount = 0;
-    let pending = 0;
-    let confirmed = 0;
-    let cancelled = 0;
+    let pending = serverApptStats ? serverApptStats.pending : 0;
+    let confirmed = serverApptStats ? serverApptStats.completed : 0;
+    let cancelled = serverApptStats ? serverApptStats.cancelled : 0;
+    let total = serverApptStats ? serverApptStats.total : augmentedQueueData.length;
 
     const now = new Date();
     const todayStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()+543}`;
@@ -354,13 +400,15 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         if (effectiveDt && effectiveDt.split(' ')[0] === todayStr) {
             todayCount++;
         }
-        if (appt.status === 'pending' || appt.dealStatus === 'pending') pending++;
-        else if (appt.status === 'confirmed' || appt.dealStatus === 'confirmed') confirmed++;
-        else if (appt.status === 'cancelled' || appt.dealStatus === 'cancelled') cancelled++;
+        if (!serverApptStats) {
+          if (appt.status === 'pending' || appt.dealStatus === 'pending') pending++;
+          else if (appt.status === 'confirmed' || appt.dealStatus === 'confirmed') confirmed++;
+          else if (appt.status === 'cancelled' || appt.dealStatus === 'cancelled') cancelled++;
+        }
     });
 
     return { total, todayCount, pending, confirmed, cancelled };
-  }, [augmentedQueueData]);
+  }, [augmentedQueueData, serverApptStats]);
 
   useEffect(() => {
     setVisibleCount(20);
@@ -514,9 +562,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             </td>
             <td className="py-4 text-center">
                 <div className="flex justify-center">
-                {(Array.isArray(appt.phone) ? appt.phone[0] : appt.phone) ? (
-                    <a href={`tel:${Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
-                    <Phone size={14} /> {Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}
+                {formatPhoneDisplay(appt.phone) ? (
+                    <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
+                    <Phone size={14} /> {formatPhoneDisplay(appt.phone)}
                     </a>
                 ) : <span className="text-slate-400">-</span>}
                 </div>
@@ -574,9 +622,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 <div className="mb-3">
                     <h4 className="font-bold text-slate-800 text-lg font-data leading-tight flex items-center flex-wrap gap-2">{appt.patientName} {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}</h4>
                     <div className="mt-1.5">
-                        {(Array.isArray(appt.phone) ? appt.phone[0] : appt.phone) ? (
-                            <a href={`tel:${Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
-                                <Phone size={12} className="text-sky-500" /> {Array.isArray(appt.phone) ? appt.phone[0] : appt.phone}
+                        {formatPhoneDisplay(appt.phone) ? (
+                            <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
+                                <Phone size={12} className="text-sky-500" /> {formatPhoneDisplay(appt.phone)}
                             </a>
                         ) : <span className="text-[10px] text-slate-400 block">- ไม่มีเบอร์ติดต่อ -</span>}
                     </div>
@@ -1328,6 +1376,6 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   );
 };
 
-export default AppointmentManager;
+export default React.memo(AppointmentManager);
 
 

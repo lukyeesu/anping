@@ -1021,5 +1021,5 @@ const SettingsManager = ({
   );
 };
 
-export default SettingsManager;
+export default React.memo(SettingsManager);
 

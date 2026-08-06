@@ -556,5 +556,5 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
   );
 };
 
-export default ProfileManager;
+export default React.memo(ProfileManager);
 

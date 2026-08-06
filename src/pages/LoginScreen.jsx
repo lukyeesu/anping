@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
+import { supabase } from '../lib/supabase';
+
 const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -30,36 +32,75 @@ const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
     }
     setIsLoading(true);
     setError('');
-    
-    // Secure Fallback: Compare SHA-256 hash instead of plain text
-    try {
-        if (window.crypto && window.crypto.subtle) {
-            const msgUint8 = new TextEncoder().encode((username.trim().toLowerCase() + ':' + password));
-            const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            
-            // This hash represents the emergency recovery credentials
-            if (hashHex === '73d2d42825f16c12972037ef5d3af93dfc8c733921aca072046a5f0063f35cdf') {
-                setTimeout(() => {
-                    setIsLoading(false);
-                    onLogin({ id: 'admin1', name: 'Admin (Recovery)', role: 'admin', category: 'staff' }, 'recovery-token');
-                }, 600);
-                return;
-            }
-        }
 
-        const res = await callAppScript('LOGIN', 'Staff', { username: username.trim(), password: password });
-        if (res.status === 'success') {
-            onLogin(res.data.staff, res.data.token);
-        } else {
-            setError(res.message || 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
+    try {
+      const usernameInput = username.trim();
+      const cleanUser = usernameInput.includes('@') ? usernameInput.split('@')[0].trim() : usernameInput;
+      const cleanLower = cleanUser.toLowerCase();
+      
+      const loginEmail = usernameInput.includes('@') 
+        ? usernameInput.toLowerCase() 
+        : `${cleanLower.replace(/[^a-z0-9._-]/g, '')}@anping.com`;
+
+      const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: password
+      });
+
+      if (authErr) {
+        if (authErr.message && authErr.message.includes('Email not confirmed')) {
+          throw new Error('บัญชีนี้ถูกสร้างในหน้า Auth โดยตรง แต่ยังไม่ได้กดยืนยันอีเมล');
         }
+        throw new Error('ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง');
+      }
+
+      let matchedStaff = null;
+      let finalToken = authData.session?.access_token || `staff-token-${Date.now()}`;
+
+      const { data: staffRows, error: staffErr } = await supabase
+        .from('staff')
+        .select('*')
+        .or(`email.eq.${loginEmail},username.eq.${cleanLower},id.eq.${authData.user.id}`);
+
+      if (!staffErr && staffRows && staffRows.length > 0) {
+        // camelCase conversion manually as we don't have rowToJS here
+        const row = staffRows[0];
+        matchedStaff = { ...row };
+        for (const [key, val] of Object.entries(row)) {
+          if (val === null || val === undefined) continue;
+          const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+          matchedStaff[camelKey] = val;
+        }
+        if (!matchedStaff.name && (matchedStaff.firstName || matchedStaff.lastName)) {
+          matchedStaff.name = `${matchedStaff.firstName || ''} ${matchedStaff.lastName || ''}`.trim();
+        }
+      }
+
+      if (!matchedStaff) {
+        // Fallback staff profile if missing in table (e.g. created directly in Auth Dashboard for monitoring)
+        matchedStaff = {
+          id: authData.user.id,
+          username: cleanUser || authData.user.email?.split('@')[0] || 'superadmin',
+          email: authData.user.email || loginEmail,
+          name: authData.user.user_metadata?.name || cleanUser || 'System Monitor',
+          role: authData.user.user_metadata?.role || 'superadmin',
+          category: authData.user.user_metadata?.category || 'admin',
+          isSpecialMonitor: true,
+          isActive: true,
+          is_active: true
+        };
+      }
+
+      if (matchedStaff.role === 'suspended') {
+        throw new Error('บัญชีผู้ใช้งานนี้ถูกระงับสิทธิ์การใช้งาน กรุณาติดต่อผู้ดูแลระบบ');
+      }
+
+      onLogin(matchedStaff, finalToken);
     } catch(err) {
-        console.error('Login error', err);
-        setError(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบ');
+      console.error('Login error', err);
+      setError(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบ');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 

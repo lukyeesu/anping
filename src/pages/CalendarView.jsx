@@ -36,21 +36,46 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       setShowStaffModal(true);
   }, [viewDate]);
 
+  const isDoctorStaff = (s) => {
+      if (!s) return false;
+      const r = String(s.role || '').trim().toLowerCase();
+      const c = String(s.category || '').trim().toLowerCase();
+      return r === 'doctor' || c === 'doctor' || r.includes('แพทย์') || c.includes('แพทย์') || r.includes('หมอ') || c.includes('หมอ');
+  };
+
+  const getStaffScheduleForDate = (schedule, dateObj) => {
+      if (!schedule) return false;
+      const d = dateObj.getDate();
+      const m = dateObj.getMonth() + 1;
+      const y = dateObj.getFullYear();
+      const dayOfWeek = dateObj.getDay();
+
+      const thaiPadded = `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y + 543}`;
+      const thaiShort = `${d}/${m}/${y + 543}`;
+      const isoDate = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+      let item = undefined;
+      if (schedule[thaiPadded] !== undefined) item = schedule[thaiPadded];
+      else if (schedule[thaiShort] !== undefined) item = schedule[thaiShort];
+      else if (schedule[isoDate] !== undefined) item = schedule[isoDate];
+      else if (typeof schedule === 'object' && schedule[dayOfWeek] !== undefined) item = schedule[dayOfWeek];
+      else if (typeof schedule === 'object' && schedule[String(dayOfWeek)] !== undefined) item = schedule[String(dayOfWeek)];
+
+      if (item !== undefined && item !== null) {
+          return typeof item === 'boolean' ? item : !!item.active;
+      }
+      if (Array.isArray(schedule)) return schedule.includes(dayOfWeek);
+      return false;
+  };
+
   const doctorsOnDutyMap = useMemo(() => {
       const map = {};
       const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
           const currentDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
-          const dateStr = `${String(d).padStart(2,'0')}/\ ${String(viewDate.getMonth()+1).padStart(2,'0')}/${viewDate.getFullYear()+543}`.replace('/ ', '/');
-          const dayOfWeek = currentDate.getDay();
-          
           map[d] = staffData.filter(s => {
-              if (s.role !== 'doctor' || !s.schedule) return false;
-              const specificData = s.schedule[dateStr];
-              if (specificData !== undefined) return specificData.active;
-              if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
-              if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
-              return false;
+              if (!isDoctorStaff(s) || !s.schedule) return false;
+              return getStaffScheduleForDate(s.schedule, currentDate);
           });
       }
       return map;
@@ -328,15 +353,9 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
   };
 
   const getDoctorOnDutyStatus = (dateObj) => {
-      const dayOfWeek = dateObj.getDay(); 
-      const dateStr = `${String(dateObj.getDate()).padStart(2,'0')}/${String(dateObj.getMonth()+1).padStart(2,'0')}/${dateObj.getFullYear()+543}`;
       const doctorsOnDuty = staffData.filter(s => {
-          if (s.role !== 'doctor' || !s.schedule) return false;
-          const specificData = s.schedule[dateStr];
-          if (specificData !== undefined) return specificData.active;
-          if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
-          if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
-          return false;
+          if (!isDoctorStaff(s) || !s.schedule) return false;
+          return getStaffScheduleForDate(s.schedule, dateObj);
       });
       return doctorsOnDuty;
   };
@@ -351,7 +370,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
   const renderDayDetailsModal = () => {
       if (!selectedDayDetails) return null;
-      const { date, events } = selectedDayDetails;
+      const { date } = selectedDayDetails;
+      const events = getEventsForDate(date);
 
       const modalContent = (
         <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 z-[160] fade-in">
@@ -516,11 +536,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
       const workingStaff = staffData.filter(s => {
           if (!s.schedule) return false;
-          const specificData = s.schedule[dateStr];
-          if (specificData !== undefined) return specificData.active;
-          if (typeof s.schedule === 'object' && s.schedule[dayOfWeek]) return s.schedule[dayOfWeek].active;
-          if (Array.isArray(s.schedule)) return s.schedule.includes(dayOfWeek);
-          return false;
+          return getStaffScheduleForDate(s.schedule, staffModalDate);
       });
 
       // จัดกลุ่มพนักงานตามตำแหน่งแบบไดนามิก โดยใช้ staffCategories (บทบาท) แทน role (สิทธิ์เข้าระบบ)

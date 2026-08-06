@@ -24,10 +24,19 @@ const InventoryManager = ({
     inventoryLogsData = [], setInventoryLogsData,
     posProducts = [], branchesData = [],
     showToast, callAppScript, isGlobalLoading,
-    currentBranch
+    currentBranch, fetchInventoryStats
 }) => {
   const [search, setSearch] = useState('');
   const [activeBranch, setActiveBranch] = useState(currentBranch === 'all' ? 'ทั้งหมด' : currentBranch);
+  const [serverInvStats, setServerInvStats] = useState(null);
+
+  useEffect(() => {
+    if (fetchInventoryStats) {
+      fetchInventoryStats().then(res => {
+        if (res) setServerInvStats(res);
+      }).catch(err => console.error(err));
+    }
+  }, [fetchInventoryStats]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
@@ -310,13 +319,15 @@ const InventoryManager = ({
   // สถิติสต็อก
   const stats = useMemo(() => {
     const today = new Date();
-    let total = 0, low = 0, out = 0, expired = 0, nearExpiry = 0;
+    let total = serverInvStats ? serverInvStats.totalItems : 0;
+    let low = 0, out = serverInvStats ? serverInvStats.outOfStock : 0, expired = 0, nearExpiry = 0;
 
     filteredData.forEach(item => {
-      total++;
-      if (item.quantity <= 0) {
-        out++;
-      } else {
+      if (!serverInvStats) {
+        total++;
+        if (item.quantity <= 0) out++;
+      }
+      if (item.quantity > 0) {
         if (item.quantity <= item.minStock) low++;
 
         // เช็ควันหมดอายุ
@@ -351,7 +362,7 @@ const InventoryManager = ({
     });
 
     return { total, low, out, expired, nearExpiry };
-  }, [filteredData]);
+  }, [filteredData, serverInvStats]);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
@@ -1647,5 +1658,5 @@ const InventoryManager = ({
   );
 };
 
-export default InventoryManager;
+export default React.memo(InventoryManager);
 

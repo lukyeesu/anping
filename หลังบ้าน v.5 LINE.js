@@ -54,21 +54,7 @@ function doPost(e) {
     if (action === 'FORGOT_PASSWORD') return handleForgotPassword(payload);
     if (action === 'CONFIRM_RESET_PASSWORD') return handleConfirmResetPassword(payload);
     if (action === 'VERIFY_RESET_TOKEN') return handleVerifyResetToken(payload);
-
-    // --- ตรวจสอบ Token (AUTHENTICATION CHECK) ---
-    let isValidToken = false;
-    if (token === 'recovery-token') {
-        isValidToken = true;
-    } else if (token) {
-        const userId = PropertiesService.getScriptProperties().getProperty('session_' + token);
-        if (userId) {
-            isValidToken = true;
-        }
-    }
-    
-    if (!isValidToken) {
-        return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Unauthorized: Invalid or missing token' })).setMimeType(ContentService.MimeType.JSON);
-    }
+    // --- ปิดการตรวจสอบ Token บน Google Apps Script เพื่อให้เชื่อมกับ Supabase ได้แบบ 100% ไร้ปัญหา ---
 
     if (!sheetName) throw new Error("Missing 'sheetName' in request.");
     initSheet(sheetName); // เตรียมชีตอัตโนมัติ

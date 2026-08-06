@@ -1152,5 +1152,5 @@ const ExecutiveDashboard = ({
   );
 };
 
-export default ExecutiveDashboard;
+export default React.memo(ExecutiveDashboard);
 
