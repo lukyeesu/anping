@@ -94,6 +94,7 @@ const CalendarDay = React.memo(({
             ev.name === nextProps.events[i].name &&
             ev.category === nextProps.events[i].category &&
             ev.artist === nextProps.events[i].artist &&
+            ev.doctor === nextProps.events[i].doctor &&
             ev.rawDeliveryStart === nextProps.events[i].rawDeliveryStart &&
             ev.rawDateTime === nextProps.events[i].rawDateTime &&
             ev.postponeCount === nextProps.events[i].postponeCount &&

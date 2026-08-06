@@ -664,7 +664,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
   const renderEventItem = React.useCallback((ev, idx, compact = false) => {
      // พยายามหลีกเลี่ยงการ New Date ใหม่เยอะๆ (รับค่าเวลาที่ดึงง่ายๆ ไว้ล่วงหน้า)
      const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '');
-     const displayText = `${timeStr ? timeStr + ' ' : ''}${ev.name} (${ev.artist || '-'})`;
+     const displayText = `${timeStr ? timeStr + ' ' : ''}${ev.name} (${ev.doctor || ev.artist || '-'})`;
      const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
      let itemColor = statusInfo.color || 'bg-slate-50 border-slate-200 text-slate-600';
      
@@ -688,7 +688,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           className={`text-left rounded-[4px] sm:rounded-md border transition-colors w-full mb-0.5 sm:mb-1 xl:mb-1.5 flex items-center shrink-0 cursor-grab active:cursor-grabbing hover:opacity-80 ${itemColor} leading-none select-none
              ${compact ? 'p-0.5 sm:p-1 xl:p-1.5 min-h-[18px] sm:h-auto gap-0.5 sm:gap-1 xl:gap-1.5 justify-start overflow-hidden' : 'px-1.5 py-1 sm:px-2 sm:py-1 xl:px-3 xl:py-1.5 h-auto min-h-[16px] sm:min-h-[26px] xl:min-h-[32px] gap-1 xl:gap-2 truncate'}
           `}
-          title={`${timeStr} ${ev.name} (${ev.artist})`}
+          title={`${timeStr} ${ev.name} (${ev.doctor || ev.artist || '-'})`}
        >
           <div className={`rounded-full shrink-0 ${dotColor} ${compact ? 'w-1.5 h-1.5 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2' : 'w-1.5 h-1.5 sm:w-2 sm:h-2 xl:w-2.5 xl:h-2.5'}`}></div>
           <span className={`truncate flex items-center font-medium tracking-tighter font-data ${compact ? 'text-[8px] sm:text-[10px] xl:text-xs 2xl:text-[13px]' : 'text-[9px] sm:text-xs xl:text-sm 2xl:text-base'}`}>
