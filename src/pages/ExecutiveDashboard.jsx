@@ -496,7 +496,7 @@ const ExecutiveDashboard = ({
       .slice(0, 5);
   }, [posHistoryData, selectedBranch, timeRange, customStartDate, customEndDate]);
 
-  // Calculate Financial Trends based on the selected timeRange and granularity
+  // Calculate Financial Trends based on timeRange & execSummary.dailyTrend
   const monthlyTrends = useMemo(() => {
     const now = new Date();
     const trends = [];
@@ -505,15 +505,25 @@ const ExecutiveDashboard = ({
     const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
     const thaiMonthsFull = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 
-    let granularity = 'monthly'; // 'daily' or 'monthly'
-    let pointsCount = 6; // default
+    // Map dailyTrend from backend by YYYY-MM-DD key for instant lookup
+    const trendMap = {};
+    if (execSummary?.dailyTrend && Array.isArray(execSummary.dailyTrend)) {
+      execSummary.dailyTrend.forEach(item => {
+        if (item.date) {
+          const key = String(item.date).split('T')[0];
+          trendMap[key] = item;
+        }
+      });
+    }
+
+    let granularity = 'daily';
+    let pointsCount = 31;
 
     if (timeRange === 'today' || timeRange === 'week') {
       granularity = 'daily';
       pointsCount = 7;
     } else if (timeRange === 'month') {
       granularity = 'daily';
-      // Number of days in the current calendar month
       pointsCount = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     } else if (timeRange === 'year') {
       granularity = 'monthly';
@@ -524,7 +534,6 @@ const ExecutiveDashboard = ({
         const end = new Date(customEndDate);
         const diffTime = Math.abs(end - start);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        
         if (diffDays <= 31) {
           granularity = 'daily';
           pointsCount = diffDays;
@@ -542,9 +551,8 @@ const ExecutiveDashboard = ({
 
     if (granularity === 'daily') {
       if (timeRange === 'today' || timeRange === 'week') {
-        // Current calendar week (Monday to Sunday)
         const startOfWeek = new Date(now);
-        const currentDay = startOfWeek.getDay(); // 0 = Sun, 1 = Mon, etc.
+        const currentDay = startOfWeek.getDay();
         const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
         startOfWeek.setDate(startOfWeek.getDate() + distanceToMonday);
         startOfWeek.setHours(0, 0, 0, 0);
@@ -552,200 +560,147 @@ const ExecutiveDashboard = ({
         for (let i = 0; i < 7; i++) {
           const d = new Date(startOfWeek);
           d.setDate(startOfWeek.getDate() + i);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const dy = String(d.getDate()).padStart(2, '0');
+          const key = `${y}-${m}-${dy}`;
+          const matched = trendMap[key] || {};
+
           trends.push({
             type: 'daily',
             date: d,
-            year: d.getFullYear(),
+            year: y,
             month: d.getMonth(),
             day: d.getDate(),
             monthLabel: thaiDaysShort[d.getDay()],
-            fullLabel: `${thaiDaysFull[d.getDay()]}ที่ ${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
+            fullLabel: `${thaiDaysFull[d.getDay()]}ที่ ${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${y + 543}`,
+            income: parseFloat(matched.income || 0),
+            expense: parseFloat(matched.expense || 0),
+            profit: parseFloat(matched.profit || (matched.income || 0) - (matched.expense || 0))
           });
         }
       } else if (timeRange === 'month') {
-        // Calendar month days from day 1 to pointsCount
         for (let day = 1; day <= pointsCount; day++) {
           const d = new Date(now.getFullYear(), now.getMonth(), day);
-          // Show labels for day 1, and every 5th day to avoid overlap
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const dy = String(d.getDate()).padStart(2, '0');
+          const key = `${y}-${m}-${dy}`;
+          const matched = trendMap[key] || {};
+
           const showLabel = (day === 1 || day % 5 === 0 || day === pointsCount);
           trends.push({
             type: 'daily',
             date: d,
-            year: d.getFullYear(),
+            year: y,
             month: d.getMonth(),
             day: d.getDate(),
             monthLabel: showLabel ? `${d.getDate()}` : '',
-            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
+            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${y + 543}`,
+            income: parseFloat(matched.income || 0),
+            expense: parseFloat(matched.expense || 0),
+            profit: parseFloat(matched.profit || (matched.income || 0) - (matched.expense || 0))
           });
         }
       } else if (timeRange === 'custom' && customStartDate && customEndDate) {
-        // Custom daily range
         const start = new Date(customStartDate);
         for (let i = 0; i < pointsCount; i++) {
           const d = new Date(start);
           d.setDate(start.getDate() + i);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const dy = String(d.getDate()).padStart(2, '0');
+          const key = `${y}-${m}-${dy}`;
+          const matched = trendMap[key] || {};
+
           const showLabel = pointsCount <= 10 || (i === 0 || i === pointsCount - 1 || d.getDate() % 5 === 0);
           trends.push({
             type: 'daily',
             date: d,
-            year: d.getFullYear(),
+            year: y,
             month: d.getMonth(),
             day: d.getDate(),
             monthLabel: showLabel ? `${d.getDate()}/${d.getMonth() + 1}` : '',
-            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
+            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${y + 543}`,
+            income: parseFloat(matched.income || 0),
+            expense: parseFloat(matched.expense || 0),
+            profit: parseFloat(matched.profit || (matched.income || 0) - (matched.expense || 0))
           });
         }
       } else {
-        // Fallback: Last N days
         for (let i = pointsCount - 1; i >= 0; i--) {
           const d = new Date();
           d.setDate(now.getDate() - i);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const dy = String(d.getDate()).padStart(2, '0');
+          const key = `${y}-${m}-${dy}`;
+          const matched = trendMap[key] || {};
+
           trends.push({
             type: 'daily',
             date: d,
-            year: d.getFullYear(),
+            year: y,
             month: d.getMonth(),
             day: d.getDate(),
             monthLabel: `${d.getDate()}/${d.getMonth() + 1}`,
-            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
+            fullLabel: `${d.getDate()} ${thaiMonthsShort[d.getMonth()]} ${y + 543}`,
+            income: parseFloat(matched.income || 0),
+            expense: parseFloat(matched.expense || 0),
+            profit: parseFloat(matched.profit || (matched.income || 0) - (matched.expense || 0))
           });
         }
       }
     } else {
-      // Monthly granularity
       if (timeRange === 'year') {
-        // Current calendar year (January to December)
         const currentYear = now.getFullYear();
         for (let mIndex = 0; mIndex < 12; mIndex++) {
           const d = new Date(currentYear, mIndex, 1);
-          trends.push({
-            type: 'monthly',
-            date: d,
-            year: d.getFullYear(),
-            month: d.getMonth(),
-            monthLabel: thaiMonthsShort[d.getMonth()],
-            fullLabel: `${thaiMonthsFull[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
+          let inc = 0, exp = 0;
+          Object.keys(trendMap).forEach(k => {
+            if (k.startsWith(`${currentYear}-${String(mIndex + 1).padStart(2, '0')}`)) {
+              inc += parseFloat(trendMap[k].income || 0);
+              exp += parseFloat(trendMap[k].expense || 0);
+            }
           });
-        }
-      } else if (timeRange === 'custom' && customStartDate && customEndDate) {
-        const start = new Date(customStartDate);
-        for (let i = 0; i < pointsCount; i++) {
-          const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+
           trends.push({
             type: 'monthly',
             date: d,
-            year: d.getFullYear(),
-            month: d.getMonth(),
-            monthLabel: `${thaiMonthsShort[d.getMonth()]} ${String(d.getFullYear() + 543).substring(2)}`,
-            fullLabel: `${thaiMonthsFull[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
-          });
-        }
-      } else {
-        // Default monthly trends (last N months)
-        for (let i = pointsCount - 1; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          trends.push({
-            type: 'monthly',
-            date: d,
-            year: d.getFullYear(),
-            month: d.getMonth(),
-            monthLabel: `${thaiMonthsShort[d.getMonth()]} ${String(d.getFullYear() + 543).substring(2)}`,
-            fullLabel: `${thaiMonthsFull[d.getMonth()]} ${d.getFullYear() + 543}`,
-            income: 0,
-            expense: 0
+            year: currentYear,
+            month: mIndex,
+            monthLabel: thaiMonthsShort[mIndex],
+            fullLabel: `${thaiMonthsFull[mIndex]} ${currentYear + 543}`,
+            income: inc,
+            expense: exp,
+            profit: inc - exp
           });
         }
       }
     }
 
-    // Now populate income and expense amounts
-    allTransactions.forEach(tx => {
-      const txDate = parseDate(tx.date);
-      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch) return;
-      if (tx.status === 'cancelled') return;
-
-      trends.forEach(t => {
-        if (t.type === 'daily') {
-          if (txDate.getFullYear() === t.year && txDate.getMonth() === t.month && txDate.getDate() === t.day) {
-            if (tx.type === 'income') t.income += tx.amount;
-            else if (tx.type === 'expense') t.expense += tx.amount;
-          }
-        } else {
-          if (txDate.getFullYear() === t.year && txDate.getMonth() === t.month) {
-            if (tx.type === 'income') t.income += tx.amount;
-            else if (tx.type === 'expense') t.expense += tx.amount;
-          }
-        }
-      });
-    });
-
     return trends;
-  }, [allTransactions, selectedBranch, timeRange, customStartDate, customEndDate]);
+  }, [execSummary, timeRange, customStartDate, customEndDate]);
 
-  // Calculate branch revenue breakdown
+  // Calculate branch revenue breakdown from execSummary
   const branchRevenue = useMemo(() => {
-    const map = {};
-    branchesData.forEach(b => {
-      map[b.id] = { id: b.id, name: b.name, income: 0, expense: 0 };
-    });
-    // Add default/fallback branch if not found
-    map['all'] = { id: 'all', name: 'อื่น ๆ / ทั่วไป', income: 0, expense: 0 };
-
-    allTransactions.forEach(tx => {
-      const txDate = parseDate(tx.date);
-      const now = new Date();
-      let matchTime = true;
-      if (timeRange === 'today') {
-        matchTime = txDate.getDate() === now.getDate() && txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-      } else if (timeRange === 'week') {
-        const limit = new Date(); limit.setDate(now.getDate() - 7);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'month') {
-        const limit = new Date(); limit.setMonth(now.getMonth() - 1);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'year') {
-        const limit = new Date(); limit.setFullYear(now.getFullYear() - 1);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'custom') {
-        if (customStartDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          if (txDate < start) matchTime = false;
-        }
-        if (customEndDate) {
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          if (txDate > end) matchTime = false;
-        }
-      }
-
-      if (matchTime) {
-        const bId = tx.branchId || 'all';
-        if (!map[bId]) {
-          map[bId] = { id: bId, name: `สาขา ${bId}`, income: 0, expense: 0 };
-        }
-        if (tx.type === 'income') {
-          map[bId].income += tx.amount;
-        } else if (tx.type === 'expense') {
-          map[bId].expense += tx.amount;
-        }
-      }
-    });
-
-    return Object.values(map).filter(b => b.income > 0 || b.expense > 0);
-  }, [branchesData, allTransactions, timeRange, customStartDate, customEndDate]);
+    if (execSummary?.branchSummary) {
+      const map = {};
+      branchesData.forEach(b => {
+        const bId = b.id;
+        const info = execSummary.branchSummary[bId] || { income: 0, expense: 0, profit: 0 };
+        map[bId] = {
+          id: bId,
+          name: b.name,
+          income: info.income || 0,
+          expense: info.expense || 0,
+          profit: info.profit || 0
+        };
+      });
+      return Object.values(map);
+    }
+    return branchesData.map(b => ({ id: b.id, name: b.name, income: 0, expense: 0, profit: 0 }));
+  }, [branchesData, execSummary]);
 
   // Format currency helper
   const formatMoney = (amount) => {
@@ -753,17 +708,16 @@ const ExecutiveDashboard = ({
   };
 
   const maxTrendValue = Math.max(
-    ...monthlyTrends.map(t => Math.max(t.income, t.expense)),
-    10000 // avoid division by 0
+    ...monthlyTrends.map(t => Math.max(t.income, t.expense, Math.abs(t.profit || 0))),
+    1000 // avoid division by 0
   );
 
   const netProfitPoints = useMemo(() => {
     return monthlyTrends.map((t, idx) => {
       const netProfit = t.income - t.expense;
       const pct = Math.max(0, Math.min(100, (netProfit / maxTrendValue) * 80));
-      // Elevate dot and line slightly above the bar for perfect visibility
-      const dotPct = Math.min(95, pct + 6);
-      const x = (idx + 0.5) * (600 / monthlyTrends.length);
+      const dotPct = Math.max(5, Math.min(95, (netProfit > 0 ? (netProfit / maxTrendValue) * 80 : 0) + 6));
+      const x = (idx + 0.5) * (600 / (monthlyTrends.length || 1));
       const y = 144 - (dotPct / 100) * 144;
       return { x, y, pct, dotPct, netProfit };
     });
@@ -949,10 +903,10 @@ const ExecutiveDashboard = ({
                 {/* Bars Container */}
                 <div className="flex items-end h-full w-full relative">
                   {monthlyTrends.map((t, idx) => {
-                    const point = netProfitPoints[idx];
-                    const incomeHeight = `${Math.max(8, (t.income / maxTrendValue) * 80)}%`;
-                    const expenseHeight = `${Math.max(8, (t.expense / maxTrendValue) * 80)}%`;
-                    const netProfitHeight = `${Math.max(8, point.pct)}%`;
+                    const point = netProfitPoints[idx] || { pct: 0, dotPct: 0 };
+                    const incomeHeight = t.income > 0 ? `${Math.max(4, (t.income / maxTrendValue) * 80)}%` : '0px';
+                    const expenseHeight = t.expense > 0 ? `${Math.max(4, (t.expense / maxTrendValue) * 80)}%` : '0px';
+                    const netProfitHeight = point.pct > 0 ? `${Math.max(4, point.pct)}%` : '0px';
                     return (
                       <div key={idx} className={`flex-1 flex items-end justify-center ${financialGroupGapClass} h-full relative group cursor-pointer z-10`}>
                         {/* Beautiful Multi-value Tooltip */}

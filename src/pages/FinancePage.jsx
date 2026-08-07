@@ -1547,7 +1547,7 @@ const FinancePage = ({
                                   <p className="text-[11px] sm:text-xs font-bold text-slate-500 kanit-text uppercase tracking-wider">ข้อมูลลูกค้า & วันที่</p>
                               </div>
                               <div className="pl-1">
-                                  <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedTxn.rawTx.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
+                                  <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedTxn.rawTx?.patientName || selectedTxn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
                                   <p className="text-xs text-slate-500 font-data mt-1.5 flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/> {formatDate(selectedTxn.date)} {formatTime(selectedTxn.date)} น.</p>
                               </div>
                           </div>
@@ -1574,7 +1574,7 @@ const FinancePage = ({
                       </div>
 
                       {/* Items List */}
-                      <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({selectedTxn.rawTx.items?.length || 0})</h5>
+                      <h5 className="font-bold text-slate-700 kanit-text mb-3 flex items-center gap-2"><ShoppingCart size={16} className="text-sky-500" /> รายการสินค้า ({(selectedTxn.rawTx?.items || selectedTxn.items)?.length || 0})</h5>
                       <div className="border border-slate-100 rounded-xl overflow-hidden mb-6 w-full">
                           {/* Desktop Table */}
                           <div className="hidden sm:block overflow-x-auto w-full">
@@ -1583,7 +1583,7 @@ const FinancePage = ({
                                       <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs font-medium kanit-text sticky top-0"><th className="w-[16%] p-3 text-center">#</th><th className="w-[32%] p-3">รายการสินค้า / บริการ</th><th className="w-[16%] p-3 text-center ">จำนวน</th><th className="w-[19%] p-3 text-right ">ราคา/หน่วย</th><th className="w-[17%] p-3 text-right ">รวม (บาท)</th></tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-50">
-                                      {(selectedTxn.rawTx.items || []).map((item, idx) => (
+                                      {(selectedTxn.rawTx?.items || selectedTxn.items || []).map((item, idx) => (
                                           <tr key={`pos-item-${idx}`} className="hover:bg-slate-50/50 transition-colors font-data text-sm">
                                               <td className="p-3 text-center text-slate-400 text-xs">{idx + 1}</td>
                                               <td className="p-3 text-slate-700 font-bold kanit-text">{item.name}</td>
@@ -1597,7 +1597,7 @@ const FinancePage = ({
                           </div>
                           {/* Mobile List */}
                           <div className="sm:hidden flex flex-col divide-y divide-slate-50 bg-slate-50/30">
-                              {(selectedTxn.rawTx.items || []).map((item, idx) => (
+                              {(selectedTxn.rawTx?.items || selectedTxn.items || []).map((item, idx) => (
                                   <div key={`pos-mob-item-${idx}`} className="p-3 flex flex-col gap-1 bg-white">
                                       <div className="flex justify-between items-start gap-2">
                                           <div className="font-bold text-slate-800 text-sm kanit-text leading-tight">{item.name}</div>
@@ -1618,12 +1618,12 @@ const FinancePage = ({
                               <div className="text-[10px] sm:text-xs text-slate-400 kanit-text mb-1 flex items-center gap-1.5"><FileText size={12}/> รหัสอ้างอิง: {selectedTxn.id}</div>
                           </div>
                           <div className="w-full sm:w-72 space-y-2 text-sm font-data">
-                              <div className="flex justify-between text-slate-600"><span className="kanit-text">รวมเป็นเงิน</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx.subtotal)}</span></div>
-                              {selectedTxn.rawTx.discountAmount > 0 && (
-                                  <div className="flex justify-between text-rose-500"><span className="kanit-text">ส่วนลด {selectedTxn.rawTx.discountType === 'percent' ? `(${selectedTxn.rawTx.discountValue}%)` : ''}</span><span className="font-semibold">- {formatCurrency(selectedTxn.rawTx.discountAmount)}</span></div>
+                              <div className="flex justify-between text-slate-600"><span className="kanit-text">รวมเป็นเงิน</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx?.subtotal || selectedTxn.amount)}</span></div>
+                              {selectedTxn.rawTx?.discountAmount > 0 && (
+                                  <div className="flex justify-between text-rose-500"><span className="kanit-text">ส่วนลด {selectedTxn.rawTx?.discountType === 'percent' ? `(${selectedTxn.rawTx?.discountValue}%)` : ''}</span><span className="font-semibold">- {formatCurrency(selectedTxn.rawTx?.discountAmount)}</span></div>
                               )}
-                              {selectedTxn.rawTx.vatAmount > 0 && (
-                                  <div className="flex justify-between text-slate-600"><span className="kanit-text">ภาษี ({selectedTxn.rawTx.taxMode === 'include' ? 'รวม' : 'แยก'})</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx.vatAmount)}</span></div>
+                              {selectedTxn.rawTx?.vatAmount > 0 && (
+                                  <div className="flex justify-between text-slate-600"><span className="kanit-text">ภาษี ({selectedTxn.rawTx?.taxMode === 'include' ? 'รวม' : 'แยก'})</span><span className="font-semibold">{formatCurrency(selectedTxn.rawTx?.vatAmount)}</span></div>
                               )}
                               <div className="h-px bg-slate-200/60 my-2"></div>
                               <div className="flex justify-between items-end text-xl sm:text-2xl font-black text-sky-600 kanit-text"><span className="text-base sm:text-lg">ยอดสุทธิ</span><span className="font-data tracking-tight">{formatCurrency(selectedTxn.rawTx?.grandTotal || selectedTxn.amount)}</span></div>
