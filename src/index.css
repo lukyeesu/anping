@@ -47,3 +47,49 @@
   .p-2 { padding: 0.75rem !important; }
   .p-3 { padding: 1rem !important; }
 }
+
+/* Toast Animations & Prevention of Repaint Flickering */
+@keyframes toastSlideDown {
+    from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastSlideUp {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to { opacity: 0; transform: translateY(-20px) scale(0.95); }
+}
+.toast-animate-in { 
+    animation: toastSlideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; 
+}
+.toast-animate-out { 
+    animation: toastSlideUp 0.3s ease-in forwards; 
+}
+.toast-wrapper-active {
+    opacity: 1;
+    transform: translateY(0);
+    margin-bottom: 0.5rem;
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toast-wrapper-closing {
+    opacity: 0 !important;
+    transform: translateY(-10px);
+    margin-bottom: 0px !important;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Anti-flicker GPU compositing for mobile WebKit & Chromium engines */
+.fixed, [class*="backdrop-blur"] {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform, opacity;
+}
+
+@media (max-width: 768px) {
+    /* Optimize mobile backdrop-blur layer compositing to prevent flashing */
+    .backdrop-blur-xl, .backdrop-blur-lg, .backdrop-blur-md, .backdrop-blur-sm, .backdrop-blur {
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+    }
+}

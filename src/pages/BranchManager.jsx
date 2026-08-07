@@ -21,7 +21,7 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
   const [isClosing, setIsClosing] = useState(false);
   const [editingBranch, setEditingBranch] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-      const initialForm = { id: '', name: '', clinicName: '', licenseNumber: '', logo: '', taxId: '', address: '', phone: '', email: '', manager: '', status: 'active', rooms: [] };
+      const initialForm = { id: '', name: '', clinicRegName: '', clinicLicense: '', logo: '', clinicTax: '', address: '', phone: '', email: '', manager: '', status: 'active', rooms: [] };
   const [formData, setFormData] = useState(initialForm);
 
   const addRoom = () => setFormData(prev => ({ ...prev, rooms: [...(prev.rooms || []), ''] }));
@@ -176,13 +176,13 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                  </div>
                  
                  <h3 className="text-lg font-bold text-slate-800 kanit-text mb-1">{branch.name}</h3>
-                 {branch.clinicName && <p className="text-xs font-bold text-sky-600 kanit-text mb-1 truncate">{branch.clinicName}</p>}
+                 {branch.clinicRegName && <p className="text-xs font-bold text-sky-600 kanit-text mb-1 truncate">{branch.clinicRegName}</p>}
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex flex-wrap gap-1 items-center">
                     <span>ID: {branch.id}</span>
-                    {branch.licenseNumber && <span className="text-slate-300">|</span>}
-                    {branch.licenseNumber && <span>ใบอนุญาต: {branch.licenseNumber}</span>}
-                    {branch.taxId && <span className="text-slate-300">|</span>}
-                    {branch.taxId && <span>TAX: {branch.taxId}</span>}
+                    {branch.clinicLicense && <span className="text-slate-300">|</span>}
+                    {branch.clinicLicense && <span>ใบอนุญาต: {branch.clinicLicense}</span>}
+                    {branch.clinicTax && <span className="text-slate-300">|</span>}
+                    {branch.clinicTax && <span>TAX: {branch.clinicTax}</span>}
                  </p>
                  
                  <div className="space-y-2.5 mb-6">
@@ -298,15 +298,15 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                            <div className="col-span-1 sm:col-span-2">
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">ชื่อจดทะเบียน / นิติบุคคล</label>
-                              <input type="text" className="w-full px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data text-sm sm:text-base" value={formData.clinicName} onChange={e => setFormData({...formData, clinicName: e.target.value})} placeholder="ชื่อบริษัทที่จดทะเบียน" />
+                              <input type="text" className="w-full px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data text-sm sm:text-base" value={formData.clinicRegName} onChange={e => setFormData({...formData, clinicRegName: e.target.value})} placeholder="ชื่อบริษัทที่จดทะเบียน" />
                            </div>
                            <div className="col-span-1">
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">เลขที่ใบอนุญาต</label>
-                              <input type="text" className="w-full px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data text-sm sm:text-base" value={formData.licenseNumber} onChange={e => setFormData({...formData, licenseNumber: e.target.value})} placeholder="เลขที่ใบอนุญาตสถานพยาบาล" />
+                              <input type="text" className="w-full px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data text-sm sm:text-base" value={formData.clinicLicense} onChange={e => setFormData({...formData, clinicLicense: e.target.value})} placeholder="เลขที่ใบอนุญาตสถานพยาบาล" />
                            </div>
                            <div className="col-span-1">
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 kanit-text">เลขประจำตัวผู้เสียภาษี (Tax ID)</label>
-                              <input type="text" className="w-full px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data text-sm sm:text-base" value={formData.taxId} onChange={e => setFormData({...formData, taxId: e.target.value})} placeholder="เลข 13 หลัก" maxLength="13" />
+                              <input type="text" className="w-full px-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all font-data text-sm sm:text-base" value={formData.clinicTax} onChange={e => setFormData({...formData, clinicTax: e.target.value})} placeholder="เลข 13 หลัก" maxLength="13" />
                            </div>
                         </div>
                         <div>

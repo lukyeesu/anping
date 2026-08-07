@@ -133,10 +133,16 @@ export const parsePatientName = (fullName) => {
 
 export const getPatientFullName = (p) => {
    if (!p) return '-';
-   if (p.firstName || p.lastName || p.prefix) {
-       return `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`.trim();
+   const prefix = p.prefix || p.title || '';
+   const fn = p.firstName || p.first_name || '';
+   const ln = p.lastName || p.last_name || '';
+   if (fn || ln) {
+       return `${prefix}${fn} ${ln}`.trim();
    }
-   return p.name || '-';
+   if (p.name && p.name.trim() !== prefix.trim()) {
+       return p.name.trim();
+   }
+   return `${prefix} ${fn} ${ln}`.trim() || '-';
 };
 
 export const generateNextHN = (patients) => {
@@ -1538,40 +1544,10 @@ export const ToastContainer = () => {
   
   // ใช้ createPortal เพื่อให้ Toast ลอยอยู่เหนือสุดของ DOM (z-index สูงสุด)
   return createPortal(
-    <>
-      <style>{`
-        @keyframes toastSlideDown {
-            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes toastSlideUp {
-            from { opacity: 1; transform: translateY(0) scale(1); }
-            to { opacity: 0; transform: translateY(-20px) scale(0.95); }
-        }
-        .toast-animate-in { 
-            animation: toastSlideDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; 
-        }
-        .toast-animate-out { 
-            animation: toastSlideUp 0.3s ease-in forwards; 
-        }
-        .toast-wrapper-active {
-            opacity: 1;
-            transform: translateY(0);
-            margin-bottom: 0.5rem;
-            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .toast-wrapper-closing {
-            opacity: 0 !important;
-            transform: translateY(-10px);
-            margin-bottom: 0px !important;
-            pointer-events: none;
-            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-      `}</style>
-      <div 
-        className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
-        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
-      >
+    <div 
+      className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
+      style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+    >
         {toasts.map((t) => (
           <div 
             key={t.id}
@@ -1593,8 +1569,7 @@ export const ToastContainer = () => {
             </div>
           </div>
         ))}
-      </div>
-    </>,
+      </div>,
     document.body
   );
 };

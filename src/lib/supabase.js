@@ -46,11 +46,16 @@ const TABLE_COLUMNS = {
     'address', 'moo', 'sub_district', 'district', 'province', 'zipcode', 'road',
     'em_name', 'em_phone', 'em_relation', 'em_address',
     'allergies', 'drug_allergy', 'underlying_disease', 'medical_history', 'chief_complaint',
-    'pdpa_status', 'pdpa_token', 'pdpa_expires', 'branch_id', 'created_at', 'updated_at'
+    'pdpa_status', 'pdpa_token', 'pdpa_expires', 'pdpa_timestamp', 'pdpa_ip_address', 'pdpa_user_agent',
+    'is_consent_marketing', 'is_consent_review',
+    'informed_consent_status', 'informed_consent_timestamp', 'informed_consent_ip_address', 'informed_consent_user_agent',
+    'informed_consent_signer_type', 'informed_consent_representative_name', 'informed_consent_representative_relation',
+    'informed_consent_risk_agreed', 'informed_consent_voluntary_agreed', 'informed_consent_signature_url', 'informed_consent_doc_id',
+    'branch_id', 'created_at', 'updated_at'
   ],
   treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at'],
-  branches: ['id', 'name', 'clinic_name', 'license_number', 'tax_id', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at'],
-  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'created_at', 'updated_at'],
+  branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at'],
+  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'treated', 'is_treated', 'created_at', 'updated_at'],
   pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'created_at', 'updated_at'],
   inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'branch_id', 'created_at', 'updated_at'],
   inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at'],
@@ -99,6 +104,12 @@ export function rowToJS(row) {
       }
     } catch(e) {}
   }
+  if (row.raw_date_time || row.deal_status || row.patient_name || row.is_treated !== undefined || row.treated !== undefined) {
+    if (row.treated !== undefined) jsObj.treated = Boolean(row.treated);
+    else if (row.is_treated !== undefined) jsObj.treated = Boolean(row.is_treated);
+    else if (row.status === 'treated' || row.status === 'completed' || row.deal_status === 'completed') jsObj.treated = true;
+    else jsObj.treated = false;
+  }
   return jsObj;
 }
 
@@ -116,6 +127,15 @@ export function jsToRow(payload, tableName = '') {
   for (const [key, val] of Object.entries(payload)) {
     if (val === null || val === undefined) continue;
     if (key === 'data' || key === 'updatedBy' || key === 'updatedById' || key === 'opdRecords' || key === 'courses') continue;
+    
+    // ป้องกันไม่ให้คอลัมน์แบบ snake_case ตัวเก่าใน payload มาเขียนทับค่าใหม่ที่เพิ่งแก้ไขใน camelCase
+    if (key.includes('_')) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (camelKey !== key && payload[camelKey] !== undefined) {
+        continue;
+      }
+    }
+
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
     
     // ตรวจสอบว่าคอลัมน์นี้มีอยู่ในโครงสร้าง TABLE_COLUMNS หรือไม่
@@ -127,6 +147,14 @@ export function jsToRow(payload, tableName = '') {
 
     if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || typeof val === 'object') {
       rawRow[snakeKey] = val;
+    }
+  }
+
+  if (tableName === 'queue' || tableName === 'Queue') {
+    if (payload.treated !== undefined) {
+      const isTr = Boolean(payload.treated);
+      rawRow.status = isTr ? 'completed' : 'pending';
+      rawRow.deal_status = isTr ? 'completed' : 'pending';
     }
   }
 
@@ -493,7 +521,7 @@ export async function callSupabase(action, sheetName, payload = null) {
           resBranches
         ] = await Promise.all([
           supabase.from('patients').select('*', { count: 'exact', head: true }),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or(`date.eq."${todayIso}",date.eq."${todayStr}"`),
+          supabase.from('queue').select('*', { count: 'exact', head: true }).or(`raw_date_time.ilike.%${todayIso}%,raw_date_time.ilike.%${todayStr}%`),
           supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq."pending",deal_status.eq."pending"'),
           supabase.from('branches').select('*', { count: 'exact', head: true }).eq('is_active', true)
         ]);
@@ -683,7 +711,10 @@ export async function callSupabase(action, sheetName, payload = null) {
 
       const row = jsToRow(payload, tableName);
       const { error } = await supabase.from(tableName).upsert(row);
-      if (error) throw error;
+      if (error) {
+        console.error("🔥 SUPABASE UPSERT ERROR:", error);
+        throw error;
+      }
 
       // ซิงค์สร้าง/แก้ไขพนักงานไปยังระบบ Supabase Auth (auth.users) ผ่าน Backend API แบบเบื้องหลัง
       if (tableName === 'staff') {

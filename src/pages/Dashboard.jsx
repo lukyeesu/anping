@@ -64,6 +64,27 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     setRoomSelectorTarget(appt);
   };
 
+  const resolveQueuePatientName = (appt) => {
+    let name = appt.patientName || appt.patient_name || appt.name || '';
+    
+    // ตรวจสอบว่า name เป็นเพียงคำนำหน้าอย่างเดียวหรือไม่ (เช่น "นางสาว", "นาย")
+    const isOnlyPrefix = /^(นาย|นางสาว|นาง|นพ\.|พญ\.|เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.|\s)*$/gi.test(name.trim());
+
+    if ((!name || isOnlyPrefix) && appt.hn && Array.isArray(patientsData)) {
+      const foundP = patientsData.find(p => String(p.id || p.hn || '').trim() === String(appt.hn).trim());
+      if (foundP) {
+        const full = getPatientFullName(foundP);
+        if (full && full !== '-') name = full;
+      }
+    }
+    
+    if (name.includes(' - ')) {
+      const parts = name.split(' - ');
+      name = parts.slice(1).join(' - ').trim() || parts[0];
+    }
+    return name.trim();
+  };
+
   const callPatient = (appt, roomName) => {
     setIsSpeaking(true);
     const idToUse = appt.id || appt.datetime;
@@ -72,12 +93,12 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     // ปิด Modal ทันทีหรือจะใช้ closeRoomModal ก็ได้
     setRoomSelectorTarget(null);
     
-    const rawName = appt.patientName || appt.name || '';
-    const cleanName = rawName.replace(/^(นาย|นางสาว|นาง|นพ\.|พญ\.|เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.)\s*/g, '').trim();
+    const resolvedName = resolveQueuePatientName(appt);
+    const cleanName = resolvedName.replace(/^(นาย|นางสาว|นาง|นพ\.|พญ\.|เด็กชาย|เด็กหญิง|ด\.ช\.|ด\.ญ\.)\s*/g, '').trim();
     
-    let textToSpeak = `ขอเชิญคุณ ${cleanName}`;
+    let textToSpeak = cleanName ? `ขอเชิญคุณ ${cleanName}` : `ขอเชิญคิวถัดไป`;
     if (roomName) textToSpeak += ` ที่ ${roomName} ค่ะ`;
-    else textToSpeak += ` ที่เค้าเตอร์ค่ะ`;
+    else textToSpeak += ` ที่เคาน์เตอร์ค่ะ`;
     
     const onEnd = () => {
       setIsSpeaking(false);
@@ -95,7 +116,6 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     setQueueData(prev => prev.map(item => item.id === appt.id ? updatedAppt : item));
     
     try {
-      showToast('กำลังบันทึกสถานะคิว...', 'info');
       await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
       showToast('บันทึกสถานะคิวเรียบร้อย', 'success');
     } catch(err) {
@@ -112,7 +132,6 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     setQueueData(prev => prev.map(item => item.id === appt.id ? updatedAppt : item));
     
     try {
-      showToast('กำลังคืนสถานะคิว...', 'info');
       await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
       showToast('คืนสถานะคิวเรียบร้อย', 'success');
     } catch(err) {
@@ -626,7 +645,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
                       <span className="leading-none mt-1 text-lg">{i+1}</span>
                     </div>
                     <div className="min-w-0 flex-1 py-1">
-                      <p className={`font-bold kanit-text truncate text-sm leading-tight transition-colors ${isThisSpeaking ? 'text-sky-700' : 'text-slate-700'}`}>{appt.patientName || appt.name}</p>
+                      <p className={`font-bold kanit-text truncate text-sm leading-tight transition-colors ${isThisSpeaking ? 'text-sky-700' : 'text-slate-700'}`}>{resolveQueuePatientName(appt) || appt.hn || 'ไม่ระบุชื่อ'}</p>
                       <p className="text-[11px] text-slate-500 flex items-center gap-1.5 font-data mt-1.5 truncate"><Clock size={12} className="text-sky-400 shrink-0" /> {time} น. <span className="text-slate-300 mx-0.5 shrink-0">|</span> <span className="truncate kanit-text">{appt.reason || appt.category || '-'}</span></p>
                     </div>
                     <div className="shrink-0 flex items-center gap-2">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'; 
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
+import QRCode from 'qrcode';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
 import { callSupabase, supabase, jsToRow, rowToJS } from './lib/supabase';
 import { ToastContainer } from './global/helpers';
@@ -1066,6 +1067,17 @@ export default function App() {
   }, [patientsData, branchesData, currentBranch]);
   const [financeData, setFinanceData] = useState([]);
   const [pdpaQrModal, setPdpaQrModal] = useState({ isOpen: false, link: '' });
+  const [pdpaQrDataUrl, setPdpaQrDataUrl] = useState('');
+
+  useEffect(() => {
+    if (pdpaQrModal.isOpen && pdpaQrModal.link) {
+      QRCode.toDataURL(pdpaQrModal.link, { width: 300, margin: 1 })
+        .then(url => setPdpaQrDataUrl(url))
+        .catch(err => console.error("QR Generation Error:", err));
+    } else {
+      setPdpaQrDataUrl('');
+    }
+  }, [pdpaQrModal.isOpen, pdpaQrModal.link]);
 
   // --- States for clinic settings (prefixes, roles/permissions, categories) ---
   const [staffPrefixes, setStaffPrefixes] = useState(['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']);
@@ -1093,36 +1105,36 @@ export default function App() {
   const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '', lineGroupId: '' });
   const [gdriveTokens, setGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
-  // --- ฟังก์ชันอ่านออกเสียง (TTS) ผ่าน Vercel Proxy (รองรับอังกฤษผสมไทย) ---
+  // --- ฟังก์ชันอ่านออกเสียง (TTS) รองรับทั้ง Localhost และ Production (Vite/Vercel Proxy + Native Fallback) ---
   const speak = (text, onEnd) => {
     if (!text) {
-        if (onEnd) onEnd();
-        return;
+      if (onEnd) onEnd();
+      return;
     }
     
-    // ตรวจสอบภาษาเบื้องต้น (Smart Language Detection)
-    // ถ้ามีภาษาไทยปนอยู่ ให้ใช้สำเนียงไทย (Google th จะอ่านคำอังกฤษในประโยคไทยได้ดี)
-    // แต่ถ้ามีแต่อังกฤษล้วน ให้ใช้ en เพื่อสำเนียงที่เป๊ะกว่า
     const hasThai = /[ก-ฮ]/.test(text);
     const lang = hasThai ? 'th' : 'en';
 
-    // 1. ลองใช้ Google TTS ผ่าน Proxy (api/tts.js)
-    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
-    const audio = new Audio(audioUrl);
+    let isEnded = false;
+    const safeOnEnd = () => {
+      if (!isEnded) {
+        isEnded = true;
+        if (onEnd) onEnd();
+      }
+    };
+
+    // 1. เรียกใช้ /api/tts (รองรับทั้ง Localhost ผ่าน Vite Middleware และ Production บน Vercel)
+    const proxyUrl = `/api/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
+    const audio = new Audio(proxyUrl);
     
     audio.playbackRate = 1.35;
     audio.preservesPitch = true;
-    
-    audio.onended = () => { if (onEnd) onEnd(); };
-    audio.onerror = () => {
-      console.warn("Audio load failed, falling back to Web Speech API");
-      handleNativeTTS(text, onEnd, lang);
-    };
+    audio.onended = safeOnEnd;
 
-    audio.play().catch(err => {
-      console.warn("Audio play failed, falling back to Web Speech API:", err);
-      handleNativeTTS(text, onEnd, lang);
-    });
+    const fallbackToNative = () => handleNativeTTS(text, safeOnEnd, lang);
+
+    audio.onerror = fallbackToNative;
+    audio.play().catch(fallbackToNative);
   };
 
   // Helper สำหรับเรียกใช้ Native Browser TTS (รองรับระบุภาษา)
@@ -1131,10 +1143,15 @@ export default function App() {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       
-      // กำหนดรหัสภาษาให้ตรงกับ Browser
       utterance.lang = lang === 'th' ? 'th-TH' : 'en-US';
       utterance.rate = 1.35;
       
+      const voices = window.speechSynthesis.getVoices();
+      if (lang === 'th' && Array.isArray(voices) && voices.length > 0) {
+        const thaiVoice = voices.find(v => (v.lang && (v.lang === 'th-TH' || v.lang.startsWith('th'))) || (v.name && (v.name.includes('Thai') || v.name.includes('Kanya') || v.name.includes('Pattara'))));
+        if (thaiVoice) utterance.voice = thaiVoice;
+      }
+
       utterance.onend = () => { if (onEnd) onEnd(); };
       utterance.onerror = () => { if (onEnd) onEnd(); };
       window.speechSynthesis.speak(utterance);
@@ -2933,8 +2950,8 @@ export default function App() {
 
       {/* PDPA QR Code Modal */}
       {pdpaQrModal.isOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200 border border-slate-100">
+          <div className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-center justify-center p-3.5 sm:p-6">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[calc(100dvh-1.75rem)] overflow-y-auto p-6 animate-in fade-in zoom-in duration-200 border border-slate-100">
                   <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
                       <h3 className="font-bold text-lg text-slate-800 kanit-text flex items-center gap-2">
                           <ShieldCheck size={24} className="text-sky-500" /> สแกนเพื่อยินยอม
@@ -2944,8 +2961,15 @@ export default function App() {
                       </button>
                   </div>
                   <div className="flex flex-col items-center">
-                      <div className="bg-white p-3 rounded-2xl border-2 border-dashed border-sky-200 shadow-sm mb-5 relative">
-                          <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(pdpaQrModal.link)}&margin=10`} alt="QR Code" className="w-56 h-56 rounded-xl" />
+                      <div className="bg-white p-3 rounded-2xl border-2 border-dashed border-sky-200 shadow-sm mb-5 relative flex items-center justify-center min-w-[240px] min-h-[240px]">
+                          {pdpaQrDataUrl ? (
+                              <img src={pdpaQrDataUrl} alt="QR Code" className="w-56 h-56 rounded-xl animate-in fade-in duration-150" />
+                          ) : (
+                              <div className="w-56 h-56 flex flex-col items-center justify-center text-slate-400 gap-2">
+                                  <Loader2 className="animate-spin text-sky-500" size={32} />
+                                  <span className="text-xs">กำลังสร้าง QR Code...</span>
+                              </div>
+                          )}
                       </div>
                       <p className="text-sm text-slate-500 text-center mb-6 px-2 leading-relaxed">
                           ให้ผู้ป่วยสแกน QR Code เพื่อให้ความยินยอม หรือคลิกปุ่มด้านล่างเพื่อเปิดหน้าต่างให้ผู้ป่วยทำรายการบนอุปกรณ์นี้

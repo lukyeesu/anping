@@ -1244,6 +1244,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const proceedGenerateLink = async (patient) => {
     const patientHn = patient.hn || patient.id;
     setProcessingPdpaHn(patientHn);
+    setIsProcessing(true);
+
     const token = Math.random().toString(36).substr(2, 9);
     const expires = new Date().getTime() + 60 * 60 * 1000; // 1 hour
 
@@ -1257,41 +1259,41 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         isConsentReview: null
     };
 
-    setIsProcessing(true);
     try {
+        // 1. บันทึกข้อมูลลง Supabase ให้สำเร็จเรียบร้อยก่อน
         await callAppScript('SAVE_DATA', 'Patients', updatedPatient);
+        
+        // 2. อัปเดตข้อมูล State ในระบบ
         setPatientsData(patientsData.map(p => (p.hn || p.id) === (patient.hn || patient.id) ? updatedPatient : p));
 
         const link = `${window.location.origin}/?pdpa=${token}&hn=${patient.hn || patient.id}`;
 
+        // 3. คัดลอกลิ้งก์ลงคลิปบอร์ด
         if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(link);
+            await navigator.clipboard.writeText(link).catch(() => {});
             showToast('สร้างลิ้งก์ PDPA และคัดลอกลงคลิปบอร์ดแล้ว (หมดอายุใน 1 ชม.)', 'success');
         } else {
-            // Fallback
             const textArea = document.createElement("textarea");
             textArea.value = link;
             textArea.style.position = "fixed";
             textArea.style.left = "-999999px";
             textArea.style.top = "-999999px";
             document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
             try {
+                textArea.focus();
+                textArea.select();
                 document.execCommand('copy');
                 showToast('สร้างลิ้งก์ PDPA และคัดลอกลงคลิปบอร์ดแล้ว (หมดอายุใน 1 ชม.)', 'success');
-            } catch (err) {
-                console.error('Fallback copy failed', err);
-            }
+            } catch (err) {}
             document.body.removeChild(textArea);
         }
-        
-        // Open QR Modal instead of immediately opening a new tab
+
+        // 4. เมื่อบันทึกฐานข้อมูลสำเร็จแล้ว ค่อยเปิด POPUP QR Code ขึ้นมา
         setPdpaQrModal({ isOpen: true, link: link, patient: updatedPatient });
-        
+
     } catch (error) {
         console.error("Error generating PDPA link:", error);
-        showToast('เกิดข้อผิดพลาดในการสร้างลิ้งก์ PDPA', 'warning');
+        showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูลสร้างลิ้งก์ PDPA', 'warning');
     } finally {
         setIsProcessing(false);
         setProcessingPdpaHn(null);
@@ -1757,24 +1759,33 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       </div>
 
       {medModal.isOpen && (
-        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl max-h-[80dvh] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${medModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            {/* แก้ไข UX/UI ส่วนหัว Modal เวชระเบียน */}
-            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
-              <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner shrink-0">
-                    {isViewMode ? <FileText className="w-5 h-5 sm:w-6 sm:h-6" /> : (editingId ? <Pencil className="w-5 h-5 sm:w-6 sm:h-6" /> : <Plus className="w-5 h-5 sm:w-6 sm:h-6" />)}
+        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${medModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            {/* แก้ไข UX/UI ส่วนหัว Modal เวชระเบียน ให้เรียบร้อย สวยงามบนมือถือ */}
+            <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0 z-10 gap-2.5">
+              <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-xs shrink-0">
+                    {isViewMode ? <FileText className="w-4 h-4 sm:w-5 sm:h-5" /> : (editingId ? <Pencil className="w-4 h-4 sm:w-5 sm:h-5" /> : <Plus className="w-4 h-4 sm:w-5 sm:h-5" />)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-base sm:text-2xl font-bold text-slate-800 kanit-text truncate leading-tight">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName} (การรักษา ${formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง)` : 'เพิ่มเวชระเบียนใหม่'}</h3>
+                  <h3 className="text-sm sm:text-lg font-bold text-slate-800 kanit-text truncate leading-tight">
+                    {editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName}` : 'เพิ่มเวชระเบียนใหม่'}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5">
+                    {editingId && (
+                      <span className="inline-flex items-center gap-1 bg-sky-100/80 text-sky-800 border border-sky-200/80 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold kanit-text shrink-0">
+                        <Activity size={11} className="text-sky-600" />
+                        การรักษา {formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง
+                      </span>
+                    )}
+                    <span className="text-[10px] sm:text-xs text-slate-500 kanit-text truncate">
+                      {isViewMode ? `อายุ ${calculatedAge} | อ่านอย่างเดียว` : (editingId ? `อายุ ${calculatedAge}` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}
+                    </span>
                   </div>
-                  <p className="text-[10px] sm:text-sm text-slate-500 kanit-text truncate leading-tight mt-0.5">{isViewMode ? `อายุ ${calculatedAge} | ข้อมูลผู้ป่วยสำหรับเรียกดู` : (editingId ? `อายุ ${calculatedAge} | แก้ไขข้อมูลเวชระเบียน` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                {/* เหลือแค่ปุ่มปิด X ด้านบน */}
-                <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 sm:p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={18} className="sm:w-5 sm:h-5" /></button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 shadow-xs border border-slate-200 hover:bg-slate-50 transition-colors"><X size={18} /></button>
               </div>
             </div>
             
@@ -2113,22 +2124,24 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                                                 }}
                                                             />
                                                         </div>
-                                                        <div className="flex justify-between w-full mt-1.5">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handlePrintInformedConsent(pat)}
-                                                                className="text-[10px] text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1 transition-colors"
-                                                            >
-                                                                <Printer size={10} /> พิมพ์ใบยินยอม (A4)
-                                                            </button>
+                                                        <div className="grid grid-cols-2 gap-2 w-full mt-3">
                                                             <a 
                                                                 href={pat.informedConsentSignatureUrl} 
                                                                 target="_blank" 
                                                                 rel="noopener noreferrer" 
-                                                                className="text-[10px] text-sky-500 hover:text-sky-600 font-bold flex items-center gap-1 transition-colors"
+                                                                className="w-full h-10 px-1.5 sm:px-3.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-slate-900 text-[11px] sm:text-xs font-bold rounded-xl flex items-center justify-center gap-1 sm:gap-1.5 transition-all border border-slate-200 text-center truncate"
                                                             >
-                                                                <ExternalLink size={10} /> ดูลายเซ็นขนาดเต็ม
+                                                                <ExternalLink size={14} className="shrink-0" />
+                                                                <span className="truncate">ดูลายเซ็นขนาดเต็ม</span>
                                                             </a>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handlePrintInformedConsent(pat)}
+                                                                className="w-full h-10 px-1.5 sm:px-3.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white text-[11px] sm:text-xs font-bold rounded-xl shadow-sm shadow-indigo-500/20 flex items-center justify-center gap-1 sm:gap-1.5 transition-all cursor-pointer text-center truncate"
+                                                            >
+                                                                <Printer size={14} className="shrink-0" />
+                                                                <span className="truncate">พิมพ์ใบยินยอม (A4)</span>
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 )}

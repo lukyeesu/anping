@@ -77,20 +77,32 @@ const PatientModal = React.memo(({
   if (!isOpen) return null;
 
   return (
-    <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-      <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl max-h-[80dvh] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-        <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
-          <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner shrink-0">
-                {isViewMode ? <FileText className="w-5 h-5 sm:w-6 sm:h-6" /> : (editingId ? <Pencil className="w-5 h-5 sm:w-6 sm:h-6" /> : <Plus className="w-5 h-5 sm:w-6 sm:h-6" />)}
+    <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+        <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0 z-10 gap-2.5">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-xs shrink-0">
+                {isViewMode ? <FileText className="w-4 h-4 sm:w-5 sm:h-5" /> : (editingId ? <Pencil className="w-4 h-4 sm:w-5 sm:h-5" /> : <Plus className="w-4 h-4 sm:w-5 sm:h-5" />)}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm sm:text-xl font-bold text-slate-800 kanit-text truncate leading-tight">{editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName}` : 'เพิ่มเวชระเบียนใหม่'}</h3>
-              <p className="text-[10px] sm:text-sm text-slate-500 kanit-text truncate leading-tight mt-0.5">{isViewMode ? `อายุ ${calculatedAge} | ข้อมูลคนไข้สำหรับเรียกดู` : (editingId ? `อายุ ${calculatedAge} | แก้ไขข้อมูลเวชระเบียน` : 'กรอกข้อมูลคนไข้ให้ครบถ้วน')}</p>
+              <h3 className="text-sm sm:text-lg font-bold text-slate-800 kanit-text truncate leading-tight">
+                {editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName}` : 'เพิ่มเวชระเบียนใหม่'}
+              </h3>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5">
+                {editingId && (
+                  <span className="inline-flex items-center gap-1 bg-sky-100/80 text-sky-800 border border-sky-200/80 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold kanit-text shrink-0">
+                    <Activity size={11} className="text-sky-600" />
+                    การรักษา {formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง
+                  </span>
+                )}
+                <span className="text-[10px] sm:text-xs text-slate-500 kanit-text truncate">
+                  {isViewMode ? `อายุ ${calculatedAge} | อ่านอย่างเดียว` : (editingId ? `อายุ ${calculatedAge}` : 'กรอกข้อมูลคนไข้ให้ครบถ้วน')}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 sm:p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={18} className="sm:w-5 sm:h-5" /></button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 shadow-xs border border-slate-200 hover:bg-slate-50 transition-colors"><X size={18} /></button>
           </div>
         </div>
         

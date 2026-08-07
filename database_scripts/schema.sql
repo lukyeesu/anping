@@ -78,13 +78,29 @@ ALTER TABLE public.treatments DROP COLUMN IF EXISTS data CASCADE;
 CREATE TABLE IF NOT EXISTS public.branches (
     id VARCHAR PRIMARY KEY,
     name VARCHAR,
+    clinic_name VARCHAR,
+    license_number VARCHAR,
+    tax_id VARCHAR,
     address TEXT,
     phone VARCHAR,
+    email VARCHAR,
+    manager VARCHAR,
+    logo TEXT,
+    rooms JSONB DEFAULT '[]'::jsonb,
+    status VARCHAR DEFAULT 'active',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.branches DROP COLUMN IF EXISTS data CASCADE;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS clinic_name VARCHAR;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS license_number VARCHAR;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS tax_id VARCHAR;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS email VARCHAR;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS manager VARCHAR;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS logo TEXT;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS rooms JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'active';
 
 -- 4. Queue / Appointments Table
 CREATE TABLE IF NOT EXISTS public.queue (

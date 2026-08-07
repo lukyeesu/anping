@@ -95,7 +95,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const [isServerSearching, setIsServerSearching] = useState(false);
   
   useEffect(() => {
-     if (!formData.searchPatient || formData.searchPatient.trim().length < 2) {
+     if (!formData.searchPatient || formData.searchPatient.trim().length < 1) {
          setServerPatientResults([]);
          return;
      }
@@ -103,21 +103,40 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
          setIsServerSearching(true);
          try {
              const s = formData.searchPatient.trim();
-             const { data, error } = await supabase.from('patients')
-                  .select('id, hn, prefix, first_name, last_name, phone1, phone2, created_at, updated_at')
-                  .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,hn.ilike.%${s}%,phone1.ilike.%${s}%`)
-                  .order('updated_at', { ascending: false })
-                  .limit(10);
-             if (!error && data) {
-                 setServerPatientResults(data);
+             let results = [];
+
+             if (supabase) {
+                 const { data, error } = await supabase.from('patients')
+                      .select('id, prefix, first_name, last_name, name, nickname, id_card, phone, created_at, updated_at')
+                      .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,name.ilike.%${s}%,id.ilike.%${s}%,id_card.ilike.%${s}%,phone.ilike.%${s}%,nickname.ilike.%${s}%`)
+                      .order('updated_at', { ascending: false })
+                      .limit(10);
+                 if (!error && data) {
+                     results = data;
+                 } else if (error) {
+                     console.warn("Supabase patient search query warning:", error.message);
+                 }
              }
+
+             if (results.length === 0 && Array.isArray(patientsData) && patientsData.length > 0) {
+                 const lowerS = s.toLowerCase();
+                 results = patientsData.filter(p => {
+                     const pId = String(p.id || p.hn || '').toLowerCase();
+                     const pName = String(p.name || `${p.firstName || ''} ${p.lastName || ''}`).toLowerCase();
+                     const pPhone = String(p.phone || p.phone1 || '').toLowerCase();
+                     const pIdCard = String(p.idCard || p.id_card || '').toLowerCase();
+                     return pId.includes(lowerS) || pName.includes(lowerS) || pPhone.includes(lowerS) || pIdCard.includes(lowerS);
+                 }).slice(0, 10);
+             }
+
+             setServerPatientResults(results);
          } catch (err) {
              console.error("Patient search error", err);
          }
          setIsServerSearching(false);
-     }, 400);
+     }, 300);
      return () => clearTimeout(timer);
-  }, [formData.searchPatient]);
+  }, [formData.searchPatient, patientsData]);
 
   const [showDoctorSuggest, setShowDoctorSuggest] = useState(false);
   const allDoctors = useMemo(() => {
