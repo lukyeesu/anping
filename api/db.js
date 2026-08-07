@@ -215,9 +215,6 @@ async function syncStaffWithSupabaseAuth(client, payload, isDelete = false) {
       if (createErr) throw createErr;
     }
   } catch (err) {
-    try {
-      fs.appendFileSync(path.resolve(process.cwd(), 'debug_api.txt'), `\n[${new Date().toISOString()}] Auth Sync Error: ${err.message || String(err)}\n`);
-    } catch(e) {}
     console.error('Error syncing staff with Supabase Auth:', err);
     throw err;
   }
