@@ -314,7 +314,21 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const opdSectionRef = React.useRef(null);
   const opdFormSectionRef = React.useRef(null);
 
-  const closeMedModal = () => { medModal.close(); };
+  const closeMedModal = () => { 
+    if (showOpdForm) {
+        showGlobalAlert({
+            type: 'warning',
+            title: 'ยืนยันการปิดหน้าต่าง',
+            text: 'คุณมีประวัติการรักษาที่กำลังเพิ่ม/แก้ไขค้างอยู่ ข้อมูลที่กรอกไว้จะไม่ถูกบันทึก ต้องการปิดหรือไม่?',
+            onConfirm: () => {
+                globalAlert.setIsOpen(false);
+                medModal.close();
+            }
+        });
+        return;
+    }
+    medModal.close(); 
+  };
   const closeMedCalendar = () => { setIsCalendarClosing(true); setTimeout(() => { setShowCalendar(false); setIsCalendarClosing(false); }, 300); };
   const closeMedOpdCalendar = () => { setIsOpdCalendarClosing(true); setTimeout(() => { setShowOpdCalendar(false); setIsOpdCalendarClosing(false); }, 300); };
     const medCalSwipeProps = useSwipeDown(closeMedCalendar);
@@ -1030,7 +1044,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }, 250); 
   };
 
-  const handleSaveOpdRecord = async () => {
+  const handleSaveOpdRecord = async (closeModalAfter = false) => {
+    const shouldCloseModal = closeModalAfter === true;
     if (!newOpdRecord.branchId) {
         showToast('กรุณาเลือกสาขาที่รับบริการ', 'warning');
         return;
@@ -1090,18 +1105,24 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
       setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));
       
-      setIsClosingOpdForm(true); 
-      setTimeout(() => {
-        setShowOpdForm(false);
-        setEditingOpdIndex(null);
-        setIsClosingOpdForm(false);
-        // เลื่อนกลับไปที่ตารางประวัติการรักษาหลังจาก Spinner หมุนบันทึกเสร็จเรียบร้อยแล้วเท่านั้น
-        if (opdSectionRef.current) {
-          opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 300);
-
-      showToast('บันทึกประวัติการรักษาเรียบร้อยแล้ว', 'success');
+      if (shouldCloseModal) {
+          setShowOpdForm(false);
+          setEditingOpdIndex(null);
+          showToast('บันทึกประวัติการรักษาเรียบร้อยแล้ว', 'success');
+          medModal.close();
+      } else {
+          setIsClosingOpdForm(true); 
+          setTimeout(() => {
+            setShowOpdForm(false);
+            setEditingOpdIndex(null);
+            setIsClosingOpdForm(false);
+            // เลื่อนกลับไปที่ตารางประวัติการรักษาหลังจาก Spinner หมุนบันทึกเสร็จเรียบร้อยแล้วเท่านั้น
+            if (opdSectionRef.current) {
+              opdSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 300);
+          showToast('บันทึกประวัติการรักษาเรียบร้อยแล้ว', 'success');
+      }
     } catch (error) {
       showToast('เกิดข้อผิดพลาดในการบันทึกประวัติการรักษา', 'warning');
     } finally {
@@ -1150,6 +1171,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   const handleSavePatient = async (e) => {
     e.preventDefault();
+
+    if (showOpdForm) {
+        showToast('กรุณาบันทึกประวัติการรักษาที่กำลังเพิ่ม/แก้ไขให้เรียบร้อยก่อน', 'warning');
+        return;
+    }
 
     // --- เพิ่มการตรวจสอบเลขบัตรประชาชนซ้ำ ---
     if (formData.idCard && formData.idCard.trim() !== '') {
@@ -2536,7 +2562,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
             {/* ย้ายปุ่ม Action ต่างๆ มารวมกันไว้ข้างล่างตรงนี้ทั้งหมด พร้อมทำเป็น flex-col-reverse บนมือถือ */}
             <div className="p-4 sm:p-6 border-t border-slate-100 flex flex-row justify-end gap-2 sm:gap-3 bg-white shrink-0 w-full">
-                {isViewMode ? (
+                {showOpdForm ? (
+                    <>
+                       <button type="button" onClick={() => closeMedModal()} className="flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text truncate">ยกเลิก</button>
+                       <button type="button" onClick={() => handleSaveOpdRecord(true)} disabled={isProcessing} className="flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-2 kanit-text truncate">
+                           {isProcessing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"></div> : <CheckCircle2 size={18} className="shrink-0" />}
+                           บันทึกการรักษา
+                       </button>
+                    </>
+                ) : isViewMode ? (
                     <>
                        <button type="button" onClick={closeMedModal} className="flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text truncate">ปิดหน้าต่าง</button>
                        <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold shadow-md transition-all active:scale-95 ${theme.primary} rounded-xl flex items-center justify-center gap-1 sm:gap-2 kanit-text truncate`}><Pencil size={18} className="shrink-0" /> แก้ไขข้อมูล</button>

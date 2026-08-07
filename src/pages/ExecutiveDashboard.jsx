@@ -16,6 +16,7 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
+import { supabase } from '../lib/supabase';
 
 const ExecutiveDashboard = ({ 
   queueData = [], 
@@ -170,9 +171,69 @@ const ExecutiveDashboard = ({
     return parseAnyDate(dStr);
   };
 
+  // Server-side Date-Based Fetching State
+  const [localPosHistory, setLocalPosHistory] = useState([]);
+  const [localFinanceData, setLocalFinanceData] = useState([]);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsDashboardLoading(true);
+      try {
+        let startDate, endDate;
+        const now = new Date();
+        
+        if (timeRange === 'today') {
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (timeRange === 'week') {
+          startDate = new Date();
+          startDate.setDate(now.getDate() - 7);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = now;
+        } else if (timeRange === 'month') {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        } else if (timeRange === 'year') {
+          startDate = new Date(now.getFullYear(), 0, 1);
+          endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+        } else if (timeRange === 'custom' && customStartDate && customEndDate) {
+          startDate = new Date(customStartDate);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(customEndDate);
+          endDate.setHours(23, 59, 59, 999);
+        }
+
+        if (startDate && endDate) {
+          const startIso = startDate.toISOString();
+          const endIso = endDate.toISOString();
+
+          // Fetch only the data in the selected date range
+          const [posRes, revRes, expRes] = await Promise.all([
+             supabase.from('pos_transactions').select('*').gte('created_at', startIso).lte('created_at', endIso),
+             supabase.from('finance_revenue').select('*').gte('created_at', startIso).lte('created_at', endIso),
+             supabase.from('finance_expenses').select('*').gte('created_at', startIso).lte('created_at', endIso)
+          ]);
+
+          if (posRes.data) setLocalPosHistory(posRes.data);
+          
+          const finances = [];
+          if (revRes.data) finances.push(...revRes.data.map(d => ({...d, type: 'income'})));
+          if (expRes.data) finances.push(...expRes.data.map(d => ({...d, type: 'expense'})));
+          setLocalFinanceData(finances);
+        }
+      } catch (e) {
+        console.error("Dashboard fetch error", e);
+      }
+      setIsDashboardLoading(false);
+    };
+
+    fetchDashboardData();
+  }, [timeRange, customStartDate, customEndDate]);
+
   // Consolidate POS history as income and finance as income/expenses
   const allTransactions = useMemo(() => {
-    const posTx = posHistoryData.map(tx => {
+    const posTx = localPosHistory.map(tx => {
       const txDate = tx.datetime || tx.timestamp || tx.createdAt || tx.date || new Date().toISOString();
       return {
         id: tx.id || tx.receiptNo || Math.random().toString(),
@@ -188,16 +249,16 @@ const ExecutiveDashboard = ({
       };
     });
 
-    const finTx = financeData.map(tx => ({
+    const finTx = localFinanceData.map(tx => ({
         ...tx,
-        date: tx.date || new Date().toISOString(),
+        date: tx.date || tx.created_at || new Date().toISOString(),
         amount: parseFloat(tx.amount || 0),
         method: tx.method || 'cash',
-        branchId: tx.branchId || 'all'
+        branchId: tx.branchId || tx.branch_id || 'all'
     }));
 
     return [...posTx, ...finTx];
-  }, [posHistoryData, financeData]);
+  }, [localPosHistory, localFinanceData]);
 
   // Filter transactions by branch and time range
   const filteredTx = useMemo(() => {

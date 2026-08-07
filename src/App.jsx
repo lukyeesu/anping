@@ -522,8 +522,6 @@ export default function App() {
         resInvLogs,
         resPosItems,
         resBranches,
-        resFinanceRevenue,
-        resFinanceExpenses,
         resStaff,
         resSettings,
         resStaffSchedules
@@ -534,8 +532,6 @@ export default function App() {
         callAppScript('GET_DATA', 'InventoryLogs').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'setting_pos').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Branches').catch(err => ({ status: 'error', data: [], message: err?.message })),
-        callAppScript('GET_DATA', 'Finance_Revenue').catch(err => ({ status: 'error', data: [], message: err?.message })),
-        callAppScript('GET_DATA', 'Finance_Expenses').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Staff').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Settings').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Staff_Schedules').catch(err => ({ status: 'error', data: [], message: err?.message }))
@@ -603,14 +599,8 @@ export default function App() {
         setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
       }
 
-      const combinedFinanceData = [];
-      if (resFinanceRevenue?.status === 'success' && Array.isArray(resFinanceRevenue.data)) {
-          combinedFinanceData.push(...resFinanceRevenue.data);
-      }
-      if (resFinanceExpenses?.status === 'success' && Array.isArray(resFinanceExpenses.data)) {
-          combinedFinanceData.push(...resFinanceExpenses.data);
-      }
-      setFinanceData(combinedFinanceData.sort((a, b) => new Date(b.date) - new Date(a.date)));
+      const combinedFinanceData = []; // Removed global finance fetch to save Egress. FinancePage now fetches directly.
+      setFinanceData(combinedFinanceData);
 
       let staffSchedulesList = Array.isArray(resStaffSchedules?.data) ? resStaffSchedules.data : [];
       if (resStaff?.status === 'success') {

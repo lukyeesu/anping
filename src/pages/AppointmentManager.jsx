@@ -17,6 +17,7 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
+import { supabase } from '../lib/supabase';
 
 const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
   const [viewMode, setViewMode] = useState('table'); 
@@ -90,6 +91,34 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const [formData, setFormData] = useState(initialApptState);
 
   const [showPatientSuggest, setShowPatientSuggest] = useState(false);
+  const [serverPatientResults, setServerPatientResults] = useState([]);
+  const [isServerSearching, setIsServerSearching] = useState(false);
+  
+  useEffect(() => {
+     if (!formData.searchPatient || formData.searchPatient.trim().length < 2) {
+         setServerPatientResults([]);
+         return;
+     }
+     const timer = setTimeout(async () => {
+         setIsServerSearching(true);
+         try {
+             const s = formData.searchPatient.trim();
+             const { data, error } = await supabase.from('patients')
+                  .select('id, hn, prefix, first_name, last_name, phone1, phone2, created_at, updated_at')
+                  .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,hn.ilike.%${s}%,phone1.ilike.%${s}%`)
+                  .order('updated_at', { ascending: false })
+                  .limit(10);
+             if (!error && data) {
+                 setServerPatientResults(data);
+             }
+         } catch (err) {
+             console.error("Patient search error", err);
+         }
+         setIsServerSearching(false);
+     }, 400);
+     return () => clearTimeout(timer);
+  }, [formData.searchPatient]);
+
   const [showDoctorSuggest, setShowDoctorSuggest] = useState(false);
   const allDoctors = useMemo(() => {
     return staffData.filter(s => s.role === 'doctor' || s.category === 'doctor');
@@ -969,34 +998,25 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                            />
                            {showPatientSuggest && formData.searchPatient && (
                               <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
-                                 {[...patientsData].filter(p => {
-                                    const fName = getPatientFullName(p).toLowerCase();
-                                    const fId = getPatientId(p).toLowerCase();
-                                    const s = formData.searchPatient.toLowerCase();
-                                    return fName.includes(s) || fId.includes(s);
-                                 })
-                                 .sort((a, b) => {
-                                     const valA = getPatientLastVisitStr(a);
-                                     const valB = getPatientLastVisitStr(b);
-                                     if (valA < valB) return 1;
-                                     if (valA > valB) return -1;
-                                     return 0;
-                                 })
-                                 .slice(0, 5).map((p, i) => (
-                                    <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
-                                       <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
-                                       <span className="text-xs text-slate-500 font-data flex items-center gap-1">{p.phone || p.phone1 ? <><Phone size={12} className="text-sky-500" /> {p.phone || p.phone1}</> : 'ไม่มีเบอร์โทรศัพท์'}</span>
+                                 {isServerSearching ? (
+                                    <div className="px-4 py-3 text-sm text-slate-500 flex items-center justify-center gap-2 kanit-text">
+                                       <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
                                     </div>
-                                 ))}
-                                 {patientsData.filter(p => {
-                                    const fName = getPatientFullName(p).toLowerCase();
-                                    const fId = getPatientId(p).toLowerCase();
-                                    const s = formData.searchPatient.toLowerCase();
-                                    return fName.includes(s) || fId.includes(s);
-                                 }).length === 0 && (
-                                    <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2 kanit-text">
-                                       <Plus size={16} className="text-sky-500" /> สร้างเป็นผู้ป่วยใหม่: "{formData.searchPatient}"
-                                    </div>
+                                 ) : (
+                                    <>
+                                       {serverPatientResults.length > 0 ? (
+                                          serverPatientResults.map((p, i) => (
+                                             <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
+                                                <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
+                                                <span className="text-xs text-slate-500 font-data flex items-center gap-1">{p.phone || p.phone1 ? <><Phone size={12} className="text-sky-500" /> {p.phone || p.phone1}</> : 'ไม่มีเบอร์โทรศัพท์'}</span>
+                                             </div>
+                                          ))
+                                       ) : (
+                                          <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2 kanit-text">
+                                             <Plus size={16} className="text-sky-500" /> สร้างเป็นผู้ป่วยใหม่: "{formData.searchPatient}"
+                                          </div>
+                                       )}
+                                    </>
                                  )}
                               </div>
                            )}

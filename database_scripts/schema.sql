@@ -181,7 +181,21 @@ CREATE TABLE IF NOT EXISTS public.finance_revenue (
     category VARCHAR,
     description TEXT,
     branch_id VARCHAR,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    items JSONB DEFAULT '[]'::jsonb,
+    subtotal NUMERIC DEFAULT 0,
+    discount_value NUMERIC DEFAULT 0,
+    discount_type VARCHAR,
+    discount_amount NUMERIC DEFAULT 0,
+    tax_mode VARCHAR,
+    vat_rate NUMERIC DEFAULT 0,
+    vat_amount NUMERIC DEFAULT 0,
+    method VARCHAR,
+    status VARCHAR,
+    is_auto BOOLEAN DEFAULT false,
+    patient_id VARCHAR,
+    patient_name VARCHAR,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.finance_revenue DROP COLUMN IF EXISTS data CASCADE;
 
@@ -193,7 +207,21 @@ CREATE TABLE IF NOT EXISTS public.finance_expenses (
     category VARCHAR,
     description TEXT,
     branch_id VARCHAR,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    items JSONB DEFAULT '[]'::jsonb,
+    subtotal NUMERIC DEFAULT 0,
+    discount_value NUMERIC DEFAULT 0,
+    discount_type VARCHAR,
+    discount_amount NUMERIC DEFAULT 0,
+    tax_mode VARCHAR,
+    vat_rate NUMERIC DEFAULT 0,
+    vat_amount NUMERIC DEFAULT 0,
+    method VARCHAR,
+    status VARCHAR,
+    is_auto BOOLEAN DEFAULT false,
+    patient_id VARCHAR,
+    patient_name VARCHAR,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.finance_expenses DROP COLUMN IF EXISTS data CASCADE;
 

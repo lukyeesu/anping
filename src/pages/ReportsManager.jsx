@@ -143,7 +143,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   const filteredDocs = useMemo(() => {
       const s = search.toLowerCase();
       return allDocuments.filter(doc => {
-          const matchSearch = doc.patientName.toLowerCase().includes(s) || doc.refNo.toLowerCase().includes(s);
+          const matchSearch = (doc.patientName || '').toLowerCase().includes(s) || (doc.refNo || '').toLowerCase().includes(s);
           const matchType = filterType === 'all' || doc.type === filterType;
           return matchSearch && matchType;
       });

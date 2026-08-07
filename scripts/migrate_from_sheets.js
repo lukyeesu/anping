@@ -31,7 +31,7 @@ const SHEETS = [
   { name: 'Logs', table: 'logs' }
 ];
 
-function jsToRow(payload) {
+function jsToRow(payload, tableName = '') {
   if (!payload) return {};
   const row = {};
   for (const [key, val] of Object.entries(payload)) {
@@ -42,6 +42,27 @@ function jsToRow(payload) {
   if (payload.id || payload.hn) {
     row.id = String(payload.id || payload.hn);
   }
+
+  if (tableName === 'pos_transactions') {
+    if (payload.hn || payload.patientId) row.hn = String(payload.hn || payload.patientId);
+    
+    const rawTotal = payload.totalAmount ?? payload.subtotal ?? payload.grandTotal ?? payload.amount ?? payload.total ?? 0;
+    const cleanTotal = parseFloat(String(rawTotal).replace(/,/g, '')) || 0;
+    row.total_amount = cleanTotal;
+
+    const rawNet = payload.netAmount ?? payload.netTotal ?? payload.grandTotal ?? payload.amount ?? 0;
+    row.net_amount = parseFloat(String(rawNet).replace(/,/g, '')) || cleanTotal;
+
+    const rawDiscount = payload.discountAmount ?? payload.discount ?? 0;
+    row.discount = parseFloat(String(rawDiscount).replace(/,/g, '')) || 0;
+  }
+
+  if (tableName === 'finance_revenue' || tableName === 'finance_expenses') {
+    if (payload.note !== undefined && payload.description === undefined) {
+      row.description = String(payload.note || '');
+    }
+  }
+
   row.updated_at = new Date().toISOString();
   return row;
 }
@@ -73,7 +94,7 @@ async function migrate() {
         
         let successCount = 0;
         for (const item of res.data) {
-          const row = jsToRow(item);
+          const row = jsToRow(item, sheet.table);
           const { error } = await supabase.from(sheet.table).upsert(row);
           if (error) {
             console.error(`  ❌ บันทึก ID ${row.id} ล้มเหลว:`, error.message);

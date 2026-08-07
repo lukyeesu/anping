@@ -2121,10 +2121,10 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                </td>
                                <td className="p-4 pr-6 text-right">
                                    <div className="flex items-center justify-end gap-1 transition-opacity no-drag-zone">
-                                       <button onClick={(e) => { e.stopPropagation(); handleOpenPayroll(s); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg" title="จ่ายเงินเดือน"><Wallet size={18}/></button>
-                                       <button onClick={(e) => { e.stopPropagation(); handleOpenSchedule(s); }} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg" title="จัดตารางงาน"><CalendarClock size={18}/></button>
-                                       <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(s); }} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg" title="แก้ไข"><Pencil size={18}/></button>
-                                       <button onClick={(e) => { e.stopPropagation(); handleDelete(s); }} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="ลบ"><Trash2 size={18}/></button>
+                                       <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenPayroll(s); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg" title="จ่ายเงินเดือน"><Wallet size={18}/></button>
+                                       <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenSchedule(s); }} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg" title="จัดตารางงาน"><CalendarClock size={18}/></button>
+                                       <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenEdit(s); }} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg" title="แก้ไข"><Pencil size={18}/></button>
+                                       <button type="button" onClick={(e) => { e.stopPropagation(); handleDelete(s); }} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="ลบ"><Trash2 size={18}/></button>
                                    </div>
                                </td>
                            </tr>
@@ -2232,16 +2232,16 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                            {/* แถวที่ 3: ปุ่มจัดการ */}
                            <div className="grid grid-cols-4 gap-2 pt-2 mt-1 border-t border-slate-100 no-drag-zone">
-                               <button onClick={(e) => { e.stopPropagation(); handleOpenPayroll(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-emerald-100 shadow-sm">
+                               <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenPayroll(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-emerald-100 shadow-sm">
                                    <Wallet size={14}/> จ่ายเงิน
                                </button>
-                               <button onClick={(e) => { e.stopPropagation(); handleOpenSchedule(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-indigo-100 shadow-sm">
+                               <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenSchedule(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-indigo-100 shadow-sm">
                                    <CalendarClock size={14}/> ตารางงาน
                                </button>
-                               <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 shadow-sm">
+                               <button type="button" onClick={(e) => { e.stopPropagation(); handleOpenEdit(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 shadow-sm">
                                    <Pencil size={14}/> แก้ไขข้อมูล
                                </button>
-                               <button onClick={(e) => { e.stopPropagation(); handleDelete(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-rose-50 text-rose-500 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 hover:border-rose-200 shadow-sm">
+                               <button type="button" onClick={(e) => { e.stopPropagation(); handleDelete(s); }} className="col-span-2 flex items-center justify-center gap-1.5 py-2.5 bg-white hover:bg-rose-50 text-rose-500 rounded-xl text-xs font-bold kanit-text transition-colors border border-slate-200 hover:border-rose-200 shadow-sm">
                                    <Trash2 size={14}/> ลบพนักงาน
                                </button>
                            </div>
@@ -2834,7 +2834,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                </div>
 
                                <div className="pt-4 mt-6 sm:mt-auto border-t border-slate-100 shrink-0">
-                                   <button 
+                                   <button type="button"
                                       onClick={() => applyShiftToSelectedRange(null)}
                                       className={`w-full py-3 sm:py-3.5 border font-bold kanit-text text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 ${!currentActive && !currentExplicitlyOff ? 'bg-slate-50 text-slate-300 border-transparent pointer-events-none' : 'bg-white border-slate-200 text-slate-500 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 shadow-sm active:scale-95'}`}
                                    >
@@ -2849,10 +2849,10 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
              {/* Footer (Fixed at bottom) */}
              <div className="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-row justify-end gap-2 sm:gap-3 shrink-0 z-20 w-full shadow-[0_-4px_15px_rgba(0,0,0,0.02)]">
-                <button onClick={scheduleModal.close} className="flex-1 sm:flex-none px-2 sm:px-6 py-3.5 sm:py-3.5 bg-slate-100 border border-transparent text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors kanit-text text-sm sm:text-base truncate">
+                <button type="button" onClick={scheduleModal.close} className="flex-1 sm:flex-none px-2 sm:px-6 py-3.5 sm:py-3.5 bg-slate-100 border border-transparent text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors kanit-text text-sm sm:text-base truncate">
                     ยกเลิก
                 </button>
-                <button onClick={handleSaveSchedule} disabled={isProcessing} className="flex-1 sm:flex-none px-2 sm:px-8 py-3.5 sm:py-3.5 bg-sky-500 text-white rounded-xl font-bold shadow-lg shadow-sky-500/30 hover:bg-sky-600 transition-all flex items-center justify-center gap-1 sm:gap-2 kanit-text text-sm sm:text-base active:scale-95 truncate">
+                <button type="button" onClick={handleSaveSchedule} disabled={isProcessing} className="flex-1 sm:flex-none px-2 sm:px-8 py-3.5 sm:py-3.5 bg-sky-500 text-white rounded-xl font-bold shadow-lg shadow-sky-500/30 hover:bg-sky-600 transition-all flex items-center justify-center gap-1 sm:gap-2 kanit-text text-sm sm:text-base active:scale-95 truncate">
                     {isProcessing ? <Loader2 className="w-5 h-5 sm:w-5 sm:h-5 animate-spin shrink-0" /> : <CheckCircle2 size={20} className="shrink-0" />} บันทึก<span className="hidden sm:inline">ตารางงาน</span>
                 </button>
              </div>

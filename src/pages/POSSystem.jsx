@@ -5,6 +5,7 @@ import CustomSelect from './CustomSelect';
 import CatalogManager from './CatalogManager';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
+import { supabase } from '../lib/supabase';
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -93,6 +94,45 @@ const POSSystem = ({
   // --- เพิ่ม State สำหรับ Infinite Scroll ของประวัติการขาย ---
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(25);
   const [isHistoryLoadingMore, setIsHistoryLoadingMore] = useState(false);
+  const [localHistoryData, setLocalHistoryData] = useState([]);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+
+  // Fetch history when modal opens or visible count increases
+  useEffect(() => {
+    if (historyModal.isOpen) {
+      const fetchHistory = async () => {
+        setIsHistoryLoadingMore(true);
+        try {
+          const { data, error } = await supabase
+            .from('pos_transactions')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(visibleHistoryCount);
+          if (data && !error) {
+            const mappedData = data.map(tx => ({
+               ...tx,
+               receiptNo: tx.receipt_no,
+               patientName: tx.patient_name,
+               branchId: tx.branch_id,
+               branchName: tx.branch_name,
+               totalAmount: tx.total_amount,
+               netAmount: tx.net_amount,
+               paymentMethod: tx.payment_method,
+               staffName: tx.staff_name,
+               createdAt: tx.created_at,
+               updatedAt: tx.updated_at
+            }));
+            setLocalHistoryData(mappedData);
+            setHasMoreHistory(data.length === visibleHistoryCount);
+          }
+        } catch (e) {
+          console.error('Fetch history error:', e);
+        }
+        setIsHistoryLoadingMore(false);
+      };
+      fetchHistory();
+    }
+  }, [historyModal.isOpen, visibleHistoryCount]);
 
   // --- เพิ่ม State สำหรับดูและแก้ไขรายละเอียดบิล ---
   const [selectedHistoryTxn, setSelectedHistoryTxn] = useState(null);
@@ -237,7 +277,7 @@ const POSSystem = ({
   // กรองสินค้าตามคำค้นหาและหมวดหมู่
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.id.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchSearch = (p.name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || (p.id || '').toLowerCase().includes((searchQuery || '').toLowerCase());
       const matchCategory = activeCategory === 'ทั้งหมด' || p.type === activeCategory;
       return matchSearch && matchCategory;
     });
@@ -339,6 +379,7 @@ const POSSystem = ({
     const transactionData = {
         id: receiptId,
         patientId: selectedPatientId,
+        hn: selectedPatientId,
         patientName: patientSearchTerm || 'ลูกค้าทั่วไป (ไม่ระบุ)',
         branchId: currentBranch === 'all' ? 'b1' : currentBranch, // บันทึกว่าขายที่สาขาไหน
         items: cart.map(item => ({
@@ -359,6 +400,9 @@ const POSSystem = ({
         vatRate: vatRate,
         vatAmount: vatAmount,
         grandTotal: grandTotal,
+        totalAmount: subtotal,
+        netAmount: grandTotal,
+        discount: discountAmount,
         paymentMethod: paymentMethod,
         status: 'completed',
         createdAt: new Date().toISOString()
@@ -581,7 +625,7 @@ const POSSystem = ({
     const { scrollTop, scrollHeight, clientHeight } = e.target;
     // ตรวจสอบว่าเลื่อนลงมาเกือบสุดหรือยัง (เหลืออีก 50px)
     if (scrollTop + clientHeight >= scrollHeight - 50) {
-      if (visibleHistoryCount < (posHistoryData?.length || 0) && !isHistoryLoadingMore) {
+      if (hasMoreHistory && !isHistoryLoadingMore) {
         setIsHistoryLoadingMore(true);
         setTimeout(() => {
           setVisibleHistoryCount(prev => prev + 25);
@@ -662,13 +706,12 @@ const POSSystem = ({
       });
         };
 
-  // สร้างตัวเลือกสำหรับ CustomSelect โดยเรียงลำดับจากประวัติการรักษาล่าสุด (หรือลงทะเบียนล่าสุด) ก่อน
   const patientOptions = useMemo(() => {
     const sortedPatients = [...patientsData].sort((a, b) => {
         const valA = getPatientLastVisitStr(a);
         const valB = getPatientLastVisitStr(b);
-        if (valA < valB) return 1;  // ค่าน้อยกว่า (เก่ากว่า) ให้อยู่ข้างล่าง
-        if (valA > valB) return -1; // ค่ามากกว่า (ใหม่กว่า) ให้อยู่ข้างบน
+        if (valA < valB) return 1;
+        if (valA > valB) return -1;
         return 0;
     });
     
@@ -677,6 +720,43 @@ const POSSystem = ({
       ...sortedPatients.map(p => ({ value: p.id || p.hn, label: `${p.hn || p.id} - ${getPatientFullName(p)}` }))
     ];
   }, [patientsData]);
+
+  // Server-side search state
+  const [serverPatientResults, setServerPatientResults] = useState([]);
+  const [isServerSearching, setIsServerSearching] = useState(false);
+  
+  useEffect(() => {
+     if (!patientSearchTerm || patientSearchTerm.trim().length < 2) {
+         // Fallback to initial patients if nothing searched
+         setServerPatientResults(patientOptions.filter(p => p.value !== '').map(p => ({
+             id: p.value,
+             label: p.label
+         })));
+         return;
+     }
+     const timer = setTimeout(async () => {
+         setIsServerSearching(true);
+         try {
+             const s = patientSearchTerm.trim();
+             const { data, error } = await supabase.from('patients')
+                  .select('id, prefix, first_name, last_name, phone, created_at, updated_at')
+                  .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,id.ilike.%${s}%,phone.ilike.%${s}%`)
+                  .order('updated_at', { ascending: false })
+                  .limit(10);
+             if (!error && data) {
+                 setServerPatientResults(data.map(p => ({
+                     id: p.id || p.hn,
+                     label: `${p.hn || p.id} - ${getPatientFullName(p)}`,
+                     raw: p
+                 })));
+             }
+         } catch (err) {
+             console.error("Patient search error", err);
+         }
+         setIsServerSearching(false);
+     }, 400);
+     return () => clearTimeout(timer);
+  }, [patientSearchTerm, patientOptions]);
 
   return (
     <>
@@ -877,20 +957,35 @@ const POSSystem = ({
                     >
                        ลูกค้าทั่วไป (ไม่ระบุ)
                     </div>
-                    {patientOptions.filter(p => p.value !== '' && p.label.toLowerCase().includes(patientSearchTerm.toLowerCase())).length === 0 && patientSearchTerm && (
-                        <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data">
-                            ไม่พบข้อมูลลูกค้า
+                    {isServerSearching ? (
+                        <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data flex items-center justify-center gap-2">
+                           <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
                         </div>
+                    ) : (
+                        <>
+                           {serverPatientResults.length === 0 && patientSearchTerm && (
+                               <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data">
+                                   ไม่พบข้อมูลลูกค้า
+                               </div>
+                           )}
+                           {serverPatientResults.map((opt) => (
+                               <div
+                                   key={opt.id}
+                                   onMouseDown={(e) => { 
+                                      e.preventDefault(); 
+                                      // If the patient is not in patientsData yet, we should add it so POS can use it!
+                                      if (opt.raw && !patientsData.find(p => (p.id || p.hn) === opt.id)) {
+                                          setPatientsData(prev => [...prev, opt.raw]);
+                                      }
+                                      handleSelectPatient(opt.id, opt.label); 
+                                   }}
+                                   className={`px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors text-sm sm:text-base ${selectedPatientId === opt.id ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                               >
+                                   {opt.label}
+                               </div>
+                           ))}
+                        </>
                     )}
-                    {patientOptions.filter(p => p.value !== '' && p.label.toLowerCase().includes(patientSearchTerm.toLowerCase())).map((opt) => (
-                        <div
-                            key={opt.value}
-                            onMouseDown={(e) => { e.preventDefault(); handleSelectPatient(opt.value, opt.label); }}
-                            className={`px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors text-sm sm:text-base ${selectedPatientId === opt.value ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
-                        >
-                            {opt.label}
-                        </div>
-                    ))}
                 </div>
               )}
             </div>
@@ -1516,7 +1611,7 @@ const POSSystem = ({
                             </div>
                          </div>
                     </div>
-                ) : posHistoryData && posHistoryData.length > 0 ? (
+                ) : localHistoryData && localHistoryData.length > 0 ? (
                     // --- Existing List View ---
                     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden m-4 sm:m-0">
                         {/* Desktop Table View */}
@@ -1527,7 +1622,7 @@ const POSSystem = ({
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {/* ใช้ .slice เพื่อจำกัดจำนวนการแสดงผลแบบ Infinite Scroll */}
-                                    {posHistoryData.slice(0, visibleHistoryCount).map((txn, idx) => (
+                                    {localHistoryData.map((txn, idx) => (
                                         <tr key={txn.id || idx} onClick={() => handleViewHistoryTxn(txn)} className="hover:bg-sky-50/50 cursor-pointer transition-colors font-data text-sm space-row-animation group" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
                                             <td className="p-4 text-slate-600">{formatDateTime(txn.createdAt)}</td>
                                             <td className="p-4 font-bold text-sky-600 kanit-text group-hover:text-sky-700">{txn.id}</td>
@@ -1553,7 +1648,7 @@ const POSSystem = ({
                         </div>
                         {/* Mobile Card View */}
                         <div className="md:hidden flex flex-col divide-y divide-slate-100 bg-slate-50/50">
-                            {posHistoryData.slice(0, visibleHistoryCount).map((txn, idx) => (
+                            {localHistoryData.map((txn, idx) => (
                                 <div key={txn.id || idx} onClick={() => handleViewHistoryTxn(txn)} className="p-4 bg-white hover:bg-sky-50/50 cursor-pointer transition-colors space-row-animation active:scale-[0.98]" style={{ animationDelay: `${(idx % 25) * 30}ms` }}>
                                     <div className="flex justify-between items-start mb-2.5">
                                         <div className="flex flex-col gap-1">

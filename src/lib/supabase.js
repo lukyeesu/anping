@@ -55,8 +55,8 @@ const TABLE_COLUMNS = {
   inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'branch_id', 'created_at', 'updated_at'],
   inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at'],
   setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'is_active', 'created_at', 'updated_at'],
-  finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'created_at'],
-  finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'created_at'],
+  finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
+  finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
   staff: ['id', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 'role', 'category', 'phone', 'email', 'branch_id', 'salary', 'is_active', 'created_at', 'updated_at'],
   staff_schedules: ['id', 'staff_id', 'staff_name', 'date', 'day_of_week', 'shift_type', 'start_time', 'end_time', 'is_active', 'branch_id', 'notes', 'created_at', 'updated_at'],
   settings: ['id', 'values', 'labels', 'created_at', 'updated_at'],
@@ -119,6 +119,26 @@ export function jsToRow(payload, tableName = '') {
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
     if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || typeof val === 'object') {
       rawRow[snakeKey] = val;
+    }
+  }
+
+  if (tableName === 'pos_transactions') {
+    if (payload.hn || payload.patientId) rawRow.hn = String(payload.hn || payload.patientId);
+    
+    const rawTotal = payload.totalAmount ?? payload.subtotal ?? payload.grandTotal ?? payload.amount ?? payload.total ?? 0;
+    const cleanTotal = parseFloat(String(rawTotal).replace(/,/g, '')) || 0;
+    rawRow.total_amount = cleanTotal;
+
+    const rawNet = payload.netAmount ?? payload.netTotal ?? payload.grandTotal ?? payload.amount ?? 0;
+    rawRow.net_amount = parseFloat(String(rawNet).replace(/,/g, '')) || cleanTotal;
+
+    const rawDiscount = payload.discountAmount ?? payload.discount ?? 0;
+    rawRow.discount = parseFloat(String(rawDiscount).replace(/,/g, '')) || 0;
+  }
+
+  if (tableName === 'finance_revenue' || tableName === 'finance_expenses') {
+    if (payload.note !== undefined && payload.description === undefined) {
+      rawRow.description = String(payload.note || '');
     }
   }
 
@@ -384,6 +404,20 @@ export async function callSupabase(action, sheetName, payload = null) {
       };
     }
 
+    case 'GET_EXEC_DASHBOARD_STATS': {
+      const { startDate, endDate, branchId } = payload || {};
+      const { data, error } = await supabase.rpc('get_dashboard_stats', {
+        p_start_date: startDate,
+        p_end_date: endDate,
+        p_branch_id: branchId
+      });
+      if (error) {
+        console.error("Dashboard RPC Error:", error);
+        return { status: 'error', message: error.message };
+      }
+      return { status: 'success', data };
+    }
+
     case 'GET_TREATMENTS_FOR_PATIENTS': {
       const selectCols = (TABLE_COLUMNS.treatments || []).join(',') || '*';
       const patientIds = payload?.patientIds || [];
@@ -451,8 +485,8 @@ export async function callSupabase(action, sheetName, payload = null) {
           resBranches
         ] = await Promise.all([
           supabase.from('patients').select('*', { count: 'exact', head: true }),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or(`date.eq.${todayIso},date.eq.${todayStr}`),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq.pending,deal_status.eq.pending'),
+          supabase.from('queue').select('*', { count: 'exact', head: true }).or(`date.eq."${todayIso}",date.eq."${todayStr}"`),
+          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq."pending",deal_status.eq."pending"'),
           supabase.from('branches').select('*', { count: 'exact', head: true }).eq('is_active', true)
         ]);
 

@@ -18,6 +18,7 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
+import { supabase } from '../lib/supabase';
 
 const FinancePage = ({ 
   currentBranch, 
@@ -37,15 +38,35 @@ const FinancePage = ({
   showGlobalAlert,
   globalAlert
 }) => {
+  const getFinInitialState = (key, defaultVal) => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored !== null) return JSON.parse(stored);
+    } catch(e) {}
+    return defaultVal;
+  };
+
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('all'); 
-  const [filterBranch, setFilterBranch] = useState('all');
-  
-  // --- [NEW/MODIFIED] State สำหรับ Filter รวมกลุ่มแบบใหม่ ---
-  const [timeFilterMode, setTimeFilterMode] = useState('all'); // 'all', 'month', 'year', 'range'
-  const [filterMonth, setFilterMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
-  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
-  const [dateRange, setDateRange] = useState({ start: null, end: null });
+  const [filterType, setFilterType] = useState(() => getFinInitialState('fin_filterType', 'all')); // 'all' | 'income' | 'expense' | 'pos' | 'manual'
+  const [filterBranch, setFilterBranch] = useState(() => getFinInitialState('fin_filterBranch', 'all'));
+
+  // --- [NEW/MODIFIED] State สำหรับ Filter รวมกลุ่มแบบใหม่ (จำค่าลง localStorage) ---
+  const [timeFilterMode, setTimeFilterMode] = useState(() => getFinInitialState('fin_timeFilterMode', 'month')); // 'all', 'month', 'year', 'range'
+  const [filterMonth, setFilterMonth] = useState(() => getFinInitialState('fin_filterMonth', String(new Date().getMonth() + 1).padStart(2, '0')));
+  const [filterYear, setFilterYear] = useState(() => getFinInitialState('fin_filterYear', String(new Date().getFullYear())));
+  const [dateRange, setDateRange] = useState(() => getFinInitialState('fin_dateRange', { start: null, end: null }));
+
+  useEffect(() => {
+    localStorage.setItem('fin_timeFilterMode', JSON.stringify(timeFilterMode));
+    localStorage.setItem('fin_filterMonth', JSON.stringify(filterMonth));
+    localStorage.setItem('fin_filterYear', JSON.stringify(filterYear));
+    localStorage.setItem('fin_dateRange', JSON.stringify(dateRange));
+  }, [timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  useEffect(() => {
+    localStorage.setItem('fin_filterType', JSON.stringify(filterType));
+    localStorage.setItem('fin_filterBranch', JSON.stringify(filterBranch));
+  }, [filterType, filterBranch]);
 
   // --- [NEW] State สำหรับ Modal ปฏิทินเลือกช่วงเวลา ---
   const [showFinRangeCalendar, setShowFinRangeCalendar] = useState(false);
@@ -481,8 +502,12 @@ const FinancePage = ({
         total: financeGrandTotal,
         netTotal: financeGrandTotal,
         grandTotal: financeGrandTotal,
+        totalAmount: financeSubtotal,
+        netAmount: financeGrandTotal,
+        discount: financeDiscountAmount,
         items: posEditForm.items,
-        patientName: patientSearchQuery 
+        patientName: patientSearchQuery,
+        hn: posEditForm.patientId || posEditForm.hn || null
       };
       delete updatedTx.displayDate;
       // ----------------------------------------------------------------------
@@ -491,6 +516,7 @@ const FinancePage = ({
       if (res.status === 'success') {
         // อัปเดต posHistoryData ใน State (เพื่อให้หน้าจอเปลี่ยนตามทันที)
         setPosHistoryData(prev => prev.map(p => p.id === updatedTx.id ? updatedTx : p));
+        fetchStatsAndData(0, true);
         showToast('แก้ไขรายการ POS สำเร็จ', 'success');
         closePosEditModal();
       } else {
@@ -549,6 +575,36 @@ const FinancePage = ({
     });
   };
 
+  const [serverPatientResults, setServerPatientResults] = useState([]);
+  const [isServerSearching, setIsServerSearching] = useState(false);
+
+  useEffect(() => {
+    if (!patientSearchQuery || patientSearchQuery.trim().length < 2) {
+      setServerPatientResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsServerSearching(true);
+      try {
+        const s = patientSearchQuery.trim();
+        const { data, error } = await supabase.from('patients')
+            .select('id, prefix, first_name, last_name, phone, created_at, updated_at')
+            .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,id.ilike.%${s}%,phone.ilike.%${s}%`)
+            .order('updated_at', { ascending: false })
+            .limit(10);
+        if (!error && data) {
+           setServerPatientResults(data);
+        } else {
+           setServerPatientResults([]);
+        }
+      } catch (err) {
+        console.error("Patient search error", err);
+      }
+      setIsServerSearching(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [patientSearchQuery]);
+
   const searchPatients = (query) => {
     setPatientSearchQuery(query);
     if (query.length >= 2) {
@@ -558,122 +614,192 @@ const FinancePage = ({
     }
   };
 
-  const selectPatient = (patient) => {
+  const selectPatient = (patient, isPosEdit = false) => {
     const hnStr = patient.hn || patient.id;
-    const nameStr = `${patient.firstName} ${patient.lastName}`.trim();
+    const nameStr = `${patient.first_name || patient.firstName || ''} ${patient.last_name || patient.lastName || ''}`.trim();
     const combinedName = `${hnStr} - ${nameStr}`;
-    setPosEditForm(prev => ({
-      ...prev,
-      patientId: hnStr,
-      patientName: combinedName
-    }));
+    
+    if (isPosEdit) {
+       setPosEditForm(prev => ({
+         ...prev,
+         patientId: hnStr,
+         patientName: combinedName
+       }));
+    } else {
+       setFormData(prev => ({
+         ...prev,
+         patientId: hnStr,
+         patientName: combinedName
+       }));
+    }
     setPatientSearchQuery(combinedName);
     setShowPatientResults(false);
   };
 
-  const filteredPatients = useMemo(() => {
-    let result = patientsData;
-    if (patientSearchQuery) {
-        const q = patientSearchQuery.toLowerCase();
-        result = patientsData.filter(p =>
-          (p.hn && p.hn.toLowerCase().includes(q)) ||
-          (p.id && p.id.toLowerCase().includes(q)) ||
-          (p.firstName && p.firstName.toLowerCase().includes(q)) ||
-          (p.lastName && p.lastName.toLowerCase().includes(q)) ||
-          (p.phone && p.phone.includes(q))
-        );
-    }
+  // --- [NEW] Server-side Fetching Logic ---
+  const [financeTransactions, setFinanceTransactions] = useState([]);
+  const [statsData, setStatsData] = useState({ income: 0, expense: 0, count_income: 0, count_expense: 0, netIncome: 0, costPercent: 0, marginPercent: 0 });
+  const [isFetchingData, setIsFetchingData] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 30;
 
-    // Sort by recent visit descending and take top 15
-    return result.sort((a, b) => {
-        const valA = getPatientLastVisitStr(a);
-        const valB = getPatientLastVisitStr(b);
-        if (valA < valB) return 1;
-        if (valA > valB) return -1;
-        return 0;
-    }).slice(0, 15);
-  }, [patientsData, patientSearchQuery]);
-  const allTransactions = useMemo(() => {
-    const posTx = posHistoryData.map(tx => {
-      const txDate = tx.datetime || tx.timestamp || tx.createdAt || new Date().toISOString();
-      return {
-        id: tx.id || tx.receiptNo || Math.random().toString(),
-        date: txDate,
-        timestamp: new Date(txDate).getTime(),
-        type: 'income',
-        amount: parseFloat(tx.total || tx.netTotal || tx.grandTotal || tx.amount || 0),
-        method: tx.paymentMethod || 'cash',
-        category: 'รายได้จาก/ขาย POS',
-        note: tx.patientName ? `${tx.patientName}` : 'ทั่วไป (ไม่ระบุ)',
-        status: tx.status || 'completed',
-        isAuto: true,
-        branchId: tx.branchId || 'all',
-        rawTx: tx
-      };
-    });
-
-    const finTx = financeData.map(tx => ({
-        ...tx,
-        timestamp: new Date(tx.date).getTime()
-    }));
-
-    return [...posTx, ...finTx].sort((a, b) => b.timestamp - a.timestamp);
-  }, [posHistoryData, financeData]);
-
-  const filteredTransactions = useMemo(() => {
-    const s = search.toLowerCase();
-    return allTransactions.filter(tx => {
-      const matchSearch = tx.note.toLowerCase().includes(s) || tx.category.toLowerCase().includes(s) || tx.id.toLowerCase().includes(s);
-      let matchType = true;
-      if (filterType === 'income') matchType = tx.type === 'income';
-      else if (filterType === 'expense') matchType = tx.type === 'expense';
-      else if (filterType === 'pos') matchType = tx.isAuto === true;
-      else if (filterType === 'manual') matchType = !tx.isAuto;
-
-      const matchBranch = filterBranch === 'all' || tx.branchId === filterBranch || tx.branchId === 'all';
-
-      // --- ตรวจสอบการกรองเวลาจากโหมดที่เลือก (Grouped Logic) ---
-      let txDateObj = new Date(tx.timestamp);
-      let matchTime = true;
-      if (timeFilterMode === 'month') {
-          matchTime = String(txDateObj.getMonth() + 1).padStart(2, '0') === filterMonth && String(txDateObj.getFullYear()) === filterYear;
-      } else if (timeFilterMode === 'year') {
-          matchTime = String(txDateObj.getFullYear()) === filterYear;
-      } else if (timeFilterMode === 'range' && dateRange.start && dateRange.end) {
-          matchTime = txDateObj >= dateRange.start && txDateObj <= dateRange.end;
-      }
-
-      return matchSearch && matchType && matchBranch && matchTime;
-    });
-  }, [allTransactions, search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
-
-  const stats = useMemo(() => {
-    let totalIncome = 0;
-    let totalExpense = 0;
-    let validTransactionsCount = 0;
-
-    filteredTransactions.forEach(tx => {
-      // ไม่นำบิลที่ถูกยกเลิก (cancelled) มารวมในยอดสรุปการเงิน
-      if (tx.status !== 'cancelled') {
-        validTransactionsCount++;
-        if (tx.type === 'income') totalIncome += tx.amount;
-        if (tx.type === 'expense') totalExpense += tx.amount;
-      }
-    });
+  const buildDateRange = () => {
+    let startDate = '1970-01-01T00:00:00.000Z';
+    let endDate = '2099-12-31T23:59:59.999Z';
+    const now = new Date();
     
-    // คำนวณเปอร์เซ็นต์ (ป้องกัน error หารด้วย 0 กรณีไม่มีรายรับ)
-    const costPercent = totalIncome > 0 ? (totalExpense / totalIncome) * 100 : 0;
-    const marginPercent = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
+    if (timeFilterMode === 'month') {
+        const y = filterYear !== 'all' ? parseInt(filterYear) : now.getFullYear();
+        const m = filterMonth !== 'all' ? parseInt(filterMonth) - 1 : now.getMonth();
+        startDate = new Date(y, m, 1).toISOString();
+        endDate = new Date(y, m + 1, 0, 23, 59, 59, 999).toISOString();
+        if (filterYear === 'all' && filterMonth === 'all') {
+            startDate = '1970-01-01T00:00:00.000Z';
+            endDate = '2099-12-31T23:59:59.999Z';
+        }
+    } else if (timeFilterMode === 'year') {
+        const y = filterYear !== 'all' ? parseInt(filterYear) : now.getFullYear();
+        startDate = new Date(y, 0, 1).toISOString();
+        endDate = new Date(y, 11, 31, 23, 59, 59, 999).toISOString();
+        if (filterYear === 'all') {
+            startDate = '1970-01-01T00:00:00.000Z';
+            endDate = '2099-12-31T23:59:59.999Z';
+        }
+    } else if (timeFilterMode === 'dateRange' || timeFilterMode === 'range') {
+        if (dateRange && (dateRange.start || (dateRange[0] && dateRange[0].startDate))) {
+          const sDate = dateRange.start || dateRange[0].startDate || now;
+          const eDate = dateRange.end || dateRange[0].endDate || now;
+          startDate = new Date(new Date(sDate).setHours(0, 0, 0, 0)).toISOString();
+          endDate = new Date(new Date(eDate).setHours(23, 59, 59, 999)).toISOString();
+        }
+    } else if (timeFilterMode === 'today') {
+        startDate = new Date(now.setHours(0,0,0,0)).toISOString();
+        endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+    }
+    return { startDate, endDate };
+  };
 
-    return {
-      balance: totalIncome - totalExpense,
-      income: totalIncome,
-      expense: totalExpense,
-      transactionsCount: validTransactionsCount,
-      costPercent,
-      marginPercent
-    };
-  }, [filteredTransactions]);
+  const fetchStatsAndData = async (pageNum, isReset = false) => {
+      if (!isReset && !hasMore) return;
+      setIsFetchingData(true);
+      const { startDate, endDate } = buildDateRange();
+      const s = search.toLowerCase();
+
+      // Fetch Stats (only on reset)
+      if (isReset) {
+          try {
+              const { data, error } = await supabase.rpc('get_finance_stats', {
+                  start_date: startDate,
+                  end_date: endDate,
+                  branch_filter: filterBranch,
+                  type_filter: filterType,
+                  search_query: s
+              });
+              if (!error && data) {
+                  const total_income = Number(data.total_income) || 0;
+                  const total_expense = Number(data.total_expense) || 0;
+                  const count_income = Number(data.count_income) || 0;
+                  const count_expense = Number(data.count_expense) || 0;
+                  const netIncome = total_income - total_expense;
+                  let costPercent = 0;
+                  let marginPercent = 0;
+                  if (total_income > 0) {
+                      costPercent = (total_expense / total_income) * 100;
+                      marginPercent = (netIncome / total_income) * 100;
+                  }
+                  setStatsData({
+                      income: total_income,
+                      expense: total_expense,
+                      balance: netIncome,
+                      totalIncome: total_income,
+                      totalExpense: total_expense,
+                      netIncome,
+                      transactionsCount: count_income + count_expense,
+                      costPercent,
+                      marginPercent
+                  });
+              }
+          } catch(e) { console.error(e); }
+      }
+
+      // Fetch Paginated Data
+      try {
+          let query = supabase.from('finance_all_transactions').select('*')
+              .gte('timestamp_date', startDate)
+              .lte('timestamp_date', endDate);
+          
+          if (filterBranch !== 'all') {
+              query = query.eq('branch_id', filterBranch);
+          }
+          if (filterType === 'income') query = query.eq('type', 'income');
+          else if (filterType === 'expense') query = query.eq('type', 'expense');
+          else if (filterType === 'pos') query = query.eq('is_auto', true);
+          else if (filterType === 'manual') query = query.eq('is_auto', false);
+
+          if (s) {
+              query = query.or(`note.ilike.%${s}%,category.ilike.%${s}%,patient_name.ilike.%${s}%,id.ilike.%${s}%`);
+          }
+
+          query = query.order('timestamp_date', { ascending: false }).order('id', { ascending: false });
+          query = query.range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+
+          const { data, error } = await query;
+          if (!error && data) {
+              const parseTxTimestamp = (dateVal) => {
+                  if (!dateVal) return Date.now();
+                  const d = new Date(dateVal).getTime();
+                  return isNaN(d) ? Date.now() : d;
+              };
+
+              const formatted = data.map(tx => {
+                  let parsedItems = tx.items;
+                  if (typeof parsedItems === 'string') {
+                      try { parsedItems = JSON.parse(parsedItems); } catch(e) { parsedItems = []; }
+                  }
+                  let displayNote = tx.note || '';
+                  if (!displayNote && Array.isArray(parsedItems) && parsedItems.length > 0) {
+                      displayNote = parsedItems.map(i => i.name || i.category).filter(Boolean).join(', ');
+                  }
+                  return {
+                      ...tx,
+                      date: tx.timestamp_date,
+                      timestamp: parseTxTimestamp(tx.timestamp_date),
+                      branchId: tx.branch_id,
+                      note: displayNote,
+                      items: parsedItems,
+                      patientName: tx.patient_name,
+                      isAuto: tx.is_auto,
+                      amount: Number(tx.amount) || 0
+                  };
+              });
+
+              if (formatted.length < PAGE_SIZE) setHasMore(false);
+              setFinanceTransactions(prev => {
+                  const newTxs = isReset ? formatted : [...prev, ...formatted];
+                  const seen = new Set();
+                  return newTxs.filter(tx => {
+                      if (seen.has(tx.id)) return false;
+                      seen.add(tx.id);
+                      return true;
+                  });
+              });
+          }
+      } catch(e) { console.error(e); }
+      setIsFetchingData(false);
+  };
+
+  useEffect(() => {
+      setPage(0);
+      setHasMore(true);
+      fetchStatsAndData(0, true);
+  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  const stats = statsData;
+  const visibleTransactions = financeTransactions;
+  const isLoadingMore = isFetchingData && page > 0;
+
+
 
   const handleEditTransaction = (tx) => {
       if (tx.isAuto) {
@@ -698,6 +824,7 @@ const FinancePage = ({
 
           setPosEditForm({
             ...originalTx,
+            status: originalTx.status || 'completed',
             displayDate: editDateStr,
             items: originalTx.items ? [...originalTx.items] : []
           });
@@ -765,7 +892,7 @@ const FinancePage = ({
             try {
                 const sheetName = tx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
                 await callAppScript('DELETE_DATA', sheetName, { id: tx.id });
-                setFinanceData(prev => prev.filter(item => item.id !== tx.id));
+                fetchStatsAndData(0, true);
 
                 if (tx.id.startsWith('EXP-PR-') && tx.patientId) {
                     const staffToUpdate = staffData.find(s => s.id === tx.patientId);
@@ -890,11 +1017,7 @@ const FinancePage = ({
       const res = await callAppScript('SAVE_DATA', sheetName, newTx);
 
       if (res.status === 'success') {
-          if (isEdit) {
-            setFinanceData(prev => prev.map(item => item.id === newTx.id ? newTx : item));
-          } else {
-            setFinanceData(prev => [newTx, ...prev]);
-          }
+          fetchStatsAndData(0, true);
           showToast(isEdit ? 'แก้ไขรายการสำเร็จ' : 'บันทึกรายการสำเร็จ', 'success');
           closeManualModal();
       } else {
@@ -913,74 +1036,62 @@ const FinancePage = ({
   };
 
   // --- [FIXED] Infinity Scroll Logic (Matched with MedicalRecords 100%) ---
-  const [visibleCount, setVisibleCount] = useState(30);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   useEffect(() => {
-    setVisibleCount(30);
-    setIsLoadingMore(false);
-  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
-
-  const visibleTransactions = useMemo(() => {
-    return filteredTransactions.slice(0, visibleCount);
-  }, [filteredTransactions, visibleCount]);
-
-  useEffect(() => {
-    const mainElement = document.getElementById('main-scroll-container');
+    const mainElement = document.getElementById('main-scroll-container') || document.querySelector('main') || window;
     if (!mainElement) return;
 
     const handleScroll = rAFThrottle((e) => {
-      // ป้องกันการคำนวณและอัปเดต ถ้า Component ถูกซ่อนอยู่
       if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
 
-      const target = e.target || mainElement;
-      const { scrollTop, scrollHeight, clientHeight } = target;
-      
-      // 1. จัดการ Sticky Header
+      const target = e.target || (mainElement !== window ? mainElement : document.documentElement);
+      const scrollTop = target.scrollTop !== undefined ? target.scrollTop : window.scrollY;
+      const scrollHeight = target.scrollHeight || document.documentElement.scrollHeight;
+      const clientHeight = target.clientHeight || window.innerHeight;
+
+      // 1. Sticky Header
       if (scrollTop > 20) {
-          headerRef.current.classList.add('is-scrolled');
+        headerRef.current.classList.add('is-scrolled');
       } else {
-          headerRef.current.classList.remove('is-scrolled');
+        headerRef.current.classList.remove('is-scrolled');
       }
 
-      // 2. จัดการ Sticky Filter
+      // 2. Sticky Filter
       if (filterRef.current && headerRef.current) {
-          const headerRect = headerRef.current.getBoundingClientRect();
-          const filterRect = filterRef.current.getBoundingClientRect();
-          if (filterRect.top <= headerRect.bottom + 1) {
-              filterRef.current.classList.add('is-scrolled');
-          } else {
-              filterRef.current.classList.remove('is-scrolled');
-          }
+        const headerRect = headerRef.current.getBoundingClientRect();
+        const filterRect = filterRef.current.getBoundingClientRect();
+        if (filterRect.top <= headerRect.bottom + 1) {
+          filterRef.current.classList.add('is-scrolled');
+        } else {
+          filterRef.current.classList.remove('is-scrolled');
+        }
       }
 
-      // 3. ตรวจสอบการโหลดข้อมูลเพิ่ม (ระยะ 100px จากท้าย)
+      // 3. Infinite Load
       if (scrollTop + clientHeight >= scrollHeight - 100) {
-        if (visibleCount < filteredTransactions.length && !isLoadingMore) {
-           setIsLoadingMore(true);
-           setTimeout(() => {
-              setVisibleCount(prev => prev + 10);
-              setIsLoadingMore(false);
-           }, 1000);
+        if (hasMore && !isFetchingData) {
+            setPage(p => {
+                const np = p + 1;
+                fetchStatsAndData(np, false);
+                return np;
+            });
         }
       }
     });
 
-    // ตั้งค่าสถานะเริ่มต้น
     setTimeout(() => {
-        // ล้างคลาสที่อาจค้างอยู่จากการสลับหน้าจอ (Tab switching) 
-        if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
-        if (filterRef.current) {
-            filterRef.current.classList.remove('is-scrolled');
-            if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
-        }
-        // บังคับให้เกิด Event Scroll 1 ครั้ง เพื่อให้ handleScroll คำนวณขนาดและตำแหน่งใหม่ให้ถูกต้อง
-        if (mainElement) mainElement.dispatchEvent(new Event('scroll'));
+      if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
+      if (filterRef.current) {
+          filterRef.current.classList.remove('is-scrolled');
+          if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
+      }
+      if (mainElement && mainElement.dispatchEvent) mainElement.dispatchEvent(new Event('scroll'));
     }, 50);
 
-    mainElement.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, [visibleCount, filteredTransactions.length, isLoadingMore]);
+    const scrollTarget = mainElement !== window ? mainElement : window;
+    scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollTarget.removeEventListener('scroll', handleScroll);
+  }, [hasMore, isFetchingData, filterBranch, filterType, search, timeFilterMode, filterMonth, filterYear, dateRange]);
   // -----------------------------
 
   return (
@@ -1237,9 +1348,14 @@ const FinancePage = ({
                                   {tx.patientName}
                                 </span>
                               )}
-                              <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note || '-'}>
-                                {tx.note || '-'}
-                              </span>
+                              {tx.note && tx.note !== tx.patientName && (
+                                <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note}>
+                                  {tx.note}
+                                </span>
+                              )}
+                              {!tx.note && !tx.patientName && (
+                                <span className="font-data line-clamp-2 leading-tight text-sm text-slate-700">-</span>
+                              )}
                             </div>
                           </td>
                           <td className="p-4">
@@ -1330,12 +1446,17 @@ const FinancePage = ({
                         </div>
                         
                         <div className="mb-1">
-                            {tx.patientName ? (
+                            {tx.patientName && (
                                 <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{tx.patientName}</div>
-                            ) : null}
-                            <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
-                                {tx.note || '-'}
-                            </div>
+                            )}
+                            {tx.note && tx.note !== tx.patientName && (
+                                <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
+                                    {tx.note}
+                                </div>
+                            )}
+                            {!tx.note && !tx.patientName && (
+                                <div className="text-xs text-slate-800 font-bold kanit-text line-clamp-2 mt-1">-</div>
+                            )}
                         </div>
 
                         <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -1723,31 +1844,36 @@ const FinancePage = ({
                              {showPatientResults && (
                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
                                    <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
-                                      {filteredPatients.map((p, pidx) => (
-                                         <button
-                                            key={p.id || `p-${pidx}`}
-                                            type="button"
-                                            onMouseDown={(e) => {
-                                               e.preventDefault(); // Prevent onBlur from firing before click
-                                               const hnStr = p.hn || p.id;
-                                               const nameStr = `${p.firstName} ${p.lastName}`.trim();
-                                               const combinedName = `${hnStr} - ${nameStr}`;
-                                               setFormData({...formData, patientId: hnStr, patientName: combinedName});
-                                               setPatientSearchQuery(combinedName);
-                                               setShowPatientResults(false);
-                                            }}
-                                            className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
-                                         >
+                                      {isServerSearching ? (
+                                         <div className="p-4 text-center text-slate-400 kanit-text text-sm">
+                                            กำลังค้นหาข้อมูล...
+                                         </div>
+                                      ) : serverPatientResults.length === 0 && patientSearchQuery.length >= 2 ? (
+                                         <div className="p-4 text-center text-slate-400 kanit-text text-sm italic">
+                                            ไม่พบข้อมูลผู้ป่วย: "{patientSearchQuery}"
+                                         </div>
+                                      ) : (
+                                         serverPatientResults.map((p, pidx) => (
+                                            <button
+                                               key={p.id || `p-${pidx}`}
+                                               type="button"
+                                               onMouseDown={(e) => {
+                                                  e.preventDefault(); // Prevent onBlur from firing before click
+                                                  selectPatient(p, false);
+                                               }}
+                                               className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                                            >
                                             <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
                                                {p.hn || 'NEW'}
                                             </div>
                                             <div className="flex-1 overflow-hidden">
-                                               <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.firstName} {p.lastName}</p>
-                                               <p className="text-[11px] text-slate-500 font-data">{p.phone || 'ไม่มีเบอร์โทร'}</p>
+                                               <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.first_name || p.firstName} {p.last_name || p.lastName}</p>
+                                               <p className="text-[11px] text-slate-500 font-data">{p.phone1 || p.phone || 'ไม่มีเบอร์โทร'}</p>
                                             </div>
                                             <ChevronRight className="text-slate-300" size={16} />
                                          </button>
-                                      ))}
+                                         ))
+                                      )}
                                    </div>
                                 </div>
                              )}
@@ -1794,7 +1920,7 @@ const FinancePage = ({
                                    {/* Custom Dropdown */}
                                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden hidden peer-focus:block hover:block modal-animate-in">
                                       <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
-                                         {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).map(p => (
+                                         {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).map(p => (
                                             <button
                                                key={p.id}
                                                type="button"
@@ -1812,7 +1938,7 @@ const FinancePage = ({
                                                <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
                                             </button>
                                          ))}
-                                         {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).length === 0 && (
+                                         {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).length === 0 && (
                                              <div className="p-4 text-center text-sm text-slate-400 kanit-text">
                                                  สามารถพิมพ์ชื่อรายการเองได้เลย
                                              </div>
@@ -2095,21 +2221,22 @@ const FinancePage = ({
                     {showPatientResults && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
                         <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
-                          {filteredPatients
-                          .sort((a, b) => {
-                              const valA = getPatientLastVisitStr(a);
-                              const valB = getPatientLastVisitStr(b);
-                              if (valA < valB) return 1;
-                              if (valA > valB) return -1;
-                              return 0;
-                          })
-                          .map(p => (
+                          {isServerSearching ? (
+                             <div className="p-4 text-center text-slate-400 kanit-text text-sm">
+                                กำลังค้นหาข้อมูล...
+                             </div>
+                          ) : serverPatientResults.length === 0 && patientSearchQuery.length >= 2 ? (
+                            <div className="p-4 text-center text-slate-400 kanit-text text-sm italic">
+                              ไม่พบข้อมูลผู้ป่วย: "{patientSearchQuery}"
+                            </div>
+                          ) : (
+                            serverPatientResults.map(p => (
                             <button 
                               key={p.id}
                               type="button"
                               onMouseDown={(e) => {
                                 e.preventDefault();
-                                selectPatient(p);
+                                selectPatient(p, true);
                               }}
                               className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
                             >
@@ -2117,16 +2244,12 @@ const FinancePage = ({
                                 {p.hn || 'NEW'}
                               </div>
                               <div className="flex-1 overflow-hidden">
-                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.firstName} {p.lastName}</p>
-                                <p className="text-[11px] text-slate-500 font-data">{p.phone || 'ไม่มีเบอร์โทร'}</p>
+                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.first_name || p.firstName} {p.last_name || p.lastName}</p>
+                                <p className="text-[11px] text-slate-500 font-data">{p.phone1 || p.phone || 'ไม่มีเบอร์โทร'}</p>
                               </div>
                               <ChevronRight className="text-slate-300" size={16} />
                             </button>
-                          ))}
-                          {filteredPatients.length === 0 && patientSearchQuery.length >= 2 && (
-                            <div className="p-4 text-center text-slate-400 kanit-text text-sm italic">
-                              ไม่พบข้อมูลผู้ป่วย: "{patientSearchQuery}"
-                            </div>
+                            ))
                           )}
                         </div>
                       </div>

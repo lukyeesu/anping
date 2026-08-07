@@ -42,6 +42,27 @@ function jsToRow(payload, tableName = '') {
   if (payload.id || payload.hn) {
     row.id = String(payload.id || payload.hn);
   }
+
+  if (tableName === 'pos_transactions' || tableName === 'POS_Transactions') {
+    if (payload.hn || payload.patientId) row.hn = String(payload.hn || payload.patientId);
+    
+    const rawTotal = payload.totalAmount ?? payload.subtotal ?? payload.grandTotal ?? payload.amount ?? payload.total ?? 0;
+    const cleanTotal = parseFloat(String(rawTotal).replace(/,/g, '')) || 0;
+    row.total_amount = cleanTotal;
+
+    const rawNet = payload.netAmount ?? payload.netTotal ?? payload.grandTotal ?? payload.amount ?? 0;
+    row.net_amount = parseFloat(String(rawNet).replace(/,/g, '')) || cleanTotal;
+
+    const rawDiscount = payload.discountAmount ?? payload.discount ?? 0;
+    row.discount = parseFloat(String(rawDiscount).replace(/,/g, '')) || 0;
+  }
+
+  if (tableName === 'finance_revenue' || tableName === 'finance_expenses') {
+    if (payload.note !== undefined && payload.description === undefined) {
+      row.description = String(payload.note || '');
+    }
+  }
+
   if (tableName !== 'logs' && tableName !== 'Logs' && tableName !== 'inventory_logs') {
     row.updated_at = new Date().toISOString();
   }
