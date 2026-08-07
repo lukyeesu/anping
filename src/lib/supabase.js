@@ -49,7 +49,7 @@ const TABLE_COLUMNS = {
     'pdpa_status', 'pdpa_token', 'pdpa_expires', 'branch_id', 'created_at', 'updated_at'
   ],
   treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at'],
-  branches: ['id', 'name', 'address', 'phone', 'is_active', 'created_at', 'updated_at'],
+  branches: ['id', 'name', 'clinic_name', 'license_number', 'tax_id', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at'],
   queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'created_at', 'updated_at'],
   pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'created_at', 'updated_at'],
   inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'branch_id', 'created_at', 'updated_at'],
@@ -117,6 +117,14 @@ export function jsToRow(payload, tableName = '') {
     if (val === null || val === undefined) continue;
     if (key === 'data' || key === 'updatedBy' || key === 'updatedById' || key === 'opdRecords' || key === 'courses') continue;
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    
+    // ตรวจสอบว่าคอลัมน์นี้มีอยู่ในโครงสร้าง TABLE_COLUMNS หรือไม่
+    // ถ้าย้ายมาใช้ Supabase จะต้องมีคอลัมน์จริงๆ ในตาราง ถึงจะอนุญาตให้ insert ได้
+    const allowedColumns = TABLE_COLUMNS[tableName] || [];
+    if (allowedColumns.length > 0 && !allowedColumns.includes(snakeKey)) {
+        continue; 
+    }
+
     if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || typeof val === 'object') {
       rawRow[snakeKey] = val;
     }
@@ -778,24 +786,73 @@ async function logFailedLogin(usernameInput, reason, staffObj = null) {
 
 
     case 'UPLOAD_FILE': {
-      if (!GOOGLE_SCRIPT_URL) {
-        throw new Error('Missing GOOGLE_SCRIPT_URL for Google Drive uploads');
-      }
-      const rawToken = localStorage.getItem('clinic_session_token') || 'recovery-token';
-      const gasToken = (rawToken.startsWith('ey') || rawToken.startsWith('supa') || rawToken.startsWith('sec')) ? 'recovery-token' : rawToken;
+      // 1. ถ้ามีการตั้งค่า GOOGLE_SCRIPT_URL ที่เป็น Google Script ของจริง ให้ใช้ Google Drive เป็นหลัก
+      if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.includes('script.google.com')) {
+        try {
+          const rawToken = localStorage.getItem('clinic_session_token') || 'recovery-token';
+          const gasToken = (rawToken.startsWith('ey') || rawToken.startsWith('supa') || rawToken.startsWith('sec')) ? 'recovery-token' : rawToken;
 
-      const response = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'UPLOAD_FILE', sheetName, payload, token: gasToken })
-      });
-      const responseText = await response.text();
-      if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE html>')) {
-        throw new Error('สิทธิ์การบันทึกภาพลง Google Drive ไม่ถูกต้อง');
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'UPLOAD_FILE', sheetName, payload, token: gasToken })
+          });
+          const responseText = await response.text();
+          if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE html>')) {
+            throw new Error('สิทธิ์การบันทึกภาพลง Google Drive ไม่ถูกต้อง');
+          }
+          const result = JSON.parse(responseText);
+          if (result.status === 'error') throw new Error(result.message);
+          return result;
+        } catch (err) {
+          console.error("Google Drive upload failed:", err);
+          throw new Error('การอัปโหลดไป Google Drive ล้มเหลว: ' + err.message);
+        }
       }
-      const result = JSON.parse(responseText);
-      if (result.status === 'error') throw new Error(result.message);
-      return result;
+
+      // 2. ถ้าไม่ได้ตั้งค่า Google Script ไว้ ให้ใช้ Supabase Storage แทน
+      try {
+        const { fileName, mimeType, data: base64Data } = payload;
+        if (!fileName || !base64Data) throw new Error('ข้อมูลไฟล์ไม่ครบถ้วน');
+
+        const byteCharacters = atob(base64Data);
+        const byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+          const slice = byteCharacters.slice(offset, offset + 512);
+          const byteNumbers = new Array(slice.length);
+          for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+          }
+          byteArrays.push(new Uint8Array(byteNumbers));
+        }
+        const blob = new Blob(byteArrays, { type: mimeType || 'image/png' });
+
+        let bucketName = 'uploads';
+        try {
+          const { data: buckets } = await supabase.storage.listBuckets();
+          if (buckets && buckets.length > 0) {
+             const preferred = buckets.find(b => b.name === 'uploads' || b.name === 'images' || b.name === 'public');
+             bucketName = preferred ? preferred.name : buckets[0].name;
+          }
+        } catch (e) {
+          console.warn('Failed to list buckets', e);
+        }
+
+        const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const filePath = `clinic_uploads/${Date.now()}_${safeFileName}`;
+
+        const { data, error } = await supabase.storage.from(bucketName).upload(filePath, blob, {
+          contentType: mimeType || 'image/png',
+          upsert: true
+        });
+
+        if (error) throw new Error(error.message);
+
+        const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+        return { status: 'success', fileUrl: publicUrlData.publicUrl };
+      } catch (err) {
+        throw new Error(`อัปโหลดไฟล์ไป Supabase Storage ล้มเหลว: ${err.message}`);
+      }
     }
 
     default:

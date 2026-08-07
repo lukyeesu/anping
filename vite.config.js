@@ -43,11 +43,13 @@ function apiDbPlugin() {
   };
 }
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     apiDbPlugin()
   ],
+  define: {
+    'import.meta.env.GOOGLE_SCRIPT_URL': JSON.stringify(process.env.GOOGLE_SCRIPT_URL || '')
+  }
 })

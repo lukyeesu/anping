@@ -8,8 +8,7 @@ export const POS_ICONS = {
   Heart: Activity, Syringe: Plus, Scissors: Plus, 
   List, ShoppingCart, Truck
 };
-
-export const GOOGLE_SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || "/api/db"; 
+export const GOOGLE_SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL || import.meta.env.GOOGLE_SCRIPT_URL || "/api/db"; 
 
 export const LOCAL_VISION_API_KEY = import.meta.env.DEV ? import.meta.env.VITE_VISION_API_KEY : null;
 

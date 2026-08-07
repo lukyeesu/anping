@@ -2,6 +2,30 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
+const TABLE_COLUMNS = {
+  patients: [
+    'id', 'prefix', 'first_name', 'last_name', 'name', 'nickname', 'id_card', 'phone', 
+    'gender', 'dob', 'age', 'blood_group', 'religion', 'nationality', 'ethnicity', 'occupation',
+    'address', 'moo', 'sub_district', 'district', 'province', 'zipcode', 'road',
+    'em_name', 'em_phone', 'em_relation', 'em_address',
+    'allergies', 'drug_allergy', 'underlying_disease', 'medical_history', 'chief_complaint',
+    'pdpa_status', 'pdpa_token', 'pdpa_expires', 'branch_id', 'created_at', 'updated_at'
+  ],
+  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at'],
+  branches: ['id', 'name', 'clinic_name', 'license_number', 'tax_id', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at'],
+  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'created_at', 'updated_at'],
+  pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'created_at', 'updated_at'],
+  inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'branch_id', 'created_at', 'updated_at'],
+  inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at'],
+  setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'is_active', 'created_at', 'updated_at'],
+  finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
+  finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
+  staff: ['id', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 'role', 'category', 'phone', 'email', 'branch_id', 'salary', 'is_active', 'created_at', 'updated_at'],
+  staff_schedules: ['id', 'staff_id', 'staff_name', 'date', 'day_of_week', 'shift_type', 'start_time', 'end_time', 'is_active', 'branch_id', 'notes', 'created_at', 'updated_at'],
+  settings: ['id', 'values', 'labels', 'created_at', 'updated_at'],
+  logs: ['id', 'user_name', 'user_id', 'role', 'action', 'target_sheet', 'target_data_id', 'detail', 'created_at']
+};
+
 function getSupabaseAdmin() {
   let supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://mjgdafabuzguofknhxvv.supabase.co';
   let serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_uaARgpzqpsrsBLbTjLeVWw_ERbdwFwn';
@@ -34,9 +58,15 @@ function rowToJS(row) {
 function jsToRow(payload, tableName = '') {
   if (!payload) return {};
   const row = {};
+  const allowedColumns = TABLE_COLUMNS[tableName] || [];
+  
   for (const [key, val] of Object.entries(payload)) {
     if (key === 'updatedBy' || key === 'updatedById') continue;
     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    
+    if (allowedColumns.length > 0 && !allowedColumns.includes(snakeKey)) {
+        continue;
+    }
     row[snakeKey] = val;
   }
   if (payload.id || payload.hn) {
