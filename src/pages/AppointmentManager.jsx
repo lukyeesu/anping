@@ -401,23 +401,94 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     setIsProcessing(false);
   };
 
+  const [patientCache, setPatientCache] = useState({});
+
+  // โหลดข้อมูลชื่อคนไข้ล่วงหน้าจาก Supabase โดยตรงสำหรับนัดหมายที่ขาดข้อมูลชื่อคนไข้ (ไม่พึ่งพาการเลื่อนโหลดในหน้าเวชระเบียน)
+  useEffect(() => {
+    if (!Array.isArray(queueData) || queueData.length === 0) return;
+
+    const missingHns = Array.from(new Set(
+      queueData
+        .filter(appt => {
+          if (!appt.hn) return false;
+          if (patientCache[appt.hn]) return false;
+          if (Array.isArray(patientsData) && patientsData.some(p => getPatientId(p) === appt.hn)) return false;
+          const currentName = appt.patientName || appt.patient_name || appt.name;
+          return !currentName || currentName === 'undefined' || currentName.trim() === '' || currentName === appt.hn;
+        })
+        .map(appt => appt.hn)
+    ));
+
+    if (missingHns.length === 0) return;
+
+    let isMounted = true;
+    const fetchMissingPatients = async () => {
+      try {
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('patients')
+            .select('id, prefix, first_name, last_name, name, phone')
+            .in('id', missingHns);
+
+          if (!error && data && isMounted) {
+            const newMap = {};
+            data.forEach(p => {
+              const fullName = getPatientFullName(p);
+              if (fullName && fullName !== 'undefined') {
+                newMap[p.id] = {
+                  name: fullName,
+                  phone: p.phone || ''
+                };
+              }
+            });
+            if (Object.keys(newMap).length > 0) {
+              setPatientCache(prev => ({ ...prev, ...newMap }));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Fetch missing patients error:", err);
+      }
+    };
+
+    fetchMissingPatients();
+    return () => { isMounted = false; };
+  }, [queueData, patientsData, patientCache]);
+
   const augmentedQueueData = useMemo(() => {
     return queueData.map(appt => {
-      if (!appt.hn) return appt;
-      const patientInfo = patientsData.find(p => getPatientId(p) === appt.hn);
-      if (patientInfo) {
-          const latestName = getPatientFullName(patientInfo);
-          const latestPhones = [patientInfo.phone1, patientInfo.phone2].filter(Boolean);
-          return {
-              ...appt,
-              patientName: latestName,
-              name: latestName, 
-              phone: latestPhones.length > 0 ? latestPhones : appt.phone
-          };
+      const hn = appt.hn || '';
+      // 1. ดึงชื่อที่มีบันทึกอยู่ในตาราง queue โดยตรงก่อนเป็นอันดับแรก (Primary Source of Truth)
+      const directName = appt.patientName || appt.patient_name || appt.name;
+      let latestName = (directName && directName !== 'undefined' && directName.trim() !== '') ? directName : '';
+
+      // 2. ถ้าคิวนั้นไม่มีชื่อบันทึกไว้ในตาราง queue ให้สืบค้นเสริมจาก patientsData หรือ patientCache
+      if (!latestName && hn) {
+        const patientInfo = Array.isArray(patientsData) ? patientsData.find(p => getPatientId(p) === hn) : null;
+        if (patientInfo) {
+          const fullName = getPatientFullName(patientInfo);
+          if (fullName && fullName !== 'undefined') {
+            latestName = fullName;
+          }
+        } else if (patientCache[hn]?.name) {
+          latestName = patientCache[hn].name;
+        }
       }
-      return appt; 
+
+      if (!latestName || latestName === 'undefined' || latestName.trim() === '') {
+        latestName = hn ? `คนไข้ (${hn})` : 'ไม่ระบุชื่อคนไข้';
+      }
+
+      const phoneVal = appt.phone || (patientCache[hn]?.phone) || '';
+
+      return {
+        ...appt,
+        patientName: latestName,
+        name: latestName,
+        phone: phoneVal
+      };
     });
-  }, [queueData, patientsData]);
+  }, [queueData, patientsData, patientCache]);
 
   const filteredData = useMemo(() => {
     return augmentedQueueData.filter(a => 
