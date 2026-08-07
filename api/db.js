@@ -301,6 +301,213 @@ export default async function handler(req, res) {
         return res.status(200).json({ status: 'success', message: 'Data deleted successfully' });
       }
 
+      case 'GET_EXECUTIVE_SUMMARY': {
+        const { startDate, endDate, branchId } = payload || {};
+        
+        let posQuery = supabaseAdmin.from('pos_transactions').select('*');
+        if (branchId && branchId !== 'all') posQuery = posQuery.eq('branch_id', branchId);
+
+        let revQuery = supabaseAdmin.from('finance_revenue').select('*');
+        if (branchId && branchId !== 'all') revQuery = revQuery.eq('branch_id', branchId);
+
+        let expQuery = supabaseAdmin.from('finance_expenses').select('*');
+        if (branchId && branchId !== 'all') expQuery = expQuery.eq('branch_id', branchId);
+
+        let queueQuery = supabaseAdmin.from('queue').select('*');
+        if (branchId && branchId !== 'all') queueQuery = queueQuery.eq('branch_id', branchId);
+
+        let patientQuery = supabaseAdmin.from('patients').select('id, created_at');
+
+        const [posRes, revRes, expRes, queueRes, patientRes] = await Promise.all([
+          posQuery, revQuery, expQuery, queueQuery, patientQuery
+        ]);
+
+        const rawPosList = (posRes.data || []).map(rowToJS);
+        const rawRevList = (revRes.data || []).map(rowToJS);
+        const rawExpList = (expRes.data || []).map(rowToJS);
+        const rawQueueList = (queueRes.data || []).map(rowToJS);
+        const rawPatientList = patientRes.data || [];
+
+        const isDateInRange = (dStr) => {
+          if (!startDate || !endDate) return true;
+          if (!dStr) return true;
+          try {
+            const dt = new Date(dStr);
+            if (isNaN(dt.getTime())) return true;
+            const y = dt.getFullYear();
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            const d = String(dt.getDate()).padStart(2, '0');
+            const ymd = `${y}-${m}-${d}`;
+            return ymd >= startDate && ymd <= endDate;
+          } catch(e) {
+            return true;
+          }
+        };
+
+        const posList = rawPosList.filter(tx => isDateInRange(tx.date || tx.createdAt || tx.created_at));
+        const revList = rawRevList.filter(tx => isDateInRange(tx.date || tx.createdAt || tx.created_at));
+        const expList = rawExpList.filter(tx => isDateInRange(tx.date || tx.createdAt || tx.created_at));
+        const queueList = rawQueueList.filter(q => isDateInRange(q.rawDateTime || q.raw_date_time || q.createdAt || q.created_at));
+        const patientList = rawPatientList.filter(p => isDateInRange(p.created_at));
+
+        let posTotalIncome = 0;
+        const paymentMethods = { cash: 0, transfer: 0, card: 0, qr: 0, other: 0 };
+        const productSales = {};
+
+        posList.forEach(tx => {
+          if (tx.status === 'cancelled') return;
+          const net = parseFloat(tx.netAmount || tx.totalAmount || tx.netTotal || tx.grandTotal || tx.amount || 0) || 0;
+          posTotalIncome += net;
+
+          const method = (tx.paymentMethod || tx.method || 'cash').toLowerCase();
+          if (method.includes('cash') || method.includes('สด')) paymentMethods.cash += net;
+          else if (method.includes('transfer') || method.includes('โอน') || method.includes('promptpay')) paymentMethods.transfer += net;
+          else if (method.includes('card') || method.includes('เครดิต')) paymentMethods.card += net;
+          else if (method.includes('qr')) paymentMethods.qr += net;
+          else paymentMethods.other += net;
+
+          let items = tx.items;
+          if (typeof items === 'string') {
+            try { items = JSON.parse(items); } catch(e) { items = []; }
+          }
+          if (Array.isArray(items)) {
+            items.forEach(it => {
+              const name = it.name || it.productName || 'สินค้าทั่วไป';
+              const qty = parseInt(it.quantity || it.qty || 1) || 1;
+              const price = parseFloat(it.price || it.unitPrice || 0) || 0;
+              const lineTotal = parseFloat(it.total || (qty * price)) || 0;
+
+              if (!productSales[name]) {
+                productSales[name] = { name, qty: 0, total: 0 };
+              }
+              productSales[name].qty += qty;
+              productSales[name].total += lineTotal;
+            });
+          }
+        });
+
+        let manualRevenueIncome = 0;
+        revList.forEach(tx => {
+          if (tx.status === 'cancelled' || tx.isAuto === true || tx.is_auto === true) return;
+          const amt = parseFloat(tx.amount || 0) || 0;
+          manualRevenueIncome += amt;
+
+          const method = (tx.method || 'cash').toLowerCase();
+          if (method.includes('cash') || method.includes('สด')) paymentMethods.cash += amt;
+          else if (method.includes('transfer') || method.includes('โอน') || method.includes('promptpay')) paymentMethods.transfer += amt;
+          else if (method.includes('card') || method.includes('เครดิต')) paymentMethods.card += amt;
+          else if (method.includes('qr')) paymentMethods.qr += amt;
+          else paymentMethods.other += amt;
+        });
+
+        const totalIncome = posTotalIncome + manualRevenueIncome;
+
+        let totalExpense = 0;
+        expList.forEach(tx => {
+          if (tx.status === 'cancelled') return;
+          const amt = parseFloat(tx.amount || 0) || 0;
+          totalExpense += amt;
+        });
+
+        const netProfit = totalIncome - totalExpense;
+        const profitMargin = totalIncome > 0 ? Number(((netProfit / totalIncome) * 100).toFixed(2)) : 0;
+
+        const topProducts = Object.values(productSales)
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+
+        const doctorCases = {};
+        queueList.forEach(q => {
+          const doc = q.doctor || 'ไม่ระบุแพทย์';
+          if (!doctorCases[doc]) doctorCases[doc] = { name: doc, count: 0 };
+          doctorCases[doc].count += 1;
+        });
+        const topDoctors = Object.values(doctorCases)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+
+        const queueStats = {
+          total: queueList.length,
+          completed: queueList.filter(q => q.status === 'completed' || q.status === 'treated' || q.treated === true).length,
+          pending: queueList.filter(q => q.status === 'pending' || q.status === 'waiting').length,
+          cancelled: queueList.filter(q => q.status === 'cancelled').length
+        };
+
+        const branchSummary = {};
+        posList.forEach(tx => {
+          if (tx.status === 'cancelled') return;
+          const bId = tx.branchId || tx.branch_id || 'main';
+          const net = parseFloat(tx.netAmount || tx.totalAmount || tx.amount || 0) || 0;
+          if (!branchSummary[bId]) branchSummary[bId] = { branchId: bId, income: 0, expense: 0, profit: 0 };
+          branchSummary[bId].income += net;
+        });
+        revList.forEach(tx => {
+          if (tx.status === 'cancelled' || tx.isAuto === true || tx.is_auto === true) return;
+          const bId = tx.branchId || tx.branch_id || 'main';
+          const amt = parseFloat(tx.amount || 0) || 0;
+          if (!branchSummary[bId]) branchSummary[bId] = { branchId: bId, income: 0, expense: 0, profit: 0 };
+          branchSummary[bId].income += amt;
+        });
+        expList.forEach(tx => {
+          if (tx.status === 'cancelled') return;
+          const bId = tx.branchId || tx.branch_id || 'main';
+          const amt = parseFloat(tx.amount || 0) || 0;
+          if (!branchSummary[bId]) branchSummary[bId] = { branchId: bId, income: 0, expense: 0, profit: 0 };
+          branchSummary[bId].expense += amt;
+        });
+        Object.keys(branchSummary).forEach(bId => {
+          branchSummary[bId].profit = branchSummary[bId].income - branchSummary[bId].expense;
+        });
+
+        const dailyTrendMap = {};
+        posList.forEach(tx => {
+          if (tx.status === 'cancelled') return;
+          const dateStr = tx.date ? String(tx.date).split('T')[0] : (tx.created_at ? String(tx.created_at).split('T')[0] : '');
+          if (!dateStr) return;
+          const net = parseFloat(tx.netAmount || tx.totalAmount || tx.amount || 0) || 0;
+          if (!dailyTrendMap[dateStr]) dailyTrendMap[dateStr] = { date: dateStr, income: 0, expense: 0, profit: 0 };
+          dailyTrendMap[dateStr].income += net;
+        });
+        revList.forEach(tx => {
+          if (tx.status === 'cancelled' || tx.isAuto === true || tx.is_auto === true) return;
+          const dateStr = tx.date ? String(tx.date).split('T')[0] : (tx.created_at ? String(tx.created_at).split('T')[0] : '');
+          if (!dateStr) return;
+          const amt = parseFloat(tx.amount || 0) || 0;
+          if (!dailyTrendMap[dateStr]) dailyTrendMap[dateStr] = { date: dateStr, income: 0, expense: 0, profit: 0 };
+          dailyTrendMap[dateStr].income += amt;
+        });
+        expList.forEach(tx => {
+          if (tx.status === 'cancelled') return;
+          const dateStr = tx.date ? String(tx.date).split('T')[0] : (tx.created_at ? String(tx.created_at).split('T')[0] : '');
+          if (!dateStr) return;
+          const amt = parseFloat(tx.amount || 0) || 0;
+          if (!dailyTrendMap[dateStr]) dailyTrendMap[dateStr] = { date: dateStr, income: 0, expense: 0, profit: 0 };
+          dailyTrendMap[dateStr].expense += amt;
+        });
+        
+        const dailyTrend = Object.values(dailyTrendMap).sort((a, b) => a.date.localeCompare(b.date));
+        dailyTrend.forEach(d => { d.profit = d.income - d.expense; });
+
+        return res.status(200).json({
+          status: 'success',
+          summary: {
+            totalIncome,
+            posTotalIncome,
+            manualRevenueIncome,
+            totalExpense,
+            netProfit,
+            profitMargin,
+            paymentMethods,
+            topProducts,
+            topDoctors,
+            queueStats,
+            newPatientsCount: patientList.length,
+            branchSummary,
+            dailyTrend
+          }
+        });
+      }
+
 
 
       default:

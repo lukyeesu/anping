@@ -27,11 +27,14 @@ const ExecutiveDashboard = ({
   branchesData = [], 
   currentBranch = 'all', 
   isGlobalLoading = false,
-  showToast = () => {}
+  showToast = () => {},
+  callAppScript
 }) => {
   const [timeRange, setTimeRange] = useState('month'); // today | week | month | year | all
   const [selectedBranch, setSelectedBranch] = useState(currentBranch);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [execSummary, setExecSummary] = useState(null);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
   const [customStartDate, setCustomStartDate] = useState(() => {
     const d = new Date();
     const year = d.getFullYear();
@@ -45,6 +48,60 @@ const ExecutiveDashboard = ({
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   });
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsDashboardLoading(true);
+      try {
+        let startDateStr = '';
+        let endDateStr = '';
+        const now = new Date();
+        const formatDate = (d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
+
+        if (timeRange === 'today') {
+          startDateStr = formatDate(now);
+          endDateStr = formatDate(now);
+        } else if (timeRange === 'week') {
+          const start = new Date();
+          start.setDate(now.getDate() - 7);
+          startDateStr = formatDate(start);
+          endDateStr = formatDate(now);
+        } else if (timeRange === 'month') {
+          const start = new Date(now.getFullYear(), now.getMonth(), 1);
+          const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          startDateStr = formatDate(start);
+          endDateStr = formatDate(end);
+        } else if (timeRange === 'year') {
+          startDateStr = `${now.getFullYear()}-01-01`;
+          endDateStr = `${now.getFullYear()}-12-31`;
+        } else if (timeRange === 'custom' && customStartDate && customEndDate) {
+          startDateStr = customStartDate;
+          endDateStr = customEndDate;
+        }
+
+        if (callAppScript) {
+          const res = await callAppScript('GET_EXECUTIVE_SUMMARY', 'System', {
+            startDate: startDateStr,
+            endDate: endDateStr,
+            branchId: selectedBranch
+          });
+          if (res?.status === 'success' && res.summary) {
+            setExecSummary(res.summary);
+          }
+        }
+      } catch (e) {
+        console.error("Executive Dashboard backend fetch error", e);
+      }
+      setIsDashboardLoading(false);
+    };
+
+    fetchDashboardData();
+  }, [timeRange, customStartDate, customEndDate, selectedBranch, callAppScript]);
 
   // --- States และฟังก์ชันสไตล์ปฏิทินของธีมหลักสำหรับปฏิทินเลือกช่วงเวลา ---
   const [showExecRangeCalendar, setShowExecRangeCalendar] = useState(false);
@@ -174,7 +231,6 @@ const ExecutiveDashboard = ({
   // Server-side Date-Based Fetching State
   const [localPosHistory, setLocalPosHistory] = useState([]);
   const [localFinanceData, setLocalFinanceData] = useState([]);
-  const [isDashboardLoading, setIsDashboardLoading] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -305,37 +361,33 @@ const ExecutiveDashboard = ({
     });
   }, [allTransactions, selectedBranch, timeRange, customStartDate, customEndDate]);
 
-  // Calculate Financial Summary
+  // Calculate Financial Summary (จากระบบสรุปผลหลังบ้าน)
   const summary = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    let cash = 0;
-    let transfer = 0;
-    let card = 0;
-    let checkoutsCount = 0;
-
-    filteredTx.forEach(tx => {
-      if (tx.type === 'income') {
-        income += tx.amount;
-        if (tx.method === 'cash') cash += tx.amount;
-        else if (tx.method === 'transfer') transfer += tx.amount;
-        else if (tx.method === 'card') card += tx.amount;
-        if (tx.isAuto) checkoutsCount++;
-      } else if (tx.type === 'expense') {
-        expense += tx.amount;
-      }
-    });
-
+    if (execSummary) {
+      return {
+        income: execSummary.totalIncome || 0,
+        expense: execSummary.totalExpense || 0,
+        netProfit: execSummary.netProfit || 0,
+        profitMargin: execSummary.profitMargin || 0,
+        cash: execSummary.paymentMethods?.cash || 0,
+        transfer: execSummary.paymentMethods?.transfer || 0,
+        card: execSummary.paymentMethods?.card || 0,
+        qr: execSummary.paymentMethods?.qr || 0,
+        checkoutsCount: execSummary.queueStats?.completed || 0
+      };
+    }
     return {
-      income,
-      expense,
-      netProfit: income - expense,
-      cash,
-      transfer,
-      card,
-      checkoutsCount
+      income: 0,
+      expense: 0,
+      netProfit: 0,
+      profitMargin: 0,
+      cash: 0,
+      transfer: 0,
+      card: 0,
+      qr: 0,
+      checkoutsCount: 0
     };
-  }, [filteredTx]);
+  }, [execSummary]);
 
   // Calculate Staff Performance Rank (sales & commissions)
   const staffStats = useMemo(() => {
@@ -827,7 +879,7 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10">
               <div>
                 <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider kanit-text">รายรับรวมทั้งหมด</p>
-                <h3 className="text-3xl font-black font-data mt-2">{isGlobalLoading ? '-' : formatMoney(summary.income)}</h3>
+                <h3 className="text-3xl font-black font-data mt-2">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.income)}</h3>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
                 <TrendingUp size={24} />
@@ -835,7 +887,7 @@ const ExecutiveDashboard = ({
             </div>
             <div className="mt-8 border-t border-white/10 pt-4 z-10 flex justify-between items-center text-xs text-emerald-100">
               <span className="kanit-text">ยอดผ่าน POS: {summary.checkoutsCount} บิล</span>
-              <span className="font-data font-bold">บัตร {((summary.card / (summary.income || 1)) * 100).toFixed(0)}%</span>
+              <span className="font-data font-bold">โอนเงิน {((summary.transfer / (summary.income || 1)) * 100).toFixed(0)}%</span>
             </div>
             <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
           </div>
@@ -845,7 +897,7 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10">
               <div>
                 <p className="text-rose-100 text-xs font-bold uppercase tracking-wider kanit-text">รายจ่ายรวมทั้งหมด</p>
-                <h3 className="text-3xl font-black font-data mt-2">{isGlobalLoading ? '-' : formatMoney(summary.expense)}</h3>
+                <h3 className="text-3xl font-black font-data mt-2">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.expense)}</h3>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
                 <TrendingDown size={24} />
@@ -863,7 +915,7 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10">
               <div>
                 <p className="text-indigo-100 text-xs font-bold uppercase tracking-wider kanit-text">กำไรสุทธิ (Net Profit)</p>
-                <h3 className="text-3xl font-black font-data mt-2">{isGlobalLoading ? '-' : formatMoney(summary.netProfit)}</h3>
+                <h3 className="text-3xl font-black font-data mt-2">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.netProfit)}</h3>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
                 <Wallet size={24} />
@@ -871,7 +923,7 @@ const ExecutiveDashboard = ({
             </div>
             <div className="mt-8 border-t border-white/10 pt-4 z-10 flex justify-between items-center text-xs text-indigo-100">
               <span className="kanit-text">กำไรหักค่าใช้จ่ายของสาขาแล้ว</span>
-              <span className="font-data font-bold">อัตรากำไร: {summary.income > 0 ? ((summary.netProfit / summary.income) * 100).toFixed(0) : '0'}%</span>
+              <span className="font-data font-bold">อัตรากำไร: {summary.profitMargin || (summary.income > 0 ? ((summary.netProfit / summary.income) * 100).toFixed(0) : '0')}%</span>
             </div>
             <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
           </div>

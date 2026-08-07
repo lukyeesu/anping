@@ -2465,6 +2465,7 @@ export default function App() {
                         currentBranch={currentBranch}
                         isGlobalLoading={isGlobalLoading}
                         showToast={showToast}
+                        callAppScript={callAppScript}
                     />
                 </div>
             )}
