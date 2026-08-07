@@ -1778,8 +1778,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                         การรักษา {formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง
                       </span>
                     )}
-                    <span className="text-[10px] sm:text-xs text-slate-500 kanit-text truncate">
-                      {isViewMode ? `อายุ ${calculatedAge} | อ่านอย่างเดียว` : (editingId ? `อายุ ${calculatedAge}` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน')}
+                    <span className="text-xs sm:text-sm text-slate-500 kanit-text truncate">
+                      {editingId ? `อายุ ${calculatedAge}` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน'}
                     </span>
                   </div>
                 </div>
