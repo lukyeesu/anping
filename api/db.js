@@ -25,7 +25,17 @@ const TABLE_COLUMNS = {
   setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'is_active', 'created_at', 'updated_at'],
   finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
   finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
-  staff: ['id', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 'role', 'category', 'phone', 'email', 'branch_id', 'salary', 'is_active', 'created_at', 'updated_at'],
+  staff: [
+    'id', 'emp_code', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 
+    'role', 'category', 'position', 'phone', 'email', 'id_card', 'license_number', 'dob', 'gender', 
+    'nationality', 'ethnicity', 'religion', 
+    'address', 'moo', 'road', 'sub_district', 'district', 'province', 'zipcode', 
+    'cur_address', 'cur_moo', 'cur_road', 'cur_sub_district', 'cur_district', 'cur_province', 'cur_zipcode', 
+    'em_name', 'em_relation', 'em_phone', 'em_address', 
+    'salary', 'base_salary', 'employment_type', 
+    'commission_rate', 'commission_type', 'commission_condition', 'commission_threshold', 
+    'ot_rate', 'branch_id', 'photo', 'schedule', 'is_active', 'created_at', 'updated_at'
+  ],
   staff_schedules: ['id', 'staff_id', 'staff_name', 'date', 'day_of_week', 'shift_type', 'start_time', 'end_time', 'is_active', 'branch_id', 'notes', 'created_at', 'updated_at'],
   settings: ['id', 'values', 'labels', 'created_at', 'updated_at'],
   logs: ['id', 'user_name', 'user_id', 'role', 'action', 'target_sheet', 'target_data_id', 'detail', 'created_at']

@@ -535,16 +535,9 @@ export const globalGenerateInformedConsentHtml = (patient, branchesData = [], cu
             </div>
 
             <!-- Signature Section -->
-            <div class="signature-section">
-                <!-- Metadata box on left -->
-                <div style="width: 50%; font-size: 11px; color: #4b5563; line-height: 1.5; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; background-color: #f8fafc;">
-                    <div class="text-bold" style="margin-bottom: 4px; color: #1e293b;">หลักฐานการลงนามอิเล็กทรอนิกส์ (E-Signature)</div>
-                    <div>วัน-เวลาลงนาม: ${formattedDate}</div>
-                    <div style="word-break: break-all;">IP Address: ${patient.informedConsentIpAddress || '-'}</div>
-                    <div style="word-break: break-all; font-size: 10px;">อุปกรณ์: ${patient.informedConsentUserAgent || '-'}</div>
-                </div>
+            <div class="signature-section" style="display: flex; justify-content: flex-end; margin-top: 40px; page-break-inside: avoid;">
                 <!-- Signature Box on right -->
-                <div class="signature-box" style="width: 45%;">
+                <div class="signature-box" style="width: 260px; text-align: center; display: flex; flex-direction: column; align-items: center;">
                     <div style="position: relative; height: 70px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px; width: 100%;">
                         ${patient.informedConsentSignatureUrl ? `
                             <img src="${patient.informedConsentSignatureUrl}" style="position: absolute; bottom: 5px; max-height: 80px; max-width: 180px; object-fit: contain; z-index: 10;" alt="Signature" />
