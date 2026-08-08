@@ -515,9 +515,20 @@ const FinancePage = ({
       
       const res = await callAppScript('SAVE_DATA', 'POS_Transactions', updatedTx);
       if (res.status === 'success') {
-        // อัปเดต posHistoryData และ financeTransactions ใน State (เพื่อให้หน้าจอเปลี่ยนตามทันที)
-        setPosHistoryData(prev => prev.map(p => p.id === updatedTx.id ? updatedTx : p));
-        setFinanceTransactions(prev => prev.map(p => p.id === updatedTx.id ? { ...p, ...updatedTx, status: updatedTx.status, is_deleted: updatedTx.is_deleted } : p));
+        const matchesTx = (p) => {
+          if (!p) return false;
+          const uId = String(updatedTx.id || '').trim();
+          const uReceipt = String(updatedTx.receiptNo || updatedTx.receipt_no || '').trim();
+          const pId = String(p.id || '').trim();
+          const pReceipt = String(p.receiptNo || p.receipt_no || '').trim();
+          return (uId && (pId === uId || pReceipt === uId)) || (uReceipt && (pId === uReceipt || pReceipt === uReceipt));
+        };
+
+        // อัปเดต posHistoryData และ financeTransactions ใน State (เพื่อให้หน้าจอเปลี่ยนตามทันที 0ms)
+        if (setPosHistoryData) {
+          setPosHistoryData(prev => prev.map(p => matchesTx(p) ? { ...p, ...updatedTx } : p));
+        }
+        setFinanceTransactions(prev => prev.map(p => matchesTx(p) ? { ...p, ...updatedTx, status: updatedTx.status, is_deleted: updatedTx.is_deleted } : p));
         fetchStatsAndData(0, true);
         showToast('แก้ไขรายการ POS สำเร็จ', 'success');
         closePosEditModal();
@@ -763,8 +774,18 @@ const FinancePage = ({
                   if (!displayNote && Array.isArray(parsedItems) && parsedItems.length > 0) {
                       displayNote = parsedItems.map(i => i.name || i.category).filter(Boolean).join(', ');
                   }
+
+                  // ซิงค์สถานะล่าสุดจาก posHistoryData เสมอ (ป้องกันกรณี View บน Supabase ยังส่งค่าเก่าคืนมา)
+                  const matchedPos = (posHistoryData || []).find(p => 
+                    (p.id && String(p.id).trim() === String(tx.id).trim()) ||
+                    (p.receiptNo && String(p.receiptNo).trim() === String(tx.id).trim()) ||
+                    (p.receipt_no && String(p.receipt_no).trim() === String(tx.id).trim())
+                  );
+                  const effectiveStatus = matchedPos ? (matchedPos.status || tx.status) : (tx.status || 'completed');
+
                   return {
                       ...tx,
+                      status: effectiveStatus,
                       date: tx.timestamp_date,
                       timestamp: parseTxTimestamp(tx.timestamp_date),
                       branchId: tx.branch_id,
@@ -831,8 +852,135 @@ const FinancePage = ({
     return () => unsubscribe();
   }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
-  const stats = statsData;
-  const visibleTransactions = financeTransactions;
+  useEffect(() => {
+    if (Array.isArray(posHistoryData) && posHistoryData.length > 0) {
+      setFinanceTransactions(prev => {
+        const next = [...prev];
+        posHistoryData.forEach(posTx => {
+          const pId = String(posTx.id || posTx.receiptNo || posTx.receipt_no || '').trim();
+          if (!pId) return;
+          const idx = next.findIndex(f => 
+            (f.id && String(f.id).trim() === pId) || 
+            (f.receiptNo && String(f.receiptNo).trim() === pId) ||
+            (f.receipt_no && String(f.receipt_no).trim() === pId)
+          );
+          const mappedItem = {
+            id: pId,
+            date: posTx.createdAt || posTx.created_at || posTx.date || new Date().toISOString(),
+            timestamp_date: posTx.createdAt || posTx.created_at || posTx.date || new Date().toISOString(),
+            amount: Number(posTx.net_amount ?? posTx.netAmount ?? posTx.total_amount ?? posTx.totalAmount ?? posTx.amount ?? 0),
+            category: 'รายได้จาก POS',
+            note: posTx.patient_name || posTx.patientName || '',
+            patientName: posTx.patient_name || posTx.patientName || '',
+            branch_id: posTx.branch_id || posTx.branchId || 'main',
+            items: posTx.items || [],
+            method: posTx.payment_method || posTx.paymentMethod || 'cash',
+            status: posTx.status || 'completed',
+            is_auto: true,
+            isAuto: true,
+            type: 'income',
+            subtotal: Number(posTx.total_amount ?? posTx.totalAmount ?? 0),
+            discount_amount: Number(posTx.discount ?? posTx.discountAmount ?? 0),
+            is_deleted: !!(posTx.is_deleted || posTx.isDeleted)
+          };
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], ...mappedItem };
+          } else if (!posTx.is_deleted && !posTx.isDeleted) {
+            next.unshift(mappedItem);
+          }
+        });
+        return next;
+      });
+    }
+  }, [posHistoryData]);
+
+  const isTxMatchingFilters = useCallback((tx) => {
+    if (!tx) return false;
+    if (tx.is_deleted || tx.isDeleted) return false;
+
+    // 1. Branch Filter
+    if (filterBranch !== 'all' && String(tx.branch_id || tx.branchId || '') !== String(filterBranch)) {
+      return false;
+    }
+
+    // 2. Type Filter
+    if (filterType === 'income' && tx.type !== 'income') return false;
+    if (filterType === 'expense' && tx.type !== 'expense') return false;
+    if (filterType === 'pos' && !tx.isAuto && !tx.is_auto) return false;
+    if (filterType === 'manual' && (tx.isAuto || tx.is_auto)) return false;
+
+    // 3. Search Filter
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      const note = String(tx.note || tx.description || '').toLowerCase();
+      const cat = String(tx.category || '').toLowerCase();
+      const name = String(tx.patientName || tx.patient_name || '').toLowerCase();
+      const id = String(tx.id || '').toLowerCase();
+      if (!note.includes(q) && !cat.includes(q) && !name.includes(q) && !id.includes(q)) {
+        return false;
+      }
+    }
+
+    // 4. Date Range / Month / Year Filter
+    const { startDate, endDate } = buildDateRange();
+    const txDateStr = tx.date || tx.timestamp_date || tx.createdAt || tx.created_at;
+    if (txDateStr) {
+      const dTime = new Date(txDateStr).getTime();
+      const sTime = new Date(startDate).getTime();
+      const eTime = new Date(endDate).getTime();
+      if (!isNaN(dTime) && !isNaN(sTime) && !isNaN(eTime)) {
+        if (dTime < sTime || dTime > eTime) return false;
+      }
+    }
+
+    return true;
+  }, [filterBranch, filterType, search, timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  const visibleTransactions = useMemo(() => {
+    return (financeTransactions || []).filter(isTxMatchingFilters);
+  }, [financeTransactions, isTxMatchingFilters]);
+
+  const stats = useMemo(() => {
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let count = 0;
+
+    visibleTransactions.forEach(tx => {
+      if (tx.status === 'cancelled') return;
+
+      const amt = Number(tx.amount || tx.net_amount || tx.netAmount || 0) || 0;
+      if (tx.type === 'income') {
+        totalIncome += amt;
+        count++;
+      } else if (tx.type === 'expense') {
+        totalExpense += amt;
+        count++;
+      } else {
+        totalIncome += amt;
+        count++;
+      }
+    });
+
+    const netIncome = totalIncome - totalExpense;
+    let costPercent = 0;
+    let marginPercent = 0;
+    if (totalIncome > 0) {
+      costPercent = (totalExpense / totalIncome) * 100;
+      marginPercent = (netIncome / totalIncome) * 100;
+    }
+
+    return {
+      income: totalIncome,
+      expense: totalExpense,
+      balance: netIncome,
+      totalIncome,
+      totalExpense,
+      netIncome,
+      transactionsCount: count,
+      costPercent,
+      marginPercent
+    };
+  }, [visibleTransactions]);
   const isLoadingMore = isFetchingData && page > 0;
 
 

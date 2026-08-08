@@ -1478,6 +1478,38 @@ export default function App() {
         }
         return [payload, ...prev];
       });
+      setFinanceData(prev => {
+        const receiptNo = String(payload.receipt_no || payload.receiptNo || '').trim();
+        const idx = prev.findIndex(f => 
+          (targetId && String(f.id || '').trim() === targetId) ||
+          (receiptNo && String(f.id || f.receiptNo || f.receipt_no || '').trim() === receiptNo)
+        );
+        const finRow = {
+          id: payload.id || payload.receipt_no || payload.receiptNo,
+          date: payload.created_at || payload.timestamp_date || payload.date || new Date().toISOString(),
+          timestamp_date: payload.created_at || payload.timestamp_date || payload.date || new Date().toISOString(),
+          amount: Number(payload.net_amount ?? payload.netAmount ?? payload.total_amount ?? payload.totalAmount ?? payload.amount ?? 0),
+          category: 'รายได้จาก POS',
+          note: payload.patient_name || payload.patientName || '',
+          patientName: payload.patient_name || payload.patientName || '',
+          branch_id: payload.branch_id || payload.branchId || 'main',
+          items: payload.items || [],
+          method: payload.payment_method || payload.paymentMethod || 'cash',
+          status: payload.status || 'completed',
+          is_auto: true,
+          isAuto: true,
+          type: 'income',
+          subtotal: Number(payload.total_amount ?? payload.totalAmount ?? 0),
+          discount_amount: Number(payload.discount ?? payload.discountAmount ?? 0),
+          is_deleted: !!(payload.is_deleted || payload.isDeleted)
+        };
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...finRow };
+          return next;
+        }
+        return [finRow, ...prev];
+      });
     } else if (sheetName === 'Staff') {
       setStaffData(prev => {
         const idx = prev.findIndex(s => 
@@ -1595,7 +1627,9 @@ export default function App() {
     } else if (sheetName === 'Branches') {
       setBranchesData(prev => prev.filter(b => String(b.id) !== targetId));
     } else if (sheetName === 'POS_Transactions') {
-      setPosHistoryData(prev => prev.filter(t => String(t.id) !== targetId));
+      upsertLocalStore('pos_transactions', [{ id: targetId, is_deleted: true }]).catch(() => {});
+      setPosHistoryData(prev => prev.filter(t => String(t.id || t.receiptNo || t.receipt_no || '').trim() !== targetId));
+      setFinanceData(prev => prev.filter(f => String(f.id || f.receiptNo || f.receipt_no || '').trim() !== targetId));
     } else if (sheetName === 'Staff') {
       setStaffData(prev => prev.filter(s => String(s.id) !== targetId));
     } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {

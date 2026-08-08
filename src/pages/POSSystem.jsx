@@ -619,7 +619,7 @@ const POSSystem = ({
         await callAppScript('SAVE_DATA', 'POS_Transactions', historyEditForm);
         // อัปเดตข้อมูลในตารางหลัก
         if (setPosHistoryData) {
-            setPosHistoryData(prev => prev.map(t => t.id === historyEditForm.id ? historyEditForm : t));
+            setPosHistoryData(prev => prev.map(t => (t.id === historyEditForm.id || t.receiptNo === historyEditForm.id || t.receipt_no === historyEditForm.receiptNo) ? { ...t, ...historyEditForm } : t));
         }
         // อัปเดตข้อมูลในหน้าดูรายละเอียด
         setSelectedHistoryTxn(historyEditForm);
