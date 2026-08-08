@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
+export const parseBool = (val) => {
+  if (val === true || val === 1 || val === '1') return true;
+  if (val === false || val === 0 || val === '0' || val === null || val === undefined) return false;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    return s === 'true' || s === 't' || s === 'yes' || s === '1';
+  }
+  return Boolean(val);
+};
+
 export const rAFThrottle = (callback) => {
   let queued = false;
   return function (...args) {
@@ -149,10 +159,11 @@ export const generateNextHN = (patients) => {
   const currentYearTH = new Date().getFullYear() + 543;
   const yearSuffix = String(currentYearTH).slice(-2);
   
-  if (!patients || patients.length === 0) return `HN${yearSuffix}-0001`;
+  const activePatients = (patients || []).filter(p => !p.is_deleted && !p.isDeleted);
+  if (!activePatients || activePatients.length === 0) return `HN${yearSuffix}-0001`;
   
   let maxNum = 0;
-  patients.forEach(p => {
+  activePatients.forEach(p => {
      const hnString = p.hn || p.id || '';
      const numMatch = hnString.match(/(\d+)$/);
      if (numMatch) {

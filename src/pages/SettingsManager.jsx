@@ -13,8 +13,9 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, Cloud
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Cloud, Database
 } from 'lucide-react';
+import { clearAllLocalStores } from '../lib/offlineStore';
 import { theme } from '../global/theme';
 
 const SettingsManager = ({
@@ -434,6 +435,17 @@ const SettingsManager = ({
           >
             <History size={18} />
             ประวัติการใช้งาน (Logs)
+          </button>
+          <button
+            onClick={() => setActiveSubTab('cache')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+              activeSubTab === 'cache'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <Database size={18} />
+            จัดการแคช & ฐานข้อมูล
           </button>
         </div>
 
@@ -1011,6 +1023,46 @@ const SettingsManager = ({
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 7: CACHE & STORAGE */}
+            {activeSubTab === 'cache' && (
+              <div className="space-y-6 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                    <Database size={20} className="text-sky-500" />
+                    จัดการแคชข้อมูลในเครื่อง (IndexedDB Local Storage)
+                  </h3>
+                  <p className="text-slate-500 text-xs mt-1 kanit-text leading-relaxed">
+                    ระบบจะทำการบันทึกข้อมูลไว้ในเครื่องของคุณอัตโนมัติ เพื่อให้เปิดหน้าเว็บได้เร็วทันใจใน 0.05 วินาที หากคุณต้องการล้างแคชในเครื่องทั้งหมดและดึงข้อมูลใหม่สดๆ จาก Supabase สามารถกดปุ่มล้างแคชด้านล่างนี้ได้ทันที
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-amber-50/80 border border-amber-200/60 text-amber-900 text-xs font-medium space-y-2">
+                  <div className="font-bold flex items-center gap-2 text-amber-800 text-sm">
+                    <AlertTriangle size={16} /> หมายเหตุเกี่ยวกับการล้างแคช
+                  </div>
+                  <p>• การล้างแคชในเครื่องจะทำการลบข้อมูลสำรองชั่วคราวใน IndexedDB ออกทั้งหมด</p>
+                  <p>• ข้อมูลจริงบนฐานข้อมูล Supabase จะไม่สูญหาย ระบบจะทำการยิงขอโหลดข้อมูลใหม่สดๆ ทั้งหมดทันทีเมื่อรีโหลดหน้าเว็บ</p>
+                </div>
+
+                <div className="pt-2 flex justify-start">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm('คุณต้องการล้างแคชในเครื่องทั้งหมด และรีโหลดหน้าเว็บเพื่อดึงข้อมูลใหม่สดๆ ใช่หรือไม่?')) {
+                        await clearAllLocalStores();
+                        showToast('ล้างแคชในเครื่องเรียบร้อยแล้ว กำลังรีโหลดระบบ...', 'success');
+                        setTimeout(() => window.location.reload(), 1200);
+                      }
+                    }}
+                    className="px-6 py-3.5 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg flex items-center gap-2.5 active:scale-95"
+                  >
+                    <RotateCcw size={18} />
+                    ล้างแคชในเครื่องทั้งหมด (Force Purge & Full Re-sync)
+                  </button>
                 </div>
               </div>
             )}

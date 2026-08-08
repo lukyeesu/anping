@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -25,7 +25,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   const [isEditFormClosing, setIsEditFormClosing] = useState(false);
   const [isProcessingProduct, setIsProcessingProduct] = useState(false);
   const [showCategorySuggest, setShowCategorySuggest] = useState(false);
-  const initialProductForm = { id: '', name: '', type: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1, minStock: 5 };
+  const initialProductForm = { id: '', name: '', category: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1, minStock: 5, isVatable: false, itemKind: 'service' };
   const [productForm, setProductForm] = useState(initialProductForm);
           const headerRef = React.useRef(null);
   const filterRef = React.useRef(null);
@@ -58,40 +58,99 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
     });
 
     setTimeout(() => {
-        // ล้างคลาสที่อาจค้างอยู่จากการสลับหน้าจอ (Tab switching) 
-        if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
-        if (filterRef.current) {
-            filterRef.current.classList.remove('is-scrolled');
-            if (filterRef.current.classList.contains('filter-expanded')) filterRef.current.classList.remove('filter-expanded');
-        }
-        // บังคับให้เกิด Event Scroll 1 ครั้ง เพื่อให้ handleScroll คำนวณขนาดและตำแหน่งใหม่ให้ถูกต้อง
-        if (mainElement) mainElement.dispatchEvent(new Event('scroll'));
-    }, 50);
+      handleScroll({ target: mainElement });
+    }, 100);
 
     mainElement.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleScroll);
+    return () => {
+      mainElement.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
-  const closeEditForm = () => {
-    setIsEditFormClosing(true);
-    setTimeout(() => {
-        setIsEditFormOpen(false);
-        setIsEditFormClosing(false);
-    }, 300);
-  };
+  const closeEditForm = useCallback(() => {
+      setIsEditFormClosing(true);
+      setTimeout(() => {
+          setIsEditFormOpen(false);
+          setIsEditFormClosing(false);
+          setProductForm(initialProductForm);
+      }, 200);
+  }, []);
 
-  const handleOpenAddProduct = () => {
-      setProductForm({ ...initialProductForm });
+  const handleOpenAddProduct = (defaultKind = 'service') => {
+      const isStock = defaultKind === 'stock';
+      const isCourse = defaultKind === 'course';
+      setProductForm({
+        ...initialProductForm,
+        itemKind: defaultKind,
+        stockManaged: isStock,
+        isCourse: isCourse
+      });
       setIsEditFormOpen(true);
   };
 
+  const handleRestoreProd001 = async () => {
+    setIsProcessingProduct(true);
+    try {
+      const restored = {
+        id: 'prod001',
+        name: 'ข้าวไข่ดาว',
+        category: 'ข้าว',
+        type: 'ข้าว',
+        price: 35,
+        unit: 'จาน',
+        stockManaged: true,
+        stock_managed: true,
+        isCourse: false,
+        is_course: false,
+        isDeleted: false,
+        is_deleted: false,
+        isActive: true,
+        is_active: true,
+        icon: 'Package',
+        minStock: 5,
+        min_stock: 5
+      };
+      await callAppScript('SAVE_DATA', 'setting_pos', restored);
+      setProducts(prev => {
+        const exists = (prev || []).some(p => p && p.id === 'prod001');
+        if (exists) return prev.map(p => p && p.id === 'prod001' ? restored : p);
+        return [restored, ...(prev || [])];
+      });
+      showToast('กู้คืนสินค้า (ข้าวไข่ดาว) สำเร็จแล้ว', 'success');
+    } catch (e) {
+      showToast('กู้คืนไม่สำเร็จ กรุณาลองใหม่', 'warning');
+    }
+    setIsProcessingProduct(false);
+  };
+
+  const checkIsStock = useCallback((p) => {
+      if (!p) return false;
+      return parseBool(p.stockManaged) || parseBool(p.stock_managed) || p.itemKind === 'stock' || p.kind === 'stock' || (typeof p.id === 'string' && p.id.toLowerCase().startsWith('prod'));
+  }, []);
+
+  const checkIsCourse = useCallback((p) => {
+      if (!p) return false;
+      return parseBool(p.isCourse) || parseBool(p.is_course) || p.itemKind === 'course' || p.kind === 'course' || (typeof p.id === 'string' && p.id.toLowerCase().startsWith('cour'));
+  }, []);
+
   const handleOpenEditProduct = (prod) => {
+      const catVal = prod.category || prod.type || '';
+      const isStock = checkIsStock(prod);
+      const isCourse = checkIsCourse(prod);
+      let kind = 'service';
+      if (isStock) kind = 'stock';
+      else if (isCourse) kind = 'course';
+
       setProductForm({ 
         ...initialProductForm, 
         ...prod, 
-        isCourse: !!prod.isCourse, 
-        courseSessions: prod.courseSessions || 1,
-        minStock: prod.minStock !== undefined ? prod.minStock : 5
+        category: catVal,
+        type: catVal,
+        itemKind: kind,
+        stockManaged: isStock,
+        isCourse: isCourse, 
+        courseSessions: prod.courseSessions || prod.course_sessions || 1,
+        minStock: prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)
       });
       setIsEditFormOpen(true);
   };
@@ -100,11 +159,15 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       e.preventDefault();
       setIsProcessingProduct(true);
       
+      const catVal = String(productForm.category || 'ทั่วไป').trim();
+      const isStock = productForm.itemKind === 'stock';
+      const isCourse = productForm.itemKind === 'course';
+
       let finalId = productForm.id;
       if (!finalId) {
           let prefix = 'serv';
-          if (productForm.isCourse) prefix = 'cour';
-          else if (productForm.stockManaged) prefix = 'prod';
+          if (isCourse) prefix = 'cour';
+          else if (isStock) prefix = 'prod';
 
           let maxNum = 0;
           products.forEach(p => {
@@ -123,13 +186,48 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       const payload = {
           ...productForm,
           id: finalId,
+          type: catVal,
+          category: catVal,
+          stockManaged: isStock,
+          stock_managed: isStock,
+          isCourse: isCourse,
+          is_course: isCourse,
           price: Number(productForm.price),
-          courseSessions: Number(productForm.courseSessions) || 1,
-          minStock: Number(productForm.minStock) || 0
+          courseSessions: isCourse ? (Number(productForm.courseSessions) || 1) : 1,
+          minStock: isStock ? (Number(productForm.minStock) || 0) : 0,
+          isVatable: Boolean(productForm.isVatable),
+          is_vatable: Boolean(productForm.isVatable),
+          icon: productForm.icon || 'Package'
       };
 
       try {
           await callAppScript('SAVE_DATA', 'setting_pos', payload);
+
+          if (isStock) {
+              const invPayload = {
+                  id: `INV_${finalId}`,
+                  code: finalId,
+                  productId: finalId,
+                  product_id: finalId,
+                  name: payload.name,
+                  category: catVal,
+                  unit: payload.unit || 'ชิ้น',
+                  costPrice: Number(payload.costPrice || 0),
+                  cost_price: Number(payload.costPrice || 0),
+                  sellingPrice: Number(payload.price || 0),
+                  selling_price: Number(payload.price || 0),
+                  stockQuantity: Number(payload.stockQuantity || 0),
+                  quantity: Number(payload.stockQuantity || 0),
+                  stock_quantity: Number(payload.stockQuantity || 0),
+                  minStock: Number(payload.minStock || 5),
+                  min_stock: Number(payload.minStock || 5)
+              };
+              await callAppScript('SAVE_DATA', 'Inventory', invPayload).catch(() => {});
+              if (typeof setInventoryData === 'function') {
+                setInventoryData(prev => [invPayload, ...(prev || [])]);
+              }
+          }
+
           if (productForm.id) {
               setProducts(products.map(p => p.id === productForm.id ? payload : p));
               showToast('อัปเดตรายการสำเร็จ', 'success');
@@ -146,14 +244,25 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
   const handleDeleteProduct = (prod) => {
       showGlobalAlert({
-          type: 'warning', title: 'ยืนยันการลบรายการ?',
-          text: `คุณต้องการลบ "${prod.name}" ใช่หรือไม่?`,
+          title: 'ยืนยันการลบรายการ',
+          message: `คุณต้องการลบรายการ "${prod.name}" ใช่หรือไม่?`,
+          type: 'warning',
           onConfirm: async () => {
               globalAlert.setIsOpen(false);
               setIsProcessingProduct(true);
               try {
                   await callAppScript('DELETE_DATA', 'setting_pos', { id: prod.id });
                   setProducts(products.filter(p => p.id !== prod.id));
+                  
+                  // ลบข้อมูลสต็อกของสินค้าชิ้นนี้ออกเพื่อไม่ให้ค้างในคลัง
+                  if (typeof setInventoryData === 'function') {
+                    setInventoryData(prev => (prev || []).filter(i => 
+                      i.productId !== prod.id && i.code !== prod.id && i.id !== prod.id && !(i.id && i.id.startsWith(`INV_${prod.id}`))
+                    ));
+                  }
+                  await callAppScript('DELETE_DATA', 'Inventory', { id: prod.id }).catch(() => {});
+                  await callAppScript('DELETE_DATA', 'Inventory', { id: `INV_${prod.id}` }).catch(() => {});
+
                   showToast('ลบรายการสำเร็จ', 'danger');
               } catch (error) {
                   showToast('ลบไม่สำเร็จ กรุณาลองใหม่', 'warning');
@@ -161,23 +270,52 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
               setIsProcessingProduct(false);
           }
       });
-        };
+  };
+
+
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase());
+      if (!p) return false;
+      const catStr = String(p.category || p.type || '').toLowerCase();
+      const nameStr = String(p.name || '').toLowerCase();
+      const searchStr = (search || '').toLowerCase();
+      const matchSearch = nameStr.includes(searchStr) || catStr.includes(searchStr);
+
+      const isStock = checkIsStock(p);
+      const isCourse = checkIsCourse(p);
+
       let matchType = true;
-      if (filterType === 'product') matchType = p.stockManaged;
-      else if (filterType === 'course') matchType = p.isCourse;
-      else if (filterType === 'service') matchType = !p.stockManaged && !p.isCourse;
+      if (filterType === 'product') matchType = isStock;
+      else if (filterType === 'course') matchType = isCourse;
+      else if (filterType === 'service') matchType = !isStock && !isCourse;
       
       return matchSearch && matchType;
     });
-  }, [products, search, filterType]);
+  }, [products, search, filterType, checkIsStock, checkIsCourse]);
 
   const categories = useMemo(() => {
-    return Array.from(new Set(products.map(p => p.type)));
+    return Array.from(new Set(products.map(p => p.category || p.type).filter(Boolean)));
   }, [products]);
+
+  const countFiltered = useCallback((type) => {
+    return products.filter(p => {
+      if (!p) return false;
+      const catStr = String(p.category || p.type || '').toLowerCase();
+      const nameStr = String(p.name || '').toLowerCase();
+      const searchStr = (search || '').toLowerCase();
+      const matchSearch = nameStr.includes(searchStr) || catStr.includes(searchStr);
+      if (!matchSearch) return false;
+
+      const isStock = checkIsStock(p);
+      const isCourse = checkIsCourse(p);
+
+      if (type === 'product') return isStock;
+      if (type === 'course') return isCourse;
+      if (type === 'service') return !isStock && !isCourse;
+      return true;
+    }).length;
+  }, [products, search, checkIsStock, checkIsCourse]);
 
   // --- [NEW] คำนวณ Ranking สินค้า/บริการขายดีจาก posHistoryData ---
   const rankings = useMemo(() => {
@@ -185,7 +323,9 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
       const productTypeMap = {};
       products.forEach(p => {
-          productTypeMap[p.name] = !!p.stockManaged; // true = Product, false = Service/Course
+          if (p && p.name) {
+              productTypeMap[p.name] = checkIsStock(p);
+          }
       });
 
       (posHistoryData || []).forEach(tx => {
@@ -214,7 +354,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       const maxServQty = Math.max(...topServices.map(s => s.qty), 1);
 
       return { topProducts, topServices, maxProdQty, maxServQty };
-  }, [posHistoryData, products]);
+  }, [posHistoryData, products, checkIsStock]);
 
   const formatCurrency = (amount) => new Intl.NumberFormat('th-TH').format(amount);
 
@@ -341,10 +481,10 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                 value={filterType}
                 onChange={(val) => setFilterType(val)}
                 options={[
-                  {value: 'all', label: `ทั้งหมด (${products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.type.toLowerCase().includes(search.toLowerCase())).length})`},
-                  {value: 'service', label: 'เฉพาะบริการ'},
-                  {value: 'product', label: 'เฉพาะสินค้า'},
-                  {value: 'course', label: 'เฉพาะคอร์ส'}
+                  {value: 'all', label: `ทั้งหมด (${countFiltered('all')})`},
+                  {value: 'service', label: `เฉพาะบริการ (${countFiltered('service')})`},
+                  {value: 'product', label: `เฉพาะสินค้า (${countFiltered('product')})`},
+                  {value: 'course', label: `เฉพาะคอร์ส (${countFiltered('course')})`}
                 ]}
                 className="w-full"
                 compact
@@ -395,9 +535,9 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                   </div>
                   <div className="min-w-0 relative z-10">
                     <div className="flex flex-wrap gap-1.5 mb-2.5">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-black kanit-text truncate uppercase border border-slate-200/50">{prod.type}</span>
-                        {prod.stockManaged && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : 5})</span>}
-                        {prod.isCourse && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions})</span>}
+                        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold kanit-text truncate uppercase border border-slate-200">{prod.category || prod.type || 'ทั่วไป'}</span>
+                        {checkIsStock(prod) && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)})</span>}
+                        {checkIsCourse(prod) && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions || prod.course_sessions || 1})</span>}
                         {prod.isVatable && <span className="px-2 py-0.5 bg-sky-50 text-sky-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-sky-100">+VAT</span>}
                     </div>
                     <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
@@ -411,10 +551,44 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-[3rem] p-16 border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 gap-4 shadow-sm">
-            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-2 shadow-inner"><Search size={40} className="text-slate-200" /></div>
-            <p className="kanit-text font-bold text-xl text-slate-400">ไม่พบรายการที่ค้นหา</p>
-            {search && <button onClick={() => setSearch('')} className="text-sky-500 font-bold kanit-text hover:underline text-sm">ล้างการค้นหา "{search}"</button>}
+          <div className="bg-white rounded-[3rem] p-10 sm:p-14 border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 gap-4 shadow-sm text-center">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-50 rounded-full flex items-center justify-center mb-1 shadow-inner">
+              <Package size={40} className="text-slate-300" />
+            </div>
+            <div className="space-y-1">
+              <p className="kanit-text font-bold text-lg sm:text-xl text-slate-600">
+                {filterType === 'product' ? 'ยังไม่มีรายการสินค้า (สต็อก) ในระบบ' :
+                 filterType === 'course' ? 'ยังไม่มีรายการคอร์สในระบบ' :
+                 filterType === 'service' ? 'ยังไม่มีรายการบริการในระบบ' : 'ไม่พบรายการที่ค้นหา'}
+              </p>
+              <p className="kanit-text text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+                {filterType === 'product' ? 'ข้อมูลใน Supabase ขณะนี้มีเฉพาะบริการทั่วไป (รายการ prod001 ข้าวไข่ดาว มีสถานะถูกลบ is_deleted=true)' :
+                 search ? `ไม่พบรายการที่ตรงกับคำค้นหา "${search}"` : 'สามารถกดเพิ่มรายการใหม่ได้ทันที'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+              {search && (
+                <button onClick={() => setSearch('')} className="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold kanit-text text-xs sm:text-sm hover:bg-slate-200 transition-colors">
+                  ล้างคำค้นหา
+                </button>
+              )}
+              <button 
+                onClick={() => handleOpenAddProduct(filterType === 'product' ? 'stock' : filterType === 'course' ? 'course' : 'service')} 
+                className="px-5 py-2.5 bg-sky-500 text-white rounded-xl font-bold kanit-text text-xs sm:text-sm hover:bg-sky-600 shadow-md shadow-sky-500/20 transition-all flex items-center gap-2"
+              >
+                <Plus size={16} /> เพิ่ม{filterType === 'product' ? 'สินค้า (สต็อก)' : filterType === 'course' ? 'คอร์ส' : 'รายการ'}ใหม่
+              </button>
+              {filterType === 'product' && (
+                <button 
+                  onClick={handleRestoreProd001} 
+                  disabled={isProcessingProduct}
+                  className="px-5 py-2.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-xl font-bold kanit-text text-xs sm:text-sm hover:bg-indigo-100 transition-all flex items-center gap-2"
+                >
+                  <RotateCcw size={16} /> กู้คืนสินค้าตัวอย่าง (prod001 ข้าวไข่ดาว)
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -454,8 +628,8 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                     required 
                                     type="text" 
                                     className="w-full px-4 py-3 pr-10 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 transition-all font-data peer" 
-                                    value={productForm.type} 
-                                    onChange={e => setProductForm({...productForm, type: e.target.value})} 
+                                    value={productForm.category} 
+                                    onChange={e => setProductForm({...productForm, category: e.target.value})} 
                                     placeholder="พิมพ์หมวดหมู่ หรือเลือกจากรายการ" 
                                     onFocus={() => setShowCategorySuggest(true)}
                                     onBlur={() => setTimeout(() => setShowCategorySuggest(false), 200)}
@@ -465,18 +639,18 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                 </div>
                                 {showCategorySuggest && (
                                     <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
-                                        {categories.filter(c => c !== 'ทั้งหมด' && c.toLowerCase().includes(productForm.type.toLowerCase())).map((cat, idx) => (
+                                        {categories.filter(c => Boolean(c) && String(c) !== 'ทั้งหมด' && String(c).toLowerCase().includes(String(productForm.category || '').toLowerCase())).map((cat, idx) => (
                                             <div 
                                                 key={idx} 
-                                                onMouseDown={(e) => { e.preventDefault(); setProductForm({...productForm, type: cat}); setShowCategorySuggest(false); }} 
-                                                className={`px-4 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${productForm.type === cat ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                                onMouseDown={(e) => { e.preventDefault(); setProductForm({...productForm, category: cat}); setShowCategorySuggest(false); }} 
+                                                className={`px-4 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${productForm.category === cat ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
                                             >
                                                 {cat}
                                             </div>
                                         ))}
-                                        {categories.filter(c => c !== 'ทั้งหมด' && c.toLowerCase().includes(productForm.type.toLowerCase())).length === 0 && productForm.type && (
+                                        {categories.filter(c => Boolean(c) && String(c) !== 'ทั้งหมด' && String(c).toLowerCase().includes(String(productForm.category || '').toLowerCase())).length === 0 && productForm.category && (
                                             <div className="px-4 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
-                                                <Plus size={14} className="text-sky-500" /> เพิ่มหมวดหมู่ใหม่: "{productForm.type}"
+                                                <Plus size={14} className="text-sky-500" /> เพิ่มหมวดหมู่ใหม่: "{productForm.category}"
                                             </div>
                                         )}
                                     </div>
@@ -503,29 +677,86 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                             </div>
                         </div>
 
-                        {/* แก้ไขเติม !! ด้านหน้า checked ทุกตัว */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                            <div onClick={() => setProductForm({...productForm, stockManaged: !productForm.stockManaged})} className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-colors ${productForm.stockManaged ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-indigo-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.stockManaged} readOnly />
-                                <div>
-                                    <label className="font-bold text-slate-800 kanit-text cursor-pointer block leading-tight">จัดการสต็อก (สินค้า)</label>
-                                    <p className="text-xs text-slate-500 mt-1 kanit-text">รายการนี้เป็นสิ่งของที่ต้องนับจำนวน มีการรับเข้า และตัดจ่าย</p>
+                        {/* ชนิดของรายการ (3 ตัวเลือก: สต็อก, คอร์ส, บริการ) */}
+                        <div className="space-y-2.5 pt-2">
+                          <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">
+                            ประเภทรายการ <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* Option 1: สินค้า (สต็อก) */}
+                            <div 
+                              onClick={() => setProductForm({...productForm, itemKind: 'stock', stockManaged: true, isCourse: false})}
+                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse)
+                                  ? 'bg-indigo-50/80 border-indigo-500 shadow-md shadow-indigo-500/10' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse) ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                  <Package size={18} />
                                 </div>
+                                <input type="radio" checked={productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse)} readOnly className="accent-indigo-500 w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 text-sm kanit-text">สินค้า (สต็อก)</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">มีตัดนับสต็อกสินค้า</div>
+                              </div>
                             </div>
-                            <div onClick={() => setProductForm({...productForm, isCourse: !productForm.isCourse})} className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-colors ${productForm.isCourse ? 'bg-amber-50/50 border-amber-200 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-amber-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.isCourse} readOnly />
-                                <div>
-                                    <label className="font-bold text-slate-800 kanit-text cursor-pointer block leading-tight">คอร์ส / แพ็กเกจ</label>
-                                    <p className="text-xs text-slate-500 mt-1 kanit-text">รายการนี้มีจำนวนครั้งที่ต้องตัดเมื่อมาใช้บริการ</p>
+
+                            {/* Option 2: คอร์ส / แพ็กเกจ */}
+                            <div 
+                              onClick={() => setProductForm({...productForm, itemKind: 'course', stockManaged: false, isCourse: true})}
+                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'course' || productForm.isCourse
+                                  ? 'bg-amber-50/80 border-amber-500 shadow-md shadow-amber-500/10' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'course' || productForm.isCourse ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                  <Award size={18} />
                                 </div>
+                                <input type="radio" checked={productForm.itemKind === 'course' || productForm.isCourse} readOnly className="accent-amber-500 w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 text-sm kanit-text">คอร์ส / แพ็กเกจ</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">ตัดจำนวนครั้งรับบริการ</div>
+                              </div>
                             </div>
-                            <div onClick={() => setProductForm({...productForm, isVatable: !productForm.isVatable})} className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-colors ${productForm.isVatable ? 'bg-sky-50/50 border-sky-200 shadow-sm' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                                <input type="checkbox" className="w-5 h-5 mt-0.5 accent-sky-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.isVatable} readOnly />
-                                <div>
-                                    <label className="font-bold text-slate-800 kanit-text cursor-pointer block leading-tight">คิดภาษี (VAT)</label>
-                                    <p className="text-xs text-slate-500 mt-1 kanit-text">นำมูลค่าของรายการนี้ไปรวมคำนวณภาษีในหน้า POS</p>
+
+                            {/* Option 3: บริการทั่วไป */}
+                            <div 
+                              onClick={() => setProductForm({...productForm, itemKind: 'service', stockManaged: false, isCourse: false})}
+                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse)
+                                  ? 'bg-sky-50/80 border-sky-500 shadow-md shadow-sky-500/10' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse) ? 'bg-sky-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                  <Stethoscope size={18} />
                                 </div>
+                                <input type="radio" checked={productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse)} readOnly className="accent-sky-500 w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 text-sm kanit-text">บริการทั่วไป</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">หัตถการ/บริการทั่วไป</div>
+                              </div>
                             </div>
+                          </div>
+                        </div>
+
+                        {/* คิดภาษี (VAT) Toggle */}
+                        <div onClick={() => setProductForm({...productForm, isVatable: !productForm.isVatable})} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all ${productForm.isVatable ? 'bg-sky-50/50 border-sky-300' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+                          <div className="flex items-center gap-3">
+                            <input type="checkbox" className="w-5 h-5 accent-sky-500 rounded cursor-pointer pointer-events-none" checked={!!productForm.isVatable} readOnly />
+                            <div>
+                              <div className="font-bold text-slate-800 text-sm kanit-text">คิดภาษีมูลค่าเพิ่ม (VAT 7%)</div>
+                              <div className="text-xs text-slate-500 kanit-text">คำนวณภาษีมูลค่าเพิ่มในใบเสร็จ POS</div>
+                            </div>
+                          </div>
                         </div>
 
                         {productForm.stockManaged && (

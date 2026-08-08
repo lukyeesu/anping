@@ -6,7 +6,7 @@ import CatalogManager from './CatalogManager';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
 import { supabase } from '../lib/supabase';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -272,13 +272,15 @@ const POSSystem = ({
   };
 
   // ดึงรายการหมวดหมู่ที่มีทั้งหมดจากข้อมูล Products
-  const categories = Array.from(new Set(['ทั้งหมด', ...products.map(p => p.type || 'ไม่ระบุหมวดหมู่')]));
+  const categories = Array.from(new Set(['ทั้งหมด', ...products.map(p => p.category || p.type || 'ไม่ระบุหมวดหมู่').filter(Boolean)]));
 
   // กรองสินค้าตามคำค้นหาและหมวดหมู่
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
+      if (!p) return false;
       const matchSearch = (p.name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || (p.id || '').toLowerCase().includes((searchQuery || '').toLowerCase());
-      const matchCategory = activeCategory === 'ทั้งหมด' || p.type === activeCategory;
+      const catVal = p.category || p.type || 'ไม่ระบุหมวดหมู่';
+      const matchCategory = activeCategory === 'ทั้งหมด' || catVal === activeCategory || p.type === activeCategory || p.category === activeCategory;
       return matchSearch && matchCategory;
     });
   }, [products, searchQuery, activeCategory]);
@@ -457,15 +459,26 @@ const POSSystem = ({
                     const logPayload = {
                         id: `LOG${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                         productId: item.product.id,
+                        product_id: item.product.id,
+                        itemId: item.product.id,
+                        item_id: item.product.id,
+                        productName: item.product.name,
+                        item_name: item.product.name,
                         branchId: targetBranch,
+                        branch_id: targetBranch,
                         type: 'SALE',
+                        change_type: 'SALE',
                         amount: deductAmount,
+                        quantity: deductAmount,
                         balance: newQty,
                         reason: `ขายสินค้า (บิล: ${receiptId})`,
-                        note: `ล็อต: ${stockItem.lotNo || 'N/A'}, สาขา: ${branchName}`,
-                        lotNo: stockItem.lotNo,
-                        expireDate: stockItem.expireDate,
-                        timestamp: new Date().toISOString()
+                        notes: `ล็อต: ${stockItem.lotNo || 'N/A'}, สาขา: ${branchName}`,
+                        lotNo: stockItem.lotNo || '',
+                        lot_no: stockItem.lotNo || '',
+                        expireDate: stockItem.expireDate || '',
+                        expire_date: stockItem.expireDate || '',
+                        timestamp: new Date().toISOString(),
+                        created_at: new Date().toISOString()
                     };
                     backgroundTasks.push(callAppScript('SAVE_DATA', 'InventoryLogs', logPayload));
 

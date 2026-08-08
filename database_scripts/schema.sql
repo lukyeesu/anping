@@ -149,6 +149,7 @@ ALTER TABLE public.pos_transactions DROP COLUMN IF EXISTS data CASCADE;
 CREATE TABLE IF NOT EXISTS public.inventory (
     id VARCHAR PRIMARY KEY,
     code VARCHAR,
+    product_id VARCHAR,
     name VARCHAR,
     category VARCHAR,
     unit VARCHAR,
@@ -156,24 +157,49 @@ CREATE TABLE IF NOT EXISTS public.inventory (
     selling_price NUMERIC DEFAULT 0,
     stock_quantity INT DEFAULT 0,
     min_stock INT DEFAULT 0,
+    lot_no VARCHAR,
+    expire_date VARCHAR,
+    receive_date VARCHAR,
     branch_id VARCHAR,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.inventory DROP COLUMN IF EXISTS data CASCADE;
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS lot_no VARCHAR;
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS expire_date VARCHAR;
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS receive_date VARCHAR;
+ALTER TABLE public.inventory ADD COLUMN IF NOT EXISTS product_id VARCHAR;
 
 -- 7. Inventory Logs Table
 CREATE TABLE IF NOT EXISTS public.inventory_logs (
     id VARCHAR PRIMARY KEY,
     item_id VARCHAR,
+    product_id VARCHAR,
     item_name VARCHAR,
     change_type VARCHAR,
+    type VARCHAR,
     quantity INT DEFAULT 0,
+    amount NUMERIC DEFAULT 0,
+    balance NUMERIC DEFAULT 0,
     staff_name VARCHAR,
+    reason TEXT,
     notes TEXT,
+    lot_no VARCHAR,
+    expire_date VARCHAR,
+    receive_date VARCHAR,
+    branch_id VARCHAR,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.inventory_logs DROP COLUMN IF EXISTS data CASCADE;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS lot_no VARCHAR;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS expire_date VARCHAR;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS receive_date VARCHAR;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS product_id VARCHAR;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS branch_id VARCHAR;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS type VARCHAR;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS amount NUMERIC;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS balance NUMERIC;
+ALTER TABLE public.inventory_logs ADD COLUMN IF NOT EXISTS reason TEXT;
 
 -- 8. Setting POS / Product Catalog Table
 CREATE TABLE IF NOT EXISTS public.setting_pos (

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
 import { callSupabase, supabase, jsToRow, rowToJS } from './lib/supabase';
+import { subscribeStoreUpdates, clearAllLocalStores, getLocalStore, upsertLocalStore } from './lib/offlineStore';
 import { ToastContainer } from './global/helpers';
 import { triggerGlobalToast } from './global/helpers';
 import ResetPasswordScreen from './pages/ResetPasswordScreen';
@@ -540,33 +541,9 @@ export default function App() {
 
       if (resPatients?.status === 'success') { 
         const rawPatients = Array.isArray(resPatients.data) ? resPatients.data : [];
-        const patientIds = rawPatients.map(p => p.id || p.hn).filter(Boolean);
 
-        // 🌟 ดึงข้อมูลประวัติการรักษาเฉพาะกลุ่มคนไข้ 20 รายแรก (ประหยัด Egress 95%)
-        const treatmentsMap = new Map();
-        if (patientIds.length > 0) {
-          const resTrts = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds }).catch(() => ({ status: 'error', data: [] }));
-          if (resTrts?.status === 'success' && Array.isArray(resTrts.data)) {
-            resTrts.data.forEach(t => {
-              const formatted = formatTreatmentRecord(t);
-              if (formatted) {
-                const pid = String(formatted.patient_id || formatted.patientId || '').trim().toLowerCase();
-                if (pid) {
-                  if (!treatmentsMap.has(pid)) treatmentsMap.set(pid, []);
-                  treatmentsMap.get(pid).push(formatted);
-                }
-              }
-            });
-          }
-        }
-
+        // 🌟 Lazy Loading On-Demand: ดึงประวัติการรักษาเมื่อเปิด Modal ของคนไข้รายนั้นเท่านั้น
         const patientsWithOpd = rawPatients.map(patient => {
-          const pid = String(patient.id || '').trim().toLowerCase();
-          const phn = String(patient.hn || '').trim().toLowerCase();
-
-          const trtList = (pid && treatmentsMap.get(pid)) || (phn && treatmentsMap.get(phn)) || [];
-          trtList.sort((a, b) => new Date(b.datetime || b.date || 0) - new Date(a.datetime || a.date || 0));
-
           let legacyOpd = [];
           if (Array.isArray(patient.opdRecords)) {
             legacyOpd = patient.opdRecords;
@@ -574,11 +551,9 @@ export default function App() {
             try { legacyOpd = JSON.parse(patient.opdRecords); } catch (e) {}
           }
 
-          const finalOpdRecords = trtList.length > 0 ? trtList : legacyOpd;
-
           return {
             ...patient,
-            opdRecords: finalOpdRecords
+            opdRecords: legacyOpd
           };
         });
 
@@ -597,7 +572,8 @@ export default function App() {
         setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
       }
       if (resPosItems?.status === 'success') {
-        setPosProducts(Array.isArray(resPosItems.data) ? resPosItems.data : []);
+        const rawPosItems = Array.isArray(resPosItems.data) ? resPosItems.data : [];
+        setPosProducts(rawPosItems);
       }
 
       const combinedFinanceData = []; // Removed global finance fetch to save Egress. FinancePage now fetches directly.
@@ -715,29 +691,15 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !isLoggedIn || !currentUser || currentUser.id === 'admin1') return;
 
-    // 1. ฟัง Auth State Change จาก Supabase
+    // ฟัง Auth State Change จาก Supabase แบบ Event-Driven (ไม่ต้องยิง Polling ถี่ๆ ทุก 5 วินาที)
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || (!session && isLoggedIn)) {
         handleLogout();
       }
     });
 
-    // 2. Heartbeat ตรวจเช็คความคงอยู่ของ Auth User กับ Supabase ทุกๆ 5 วินาที
-    const authHeartbeat = setInterval(async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error || !data?.user) {
-          clearInterval(authHeartbeat);
-          handleLogout();
-        }
-      } catch (err) {
-        console.warn('Auth heartbeat check note:', err);
-      }
-    }, 5000);
-
     return () => {
       authListener?.subscription?.unsubscribe();
-      clearInterval(authHeartbeat);
     };
   }, [isLoggedIn, currentUser]);
 
@@ -1270,30 +1232,7 @@ export default function App() {
         const rawPatients = resPatients.data;
         const patientIds = rawPatients.map(p => p.id || p.hn).filter(Boolean);
 
-        let treatmentsMap = new Map();
-        if (patientIds.length > 0) {
-          const resTrts = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds }).catch(() => ({ status: 'error', data: [] }));
-          if (resTrts?.status === 'success' && Array.isArray(resTrts.data)) {
-            resTrts.data.forEach(t => {
-              const formatted = formatTreatmentRecord(t);
-              if (formatted) {
-                const pid = String(formatted.patient_id || formatted.patientId || '').trim().toLowerCase();
-                if (pid) {
-                  if (!treatmentsMap.has(pid)) treatmentsMap.set(pid, []);
-                  treatmentsMap.get(pid).push(formatted);
-                }
-              }
-            });
-          }
-        }
-
         const patientsWithOpd = rawPatients.map(patient => {
-          const pid = String(patient.id || '').trim().toLowerCase();
-          const phn = String(patient.hn || '').trim().toLowerCase();
-
-          const trtList = (pid && treatmentsMap.get(pid)) || (phn && treatmentsMap.get(phn)) || [];
-          trtList.sort((a, b) => new Date(b.datetime || b.date || 0) - new Date(a.datetime || a.date || 0));
-
           let legacyOpd = [];
           if (Array.isArray(patient.opdRecords)) {
             legacyOpd = patient.opdRecords;
@@ -1303,7 +1242,7 @@ export default function App() {
 
           return {
             ...patient,
-            opdRecords: trtList.length > 0 ? trtList : legacyOpd
+            opdRecords: legacyOpd
           };
         });
 
@@ -1610,6 +1549,7 @@ export default function App() {
     } else if (sheetName === 'Treatments') {
       const patientId = String(payload.patient_id || payload.patientId || payload.hn || '').trim();
       if (patientId) {
+        upsertLocalStore('treatments', [payload]).catch(() => {});
         setPatientsData(prev => {
           return prev.map(p => {
             if (String(p.id || p.hn).trim().toLowerCase() === patientId.toLowerCase()) {
@@ -1890,6 +1830,28 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  // --- BroadcastChannel Listener (ซิงค์ข้อมูลระหว่างหลายแท็บในเครื่องเดียวกัน) ---
+  useEffect(() => {
+    const unsubscribe = subscribeStoreUpdates((eventData) => {
+      if (eventData && (eventData.type === 'STORE_UPDATED' || eventData.action === 'NETWORK_RECONNECTED')) {
+        const storeName = eventData.storeName;
+        if (storeName === 'patients' || storeName === '*') {
+          getLocalStore('patients').then(data => data && data.length && setPatientsData(data));
+        }
+        if (storeName === 'queue' || storeName === '*') {
+          getLocalStore('queue').then(data => data && data.length && setQueueData(data));
+        }
+        if (storeName === 'inventory' || storeName === '*') {
+          getLocalStore('inventory').then(data => data && data.length && setInventoryData(data));
+        }
+        if (storeName === 'staff' || storeName === '*') {
+          getLocalStore('staff').then(data => data && data.length && setStaffData(data));
+        }
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const navItems = [

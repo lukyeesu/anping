@@ -4,7 +4,7 @@ import Skeleton from './Skeleton';
 import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -18,6 +18,7 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
+import { supabase, rowToJS } from '../lib/supabase';
 
 const InventoryManager = ({
     inventoryData = [], setInventoryData,
@@ -245,17 +246,32 @@ const InventoryManager = ({
 
   const branches = branchesData;
 
+  const isStockForProduct = useCallback((stockRow, targetProductId) => {
+    if (!stockRow || !targetProductId) return false;
+    const cleanTarget = String(targetProductId).replace(/^INV_/, '').trim().toLowerCase();
+    const cleanId = String(stockRow.id || '').replace(/^INV_/, '').trim().toLowerCase();
+    const cleanPId = String(stockRow.productId || stockRow.product_id || '').replace(/^INV_/, '').trim().toLowerCase();
+    const cleanCode = String(stockRow.code || '').replace(/^INV_/, '').trim().toLowerCase();
+
+    return cleanId === cleanTarget || cleanPId === cleanTarget || cleanCode === cleanTarget;
+  }, []);
+
   // แก้ไข: ปรับปรุง Logic การรวมข้อมูลให้รองรับการแยกตามล็อต (Lot-specific View)
   const joinedData = useMemo(() => {
-    const manageableProducts = posProducts.filter(p => p.stockManaged);
+    const manageableProducts = (posProducts || []).filter(p => {
+      if (!p || p.isDeleted || p.is_deleted) return false;
+      // เอาเฉพาะรายการที่เลือก/ติ๊กถูกว่าเป็นสินค้า (Stock Managed)
+      const isStockChecked = Boolean(parseBool(p.stockManaged) || parseBool(p.stock_managed) || p.kind === 'stock' || p.itemKind === 'stock' || (typeof p.id === 'string' && p.id.toLowerCase().startsWith('prod')));
+      return isStockChecked;
+    });
     const results = [];
 
     manageableProducts.forEach(product => {
-      const productStocks = inventoryData.filter(i => i.productId === product.id);
+      const productStocks = (inventoryData || []).filter(i => isStockForProduct(i, product.id));
       
       // กรณีเลือกสาขาเจาะจง
       if (activeBranch !== 'ทั้งหมด') {
-        const branchStocks = productStocks.filter(i => i.branchId === activeBranch);
+        const branchStocks = productStocks.filter(i => (i.branchId || i.branch_id) === activeBranch);
         
         if (branchStocks.length === 0) {
           // ถ้ายังไม่มีสต็อกเลย ให้โชว์แถวว่าง 1 แถวสำหรับสาขานั้น
@@ -273,7 +289,7 @@ const InventoryManager = ({
           });
         } else {
           // รวบรวมข้อมูลให้เป็นแบบ Group เสมอ เพื่อความเป็นระเบียบและรวม Lot ไว้ในปุ่ม
-          const totalQty = branchStocks.reduce((sum, s) => sum + Number(s.quantity), 0);
+          const totalQty = branchStocks.reduce((sum, s) => sum + Number(s.quantity ?? s.stockQuantity ?? s.stock_quantity ?? 0), 0);
           const minStock = product.minStock !== undefined ? product.minStock : 5;
           
           results.push({
@@ -289,7 +305,7 @@ const InventoryManager = ({
         }
       } else {
         // กรณีดู "ทุกสาขา" (ยังคงรวมยอดต่อสินค้าเพื่อให้ดูง่าย แต่เก็บข้อมูลล็อตไว้ข้างใน)
-        const totalQty = productStocks.reduce((sum, s) => sum + Number(s.quantity), 0);
+        const totalQty = productStocks.reduce((sum, s) => sum + Number(s.quantity ?? s.stockQuantity ?? s.stock_quantity ?? 0), 0);
         const minStock = product.minStock !== undefined ? product.minStock : 5;
         
         results.push({
@@ -306,13 +322,15 @@ const InventoryManager = ({
     });
 
     return results;
-  }, [inventoryData, posProducts, activeBranch]);
+  }, [inventoryData, posProducts, activeBranch, isStockForProduct]);
 
   const filteredData = useMemo(() => {
     return joinedData.filter(item => {
-      const matchSearch = item.product.name.toLowerCase().includes(search.toLowerCase()) || 
-                          (item.productId && item.productId.toLowerCase().includes(search.toLowerCase()));
-      return matchSearch;
+      if (!item) return false;
+      const pName = String(item.product?.name || item.name || '').toLowerCase();
+      const pId = String(item.productId || item.product?.id || item.code || '').toLowerCase();
+      const pSearch = (search || '').toLowerCase();
+      return pName.includes(pSearch) || pId.includes(pSearch);
     });
   }, [joinedData, search]);
 
@@ -406,12 +424,12 @@ const InventoryManager = ({
   const handleOpenAdjust = (item) => {
     // กำหนดสาขาเริ่มต้น: ถ้าเป็นสาขา "ทั้งหมด" ให้พยายามเอาจากข้อมูลดิบก่อน (หรือค่าเริ่มต้น b1)
     const defaultBranch = activeBranch === 'ทั้งหมด' 
-        ? (item.stocks?.[0]?.branchId || 'b1') 
+        ? (item.stocks?.[0]?.branchId || item.stocks?.[0]?.branch_id || 'b1') 
         : activeBranch;
 
     // ค้นหาข้อมูลสต็อกปัจจุบันของสาขาที่เลือก เพื่อเอาล็อตและวันหมดอายุมาแสดงเริ่มต้น
     const existingStock = item.isGrouped 
-        ? item.stocks.find(s => s.branchId === defaultBranch)
+        ? item.stocks?.find(s => (s.branchId || s.branch_id) === defaultBranch)
         : item;
 
     setAdjustItem(item);
@@ -420,9 +438,9 @@ const InventoryManager = ({
         amount: 1, 
         reason: '', 
         branchId: defaultBranch,
-        lotNo: existingStock?.lotNo || '',
-        expireDate: existingStock?.expireDate || '',
-        receiveDate: existingStock?.receiveDate || new Date().toISOString().split('T')[0]
+        lotNo: existingStock?.lotNo || existingStock?.lot_no || '',
+        expireDate: existingStock?.expireDate || existingStock?.expire_date || '',
+        receiveDate: existingStock?.receiveDate || existingStock?.receive_date || new Date().toISOString().split('T')[0]
     });
     setIsAdjustModalOpen(true);
   };
@@ -432,17 +450,63 @@ const InventoryManager = ({
     setIsLotModalOpen(true);
   };
 
-  // ฟังก์ชันเปิดดูประวัติ (Log)
-  const handleOpenLogs = (item) => {
-    // แก้ไข: ถ้าเป็นโหมดรวมยอด (isGrouped) ให้กรองเฉพาะรหัสสินค้า เพื่อโชว์ประวัติของทุกสาขา
-    const logs = inventoryLogsData.filter(l => {
-        const matchProduct = l.productId === item.productId;
-        const matchBranch = item.isGrouped ? true : l.branchId === item.branchId;
-        return matchProduct && matchBranch;
-    });
-    setSelectedProductLogs(logs);
-    setLogProductInfo(item.product);
+  // ฟังก์ชันเปิดดูประวัติ (Log) ดึงจากตาราง inventory_logs บน DB โดยตรง
+  const handleOpenLogs = async (item) => {
+    const rawTargetId = item.productId || item.product?.id || item.code || item.id || '';
+    const cleanTargetId = String(rawTargetId).replace(/^INV_/, '').trim();
+    const productName = item.product?.name || item.name || '';
+
+    setLogProductInfo(item.product || { name: productName || 'สินค้า' });
     setIsLogModalOpen(true);
+
+    try {
+      let fetchedLogs = [];
+      if (supabase) {
+        let query = supabase.from('inventory_logs').select('*');
+        if (cleanTargetId && productName) {
+          query = query.or(`item_id.eq."${cleanTargetId}",product_id.eq."${cleanTargetId}",item_name.eq."${productName}"`);
+        } else if (cleanTargetId) {
+          query = query.or(`item_id.eq."${cleanTargetId}",product_id.eq."${cleanTargetId}"`);
+        } else if (productName) {
+          query = query.eq('item_name', productName);
+        }
+        query = query.order('created_at', { ascending: false }).limit(100);
+
+        const { data, error } = await query;
+        if (!error && Array.isArray(data) && data.length > 0) {
+          fetchedLogs = data.map(rowToJS);
+        }
+      }
+
+      // Fallback กรองจากข้อมูลที่มีในเครื่อง
+      const fallbackLogs = inventoryLogsData.filter(l => {
+        const lProductId = String(l.productId || l.product_id || l.itemId || l.item_id || l.code || '').trim();
+        const lProductName = String(l.productName || l.product_name || l.itemName || l.item_name || '').trim();
+        
+        const matchId = cleanTargetId && (
+          lProductId.toLowerCase() === cleanTargetId.toLowerCase() ||
+          lProductId.toLowerCase().replace(/^inv_/, '') === cleanTargetId.toLowerCase()
+        );
+        const matchName = productName && lProductName && lProductName.toLowerCase() === productName.toLowerCase();
+
+        return matchId || matchName;
+      });
+
+      const combinedLogs = [...fetchedLogs, ...fallbackLogs];
+
+      // กรองเอาเฉพาะรายการที่ไม่ซ้ำกัน
+      const seenIds = new Set();
+      const uniqueLogs = combinedLogs.filter(l => {
+        const idKey = l.id || `${l.productId || l.product_id}_${l.timestamp || l.created_at}_${l.amount || l.quantity}`;
+        if (seenIds.has(idKey)) return false;
+        seenIds.add(idKey);
+        return true;
+      });
+
+      setSelectedProductLogs(uniqueLogs);
+    } catch (e) {
+      console.error('Error fetching inventory logs:', e);
+    }
   };
 
   const handleSaveItem = async (e) => {
@@ -460,11 +524,18 @@ const InventoryManager = ({
           const payload = {
             id: finalId,
             productId: formData.productId,
+            code: formData.productId,
             branchId: assignment.branchId,
+            branch_id: assignment.branchId,
             quantity: Number(assignment.quantity),
-            receiveDate: formData.receiveDate,
-            expireDate: formData.expireDate,
-            lotNo: formData.lotNo
+            stockQuantity: Number(assignment.quantity),
+            stock_quantity: Number(assignment.quantity),
+            receiveDate: formData.receiveDate || '',
+            receive_date: formData.receiveDate || '',
+            expireDate: formData.expireDate || '',
+            expire_date: formData.expireDate || '',
+            lotNo: formData.lotNo || '',
+            lot_no: formData.lotNo || ''
           };
           
           await callAppScript('SAVE_DATA', 'Inventory', payload);
@@ -474,11 +545,21 @@ const InventoryManager = ({
           const logPayload = {
               id: `LOG${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
               productId: payload.productId,
+              product_id: payload.productId,
               branchId: payload.branchId,
+              branch_id: payload.branchId,
               type: 'MANUAL',
+              change_type: 'MANUAL',
               amount: payload.quantity,
               balance: payload.quantity,
+              lotNo: payload.lotNo,
+              lot_no: payload.lotNo,
+              expireDate: payload.expireDate,
+              expire_date: payload.expireDate,
+              receiveDate: payload.receiveDate,
+              receive_date: payload.receiveDate,
               reason: isNew ? 'ตั้งค่าเริ่มต้นสาขาใหม่' : 'อัปเดตข้อมูลรวมศูนย์',
+              notes: isNew ? 'ตั้งค่าเริ่มต้นสาขาใหม่' : 'อัปเดตข้อมูลรวมศูนย์',
               timestamp: new Date().toISOString()
           };
           await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
@@ -491,7 +572,7 @@ const InventoryManager = ({
           let next = [...prev];
           results.forEach(res => {
               const idx = next.findIndex(i => i.id === res.id);
-              if (idx !== -1) next[idx] = res;
+              if (idx !== -1) next[idx] = { ...next[idx], ...res };
               else next.push(res);
           });
           return next;
@@ -509,23 +590,31 @@ const InventoryManager = ({
     }
   };
 
-  const handleSaveAdjustment = async (e) => {
-    e.preventDefault();
+  const handleConfirmAdjust = async (e) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (!adjustItem || !adjustData.branchId) {
+      showToast('กรุณาระบุข้อมูลให้ครบถ้วน', 'warning');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const amount = Number(adjustData.amount);
       const isAdd = adjustData.type === 'add';
       const targetBranchId = adjustData.branchId;
-      const targetLotNo = adjustData.lotNo;
+      const targetLotNo = String(adjustData.lotNo || '').trim();
+      const pId = adjustItem.productId || adjustItem.product?.id || adjustItem.code || adjustItem.id || '';
+      const cleanPId = String(pId).replace(/^INV_/, '').trim();
+      const pName = adjustItem.product?.name || adjustItem.name || '';
 
       // ค้นหาข้อมูลสต็อกปัจจุบันของสาขา และ ล็อต ที่เลือก
-      const existingStock = inventoryData.find(i => 
-        i.productId === adjustItem.productId && 
-        i.branchId === targetBranchId &&
-        (i.lotNo || '') === (targetLotNo || '')
+      const existingStock = (inventoryData || []).find(i => 
+        isStockForProduct(i, cleanPId) && 
+        (i.branchId || i.branch_id) === targetBranchId && 
+        (String(i.lotNo || i.lot_no || '').trim() === targetLotNo)
       );
       
-      const currentQty = existingStock ? Number(existingStock.quantity) : 0;
+      const currentQty = existingStock ? (Number(existingStock.quantity ?? existingStock.stockQuantity ?? existingStock.stock_quantity) || 0) : 0;
       const newQty = isAdd ? currentQty + amount : Math.max(0, currentQty - amount);
 
       // ใช้ ID เดิมถ้ามี หรือสร้างใหม่
@@ -533,28 +622,48 @@ const InventoryManager = ({
       const payload = {
           id: finalId,
           productId: adjustItem.productId,
+          code: adjustItem.productId,
           branchId: targetBranchId,
+          branch_id: targetBranchId,
           quantity: newQty,
-          expireDate: adjustData.expireDate,
-          lotNo: targetLotNo,
-          receiveDate: adjustData.receiveDate
+          stockQuantity: newQty,
+          stock_quantity: newQty,
+          expireDate: adjustData.expireDate || '',
+          expire_date: adjustData.expireDate || '',
+          lotNo: targetLotNo || '',
+          lot_no: targetLotNo || '',
+          receiveDate: adjustData.receiveDate || '',
+          receive_date: adjustData.receiveDate || ''
       };
 
       await callAppScript('SAVE_DATA', 'Inventory', payload);
 
-      // สร้าง Log
+      // สร้าง Log สำหรับการปรับปรุง/จ่ายออก/รับเข้า
       const logPayload = {
-          id: `LOG${Date.now()}`,
-          productId: adjustItem.productId,
+          id: `LOG${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          productId: pId,
+          product_id: pId,
+          itemId: pId,
+          item_id: pId,
+          productName: pName,
+          item_name: pName,
           branchId: targetBranchId,
+          branch_id: targetBranchId,
           type: isAdd ? 'IN' : 'OUT',
-          amount: amount,
+          change_type: isAdd ? 'IN' : 'OUT',
+          amount: isAdd ? amount : -amount,
+          quantity: isAdd ? amount : -amount,
           balance: newQty,
-          reason: adjustData.reason || (isAdd ? 'รับเข้า (ปกติ)' : 'จ่ายออก/ปรับปรุง'),
-          lotNo: targetLotNo,
-          expireDate: adjustData.expireDate,
-          receiveDate: adjustData.receiveDate,
-          timestamp: new Date().toISOString()
+          reason: adjustData.reason || (isAdd ? 'รับเข้าสินค้า' : 'จ่ายออก/ปรับปรุงสต็อก'),
+          notes: adjustData.reason || (isAdd ? 'รับเข้าสินค้า' : 'จ่ายออก/ปรับปรุงสต็อก'),
+          lotNo: targetLotNo || '',
+          lot_no: targetLotNo || '',
+          expireDate: adjustData.expireDate || '',
+          expire_date: adjustData.expireDate || '',
+          receiveDate: adjustData.receiveDate || '',
+          receive_date: adjustData.receiveDate || '',
+          timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString()
       };
       await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
 
@@ -574,6 +683,8 @@ const InventoryManager = ({
       setIsProcessing(false);
     }
   };
+
+  const handleSaveAdjustment = handleConfirmAdjust;
 
   return (
     <div className="flex flex-col h-full fade-in pb-20 md:pb-0 relative">
@@ -731,7 +842,8 @@ const InventoryManager = ({
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredData.map((item, idx) => {
-                  const Icon = POS_ICONS[item.product.icon] || Package;
+                  const prod = item.product || { name: item.name || 'สินค้า', icon: 'Package', type: 'ทั่วไป' };
+                  const Icon = POS_ICONS[prod.icon] || Package;
                   const isLow = item.quantity <= item.minStock && item.quantity > 0;
                   const isOut = item.quantity <= 0;
                   
@@ -788,8 +900,8 @@ const InventoryManager = ({
                             <Icon size={24} />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-800 kanit-text text-base truncate leading-tight">{item.product.name}</p>
-                            <p className="text-xs text-slate-400 font-data tracking-tight mt-1.5 whitespace-nowrap">{item.productId} | {item.product.type}</p>
+                            <p className="font-bold text-slate-800 kanit-text text-base truncate leading-tight">{prod.name}</p>
+                            <p className="text-xs text-slate-400 font-data tracking-tight mt-1.5 whitespace-nowrap">{item.productId} | {prod.type || 'ทั่วไป'}</p>
                           </div>
                         </div>
                       </td>
@@ -895,7 +1007,8 @@ const InventoryManager = ({
           {/* --- Mobile View (Cards) --- */}
           <div className="lg:hidden flex flex-col gap-3 p-3 bg-slate-50/50">
              {filteredData.map((item, idx) => {
-                  const Icon = POS_ICONS[item.product.icon] || Package;
+                  const prod = item.product || { name: item.name || 'สินค้า', icon: 'Package', type: 'ทั่วไป' };
+                  const Icon = POS_ICONS[prod.icon] || Package;
                   const isLow = item.quantity <= item.minStock && item.quantity > 0;
                   const isOut = item.quantity <= 0;
                   
@@ -950,11 +1063,11 @@ const InventoryManager = ({
                                <Icon size={24} />
                              </div>
                              <div className="min-w-0 flex-1">
-                               <p className="font-bold text-slate-800 kanit-text text-sm sm:text-base line-clamp-2 leading-tight pr-1">{item.product.name}</p>
+                               <p className="font-bold text-slate-800 kanit-text text-sm sm:text-base line-clamp-2 leading-tight pr-1">{prod.name}</p>
                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                    <p className="text-[10px] sm:text-xs text-slate-400 font-data tracking-tight whitespace-nowrap truncate max-w-[80px] sm:max-w-[100px]">{item.productId}</p>
                                    <div className="w-1 h-1 rounded-full bg-slate-300 shrink-0"></div>
-                                   <p className="text-[10px] sm:text-xs text-slate-400 font-data tracking-tight whitespace-nowrap truncate max-w-[100px]">{item.product.type}</p>
+                                   <p className="text-[10px] sm:text-xs text-slate-400 font-data tracking-tight whitespace-nowrap truncate max-w-[100px]">{prod.type || 'ทั่วไป'}</p>
                                </div>
                              </div>
                            </div>
@@ -1255,14 +1368,15 @@ const InventoryManager = ({
                         <CustomSelect 
                           value={adjustData.branchId}
                           onChange={val => {
-                            const branchStocks = inventoryData.filter(i => i.productId === adjustItem?.productId && i.branchId === val);
+                            const targetPId = adjustItem?.productId || adjustItem?.product?.id || adjustItem?.code || adjustItem?.id;
+                            const branchStocks = inventoryData.filter(i => isStockForProduct(i, targetPId) && (i.branchId || i.branch_id) === val);
                             const firstStock = branchStocks[0];
                             setAdjustData({
                                 ...adjustData, 
                                 branchId: val,
-                                lotNo: firstStock?.lotNo || '',
-                                expireDate: firstStock?.expireDate || '',
-                                receiveDate: firstStock?.receiveDate || new Date().toISOString().split('T')[0]
+                                lotNo: firstStock?.lotNo || firstStock?.lot_no || '',
+                                expireDate: firstStock?.expireDate || firstStock?.expire_date || '',
+                                receiveDate: firstStock?.receiveDate || firstStock?.receive_date || new Date().toISOString().split('T')[0]
                             });
                           }}
                           options={branches.map(b => ({ value: b.id, label: b.name }))}
@@ -1276,11 +1390,15 @@ const InventoryManager = ({
                         <span className="text-[10px] font-bold text-sky-600 kanit-text uppercase mb-1">คงเหลือล็อตที่เลือก</span>
                         <div className="flex items-baseline gap-2">
                           <span className="text-3xl font-black text-sky-700 font-data">
-                            {inventoryData.find(i => 
-                              i.productId === adjustItem?.productId && 
-                              i.branchId === adjustData.branchId &&
-                              (i.lotNo || '') === (adjustData.lotNo || '')
-                            )?.quantity || 0}
+                            {(() => {
+                              const targetPId = adjustItem?.productId || adjustItem?.product?.id || adjustItem?.code || adjustItem?.id;
+                              const matchedStock = inventoryData.find(i => 
+                                isStockForProduct(i, targetPId) && 
+                                (i.branchId || i.branch_id) === adjustData.branchId &&
+                                (String(i.lotNo || i.lot_no || '').trim() === String(adjustData.lotNo || '').trim())
+                              );
+                              return matchedStock ? Number(matchedStock.quantity ?? matchedStock.stockQuantity ?? matchedStock.stock_quantity ?? 0) : 0;
+                            })()}
                           </span>
                           <span className="text-sm font-bold text-sky-600 kanit-text">รายการ</span>
                         </div>
@@ -1297,42 +1415,64 @@ const InventoryManager = ({
                         <div className="space-y-1.5">
                           <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase tracking-wider">เลือกล็อตเดิมที่มี</label>
                           <CustomSelect 
-                            placeholder="เลือกจากล็อตเดิม..."
-                            value={adjustData.lotNo}
+                            placeholder="เลือกจากล็อตเดิมที่มี..."
+                            value={adjustData.lotNo === 'N/A' ? '' : adjustData.lotNo}
                             compact
                             fullWidth
                             onChange={val => {
-                                const stock = inventoryData.find(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId && i.lotNo === val);
+                                const targetPId = adjustItem?.productId || adjustItem?.product?.id || adjustItem?.code || adjustItem?.id;
+                                const stock = inventoryData.find(i => isStockForProduct(i, targetPId) && (i.branchId || i.branch_id) === adjustData.branchId && (i.lotNo === val || i.lot_no === val));
                                 setAdjustData({ 
                                     ...adjustData, 
                                     lotNo: val, 
-                                    expireDate: stock?.expireDate || '',
-                                    receiveDate: stock?.receiveDate || adjustData.receiveDate
+                                    expireDate: stock?.expireDate || stock?.expire_date || '',
+                                    receiveDate: stock?.receiveDate || stock?.receive_date || adjustData.receiveDate
                                 });
                             }}
-                            options={[
-                                ...inventoryData
-                                    .filter(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId)
-                                    .map(i => ({ value: i.lotNo, label: `${i.lotNo || 'N/A'} (เหลือ ${i.quantity})` }))
-                            ]}
+                            options={(() => {
+                                const targetPId = adjustItem?.productId || adjustItem?.product?.id || adjustItem?.code || adjustItem?.id;
+                                const matchedList = inventoryData.filter(i => {
+                                  if (!isStockForProduct(i, targetPId)) return false;
+                                  if (adjustData.branchId && (i.branchId || i.branch_id) !== adjustData.branchId) return false;
+                                  const lotVal = String(i.lotNo || i.lot_no || '').trim();
+                                  return lotVal !== '' && lotVal !== 'N/A';
+                                });
+
+                                const lotMap = new Map();
+                                matchedList.forEach(i => {
+                                  const lotVal = String(i.lotNo || i.lot_no || '').trim();
+                                  const qty = Number(i.quantity ?? i.stockQuantity ?? i.stock_quantity ?? 0);
+                                  if (!lotMap.has(lotVal)) {
+                                    lotMap.set(lotVal, qty);
+                                  } else {
+                                    lotMap.set(lotVal, lotMap.get(lotVal) + qty);
+                                  }
+                                });
+
+                                return Array.from(lotMap.entries()).map(([lotVal, qty]) => ({
+                                  value: lotVal,
+                                  label: `ล็อต: ${lotVal} (คงเหลือ ${qty})`
+                                }));
+                            })()}
                           />
                         </div>
                         <div className="space-y-1.5">
                           <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase tracking-wider">ระบุล็อตใหม่</label>
                           <input 
                             type="text" className={`${theme.input} !py-3 font-data uppercase text-sm`} 
-                            value={adjustData.lotNo} 
+                            value={adjustData.lotNo === 'N/A' ? '' : adjustData.lotNo} 
                             onChange={e => {
                                 const newLot = e.target.value.toUpperCase();
-                                const stock = inventoryData.find(i => i.productId === adjustItem?.productId && i.branchId === adjustData.branchId && i.lotNo === newLot);
+                                const targetPId = adjustItem?.productId || adjustItem?.product?.id || adjustItem?.code || adjustItem?.id;
+                                const stock = inventoryData.find(i => isStockForProduct(i, targetPId) && (i.branchId || i.branch_id) === adjustData.branchId && (i.lotNo === newLot || i.lot_no === newLot));
                                 setAdjustData({
                                     ...adjustData, 
                                     lotNo: newLot, 
-                                    expireDate: stock?.expireDate || adjustData.expireDate,
-                                    receiveDate: stock?.receiveDate || adjustData.receiveDate
+                                    expireDate: stock?.expireDate || stock?.expire_date || adjustData.expireDate,
+                                    receiveDate: stock?.receiveDate || stock?.receive_date || adjustData.receiveDate
                                 });
                             }} 
-                            placeholder="พิมพ์ชื่อล็อตใหม่..." 
+                            placeholder="พิมพ์ชื่อล็อตใหม่ (เช่น LOT-2026A)..." 
                           />
                         </div>
                       </div>
@@ -1577,8 +1717,27 @@ const InventoryManager = ({
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30">
               {selectedProductLogs.length > 0 ? (
                 <div className="space-y-3">
-                  {selectedProductLogs.map((log, idx) => (
-                    <div key={log.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:border-indigo-200 transition-all">
+                  {selectedProductLogs.map((logItem, idx) => {
+                    const logAmount = Number(logItem.amount ?? logItem.quantity ?? 0);
+                    const logType = logItem.type || logItem.change_type || logItem.changeType || 'MANUAL';
+                    const isPositive = logType === 'IN' || (logType === 'MANUAL' && logAmount > 0);
+                    const absQty = Math.abs(logAmount);
+                    const qtyDisplay = isPositive ? `+${absQty}` : `-${absQty}`;
+                    const textColor = isPositive ? 'text-emerald-500' : (logType === 'OUT' || logType === 'SALE' ? 'text-rose-500' : 'text-sky-500');
+
+                    const log = {
+                      id: logItem.id || idx,
+                      type: logType,
+                      branchId: logItem.branchId || logItem.branch_id || 'all',
+                      timestamp: logItem.timestamp || logItem.created_at || logItem.createdAt,
+                      reason: logItem.reason || logItem.notes || logItem.note || 'อัปเดตสต็อก',
+                      amount: logAmount,
+                      balance: logItem.balance !== undefined && logItem.balance !== null ? logItem.balance : '-',
+                      lotNo: logItem.lotNo || logItem.lot_no,
+                      expireDate: logItem.expireDate || logItem.expire_date
+                    };
+                    return (
+                    <div key={`log_${log.id}_${idx}`} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:border-indigo-200 transition-all">
                       <div className="flex items-start gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                             log.type === 'SALE' ? 'bg-amber-50 text-amber-500' :
@@ -1626,18 +1785,16 @@ const InventoryManager = ({
                       
                       <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-50">
                         <div className="flex items-center gap-1.5">
-                            <span className={`text-sm font-black ${
-                                log.type === 'IN' ? 'text-emerald-500' : 
-                                log.type === 'MANUAL' ? 'text-sky-500' : 'text-rose-500'
-                            }`}>
-                                {log.type === 'IN' || (log.type === 'MANUAL' && log.amount > 0) ? '+' : '-'}{log.amount}
+                            <span className={`text-sm font-black ${textColor}`}>
+                                {qtyDisplay}
                             </span>
                             <span className="text-[10px] text-slate-400 kanit-text font-medium">รายการ</span>
                         </div>
                         <div className="text-[11px] font-bold text-slate-400 kanit-text">คงเหลือ: <span className="text-slate-600 font-data">{log.balance}</span></div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-300">

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
+import { getLocalStore, upsertLocalStore } from '../lib/offlineStore';
 
 const FinancePage = ({ 
   currentBranch, 
@@ -774,6 +775,12 @@ const FinancePage = ({
                   };
               });
 
+              // ซิงค์บันทึกลง IndexedDB คลังในเครื่องสำหรับใช้งานออฟไลน์
+              const revenues = formatted.filter(t => t.type === 'income');
+              const expenses = formatted.filter(t => t.type === 'expense');
+              if (revenues.length > 0) upsertLocalStore('finance_revenue', revenues).catch(() => {});
+              if (expenses.length > 0) upsertLocalStore('finance_expenses', expenses).catch(() => {});
+
               if (formatted.length < PAGE_SIZE) setHasMore(false);
               setFinanceTransactions(prev => {
                   const newTxs = isReset ? formatted : [...prev, ...formatted];
@@ -784,8 +791,24 @@ const FinancePage = ({
                       return true;
                   });
               });
+          } else if (error) {
+              // ดึงจาก IndexedDB เมื่อเน็ตหลุดหรือยิงเซิร์ฟเวอร์ไม่ผ่าน
+              const localRev = await getLocalStore('finance_revenue').catch(() => []);
+              const localExp = await getLocalStore('finance_expenses').catch(() => []);
+              const localCombined = [...localRev.map(r => ({...r, type: 'income'})), ...localExp.map(e => ({...e, type: 'expense'}))];
+              if (localCombined.length > 0) {
+                  setFinanceTransactions(localCombined);
+              }
           }
-      } catch(e) { console.error(e); }
+      } catch(e) { 
+          console.error(e); 
+          const localRev = await getLocalStore('finance_revenue').catch(() => []);
+          const localExp = await getLocalStore('finance_expenses').catch(() => []);
+          const localCombined = [...localRev.map(r => ({...r, type: 'income'})), ...localExp.map(e => ({...e, type: 'expense'}))];
+          if (localCombined.length > 0) {
+              setFinanceTransactions(localCombined);
+          }
+      }
       setIsFetchingData(false);
   };
 

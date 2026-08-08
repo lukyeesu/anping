@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { GOOGLE_SCRIPT_URL } from '../global/constants';
+import { getLocalStore, upsertLocalStore, replaceLocalStore, getLastSyncTime, setLastSyncTime } from './offlineStore';
 
 const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -51,17 +52,17 @@ const TABLE_COLUMNS = {
     'informed_consent_status', 'informed_consent_timestamp', 'informed_consent_ip_address', 'informed_consent_user_agent',
     'informed_consent_signer_type', 'informed_consent_representative_name', 'informed_consent_representative_relation',
     'informed_consent_risk_agreed', 'informed_consent_voluntary_agreed', 'informed_consent_signature_url', 'informed_consent_doc_id',
-    'branch_id', 'created_at', 'updated_at'
+    'branch_id', 'created_at', 'updated_at', 'is_deleted'
   ],
-  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at'],
-  branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at'],
-  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'treated', 'is_treated', 'created_at', 'updated_at'],
-  pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'created_at', 'updated_at'],
-  inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'branch_id', 'created_at', 'updated_at'],
-  inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at'],
-  setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'is_active', 'created_at', 'updated_at'],
-  finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
-  finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at'],
+  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
+  branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at', 'is_deleted'],
+  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'treated', 'is_treated', 'created_at', 'updated_at', 'is_deleted'],
+  pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'created_at', 'updated_at', 'is_deleted'],
+  inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'lot_no', 'expire_date', 'receive_date', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
+  inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at', 'updated_at', 'lot_no', 'expire_date', 'receive_date', 'product_id', 'branch_id', 'type', 'amount', 'balance', 'reason'],
+  setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'icon', 'stock_managed', 'is_course', 'course_sessions', 'min_stock', 'is_vatable', 'is_active', 'created_at', 'updated_at', 'is_deleted'],
+  finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
+  finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   staff: [
     'id', 'emp_code', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 
     'role', 'category', 'position', 'phone', 'email', 'id_card', 'license_number', 'dob', 'gender', 
@@ -80,6 +81,16 @@ const TABLE_COLUMNS = {
 
 const getTableName = (sheetName) => TABLE_MAP[sheetName] || sheetName.toLowerCase();
 
+export const parseBool = (val) => {
+  if (val === true || val === 1 || val === '1') return true;
+  if (val === false || val === 0 || val === '0' || val === null || val === undefined) return false;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    return s === 'true' || s === 't' || s === 'yes' || s === '1';
+  }
+  return Boolean(val);
+};
+
 export function rowToJS(row) {
   if (!row) return null;
   const jsObj = { ...row };
@@ -88,6 +99,87 @@ export function rowToJS(row) {
     const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
     jsObj[camelKey] = val;
   }
+  if (row.category || row.type) {
+    jsObj.category = row.category || row.type;
+  }
+  if (row.stock_managed !== undefined || row.stockManaged !== undefined) {
+    jsObj.stockManaged = parseBool(row.stock_managed ?? row.stockManaged);
+    jsObj.stock_managed = jsObj.stockManaged;
+  }
+  if (row.is_course !== undefined || row.isCourse !== undefined) {
+    jsObj.isCourse = parseBool(row.is_course ?? row.isCourse);
+    jsObj.is_course = jsObj.isCourse;
+  }
+  if (row.is_active !== undefined || row.isActive !== undefined) {
+    jsObj.isActive = parseBool(row.is_active ?? row.isActive);
+    jsObj.is_active = jsObj.isActive;
+  }
+  if (row.is_deleted !== undefined || row.isDeleted !== undefined) {
+    jsObj.isDeleted = parseBool(row.is_deleted ?? row.isDeleted);
+    jsObj.is_deleted = jsObj.isDeleted;
+  }
+  if (row.course_sessions !== undefined || row.courseSessions !== undefined) {
+    jsObj.courseSessions = Number((row.course_sessions ?? row.courseSessions) || 1);
+  }
+  if (row.min_stock !== undefined || row.minStock !== undefined) {
+    jsObj.minStock = Number((row.min_stock ?? row.minStock) || 0);
+  }
+  if (row.stock_quantity !== undefined || row.stockQuantity !== undefined || row.quantity !== undefined) {
+    const qty = Number((row.stock_quantity ?? row.stockQuantity ?? row.quantity) || 0);
+    jsObj.stockQuantity = qty;
+    jsObj.quantity = qty;
+    jsObj.stock_quantity = qty;
+  }
+  if (row.is_vatable !== undefined || row.isVatable !== undefined) {
+    jsObj.isVatable = parseBool(row.is_vatable ?? row.isVatable);
+    jsObj.is_vatable = jsObj.isVatable;
+  }
+  if (row.icon) {
+    jsObj.icon = row.icon;
+  }
+  if (row.code || row.product_id || row.productId || row.item_id || row.itemId) {
+    const pId = String(row.productId || row.product_id || row.itemId || row.item_id || row.code || '').trim();
+    jsObj.productId = pId;
+    jsObj.itemId = pId;
+    jsObj.code = pId;
+  }
+  if (row.item_name || row.product_name || row.productName) {
+    const pName = String(row.productName || row.product_name || row.item_name || '').trim();
+    jsObj.productName = pName;
+    jsObj.itemName = pName;
+  }
+  if (row.change_type || row.type) {
+    const tVal = String(row.change_type || row.type || '').trim();
+    jsObj.type = tVal;
+    jsObj.changeType = tVal;
+    jsObj.change_type = tVal;
+  }
+  if (row.notes || row.reason) {
+    const rVal = String(row.reason || row.notes || '').trim();
+    jsObj.reason = rVal;
+    jsObj.notes = rVal;
+  }
+  if (row.created_at || row.timestamp) {
+    const ts = row.created_at || row.timestamp;
+    jsObj.created_at = ts;
+    jsObj.timestamp = ts;
+  }
+  if (row.lot_no !== undefined || row.lotNo !== undefined) {
+    const val = row.lot_no ?? row.lotNo ?? '';
+    jsObj.lotNo = val;
+    jsObj.lot_no = val;
+  }
+  if (row.expire_date !== undefined || row.expireDate !== undefined) {
+    const val = row.expire_date ?? row.expireDate ?? '';
+    jsObj.expireDate = val;
+    jsObj.expire_date = val;
+  }
+  if (row.receive_date !== undefined || row.receiveDate !== undefined) {
+    const val = row.receive_date ?? row.receiveDate ?? '';
+    jsObj.receiveDate = val;
+    jsObj.receive_date = val;
+  }
+
   if (!jsObj.hn && jsObj.id) {
     jsObj.hn = jsObj.id;
   }
@@ -247,6 +339,77 @@ export function jsToRow(payload, tableName = '') {
   if (payload.employmentType || payload.employment_type) rawRow.employment_type = String(payload.employmentType || payload.employment_type);
   if (payload.bankName || payload.bank_name) rawRow.bank_name = String(payload.bankName || payload.bank_name);
   if (payload.bankAccount || payload.bank_account) rawRow.bank_account = String(payload.bankAccount || payload.bank_account);
+  if (payload.type || payload.category) {
+    const catVal = String(payload.category || payload.type || '').trim();
+    rawRow.category = catVal;
+  }
+  if (payload.stockManaged !== undefined || payload.stock_managed !== undefined) {
+    rawRow.stock_managed = parseBool(payload.stockManaged ?? payload.stock_managed);
+  }
+  if (payload.isCourse !== undefined || payload.is_course !== undefined) {
+    rawRow.is_course = parseBool(payload.isCourse ?? payload.is_course);
+  }
+  if (payload.isActive !== undefined || payload.is_active !== undefined) {
+    rawRow.is_active = parseBool(payload.isActive ?? payload.is_active);
+  }
+  if (payload.isDeleted !== undefined || payload.is_deleted !== undefined) {
+    rawRow.is_deleted = parseBool(payload.isDeleted ?? payload.is_deleted);
+  }
+  if (payload.courseSessions !== undefined || payload.course_sessions !== undefined) {
+    rawRow.course_sessions = Number((payload.courseSessions ?? payload.course_sessions) || 1);
+  }
+  if (payload.minStock !== undefined || payload.min_stock !== undefined) {
+    rawRow.min_stock = Number((payload.minStock ?? payload.min_stock) || 0);
+  }
+  if (payload.quantity !== undefined || payload.stockQuantity !== undefined || payload.stock_quantity !== undefined) {
+    rawRow.stock_quantity = Number((payload.stockQuantity ?? payload.quantity ?? payload.stock_quantity) || 0);
+  }
+  if (payload.code || payload.productId || payload.product_id || payload.itemId || payload.item_id) {
+    const pId = String(payload.code || payload.productId || payload.product_id || payload.itemId || payload.item_id || '').trim();
+    rawRow.code = pId;
+    rawRow.item_id = pId;
+    rawRow.product_id = pId;
+  }
+  if (payload.productName || payload.product_name || payload.itemName || payload.item_name) {
+    const pName = String(payload.productName || payload.product_name || payload.itemName || payload.item_name || '').trim();
+    rawRow.item_name = pName;
+  }
+  if (payload.changeType || payload.change_type || payload.type) {
+    const cType = String(payload.change_type || payload.changeType || payload.type || '').trim();
+    rawRow.change_type = cType;
+    rawRow.type = cType;
+  }
+  if (payload.notes || payload.note || payload.reason) {
+    const noteVal = String(payload.notes || payload.note || payload.reason || '').trim();
+    rawRow.notes = noteVal;
+    rawRow.reason = noteVal;
+  }
+  if (payload.amount !== undefined || payload.quantity !== undefined || payload.balance !== undefined) {
+    const amt = Number((payload.amount ?? payload.quantity) || 0);
+    const qty = Number((payload.quantity ?? payload.amount) || 0);
+    rawRow.amount = amt;
+    rawRow.quantity = qty;
+    rawRow.balance = Number(payload.balance || 0);
+  }
+  if (payload.staffName || payload.staff_name) {
+    rawRow.staff_name = String(payload.staffName || payload.staff_name || '');
+  }
+  if (payload.lotNo !== undefined || payload.lot_no !== undefined) {
+    rawRow.lot_no = String(payload.lotNo ?? payload.lot_no ?? '');
+  }
+  if (payload.expireDate !== undefined || payload.expire_date !== undefined) {
+    rawRow.expire_date = String(payload.expireDate ?? payload.expire_date ?? '');
+  }
+  if (payload.receiveDate !== undefined || payload.receive_date !== undefined) {
+    rawRow.receive_date = String(payload.receiveDate ?? payload.receive_date ?? '');
+  }
+  if (payload.isVatable !== undefined || payload.is_vatable !== undefined) {
+    rawRow.is_vatable = Boolean(payload.isVatable ?? payload.is_vatable);
+  }
+  if (payload.icon !== undefined) {
+    rawRow.icon = String(payload.icon);
+  }
+
   if (payload.schedule !== undefined) rawRow.schedule = payload.schedule;
 
   // Safe Numeric Mappings
@@ -325,24 +488,33 @@ export async function callSupabase(action, sheetName, payload = null) {
   switch (action) {
     case 'GET_DATA': {
       const selectCols = (TABLE_COLUMNS[tableName] || []).join(',') || '*';
+      const isMasterConfigTable = ['setting_pos', 'branches', 'settings', 'staff', 'logs'].includes(tableName);
+      const lastSync = isMasterConfigTable ? null : await getLastSyncTime(tableName);
+
       let query = supabase.from(tableName).select(selectCols);
 
-      if (tableName === 'logs') {
-        query = query.order('created_at', { ascending: false }).limit(100);
-      } else if (tableName === 'inventory_logs') {
-        query = query.order('created_at', { ascending: false }).limit(200);
-      } else if (tableName === 'pos_transactions') {
-        query = query.order('created_at', { ascending: false }).limit(500);
-      } else if (tableName === 'finance_revenue' || tableName === 'finance_expenses') {
-        query = query.order('created_at', { ascending: false }).limit(500);
-      } else if (tableName === 'treatments') {
-        query = query.order('created_at', { ascending: false }).limit(1000);
+      if (lastSync) {
+        // ในกรณี Delta Sync ไม่ใส่ Filter is_deleted เพื่อให้ดึงรายการที่ถูกลบฝั่ง Server ในช่วงที่ปิดแอปกลับมาอัปเดตลบออกใน IndexedDB ด้วย
+        if (tableName === 'inventory_logs' || tableName === 'logs') {
+          query = query.gt('created_at', lastSync);
+        } else {
+          query = query.gt('updated_at', lastSync);
+        }
+      } else {
+        if (TABLE_COLUMNS[tableName]?.includes('is_deleted')) {
+          query = query.or('is_deleted.is.null,is_deleted.eq.false');
+        }
+        if (tableName === 'logs') query = query.order('created_at', { ascending: false }).limit(100);
+        else if (tableName === 'inventory_logs') query = query.order('created_at', { ascending: false }).limit(500);
+        else if (tableName === 'pos_transactions') query = query.order('created_at', { ascending: false }).limit(500);
+        else if (tableName === 'finance_revenue' || tableName === 'finance_expenses') query = query.order('created_at', { ascending: false }).limit(500);
+        else if (tableName === 'treatments') query = query.order('created_at', { ascending: false }).limit(1000);
       }
 
       let { data, error } = await query;
 
       if (error) {
-        console.warn(`Query ${tableName} with explicit columns failed (${error.message}). Retrying with select('*')...`);
+        console.warn(`Query ${tableName} with explicit columns or delta query failed (${error.message}). Retrying fallback select('*')...`);
         let fallbackQuery = supabase.from(tableName).select('*');
         if (tableName === 'logs') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(100);
         else if (tableName === 'inventory_logs') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(200);
@@ -351,15 +523,32 @@ export async function callSupabase(action, sheetName, payload = null) {
         else if (tableName === 'treatments') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(1000);
         
         const resFb = await fallbackQuery;
-        data = resFb.data;
-        if (resFb.error) {
+        if (resFb.data) {
+          data = resFb.data;
+        } else if (resFb.error && !lastSync) {
           console.error(`Fallback query for ${tableName} also failed:`, resFb.error.message);
           return { status: 'error', data: [], message: resFb.error.message };
         }
       }
 
       const formattedData = (data || []).map(rowToJS);
-      return { status: 'success', data: formattedData };
+      const nowIso = new Date().toISOString();
+      const hasSoftDelete = TABLE_COLUMNS[tableName]?.includes('is_deleted');
+
+      if (lastSync) {
+        if (formattedData.length > 0) {
+          await upsertLocalStore(tableName, formattedData);
+        }
+        await setLastSyncTime(tableName, nowIso);
+        const mergedLocalData = await getLocalStore(tableName);
+        return { status: 'success', data: mergedLocalData };
+      } else {
+        await replaceLocalStore(tableName, formattedData);
+        await setLastSyncTime(tableName, nowIso);
+        const localData = await getLocalStore(tableName);
+        const finalData = localData.length > 0 ? localData : formattedData;
+        return { status: 'success', data: finalData };
+      }
     }
 
     case 'GET_DATA_BY_MONTH': {
@@ -383,6 +572,11 @@ export async function callSupabase(action, sheetName, payload = null) {
           if (!d) return true;
           return d.getFullYear() === year && (d.getMonth() + 1) === month;
         });
+      const nowIso = new Date().toISOString();
+      if (formattedData.length > 0) {
+        await upsertLocalStore(tableName, formattedData);
+        await setLastSyncTime(tableName, nowIso);
+      }
       return { status: 'success', data: formattedData };
     }
 
@@ -392,15 +586,37 @@ export async function callSupabase(action, sheetName, payload = null) {
       if (!patientId) {
         return { status: 'success', data: [] };
       }
-      const { data, error } = await supabase
-        .from('treatments')
-        .select(selectCols)
-        .eq('patient_id', patientId)
-        .order('datetime', { ascending: false });
 
-      if (error) throw error;
+      // 1. อ่านข้อมูลเดิมจาก IndexedDB ก่อนเพื่อความรวดเร็ว (Offline First)
+      const localStoreTreatments = (await getLocalStore('treatments')) || [];
+      const cachedForPatient = localStoreTreatments.filter(t => 
+        t && String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase() === patientId.toLowerCase()
+      );
+
+      // 2. ดึงจาก Supabase DB
+      let query = supabase.from('treatments').select(selectCols).eq('patient_id', patientId);
+      if (TABLE_COLUMNS.treatments?.includes('is_deleted')) {
+        query = query.or('is_deleted.is.null,is_deleted.eq.false');
+      }
+      query = query.order('created_at', { ascending: false });
+
+      let { data, error } = await query;
+      if (error) {
+        if (cachedForPatient.length > 0) {
+          return { status: 'success', data: cachedForPatient };
+        }
+        throw error;
+      }
+
       const formattedData = (data || []).map(rowToJS);
-      return { status: 'success', data: formattedData };
+      const nowIso = new Date().toISOString();
+      if (formattedData.length > 0) {
+        await upsertLocalStore('treatments', formattedData);
+        await setLastSyncTime('treatments', nowIso);
+      }
+
+      const finalTreatments = formattedData.length > 0 ? formattedData : cachedForPatient;
+      return { status: 'success', data: finalTreatments };
     }
 
     case 'GET_PATIENTS_PAGINATED': {
@@ -419,6 +635,7 @@ export async function callSupabase(action, sheetName, payload = null) {
       else if (sortKey === 'createdAt') colSort = 'created_at';
 
       let query = supabase.from('patients').select(selectCols, { count: 'exact' });
+      query = query.or('is_deleted.is.null,is_deleted.eq.false');
 
       if (search) {
         query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,id.ilike.%${search}%,id_card.ilike.%${search}%,phone.ilike.%${search}%,nickname.ilike.%${search}%`);
@@ -431,6 +648,7 @@ export async function callSupabase(action, sheetName, payload = null) {
 
       if (error) {
         let fbQuery = supabase.from('patients').select('*', { count: 'exact' });
+        fbQuery = fbQuery.or('is_deleted.is.null,is_deleted.eq.false');
         if (search) {
           fbQuery = fbQuery.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,id.ilike.%${search}%,id_card.ilike.%${search}%,phone.ilike.%${search}%,nickname.ilike.%${search}%`);
         }
@@ -442,6 +660,13 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       const formattedData = (data || []).map(rowToJS);
+      const nowIso = new Date().toISOString();
+
+      if (formattedData.length > 0) {
+        await upsertLocalStore('patients', formattedData);
+        await setLastSyncTime('patients', nowIso);
+      }
+
       return { 
         status: 'success', 
         data: formattedData, 
@@ -486,6 +711,10 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       const formattedData = (data || []).map(rowToJS);
+      if (formattedData.length > 0) {
+        await upsertLocalStore('treatments', formattedData);
+        await setLastSyncTime('treatments', new Date().toISOString());
+      }
       return { status: 'success', data: formattedData };
     }
 
@@ -496,9 +725,9 @@ export async function callSupabase(action, sheetName, payload = null) {
           resMale,
           resFemale
         ] = await Promise.all([
-          supabase.from('patients').select('*', { count: 'exact', head: true }),
-          supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'ชาย'),
-          supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'หญิง')
+          supabase.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false'),
+          supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'ชาย').or('is_deleted.is.null,is_deleted.eq.false'),
+          supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'หญิง').or('is_deleted.is.null,is_deleted.eq.false')
         ]);
 
         return {
@@ -530,7 +759,7 @@ export async function callSupabase(action, sheetName, payload = null) {
           resPendingQueue,
           resBranches
         ] = await Promise.all([
-          supabase.from('patients').select('*', { count: 'exact', head: true }),
+          supabase.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false'),
           supabase.from('queue').select('*', { count: 'exact', head: true }).or(`raw_date_time.ilike.%${todayIso}%,raw_date_time.ilike.%${todayStr}%`),
           supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq."pending",deal_status.eq."pending"'),
           supabase.from('branches').select('*', { count: 'exact', head: true }).eq('is_active', true)
@@ -955,21 +1184,34 @@ export async function callSupabase(action, sheetName, payload = null) {
           .then(res => res.json())
           .then(data => {
             if (data.status === 'error' && data.message && data.message.includes('Auth Sync Failed')) {
-              console.warn('Auth Sync Note: Backend could not sync to Supabase Auth automatically. You may need to create this user manually in the Supabase Dashboard.');
+              console.warn('Auth Sync Note: Backend could not sync to Supabase Auth automatically.');
             }
           })
           .catch(() => {});
         } catch (e) {}
       }
 
-      return { status: 'success', message: 'Data saved successfully', id: row.id, data: payload };
+      const savedJsRow = rowToJS(row);
+      await upsertLocalStore(tableName, [savedJsRow]);
+      await setLastSyncTime(tableName, new Date().toISOString());
+
+      return { status: 'success', message: 'Data saved successfully', id: row.id, data: savedJsRow };
     }
 
     case 'DELETE_DATA': {
       const recordId = String(payload?.hn || payload?.id || payload?.username);
       if (!recordId) throw new Error('Missing ID for deletion');
-      const { error } = await supabase.from(tableName).delete().eq('id', recordId);
-      if (error) throw error;
+      
+      const nowIso = new Date().toISOString();
+
+      // สั่งลบข้อมูลออกจาก Supabase DB โดยตรงเพื่อไม่ให้ค้างในฐานข้อมูล
+      const { error: deleteErr } = await supabase.from(tableName).delete().eq('id', recordId);
+      if (deleteErr) {
+        console.warn(`Hard delete on ${tableName} failed (${deleteErr.message}). Performing soft delete fallback...`);
+        await supabase.from(tableName).update({ is_deleted: true, updated_at: nowIso }).eq('id', recordId);
+      }
+
+      await upsertLocalStore(tableName, [{ id: recordId, is_deleted: true }]);
 
       // ซิงค์ลบพนักงานออกจากระบบ Supabase Auth (auth.users) ผ่าน Backend API
       if (tableName === 'staff') {

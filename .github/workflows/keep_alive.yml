@@ -1,0 +1,29 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # Runs every 3 days at 00:00 UTC (Runs every 3 days to prevent Supabase 7-day auto-pause)
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Allows manual trigger anytime from GitHub Actions tab
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://mjgdafabuzguofknhxvv.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'sb_publishable_uaARgpzqpsrsBLbTjLeVWw_ERbdwFwn' }}
+        run: |
+          echo "📡 Ping Supabase DB to prevent auto-pausing..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "$SUPABASE_URL/rest/v1/settings?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 206 ]; then
+            echo "✅ Supabase ping successful! (HTTP Status: $HTTP_STATUS)"
+          else
+            echo "❌ Supabase ping failed with HTTP Status: $HTTP_STATUS"
+            exit 1
+          fi

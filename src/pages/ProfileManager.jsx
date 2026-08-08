@@ -12,8 +12,9 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Database
 } from 'lucide-react';
+import { clearAllLocalStores } from '../lib/offlineStore';
 import { theme } from '../global/theme';
 
 const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffData, branchesData = [], callAppScript, showToast, isGlobalLoading, roleLabels = {}, gdriveTokens }) => {
@@ -536,6 +537,35 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5 ml-1 kanit-text">อัตราค่าคอมมิชชั่น</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-slate-200/60 border border-slate-300 text-slate-500 cursor-not-allowed text-sm font-data" value={`${formData.commissionRate || 0} ${formData.commissionType === 'amount' ? 'บาท' : '%'}`} readOnly />
               </div>
+            </div>
+          </div>
+
+          {/* จัดการแคชข้อมูลในเครื่อง (IndexedDB) */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 md:col-span-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 kanit-text">
+                  <Database size={18} className="text-sky-500" />
+                  จัดการแคชข้อมูลในเครื่อง (IndexedDB Local Storage)
+                </h3>
+                <p className="text-slate-500 text-xs mt-1 kanit-text">
+                  ระบบจะทำการบันทึกข้อมูลไว้ในเครื่องของคุณอัตโนมัติ เพื่อให้เปิดหน้าเว็บได้เร็วทันใจใน 0.05 วินาที หากต้องการล้างแคชในเครื่องทั้งหมดและดึงข้อมูลใหม่สดๆ สามารถกดปุ่มนี้ได้ทันที
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm('คุณต้องการล้างแคชในเครื่องทั้งหมด และดึงข้อมูลใหม่สดๆ ใช่หรือไม่?')) {
+                    await clearAllLocalStores();
+                    showToast('ล้างแคชในเครื่องเรียบร้อยแล้ว กำลังรีโหลด...', 'success');
+                    setTimeout(() => window.location.reload(), 1000);
+                  }
+                }}
+                className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold kanit-text text-xs transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
+              >
+                <RotateCcw size={14} />
+                ล้างแคชในเครื่องทั้งหมด
+              </button>
             </div>
           </div>
         </div>
