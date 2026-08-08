@@ -515,8 +515,9 @@ const FinancePage = ({
       
       const res = await callAppScript('SAVE_DATA', 'POS_Transactions', updatedTx);
       if (res.status === 'success') {
-        // อัปเดต posHistoryData ใน State (เพื่อให้หน้าจอเปลี่ยนตามทันที)
+        // อัปเดต posHistoryData และ financeTransactions ใน State (เพื่อให้หน้าจอเปลี่ยนตามทันที)
         setPosHistoryData(prev => prev.map(p => p.id === updatedTx.id ? updatedTx : p));
+        setFinanceTransactions(prev => prev.map(p => p.id === updatedTx.id ? { ...p, ...updatedTx, status: updatedTx.status, is_deleted: updatedTx.is_deleted } : p));
         fetchStatsAndData(0, true);
         showToast('แก้ไขรายการ POS สำเร็จ', 'success');
         closePosEditModal();
@@ -902,7 +903,7 @@ const FinancePage = ({
 
   const handleDeleteTransaction = async (tx) => {
       if (tx.isAuto) {
-        showToast('รายการจากระบบ POS ไม่สามารถลบได้ กรุณากด "แก้ไข" และเปลี่ยนสถานะบิลเป็น "ยกเลิก (Void)" แทน', 'warning');
+        showToast('รายการจากระบบ POS ไม่สามารถลบได้ กรุณากด "แก้ไข" และเปลี่ยนสถานะบิลเป็น "ยกเลิก" แทน', 'warning');
         return;
       }
       showGlobalAlert({
@@ -1398,8 +1399,8 @@ const FinancePage = ({
                             </span>
                           </td>
                           <td className="p-4 text-center">
-                            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                               <CheckCircle2 size={12} /> {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
+                            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                               <CheckCircle2 size={12} /> {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
                             </span>
                           </td>
                           <td className="p-4 pr-6 text-right" onClick={(e) => e.stopPropagation()}>
@@ -1463,8 +1464,8 @@ const FinancePage = ({
                                 <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
                                 <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatTime(tx.date)} น.</div>
                             </div>
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                                {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
                             </span>
                         </div>
                         
@@ -1583,7 +1584,7 @@ const FinancePage = ({
                                   <div className="flex items-center gap-2">
                                       <span className="text-xs text-slate-500 w-16">สถานะ:</span>
                                       <span className={`px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold kanit-text ${selectedTxn.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : selectedTxn.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                                          {selectedTxn.status === 'completed' ? 'สำเร็จ' : selectedTxn.status === 'cancelled' ? 'ยกเลิก (Void)' : selectedTxn.status}
+                                          {selectedTxn.status === 'completed' ? 'สำเร็จ' : selectedTxn.status === 'cancelled' ? 'ยกเลิก' : selectedTxn.status}
                                       </span>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -1676,7 +1677,7 @@ const FinancePage = ({
                                   <div className="flex items-center gap-2">
                                       <span className="text-xs text-slate-500 w-16">สถานะ:</span>
                                       <span className={`px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold kanit-text ${selectedTxn.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : selectedTxn.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                                          {selectedTxn.status === 'completed' ? 'สำเร็จ' : selectedTxn.status === 'cancelled' ? 'ยกเลิก (Void)' : selectedTxn.status}
+                                          {selectedTxn.status === 'completed' ? 'สำเร็จ' : selectedTxn.status === 'cancelled' ? 'ยกเลิก' : selectedTxn.status}
                                       </span>
                                   </div>
                                   <div className="flex items-center gap-2">

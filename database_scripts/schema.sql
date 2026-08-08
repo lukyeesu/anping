@@ -140,10 +140,12 @@ CREATE TABLE IF NOT EXISTS public.pos_transactions (
     staff_name VARCHAR,
     date VARCHAR,
     time VARCHAR,
+    status VARCHAR DEFAULT 'completed',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.pos_transactions DROP COLUMN IF EXISTS data CASCADE;
+ALTER TABLE public.pos_transactions ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'completed';
 
 -- 6. Inventory Table
 CREATE TABLE IF NOT EXISTS public.inventory (

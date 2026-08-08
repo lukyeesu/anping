@@ -1,3 +1,4 @@
+-- 1. สร้าง View รวมรายการการเงินทั้งหมด (ทั้งแบบ Manual และ Auto จาก POS)
 CREATE OR REPLACE VIEW public.finance_all_transactions AS
 SELECT 
     id, 
@@ -8,14 +9,16 @@ SELECT
     branch_id, 
     items, 
     method, 
-    status, 
+    COALESCE(status, 'completed') as status, 
     is_auto, 
     patient_name, 
     'income' as type,
     subtotal,
     discount_amount,
-    vat_amount
+    vat_amount,
+    is_deleted
 FROM public.finance_revenue
+WHERE is_deleted IS NULL OR is_deleted = false
 
 UNION ALL
 
@@ -28,14 +31,16 @@ SELECT
     branch_id, 
     items, 
     method, 
-    status, 
+    COALESCE(status, 'completed') as status, 
     is_auto, 
     patient_name, 
     'expense' as type,
     subtotal,
     discount_amount,
-    vat_amount
+    vat_amount,
+    is_deleted
 FROM public.finance_expenses
+WHERE is_deleted IS NULL OR is_deleted = false
 
 UNION ALL
 
@@ -48,16 +53,18 @@ SELECT
     branch_id, 
     items, 
     payment_method as method, 
-    'completed'::varchar as status, 
+    COALESCE(status, 'completed')::varchar as status, 
     true as is_auto, 
     patient_name, 
     'income' as type,
     total_amount as subtotal,
     discount as discount_amount,
-    0::numeric as vat_amount
-FROM public.pos_transactions;
+    0::numeric as vat_amount,
+    is_deleted
+FROM public.pos_transactions
+WHERE is_deleted IS NULL OR is_deleted = false;
 
--- สร้างฟังก์ชันดึงยอดสรุปบัญชี
+-- 2. สร้างฟังก์ชันดึงยอดสรุปบัญชี (ยกเว้นรายการที่โดนยกเลิก หรือโดนลบ)
 CREATE OR REPLACE FUNCTION get_finance_stats(
     start_date text,
     end_date text,
@@ -72,10 +79,10 @@ DECLARE
     count_expense int := 0;
 BEGIN
     SELECT 
-        COALESCE(SUM(amount) FILTER (WHERE type = 'income' AND status != 'cancelled'), 0),
-        COALESCE(SUM(amount) FILTER (WHERE type = 'expense' AND status != 'cancelled'), 0),
-        COUNT(*) FILTER (WHERE type = 'income' AND status != 'cancelled'),
-        COUNT(*) FILTER (WHERE type = 'expense' AND status != 'cancelled')
+        COALESCE(SUM(amount) FILTER (WHERE type = 'income' AND status != 'cancelled' AND (is_deleted IS NULL OR is_deleted = false)), 0),
+        COALESCE(SUM(amount) FILTER (WHERE type = 'expense' AND status != 'cancelled' AND (is_deleted IS NULL OR is_deleted = false)), 0),
+        COUNT(*) FILTER (WHERE type = 'income' AND status != 'cancelled' AND (is_deleted IS NULL OR is_deleted = false)),
+        COUNT(*) FILTER (WHERE type = 'expense' AND status != 'cancelled' AND (is_deleted IS NULL OR is_deleted = false))
     INTO total_income, total_expense, count_income, count_expense
     FROM public.finance_all_transactions
     WHERE timestamp_date >= start_date AND timestamp_date <= end_date
@@ -102,4 +109,4 @@ BEGIN
         'count_expense', count_expense
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;

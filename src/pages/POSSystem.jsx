@@ -1532,7 +1532,7 @@ const POSSystem = ({
                                                     compact
                                                     value={historyEditForm.status} 
                                                     onChange={val => setHistoryEditForm({...historyEditForm, status: val})}
-                                                    options={[{value:'completed', label:'✅ สำเร็จ'}, {value:'cancelled', label:'❌ ยกเลิก (Void)'}]}
+                                                    options={[{value:'completed', label:'✅ สำเร็จ'}, {value:'cancelled', label:'❌ ยกเลิก'}]}
                                                     className="w-full"
                                                 />
                                             </div>
@@ -1552,7 +1552,7 @@ const POSSystem = ({
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs text-slate-500 w-16">สถานะ:</span>
                                                 <span className={`px-2.5 py-1 rounded-md text-[10px] sm:text-xs font-bold kanit-text ${selectedHistoryTxn.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : selectedHistoryTxn.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                                                    {selectedHistoryTxn.status === 'completed' ? 'สำเร็จ' : selectedHistoryTxn.status === 'cancelled' ? 'ยกเลิก (Void)' : selectedHistoryTxn.status}
+                                                    {selectedHistoryTxn.status === 'completed' ? 'สำเร็จ' : selectedHistoryTxn.status === 'cancelled' ? 'ยกเลิก' : selectedHistoryTxn.status}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-2">
