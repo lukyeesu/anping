@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
-import { getLocalStore, upsertLocalStore } from '../lib/offlineStore';
+import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
 
 const FinancePage = ({ 
   currentBranch, 
@@ -817,6 +817,18 @@ const FinancePage = ({
       setPage(0);
       setHasMore(true);
       fetchStatsAndData(0, true);
+  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeStoreUpdates((eventData) => {
+      if (eventData && (eventData.type === 'STORE_UPDATED' || eventData.action === 'NETWORK_RECONNECTED')) {
+        const storeName = eventData.storeName;
+        if (storeName === 'pos_transactions' || storeName === 'finance_revenue' || storeName === 'finance_expenses' || storeName === '*') {
+          fetchStatsAndData(0, true);
+        }
+      }
+    });
+    return () => unsubscribe();
   }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
   const stats = statsData;

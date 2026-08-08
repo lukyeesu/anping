@@ -1463,6 +1463,7 @@ export default function App() {
         return [...prev, payload];
       });
     } else if (sheetName === 'POS_Transactions') {
+      upsertLocalStore('pos_transactions', [payload]).catch(() => {});
       setPosHistoryData(prev => {
         const receiptNo = String(payload.receipt_no || payload.receiptNo || '').trim();
         const idx = prev.findIndex(t => 
@@ -1848,6 +1849,9 @@ export default function App() {
         }
         if (storeName === 'staff' || storeName === '*') {
           getLocalStore('staff').then(data => data && data.length && setStaffData(data));
+        }
+        if (storeName === 'pos_transactions' || storeName === '*') {
+          getLocalStore('pos_transactions').then(data => data && data.length && setPosHistoryData([...data].reverse()));
         }
       }
     });
