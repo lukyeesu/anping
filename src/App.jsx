@@ -1567,6 +1567,8 @@ export default function App() {
         }));
       }
     } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {
+      const storeName = sheetName === 'Finance_Revenue' ? 'finance_revenue' : 'finance_expenses';
+      upsertLocalStore(storeName, [payload]).catch(() => {});
       setFinanceData(prev => {
         const idx = prev.findIndex(f => 
           (targetId && String(f.id || '').trim() === targetId) ||
@@ -1633,6 +1635,8 @@ export default function App() {
     } else if (sheetName === 'Staff') {
       setStaffData(prev => prev.filter(s => String(s.id) !== targetId));
     } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {
+      const storeName = sheetName === 'Finance_Revenue' ? 'finance_revenue' : 'finance_expenses';
+      upsertLocalStore(storeName, [{ id: targetId, is_deleted: true }]).catch(() => {});
       setFinanceData(prev => prev.filter(f => String(f.id) !== targetId));
     } else if (sheetName === 'Treatments') {
       setPatientsData(prev => prev.map(p => {

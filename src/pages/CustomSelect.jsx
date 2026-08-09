@@ -26,57 +26,83 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
     const displayLabel = selectedOption ? (typeof selectedOption === 'object' ? selectedOption.label : selectedOption) : placeholder;
     const hasColor = selectedOption && typeof selectedOption === 'object' && selectedOption.color;
 
-    const toggleOpen = () => {
+    const updatePosition = useCallback(() => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        
+        // Auto flip if there is not enough space below (250px)
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const shouldDropUp = dropUp || (spaceBelow < 250 && spaceAbove > spaceBelow);
+
+        // Auto adjust left if it goes off screen on the right
+        const isNearRightEdge = rect.right > window.innerWidth - 100;
+
+        setDropdownStyle({
+            position: 'fixed',
+            top: shouldDropUp ? 'auto' : rect.bottom + 4,
+            bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto',
+            left: (compact && isNearRightEdge) ? 'auto' : rect.left,
+            right: (compact && isNearRightEdge) ? (window.innerWidth - rect.right) : 'auto',
+            width: compact && !fullWidth ? 'auto' : rect.width,
+            minWidth: compact && !fullWidth ? rect.width : undefined,
+            zIndex: 99999,
+            transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
+        });
+    }, [compact, fullWidth, dropUp]);
+
+    const toggleOpen = (e) => {
         if (disabled) return;
-        if (!isOpen && containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            
-            // Auto flip if there is not enough space below (192px is max-h-48 + padding)
-            const spaceBelow = window.innerHeight - rect.bottom;
-            const spaceAbove = rect.top;
-            const shouldDropUp = dropUp || (spaceBelow < 250 && spaceAbove > spaceBelow);
-
-            // Auto adjust left if it goes off screen on the right
-            const isNearRightEdge = rect.right > window.innerWidth - 100;
-
-            setDropdownStyle({
-                position: 'fixed',
-                top: shouldDropUp ? 'auto' : rect.bottom + 4,
-                bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto',
-                left: (compact && isNearRightEdge) ? 'auto' : rect.left,
-                right: (compact && isNearRightEdge) ? (window.innerWidth - rect.right) : 'auto',
-                width: compact && !fullWidth ? 'auto' : rect.width,
-                minWidth: compact && !fullWidth ? rect.width : undefined,
-                zIndex: 99999,
-                transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
-            });
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
         }
-        setIsOpen(!isOpen);
+        if (!isOpen) {
+            updatePosition();
+            setIsOpen(true);
+        } else {
+            setIsOpen(false);
+        }
     };
 
     useEffect(() => {
-        if (isOpen) {
-            const handleClose = (e) => {
-                if (e && e.target && dropdownRef.current && (e.target === dropdownRef.current || dropdownRef.current.contains(e.target))) {
-                    return;
-                }
-                setIsOpen(false);
-            };
-            window.addEventListener('scroll', handleClose, true);
-            window.addEventListener('resize', handleClose);
-            return () => {
-                window.removeEventListener('scroll', handleClose, true);
-                window.removeEventListener('resize', handleClose);
-            };
-        }
-    }, [isOpen]);
+        if (!isOpen) return;
+
+        const handleOutsideClick = (e) => {
+            if (containerRef.current && containerRef.current.contains(e.target)) {
+                return;
+            }
+            if (dropdownRef.current && dropdownRef.current.contains(e.target)) {
+                return;
+            }
+            setIsOpen(false);
+        };
+
+        const handleScrollOrResize = (e) => {
+            if (dropdownRef.current && dropdownRef.current.contains(e.target)) {
+                return;
+            }
+            updatePosition();
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
+        window.addEventListener('scroll', handleScrollOrResize, true);
+        window.addEventListener('resize', handleScrollOrResize);
+
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideClick);
+            document.removeEventListener('touchstart', handleOutsideClick);
+            window.removeEventListener('scroll', handleScrollOrResize, true);
+            window.removeEventListener('resize', handleScrollOrResize);
+        };
+    }, [isOpen, updatePosition]);
 
     return (
         <div ref={containerRef} className={`relative ${className || ''} ${disabled ? (hasColor ? 'pointer-events-none' : 'opacity-70 pointer-events-none') : ''}`}>
             <div
                 tabIndex={disabled ? -1 : 0}
                 onClick={toggleOpen}
-                onBlur={() => setTimeout(() => setIsOpen(false), 150)}
                 className={compact 
                     ? `flex items-center ${fullWidth ? 'w-full px-3 justify-between' : 'justify-center px-2.5'} gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-xl py-2 transition-all font-data shadow-sm`
                     : hasColor
@@ -97,7 +123,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                         return (
                             <div
                                 key={i}
-                                onMouseDown={(e) => { e.preventDefault(); onChange(val); setIsOpen(false); }}
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange(val); setIsOpen(false); }}
                                 className={`px-4 hover:brightness-95 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-all whitespace-nowrap text-sm py-2.5 ${
                                     optColor 
                                         ? `${optColor} ${isSelected ? 'font-bold ring-1 ring-inset ring-sky-500/30' : ''}` 

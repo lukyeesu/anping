@@ -359,7 +359,9 @@ const POSSystem = ({
 
   // Format ค่าเงิน
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+    const num = Number(amount);
+    const validNum = isNaN(num) ? 0 : num;
+    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(validNum);
   };
 
   // จัดการการชำระเงิน
@@ -590,7 +592,17 @@ const POSSystem = ({
 
   // --- ฟังก์ชันจัดการดูและแก้ไขบิลย้อนหลัง ---
   const handleViewHistoryTxn = (txn) => {
-    setSelectedHistoryTxn(txn);
+    if (!txn) return;
+    const formattedTxn = {
+      ...txn,
+      subtotal: Number(txn.subtotal ?? txn.total_amount ?? txn.totalAmount ?? txn.grandTotal ?? txn.grand_total ?? txn.net_amount ?? txn.netAmount ?? txn.amount ?? 0),
+      discountAmount: Number(txn.discountAmount ?? txn.discount_amount ?? txn.discount ?? 0),
+      vatAmount: Number(txn.vatAmount ?? txn.vat_amount ?? txn.vat ?? 0),
+      grandTotal: Number(txn.grandTotal ?? txn.grand_total ?? txn.netAmount ?? txn.net_amount ?? txn.total_amount ?? txn.totalAmount ?? txn.amount ?? 0),
+      paymentMethod: txn.paymentMethod || txn.payment_method || 'cash',
+      status: txn.status || 'completed'
+    };
+    setSelectedHistoryTxn(formattedTxn);
     setHistoryEditForm(null);
     setIsEditingHistory(false);
     
@@ -1640,7 +1652,7 @@ const POSSystem = ({
                                             <td className="p-4 text-slate-600">{formatDateTime(txn.createdAt)}</td>
                                             <td className="p-4 font-bold text-sky-600 kanit-text group-hover:text-sky-700">{txn.id}</td>
                                             <td className="p-4 text-slate-800 kanit-text font-medium">{txn.patientName || '-'}</td>
-                                            <td className="p-4 font-bold text-slate-800 text-right">{formatCurrency(txn.grandTotal)}</td>
+                                            <td className="p-4 font-bold text-slate-800 text-right">{formatCurrency(txn.grandTotal ?? txn.grand_total ?? txn.netAmount ?? txn.net_amount ?? txn.totalAmount ?? txn.total_amount ?? txn.amount)}</td>
                                             <td className="p-4 text-center">
                                                 <span className="text-[11px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg kanit-text font-semibold flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
                                                     {txn.paymentMethod === 'cash' ? <><Banknote size={12}/> เงินสด</> : txn.paymentMethod === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : txn.paymentMethod === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : txn.paymentMethod}
@@ -1682,7 +1694,7 @@ const POSSystem = ({
                                                 {txn.paymentMethod === 'cash' ? <Banknote size={12}/> : txn.paymentMethod === 'transfer' ? <QrCode size={12}/> : <CreditCard size={12}/>}
                                                 {txn.paymentMethod === 'cash' ? 'เงินสด' : txn.paymentMethod === 'transfer' ? 'โอนเงิน' : txn.paymentMethod === 'credit' ? 'บัตรเครดิต' : txn.paymentMethod}
                                             </div>
-                                            <div className="font-black text-sky-600 font-data text-lg leading-none">{formatCurrency(txn.grandTotal)}</div>
+                                            <div className="font-black text-sky-600 font-data text-lg leading-none">{formatCurrency(txn.grandTotal ?? txn.grand_total ?? txn.netAmount ?? txn.net_amount ?? txn.totalAmount ?? txn.total_amount ?? txn.amount)}</div>
                                         </div>
                                     </div>
                                 </div>

@@ -18,7 +18,7 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
-import { supabase } from '../lib/supabase';
+import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
 
 const FinancePage = ({ 
@@ -839,6 +839,113 @@ const FinancePage = ({
       setHasMore(true);
       fetchStatsAndData(0, true);
   }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  // --- Realtime Delta Sync Listener for Finance Page (0ms UI Update when other devices add/edit/delete) ---
+  const handleRealtimeFinanceChange = useCallback((table, payload) => {
+    if (!payload) return;
+    const { eventType, new: newRow, old: oldRow } = payload;
+    
+    if (eventType === 'DELETE') {
+      const targetId = String(oldRow?.id || '').trim();
+      if (targetId) {
+        setFinanceTransactions(prev => prev.filter(t => String(t.id).trim() !== targetId));
+      }
+      fetchStatsAndData(0, true);
+      return;
+    }
+
+    if (!newRow) return;
+    const jsRow = rowToJS ? rowToJS(newRow) : newRow;
+    const targetId = String(jsRow.id || jsRow.receipt_no || jsRow.receiptNo || '').trim();
+
+    if (jsRow.is_deleted || jsRow.isDeleted) {
+      if (targetId) {
+        setFinanceTransactions(prev => prev.filter(t => String(t.id).trim() !== targetId));
+      }
+      fetchStatsAndData(0, true);
+      return;
+    }
+
+    let txType = jsRow.type;
+    if (!txType) {
+      if (table === 'finance_revenue' || table === 'pos_transactions') txType = 'income';
+      else if (table === 'finance_expenses') txType = 'expense';
+    }
+
+    let parsedItems = jsRow.items;
+    if (typeof parsedItems === 'string') {
+      try { parsedItems = JSON.parse(parsedItems); } catch(e) { parsedItems = []; }
+    }
+
+    let displayNote = jsRow.note || jsRow.description || '';
+    if (!displayNote && Array.isArray(parsedItems) && parsedItems.length > 0) {
+      displayNote = parsedItems.map(i => i.name || i.category).filter(Boolean).join(', ');
+    }
+
+    const parseTxTimestamp = (dateVal) => {
+      if (!dateVal) return Date.now();
+      const d = new Date(dateVal).getTime();
+      return isNaN(d) ? Date.now() : d;
+    };
+
+    const dateVal = jsRow.timestamp_date || jsRow.date || jsRow.created_at || new Date().toISOString();
+
+    const formattedTx = {
+      ...jsRow,
+      id: targetId,
+      type: txType,
+      date: dateVal,
+      timestamp_date: dateVal,
+      timestamp: parseTxTimestamp(dateVal),
+      branchId: jsRow.branch_id || jsRow.branchId || 'main',
+      branch_id: jsRow.branch_id || jsRow.branchId || 'main',
+      note: displayNote,
+      items: parsedItems,
+      patientName: jsRow.patient_name || jsRow.patientName || '',
+      patient_name: jsRow.patient_name || jsRow.patientName || '',
+      isAuto: table === 'pos_transactions' ? true : (jsRow.is_auto !== undefined ? jsRow.is_auto : !!jsRow.isAuto),
+      is_auto: table === 'pos_transactions' ? true : (jsRow.is_auto !== undefined ? jsRow.is_auto : !!jsRow.isAuto),
+      amount: Number(jsRow.amount ?? jsRow.net_amount ?? jsRow.netAmount ?? 0),
+      category: jsRow.category || (table === 'pos_transactions' ? 'รายได้จาก POS' : ''),
+      status: jsRow.status || 'completed'
+    };
+
+    setFinanceTransactions(prev => {
+      const idx = prev.findIndex(f => String(f.id).trim() === targetId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...formattedTx };
+        return next;
+      }
+      return [formattedTx, ...prev];
+    });
+
+    const storeName = table === 'finance_revenue' ? 'finance_revenue' : (table === 'finance_expenses' ? 'finance_expenses' : 'pos_transactions');
+    upsertLocalStore(storeName, [jsRow]).catch(() => {});
+
+    fetchStatsAndData(0, true);
+  }, [fetchStatsAndData]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('finance-page-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_revenue' }, payload => {
+        handleRealtimeFinanceChange('finance_revenue', payload);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_expenses' }, payload => {
+        handleRealtimeFinanceChange('finance_expenses', payload);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_transactions' }, payload => {
+        handleRealtimeFinanceChange('pos_transactions', payload);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [handleRealtimeFinanceChange]);
 
   useEffect(() => {
     const unsubscribe = subscribeStoreUpdates((eventData) => {

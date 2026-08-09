@@ -45,6 +45,16 @@ function broadcastStoreChange(storeName, action = 'UPDATE') {
       console.warn('[OfflineStore] BroadcastChannel send note:', e);
     }
   }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('clinichub_store_updated', {
+      detail: {
+        type: 'STORE_UPDATED',
+        storeName,
+        action,
+        timestamp: Date.now()
+      }
+    }));
+  }
 }
 
 // Safeguard 2: Automatic Reconnect Event Listener
@@ -268,16 +278,31 @@ export async function clearAllLocalStores() {
   }
 }
 
-// Subscribe to store updates across browser tabs
+// Subscribe to store updates across browser tabs and within the same tab
 export function subscribeStoreUpdates(callback) {
-  if (!syncChannel) return () => {};
-  const handler = (event) => {
-    if (event.data && typeof callback === 'function') {
-      callback(event.data);
-    }
-  };
-  syncChannel.addEventListener('message', handler);
+  const cleanups = [];
+
+  if (syncChannel) {
+    const handler = (event) => {
+      if (event.data && typeof callback === 'function') {
+        callback(event.data);
+      }
+    };
+    syncChannel.addEventListener('message', handler);
+    cleanups.push(() => syncChannel.removeEventListener('message', handler));
+  }
+
+  if (typeof window !== 'undefined') {
+    const customHandler = (event) => {
+      if (event.detail && typeof callback === 'function') {
+        callback(event.detail);
+      }
+    };
+    window.addEventListener('clinichub_store_updated', customHandler);
+    cleanups.push(() => window.removeEventListener('clinichub_store_updated', customHandler));
+  }
+
   return () => {
-    syncChannel.removeEventListener('message', handler);
+    cleanups.forEach(fn => fn());
   };
 }
