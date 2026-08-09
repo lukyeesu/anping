@@ -130,7 +130,8 @@ export async function getLocalStore(storeName) {
 }
 
 // Upsert (add or update) items in IndexedDB
-export async function upsertLocalStore(storeName, items) {
+export async function upsertLocalStore(storeName, items, options = {}) {
+  const shouldBroadcast = options.broadcast !== false;
   if (!Array.isArray(items) || items.length === 0) return;
 
   // Update memory fallback
@@ -147,7 +148,7 @@ export async function upsertLocalStore(storeName, items) {
   });
 
   if (!isIndexedDBSupported) {
-    broadcastStoreChange(storeName, 'UPSERT');
+    if (shouldBroadcast) broadcastStoreChange(storeName, 'UPSERT');
     return;
   }
 
@@ -170,23 +171,24 @@ export async function upsertLocalStore(storeName, items) {
       });
 
       transaction.oncomplete = () => {
-        broadcastStoreChange(storeName, 'UPSERT');
+        if (shouldBroadcast) broadcastStoreChange(storeName, 'UPSERT');
         resolve(true);
       };
       transaction.onerror = () => reject(transaction.error);
     });
   } catch (err) {
     console.warn(`[OfflineStore] Failed to upsert local store ${storeName}:`, err);
-    broadcastStoreChange(storeName, 'UPSERT');
+    if (shouldBroadcast) broadcastStoreChange(storeName, 'UPSERT');
   }
 }
 
 // Replace entire store (used for full initial load or hard reset)
-export async function replaceLocalStore(storeName, items) {
+export async function replaceLocalStore(storeName, items, options = {}) {
+  const shouldBroadcast = options.broadcast !== false;
   memoryStore[storeName] = Array.isArray(items) ? items.filter(x => !x.is_deleted && !x.isDeleted) : [];
 
   if (!isIndexedDBSupported) {
-    broadcastStoreChange(storeName, 'REPLACE');
+    if (shouldBroadcast) broadcastStoreChange(storeName, 'REPLACE');
     return;
   }
 
@@ -207,14 +209,14 @@ export async function replaceLocalStore(storeName, items) {
       }
 
       transaction.oncomplete = () => {
-        broadcastStoreChange(storeName, 'REPLACE');
+        if (shouldBroadcast) broadcastStoreChange(storeName, 'REPLACE');
         resolve(true);
       };
       transaction.onerror = () => reject(transaction.error);
     });
   } catch (err) {
     console.warn(`[OfflineStore] Failed to replace local store ${storeName}:`, err);
-    broadcastStoreChange(storeName, 'REPLACE');
+    if (shouldBroadcast) broadcastStoreChange(storeName, 'REPLACE');
   }
 }
 

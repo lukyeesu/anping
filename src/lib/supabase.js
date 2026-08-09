@@ -541,13 +541,13 @@ export async function callSupabase(action, sheetName, payload = null) {
 
       if (lastSync) {
         if (formattedData.length > 0) {
-          await upsertLocalStore(tableName, formattedData);
+          await upsertLocalStore(tableName, formattedData, { broadcast: false });
         }
         await setLastSyncTime(tableName, nowIso);
         const mergedLocalData = await getLocalStore(tableName);
         return { status: 'success', data: mergedLocalData };
       } else {
-        await replaceLocalStore(tableName, formattedData);
+        await replaceLocalStore(tableName, formattedData, { broadcast: false });
         await setLastSyncTime(tableName, nowIso);
         const localData = await getLocalStore(tableName);
         const finalData = localData.length > 0 ? localData : formattedData;
@@ -578,7 +578,7 @@ export async function callSupabase(action, sheetName, payload = null) {
         });
       const nowIso = new Date().toISOString();
       if (formattedData.length > 0) {
-        await upsertLocalStore(tableName, formattedData);
+        await upsertLocalStore(tableName, formattedData, { broadcast: false });
         await setLastSyncTime(tableName, nowIso);
       }
       return { status: 'success', data: formattedData };
@@ -615,7 +615,7 @@ export async function callSupabase(action, sheetName, payload = null) {
       const formattedData = (data || []).map(rowToJS);
       const nowIso = new Date().toISOString();
       if (formattedData.length > 0) {
-        await upsertLocalStore('treatments', formattedData);
+        await upsertLocalStore('treatments', formattedData, { broadcast: false });
         await setLastSyncTime('treatments', nowIso);
       }
 
@@ -667,7 +667,7 @@ export async function callSupabase(action, sheetName, payload = null) {
       const nowIso = new Date().toISOString();
 
       if (formattedData.length > 0) {
-        await upsertLocalStore('patients', formattedData);
+        await upsertLocalStore('patients', formattedData, { broadcast: false });
         await setLastSyncTime('patients', nowIso);
       }
 
@@ -716,7 +716,7 @@ export async function callSupabase(action, sheetName, payload = null) {
 
       const formattedData = (data || []).map(rowToJS);
       if (formattedData.length > 0) {
-        await upsertLocalStore('treatments', formattedData);
+        await upsertLocalStore('treatments', formattedData, { broadcast: false });
         await setLastSyncTime('treatments', new Date().toISOString());
       }
       return { status: 'success', data: formattedData };

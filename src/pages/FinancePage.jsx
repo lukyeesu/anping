@@ -797,11 +797,11 @@ const FinancePage = ({
                   };
               });
 
-              // ซิงค์บันทึกลง IndexedDB คลังในเครื่องสำหรับใช้งานออฟไลน์
+              // ซิงค์บันทึกลง IndexedDB คลังในเครื่องสำหรับใช้งานออฟไลน์ (ไม่ส่งสัญญาณ broadcast เพื่อป้องกัน infinite loop)
               const revenues = formatted.filter(t => t.type === 'income');
               const expenses = formatted.filter(t => t.type === 'expense');
-              if (revenues.length > 0) upsertLocalStore('finance_revenue', revenues).catch(() => {});
-              if (expenses.length > 0) upsertLocalStore('finance_expenses', expenses).catch(() => {});
+              if (revenues.length > 0) upsertLocalStore('finance_revenue', revenues, { broadcast: false }).catch(() => {});
+              if (expenses.length > 0) upsertLocalStore('finance_expenses', expenses, { broadcast: false }).catch(() => {});
 
               if (formatted.length < PAGE_SIZE) setHasMore(false);
               setFinanceTransactions(prev => {
@@ -921,7 +921,7 @@ const FinancePage = ({
     });
 
     const storeName = table === 'finance_revenue' ? 'finance_revenue' : (table === 'finance_expenses' ? 'finance_expenses' : 'pos_transactions');
-    upsertLocalStore(storeName, [jsRow]).catch(() => {});
+    upsertLocalStore(storeName, [jsRow], { broadcast: false }).catch(() => {});
 
     fetchStatsAndData(0, true);
   }, [fetchStatsAndData]);
