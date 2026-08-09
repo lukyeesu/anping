@@ -2305,12 +2305,7 @@ export default function App() {
               {/* Single Unified Profile Bar */}
               <div 
                 onClick={() => {
-                  if (!isSidebarExpanded) {
-                    setIsSidebarExpanded(true);
-                    setIsProfileDropdownOpen(true);
-                  } else {
-                    setIsProfileDropdownOpen(!isProfileDropdownOpen);
-                  }
+                  setIsProfileDropdownOpen(prev => !prev);
                 }}
                 className="w-full flex items-center cursor-pointer hover:bg-slate-50/80 py-2 rounded-2xl transition-colors no-drag-zone select-none"
               >
