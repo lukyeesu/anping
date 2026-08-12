@@ -21,6 +21,58 @@ import { theme } from '../global/theme';
 import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
 
+const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', suffix = '', formatter, className = '', title }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const startTimeRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  useEffect(() => {
+    const startVal = displayValue;
+    const endVal = Number(value) || 0;
+    
+    if (Math.abs(startVal - endVal) < (decimals > 0 ? 0.001 : 0.5)) {
+      setDisplayValue(endVal);
+      return;
+    }
+
+    startTimeRef.current = null;
+    const easeOutExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
+
+    const step = (timestamp) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
+      const easedProgress = easeOutExpo(progress);
+      const current = startVal + (endVal - startVal) * easedProgress;
+
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(step);
+      } else {
+        setDisplayValue(endVal);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [value, duration]);
+
+  const formattedStr = formatter 
+    ? formatter(displayValue) 
+    : (decimals > 0 ? displayValue.toFixed(decimals) : Math.round(displayValue).toLocaleString('th-TH'));
+
+  return (
+    <span className={className} title={title || formattedStr}>
+      {prefix}{formattedStr}{suffix}
+    </span>
+  );
+};
+
 const FinancePage = ({ 
   currentBranch, 
   financeData = [], 
@@ -165,8 +217,8 @@ const FinancePage = ({
   const finRangeSwipeProps = useSwipeDown(closeFinRangeCalendar);
 
   const handleOpenFinRange = () => {
-      setTempStartDate(dateRange.start);
-      setTempEndDate(dateRange.end);
+      setTempStartDate(dateRange.start ? new Date(dateRange.start) : null);
+      setTempEndDate(dateRange.end ? new Date(dateRange.end) : null);
       if (dateRange.start) {
           setFinRangeCalDate(new Date(dateRange.start));
       } else {
@@ -184,7 +236,8 @@ const FinancePage = ({
           setTempStartDate(selectedDate);
           setTempEndDate(null);
       } else {
-          if (selectedDate >= tempStartDate) {
+          const s = tempStartDate instanceof Date ? tempStartDate : new Date(tempStartDate);
+          if (selectedDate >= s) {
               setTempEndDate(selectedDate);
           } else {
               setTempStartDate(selectedDate);
@@ -195,7 +248,9 @@ const FinancePage = ({
 
   const confirmFinRange = () => {
       if (tempStartDate && tempEndDate) {
-          setDateRange({ start: tempStartDate, end: new Date(tempEndDate.getTime() + 86399999) }); // เซ็ตเวลา end ให้สุดวัน
+          const s = tempStartDate instanceof Date ? tempStartDate : new Date(tempStartDate);
+          const e = tempEndDate instanceof Date ? tempEndDate : new Date(tempEndDate);
+          setDateRange({ start: s, end: new Date(new Date(e).setHours(23, 59, 59, 999)) }); // เซ็ตเวลา end ให้สุดวัน
           setTimeFilterMode('range'); // บังคับโหมดเป็นช่วงเวลาเมื่อกดยืนยัน
           closeFinRangeCalendar();
       } else {
@@ -209,8 +264,10 @@ const FinancePage = ({
       setTimeFilterMode('all');
   };
 
-  const formatRangeStr = (dateObj) => {
-      if (!dateObj) return '';
+  const formatRangeStr = (dateInput) => {
+      if (!dateInput) return '';
+      const dateObj = dateInput instanceof Date ? dateInput : new Date(dateInput);
+      if (isNaN(dateObj.getTime())) return '';
       const d = String(dateObj.getDate()).padStart(2, '0');
       const m = String(dateObj.getMonth() + 1).padStart(2, '0');
       const y = dateObj.getFullYear() + 543;
@@ -652,6 +709,7 @@ const FinancePage = ({
   // --- [NEW] Server-side Fetching Logic ---
   const [financeTransactions, setFinanceTransactions] = useState([]);
   const [statsData, setStatsData] = useState({ income: 0, expense: 0, count_income: 0, count_expense: 0, netIncome: 0, costPercent: 0, marginPercent: 0 });
+  const [isStatsFromServer, setIsStatsFromServer] = useState(false);
   const [isFetchingData, setIsFetchingData] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
@@ -663,21 +721,27 @@ const FinancePage = ({
     const now = new Date();
     
     if (timeFilterMode === 'month') {
-        const y = filterYear !== 'all' ? parseInt(filterYear) : now.getFullYear();
-        const m = filterMonth !== 'all' ? parseInt(filterMonth) - 1 : now.getMonth();
-        startDate = new Date(y, m, 1).toISOString();
-        endDate = new Date(y, m + 1, 0, 23, 59, 59, 999).toISOString();
         if (filterYear === 'all' && filterMonth === 'all') {
             startDate = '1970-01-01T00:00:00.000Z';
             endDate = '2099-12-31T23:59:59.999Z';
+        } else if (filterMonth === 'all') {
+            const y = parseInt(filterYear);
+            startDate = new Date(y, 0, 1, 0, 0, 0, 0).toISOString();
+            endDate = new Date(y, 11, 31, 23, 59, 59, 999).toISOString();
+        } else {
+            const y = filterYear !== 'all' ? parseInt(filterYear) : now.getFullYear();
+            const m = parseInt(filterMonth) - 1;
+            startDate = new Date(y, m, 1, 0, 0, 0, 0).toISOString();
+            endDate = new Date(y, m + 1, 0, 23, 59, 59, 999).toISOString();
         }
     } else if (timeFilterMode === 'year') {
-        const y = filterYear !== 'all' ? parseInt(filterYear) : now.getFullYear();
-        startDate = new Date(y, 0, 1).toISOString();
-        endDate = new Date(y, 11, 31, 23, 59, 59, 999).toISOString();
         if (filterYear === 'all') {
             startDate = '1970-01-01T00:00:00.000Z';
             endDate = '2099-12-31T23:59:59.999Z';
+        } else {
+            const y = parseInt(filterYear);
+            startDate = new Date(y, 0, 1, 0, 0, 0, 0).toISOString();
+            endDate = new Date(y, 11, 31, 23, 59, 59, 999).toISOString();
         }
     } else if (timeFilterMode === 'dateRange' || timeFilterMode === 'range') {
         if (dateRange && (dateRange.start || (dateRange[0] && dateRange[0].startDate))) {
@@ -732,8 +796,14 @@ const FinancePage = ({
                       costPercent,
                       marginPercent
                   });
+                  setIsStatsFromServer(true);
+              } else {
+                  setIsStatsFromServer(false);
               }
-          } catch(e) { console.error(e); }
+          } catch(e) { 
+              console.error(e); 
+              setIsStatsFromServer(false);
+          }
       }
 
       // Fetch Paginated Data
@@ -1088,6 +1158,16 @@ const FinancePage = ({
       marginPercent
     };
   }, [visibleTransactions]);
+
+  const displayStats = useMemo(() => {
+    if (isStatsFromServer && statsData) {
+      return statsData;
+    }
+    return stats;
+  }, [isStatsFromServer, statsData, stats]);
+
+  const isStatsLoading = isGlobalLoading || (isFetchingData && page === 0);
+
   const isLoadingMore = isFetchingData && page > 0;
 
 
@@ -1414,13 +1494,13 @@ const FinancePage = ({
               <h3 className="text-sm sm:text-base font-bold text-emerald-700 kanit-text tracking-wide">รายรับ</h3>
             </div>
             <div className="z-10 w-full overflow-hidden">
-              {isGlobalLoading ? <div className="w-full max-w-[150px] h-[32px] bg-slate-200 animate-pulse rounded-xl mb-1"></div> : <h2 className={`font-black text-emerald-800 font-data mb-1 whitespace-nowrap ${getDynamicTextClass(formatCurrency(stats.income))}`} title={formatCurrency(stats.income)}>{formatCurrency(stats.income)}</h2>}
+              <h2 className={`font-black text-emerald-800 font-data mb-1 whitespace-nowrap transition-opacity duration-300 ${getDynamicTextClass(formatCurrency(displayStats.income))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+                <AnimatedNumber value={displayStats.income} duration={800} formatter={formatCurrency} />
+              </h2>
             </div>
-            {!isGlobalLoading && (
-              <div className="text-[10px] sm:text-xs text-emerald-600/80 font-medium kanit-text z-10 mt-1">
-                จาก {stats.transactionsCount || 0} รายการ
-              </div>
-            )}
+            <div className={`text-[10px] sm:text-xs text-emerald-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+              จาก <AnimatedNumber value={displayStats.transactionsCount || 0} duration={600} /> รายการ
+            </div>
           </div>
           
           {/* Card 2: รายจ่าย */}
@@ -1432,13 +1512,13 @@ const FinancePage = ({
               <h3 className="text-sm sm:text-base font-bold text-rose-700 kanit-text tracking-wide">รายจ่าย</h3>
             </div>
             <div className="z-10 w-full overflow-hidden">
-              {isGlobalLoading ? <div className="w-full max-w-[150px] h-[32px] bg-slate-200 animate-pulse rounded-xl mb-1"></div> : <h2 className={`font-black text-rose-800 font-data mb-1 whitespace-nowrap ${getDynamicTextClass(formatCurrency(stats.expense))}`} title={formatCurrency(stats.expense)}>{formatCurrency(stats.expense)}</h2>}
+              <h2 className={`font-black text-rose-800 font-data mb-1 whitespace-nowrap transition-opacity duration-300 ${getDynamicTextClass(formatCurrency(displayStats.expense))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+                <AnimatedNumber value={displayStats.expense} duration={800} formatter={formatCurrency} />
+              </h2>
             </div>
-            {!isGlobalLoading && (
-              <div className="text-[10px] sm:text-xs text-rose-600/80 font-medium kanit-text z-10 mt-1">
-                Cost: {Number(stats.costPercent || 0).toFixed(2)}%
-              </div>
-            )}
+            <div className={`text-[10px] sm:text-xs text-rose-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+              Cost: <AnimatedNumber value={displayStats.costPercent || 0} duration={600} decimals={2} suffix="%" />
+            </div>
           </div>
 
           {/* Card 3: กำไรสุทธิ */}
@@ -1450,13 +1530,13 @@ const FinancePage = ({
               <h3 className="text-sm sm:text-base font-bold text-sky-700 kanit-text tracking-wide">กำไรสุทธิ</h3>
             </div>
             <div className="z-10 w-full overflow-hidden">
-              {isGlobalLoading ? <div className="w-full max-w-[150px] h-[32px] bg-slate-200 animate-pulse rounded-xl mb-1"></div> : <h2 className={`font-black font-data mb-1 whitespace-nowrap ${stats.balance < 0 ? 'text-rose-600' : 'text-sky-800'} ${getDynamicTextClass(formatCurrency(stats.balance))}`} title={formatCurrency(stats.balance)}>{formatCurrency(stats.balance)}</h2>}
+              <h2 className={`font-black font-data mb-1 whitespace-nowrap transition-opacity duration-300 ${displayStats.balance < 0 ? 'text-rose-600' : 'text-sky-800'} ${getDynamicTextClass(formatCurrency(displayStats.balance))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+                <AnimatedNumber value={displayStats.balance} duration={800} formatter={formatCurrency} />
+              </h2>
             </div>
-            {!isGlobalLoading && (
-              <div className="text-[10px] sm:text-xs text-sky-600/80 font-medium kanit-text z-10 mt-1">
-                Margin: {Number(stats.marginPercent || 0).toFixed(2)}%
-              </div>
-            )}
+            <div className={`text-[10px] sm:text-xs text-sky-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+              Margin: <AnimatedNumber value={displayStats.marginPercent || 0} duration={600} decimals={2} suffix="%" />
+            </div>
           </div>
         </div>
       </div>
