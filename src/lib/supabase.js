@@ -54,7 +54,7 @@ const TABLE_COLUMNS = {
     'informed_consent_risk_agreed', 'informed_consent_voluntary_agreed', 'informed_consent_signature_url', 'informed_consent_doc_id',
     'branch_id', 'created_at', 'updated_at', 'is_deleted'
   ],
-  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
+  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'med_cert_number', 'created_at', 'updated_at', 'is_deleted'],
   branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at', 'is_deleted'],
   queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'branch_id', 'notes', 'treated', 'created_at', 'updated_at', 'is_deleted'],
   pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'status', 'created_at', 'updated_at', 'is_deleted'],
@@ -585,7 +585,6 @@ export async function callSupabase(action, sheetName, payload = null) {
     }
 
     case 'GET_TREATMENTS_BY_PATIENT': {
-      const selectCols = (TABLE_COLUMNS.treatments || []).join(',') || '*';
       const patientId = String(payload?.patientId || payload?.patient_id || payload?.hn || '').trim();
       if (!patientId) {
         return { status: 'success', data: [] };
@@ -597,19 +596,20 @@ export async function callSupabase(action, sheetName, payload = null) {
         t && String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase() === patientId.toLowerCase()
       );
 
-      // 2. ดึงจาก Supabase DB
-      let query = supabase.from('treatments').select(selectCols).eq('patient_id', patientId);
-      if (TABLE_COLUMNS.treatments?.includes('is_deleted')) {
-        query = query.or('is_deleted.is.null,is_deleted.eq.false');
-      }
-      query = query.order('created_at', { ascending: false });
+      // 2. ดึงจาก Supabase DB ด้วย ilike ค้นหาครอบคลุมตัวพิมพ์เล็ก-ใหญ่
+      let data = null;
+      const { data: resData, error } = await supabase
+        .from('treatments')
+        .select('*')
+        .ilike('patient_id', patientId)
+        .order('created_at', { ascending: false });
 
-      let { data, error } = await query;
       if (error) {
-        if (cachedForPatient.length > 0) {
-          return { status: 'success', data: cachedForPatient };
-        }
-        throw error;
+        console.warn("GET_TREATMENTS_BY_PATIENT query warning:", error.message);
+        const fbRes = await supabase.from('treatments').select('*').eq('patient_id', patientId);
+        data = fbRes.data;
+      } else {
+        data = resData;
       }
 
       const formattedData = (data || []).map(rowToJS);
@@ -619,7 +619,7 @@ export async function callSupabase(action, sheetName, payload = null) {
         await setLastSyncTime('treatments', nowIso);
       }
 
-      const finalTreatments = formattedData.length > 0 ? formattedData : cachedForPatient;
+      const finalTreatments = (formattedData && formattedData.length > 0) ? formattedData : cachedForPatient;
       return { status: 'success', data: finalTreatments };
     }
 

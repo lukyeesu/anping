@@ -482,10 +482,10 @@ export const globalGenerateInformedConsentHtml = (patient, branchesData = [], cu
             .indent { text-indent: 40px; }
             
             /* Signature Section */
-            .signature-section { display: flex; justify-content: space-between; margin-top: 40px; page-break-inside: avoid; align-items: flex-end; }
-            .signature-box { width: 45%; text-align: center; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+            .signature-section { display: flex; justify-content: space-between; margin-top: 30px; page-break-inside: avoid; align-items: flex-end; }
+            .signature-box { width: 45%; text-align: center; display: flex; flex-direction: column; gap: 0px; align-items: center; }
             .signature-line { border-bottom: 1px dotted #111827; width: 80%; height: 1px; margin: 0 auto; }
-            .signature-text { margin: 0; line-height: 1.4; white-space: nowrap; font-size: 13px; }
+            .signature-text { margin: 0; line-height: 1.2; white-space: nowrap; font-size: 13px; }
             
             @media print {
                 body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -546,17 +546,17 @@ export const globalGenerateInformedConsentHtml = (patient, branchesData = [], cu
             </div>
 
             <!-- Signature Section -->
-            <div class="signature-section" style="display: flex; justify-content: flex-end; margin-top: 40px; page-break-inside: avoid;">
+            <div class="signature-section" style="display: flex; justify-content: flex-end; margin-top: 32px; page-break-inside: avoid;">
                 <!-- Signature Box on right -->
-                <div class="signature-box" style="width: 260px; text-align: center; display: flex; flex-direction: column; align-items: center;">
-                    <div style="position: relative; height: 70px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 5px; width: 100%;">
+                <div class="signature-box" style="width: 260px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0;">
+                    <div style="position: relative; height: 65px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 0px; width: 100%;">
                         ${patient.informedConsentSignatureUrl ? `
-                            <img src="${patient.informedConsentSignatureUrl}" style="position: absolute; bottom: 5px; max-height: 80px; max-width: 180px; object-fit: contain; z-index: 10;" alt="Signature" />
+                            <img src="${patient.informedConsentSignatureUrl}" style="position: absolute; bottom: 4px; max-height: 75px; max-width: 180px; object-fit: contain; z-index: 10;" alt="Signature" />
                         ` : ''}
-                        <div class="signature-text" style="position: relative; z-index: 1;">ลงชื่อ ..............................................................</div>
+                        <div class="signature-text" style="position: relative; z-index: 1; margin: 0; line-height: 1;">ลงชื่อ ..............................................................</div>
                     </div>
-                    <div class="signature-text" style="font-size: 14px; margin-top: 5px;">( ${signerName} )</div>
-                    <div class="signature-text" style="font-size: 13px; margin-top: 2px;">ผู้ให้ความยินยอม</div>
+                    <div class="signature-text" style="font-size: 14px; margin-top: 6px; line-height: 1.25;">( ${signerName} )</div>
+                    <div class="signature-text" style="font-size: 13px; margin-top: 3px; line-height: 1.25;">ผู้ให้ความยินยอม</div>
                 </div>
             </div>
         </div>

@@ -856,12 +856,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       try { parsedOpd = JSON.parse(patient.opdRecords); } catch (e) {}
     }
     
-    // 🌟 ดึงข้อมูลประวัติการรักษาเฉพาะคนไข้คนนี้จาก Supabase บน demand ทันทีเมื่อเปิด Modal (Lazy Loading)
-    if (fetchPatientTreatments && parsedOpd.length === 0) {
+    // 🌟 ดึงข้อมูลประวัติการรักษาเฉพาะคนไข้คนนี้จาก Supabase บน demand ทันทีเมื่อเปิด Modal
+    if (fetchPatientTreatments) {
       const patientId = patient.id || patient.hn;
       if (patientId) {
         const fetchedTreatments = await fetchPatientTreatments(patientId);
-        if (fetchedTreatments && fetchedTreatments.length > 0) {
+        if (fetchedTreatments && Array.isArray(fetchedTreatments) && fetchedTreatments.length > 0) {
           parsedOpd = fetchedTreatments;
         }
       }
@@ -1038,17 +1038,37 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             dataToPrint = { ...formData, opdRecords: newRecords };
             setFormData(dataToPrint);
             
-            // จัดเตรียมข้อมูลส่งไปเซฟที่ Backend (Google Apps Script)
+            // จัดเตรียมข้อมูลส่งไปเซฟที่ Backend (เซฟลงทั้งตาราง Patients และตาราง Treatments ใน Supabase)
             const combinedData = {
               ...dataToPrint,
               name: `${dataToPrint.prefix}${dataToPrint.firstName} ${dataToPrint.lastName}`.trim(),
               phone: dataToPrint.phones && dataToPrint.phones.length > 0 ? dataToPrint.phones[0] : '',
               id: editingId || dataToPrint.hn
             };
+
+            const patientId = String(editingId || dataToPrint.hn || '').trim();
+            const treatmentRow = {
+              id: String(updatedRecord.id || `TRT_${patientId}_${Date.now()}`),
+              patient_id: patientId,
+              datetime: String(updatedRecord.datetime || new Date().toISOString()),
+              date: String(updatedRecord.date || (updatedRecord.datetime ? updatedRecord.datetime.split(' ')[0] : '')),
+              time: String(updatedRecord.time || (updatedRecord.datetime ? updatedRecord.datetime.split(' ')[1] || '' : '')),
+              doctor: String(updatedRecord.doctor || ''),
+              chief_complaint: String(updatedRecord.chiefComplaint || updatedRecord.cc || ''),
+              diagnosis: String(updatedRecord.diagnosis || updatedRecord.dx || ''),
+              treatment_detail: String(updatedRecord.treatmentDetail || updatedRecord.note || ''),
+              prescription: updatedRecord.prescription || updatedRecord.tx || [],
+              vital_signs: updatedRecord.vitalSigns || { bp: updatedRecord.bp, pulse: updatedRecord.pulse, weight: updatedRecord.weight, temp: updatedRecord.temp },
+              attachments: updatedRecord.attachments || [],
+              cost: Number(updatedRecord.cost || 0),
+              branch_id: String(updatedRecord.branchId || currentBranch?.id || ''),
+              med_cert_number: updatedRecord.medCertNumber
+            };
             
             try {
               if (callAppScript) {
                   await callAppScript('SAVE_DATA', 'Patients', combinedData);
+                  await callAppScript('SAVE_DATA', 'Treatments', treatmentRow).catch(console.error);
               }
               // อัปเดต Global State
               setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));

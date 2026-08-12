@@ -1430,7 +1430,8 @@ export default function App() {
             height: t.height || vs.height || '',
             attachments: Array.isArray(t.attachments) ? t.attachments : [],
             cost: Number(t.cost || 0),
-            branchId: t.branch_id || t.branchId
+            branchId: t.branch_id || t.branchId,
+            medCertNumber: t.med_cert_number || t.medCertNumber || t.med_cert_no || ''
           };
         });
         

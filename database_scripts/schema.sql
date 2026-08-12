@@ -69,10 +69,12 @@ CREATE TABLE IF NOT EXISTS public.treatments (
     attachments JSONB DEFAULT '[]'::jsonb,
     cost NUMERIC DEFAULT 0,
     branch_id VARCHAR,
+    med_cert_number VARCHAR,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.treatments DROP COLUMN IF EXISTS data CASCADE;
+ALTER TABLE public.treatments ADD COLUMN IF NOT EXISTS med_cert_number VARCHAR;
 
 -- 3. Branches Table
 CREATE TABLE IF NOT EXISTS public.branches (
