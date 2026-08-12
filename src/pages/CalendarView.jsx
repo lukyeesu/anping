@@ -17,9 +17,16 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading, roleLabels = {}, staffCategories = [] }) => {
+const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading, roleLabels = {}, staffCategories = [], onViewChange }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('month'); 
+
+  useEffect(() => {
+    if (onViewChange) {
+      onViewChange({ viewMode, viewDate });
+    }
+  }, [viewMode, viewDate, onViewChange]);
+
   const [selectedDayDetails, setSelectedDayDetails] = useState(null); 
   const [isDayModalClosing, setIsDayModalClosing] = useState(false); 
   const [showStaffModal, setShowStaffModal] = useState(false);
@@ -35,6 +42,26 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       setStaffModalDate(date);
       setShowStaffModal(true);
   }, [viewDate]);
+
+  const getTimeDisplayStr = (ev) => {
+    if (!ev) return '-';
+    const effectiveStr = (typeof getEffectiveApptDatetimeStr === 'function' ? getEffectiveApptDatetimeStr(ev) : '') || ev.datetime || ev.raw_date_time || ev.rawDateTime || ev.rawDeliveryStart || '';
+    const timeMatch = String(effectiveStr).match(/(\d{1,2}:\d{2})/);
+    if (timeMatch) return timeMatch[1];
+
+    if (ev.rawDeliveryStart || ev.rawDateTime) {
+      const d = new Date(ev.rawDeliveryStart || ev.rawDateTime);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+    return '-';
+  };
+
+  const getDoctorDisplayStr = (ev) => {
+    if (!ev) return '-';
+    return ev.doctor || ev.artist || ev.doctorName || '-';
+  };
 
   const isDoctorStaff = (s) => {
       if (!s) return false;
@@ -418,7 +445,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                     <tbody className="divide-y divide-slate-50">
                                         {events.map((ev, idx) => {
                                             const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
-                                            const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-');
+                                            const timeStr = getTimeDisplayStr(ev);
                                             return (
                                                 <tr key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="hover:bg-sky-50/30 cursor-pointer transition-colors group">
                                                     <td className="p-4 font-bold text-slate-700 whitespace-nowrap align-top text-center">
@@ -429,7 +456,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                     </td>
                                                     <td className="p-4 align-top">
                                                         <div className="font-bold text-slate-800 flex items-center flex-wrap gap-1">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={10} /> เคยเลื่อนนัด</span>}</div>
-                                                        <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5 truncate max-w-[200px]">{ev.category || '-'}</div>
+                                                        <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5 truncate max-w-[200px]">{ev.reason || ev.category || '-'}</div>
                                                     </td>
                                                     <td className="p-4 align-top text-center">
                                                         <div className="flex justify-center">
@@ -441,7 +468,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                         </div>
                                                     </td>
                                                     <td className="p-4 align-top">
-                                                        <div className="text-sm font-bold text-sky-600">{ev.artist || '-'}</div>
+                                                        <div className="text-sm font-bold text-sky-600">{getDoctorDisplayStr(ev)}</div>
                                                         <div className="text-xs text-slate-500 mt-1">{ev.customer ? `Sale: ${ev.customer}` : ''}</div>
                                                     </td>
                                                     <td className="p-4 align-top">
@@ -468,7 +495,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                         <div className="md:hidden space-y-3">
                             {events.map((ev, idx) => {
                                 const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
-                                const timeStr = ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : (ev.rawDateTime ? new Date(ev.rawDateTime).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) : '-');
+                                const timeStr = getTimeDisplayStr(ev);
                                 return (
                                     <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 active:scale-95 transition-transform cursor-pointer">
                                         <div className="flex justify-between items-start">
@@ -488,12 +515,12 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                         </div>
                                         <div className="mt-1">
                                             <h4 className="font-bold text-slate-800 text-sm line-clamp-2 flex items-center flex-wrap gap-1">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={10} /> เคยเลื่อนนัด</span>}</h4>
-                                            <div className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit mt-1 truncate max-w-full">{ev.category || '-'}</div>
+                                            <div className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit mt-1 truncate max-w-full">{ev.reason || ev.category || '-'}</div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
                                             <div className="min-w-0">
                                                 <p className="text-[9px] font-semibold text-slate-400 mb-0.5">แพทย์</p>
-                                                <p className="font-bold text-sky-600 truncate">{ev.artist || '-'}</p>
+                                                <p className="font-bold text-sky-600 truncate">{getDoctorDisplayStr(ev)}</p>
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="text-[9px] font-semibold text-slate-400 mb-0.5">คนไข้</p>
@@ -853,26 +880,34 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                   {events.length > 0 ? events.map((ev, idx) => {
                       const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                       return (
-                      <div key={idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="flex items-stretch gap-2 sm:gap-4 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 hover:border-sky-200 hover:shadow-md transition-all cursor-pointer bg-white group">
-                          <div className="w-16 sm:w-20 text-center shrink-0 flex flex-col items-center justify-center gap-1">
-                              <span className="font-bold text-sky-600 bg-sky-50 px-1.5 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs w-full sm:w-fit whitespace-nowrap truncate">{ev.hn || '-'}</span>
-                              <span className="text-xs sm:text-sm font-bold text-slate-600 block mt-0.5 font-data">{ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'}</span>
-                          </div>
-                          <div className="w-1 bg-slate-100 rounded-full group-hover:bg-sky-400 transition-colors shrink-0"></div>
-                          <div className="flex-1 min-w-0 py-0.5 sm:py-1 flex flex-col justify-center">
-                              <div className="flex flex-row justify-between items-start mb-0.5 gap-1">
-                                  <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate pr-1">{ev.name}</h4>
-                                  <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                          <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer">
+                              {/* Responsive Card Layout */}
+                              <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 sm:gap-4">
+                              {/* Top Bar on Mobile / Left Column on Desktop */}
+                              <div className="flex sm:flex-col items-center sm:justify-center justify-between gap-2 border-b sm:border-b-0 sm:border-r border-slate-100 pb-2 sm:pb-0 sm:pr-4 sm:w-32 shrink-0">
+                                  <span className="font-black text-sky-700 bg-sky-50 border border-sky-200/80 px-2.5 py-1 rounded-lg text-xs sm:text-sm font-data whitespace-nowrap shadow-xs">{ev.hn || '-'}</span>
+                                  <span className="font-data text-xs text-slate-500 font-semibold flex items-center gap-1">
+                                      <Clock size={12} className="text-slate-400 sm:hidden" />
+                                      {getTimeDisplayStr(ev)} น.
+                                  </span>
                               </div>
-                              {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
-                                  <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
-                                      <Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
-                                  </a>
-                              ) : null}
-                              <p className="text-xs sm:text-sm text-slate-500 truncate flex items-center gap-1.5 mt-1.5">
-                                  <span className="font-medium text-sky-600 truncate">แพทย์: {ev.artist || '-'}</span> 
-                                  {ev.customer && <><span className="text-slate-300 mx-0.5 sm:mx-1 shrink-0">|</span> <span className="truncate">{ev.customer}</span></>}
-                              </p>
+
+                              {/* Body Section */}
+                              <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2">
+                                      <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate">{ev.name}</h4>
+                                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                      {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
+                                          <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-xs bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
+                                              <Phone size={11} /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                          </a>
+                                      ) : null}
+                                      <span className="font-medium text-sky-600 truncate">แพทย์: {getDoctorDisplayStr(ev)}</span>
+                                      {ev.reason && <span className="text-slate-500 truncate">• {ev.reason}</span>}
+                                  </div>
+                              </div>
                           </div>
                       </div>
                   )}) : (
@@ -913,22 +948,33 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                   {events.length > 0 ? events.map((ev, idx) => {
                                       const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                                       return (
-                                      <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer flex items-stretch gap-2 sm:gap-4">
-                                          <div className="text-xs font-bold text-slate-500 pt-1 w-14 sm:w-20 shrink-0 flex flex-col items-center justify-center gap-1.5">
-                                              <span className="font-bold text-sky-600 bg-sky-50 px-1.5 sm:px-2.5 py-1 rounded-md sm:rounded-lg text-[9px] sm:text-xs w-full text-center truncate">{ev.hn || '-'}</span>
-                                              <span className="font-data text-[10px] sm:text-xs text-center">{ev.rawDeliveryStart ? new Date(ev.rawDeliveryStart).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'} น.</span>
-                                          </div>
-                                          <div className="flex-1 min-w-0 border-l border-slate-100 pl-2 sm:pl-4 flex flex-col justify-center">
-                                              <div className="flex flex-row justify-between items-start mb-0.5 gap-1">
-                                                  <span className="font-bold text-slate-800 text-sm sm:text-base truncate pr-1">{ev.name}</span>
-                                                  <span className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                                      <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer">
+                                          {/* Responsive Card Layout */}
+                                          <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 sm:gap-4">
+                                              {/* Top Bar on Mobile / Left Column on Desktop */}
+                                              <div className="flex sm:flex-col items-center sm:justify-center justify-between gap-2 border-b sm:border-b-0 sm:border-r border-slate-100 pb-2 sm:pb-0 sm:pr-4 sm:w-32 shrink-0">
+                                                  <span className="font-black text-sky-700 bg-sky-50 border border-sky-200/80 px-2.5 py-1 rounded-lg text-xs sm:text-sm font-data whitespace-nowrap shadow-xs">{ev.hn || '-'}</span>
+                                                  <span className="font-data text-xs text-slate-500 font-semibold flex items-center gap-1">
+                                                      <Clock size={12} className="text-slate-400 sm:hidden" />
+                                                      {getTimeDisplayStr(ev)} น.
+                                                  </span>
                                               </div>
-                                              {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
-                                                  <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors"><Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}</a>
-                                              ) : null}
-                                              <div className="text-[10px] sm:text-xs text-slate-500 mt-1.5 truncate flex items-center gap-1.5">
-                                                  <span className="font-medium text-sky-600 truncate">แพทย์: {ev.artist || '-'}</span> 
-                                                  {ev.customer && <><span className="text-slate-300 mx-0.5 sm:mx-1 shrink-0">•</span> <span className="truncate">{ev.customer}</span></>}
+
+                                              {/* Body Section */}
+                                              <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                                                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2">
+                                                      <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate">{ev.name}</h4>
+                                                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                                                  </div>
+                                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                                      {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
+                                                          <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-xs bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
+                                                              <Phone size={11} /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                                          </a>
+                                                      ) : null}
+                                                      <span className="font-medium text-sky-600 truncate">แพทย์: {getDoctorDisplayStr(ev)}</span>
+                                                      {ev.reason && <span className="text-slate-500 truncate">• {ev.reason}</span>}
+                                                  </div>
                                               </div>
                                           </div>
                                       </div>

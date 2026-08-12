@@ -541,8 +541,32 @@ export default function App() {
 
       if (resPatients?.status === 'success') { 
         const rawPatients = Array.isArray(resPatients.data) ? resPatients.data : [];
+        const patientIds = [];
+        rawPatients.forEach(p => {
+          if (p.id) patientIds.push(p.id);
+          if (p.hn && p.hn !== p.id) patientIds.push(p.hn);
+        });
 
-        // 🌟 Lazy Loading On-Demand: ดึงประวัติการรักษาเมื่อเปิด Modal ของคนไข้รายนั้นเท่านั้น
+        let treatmentsMap = {};
+        if (patientIds.length > 0) {
+          try {
+            const resTx = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds });
+            if (resTx?.status === 'success' && Array.isArray(resTx.data)) {
+              resTx.data.forEach(t => {
+                const pid = String(t.patient_id || t.patientId || t.hn || '').trim();
+                if (pid) {
+                  const lower = pid.toLowerCase();
+                  const norm = lower.replace(/o/g, '0');
+                  if (!treatmentsMap[pid]) treatmentsMap[pid] = [];
+                  if (!treatmentsMap[lower]) treatmentsMap[lower] = treatmentsMap[pid];
+                  if (!treatmentsMap[norm]) treatmentsMap[norm] = treatmentsMap[pid];
+                  treatmentsMap[pid].push(t);
+                }
+              });
+            }
+          } catch (e) {}
+        }
+
         const patientsWithOpd = rawPatients.map(patient => {
           let legacyOpd = [];
           if (Array.isArray(patient.opdRecords)) {
@@ -551,9 +575,18 @@ export default function App() {
             try { legacyOpd = JSON.parse(patient.opdRecords); } catch (e) {}
           }
 
+          const pId = String(patient.id || '').trim();
+          const pHn = String(patient.hn || '').trim();
+          const pNorm = (pId || pHn).toLowerCase().replace(/o/g, '0');
+
+          const fetchedTx = treatmentsMap[pId] || treatmentsMap[pHn] || treatmentsMap[pNorm] || [];
+          const finalOpd = fetchedTx.length > 0 ? fetchedTx : legacyOpd;
+
           return {
             ...patient,
-            opdRecords: legacyOpd
+            opdRecords: finalOpd,
+            treatment_count: finalOpd.length,
+            treatmentCount: finalOpd.length
           };
         });
 
@@ -1230,7 +1263,31 @@ export default function App() {
       const resPatients = await callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset, limit, search, sortKey, sortDir });
       if (resPatients?.status === 'success' && Array.isArray(resPatients.data)) {
         const rawPatients = resPatients.data;
-        const patientIds = rawPatients.map(p => p.id || p.hn).filter(Boolean);
+        const patientIds = [];
+        rawPatients.forEach(p => {
+          if (p.id) patientIds.push(p.id);
+          if (p.hn && p.hn !== p.id) patientIds.push(p.hn);
+        });
+
+        let treatmentsMap = {};
+        if (patientIds.length > 0) {
+          try {
+            const resTx = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds });
+            if (resTx?.status === 'success' && Array.isArray(resTx.data)) {
+              resTx.data.forEach(t => {
+                const pid = String(t.patient_id || t.patientId || t.hn || '').trim();
+                if (pid) {
+                  const lower = pid.toLowerCase();
+                  const norm = lower.replace(/o/g, '0');
+                  if (!treatmentsMap[pid]) treatmentsMap[pid] = [];
+                  if (!treatmentsMap[lower]) treatmentsMap[lower] = treatmentsMap[pid];
+                  if (!treatmentsMap[norm]) treatmentsMap[norm] = treatmentsMap[pid];
+                  treatmentsMap[pid].push(t);
+                }
+              });
+            }
+          } catch (e) {}
+        }
 
         const patientsWithOpd = rawPatients.map(patient => {
           let legacyOpd = [];
@@ -1240,9 +1297,18 @@ export default function App() {
             try { legacyOpd = JSON.parse(patient.opdRecords); } catch (e) {}
           }
 
+          const pId = String(patient.id || '').trim();
+          const pHn = String(patient.hn || '').trim();
+          const pNorm = (pId || pHn).toLowerCase().replace(/o/g, '0');
+
+          const fetchedTx = treatmentsMap[pId] || treatmentsMap[pHn] || treatmentsMap[pNorm] || [];
+          const finalOpd = fetchedTx.length > 0 ? fetchedTx : legacyOpd;
+
           return {
             ...patient,
-            opdRecords: legacyOpd
+            opdRecords: finalOpd,
+            treatment_count: finalOpd.length,
+            treatmentCount: finalOpd.length
           };
         });
 
@@ -1283,17 +1349,18 @@ export default function App() {
     return { totalPatients: 0, todaysQueue: 0, pendingQueue: 0, activeBranches: 1 };
   }, []);
 
-  const fetchAppointmentStats = useCallback(async () => {
+  const fetchAppointmentStats = useCallback(async (branchId) => {
     try {
-      const res = await callAppScript('GET_APPOINTMENT_STATS', 'Queue');
+      const targetBranch = branchId || currentBranch || 'all';
+      const res = await callAppScript('GET_APPOINTMENT_STATS', 'Queue', { branch_id: targetBranch });
       if (res?.status === 'success' && res.data) {
         return res.data;
       }
     } catch (e) {
       console.error('fetchAppointmentStats error:', e);
     }
-    return { total: 0, completed: 0, pending: 0, cancelled: 0 };
-  }, []);
+    return { total: 0, todayCount: 0, completed: 0, confirmed: 0, pending: 0, cancelled: 0 };
+  }, [currentBranch]);
 
   const fetchInventoryStats = useCallback(async () => {
     try {
@@ -1373,6 +1440,19 @@ export default function App() {
           }
           return p;
         }));
+
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            const rawPid = String(patientId).trim();
+            const lowerPid = rawPid.toLowerCase();
+            const savedStr = localStorage.getItem('clinic_treatment_counts');
+            const currentMap = savedStr ? JSON.parse(savedStr) : {};
+            currentMap[rawPid] = formattedTreatments.length;
+            currentMap[lowerPid] = formattedTreatments.length;
+            localStorage.setItem('clinic_treatment_counts', JSON.stringify(currentMap));
+          }
+        } catch (err) {}
+
         return formattedTreatments;
       }
     } catch (e) {
@@ -2214,23 +2294,6 @@ export default function App() {
                     <span>โปรไฟล์</span>
                   </button>
 
-                  {/* Row 3: ดึงข้อมูล GAS -> Supabase */}
-                  <button 
-                    disabled={isSyncingGasToSupabase}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsProfileDropdownOpen(false);
-                      handleSyncGasToSupabase();
-                    }}
-                    className="w-full text-left px-3 py-2.5 text-xs text-sky-700 hover:bg-sky-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isSyncingGasToSupabase ? (
-                      <Loader2 size={14} className="animate-spin text-sky-600 shrink-0" />
-                    ) : (
-                      <CloudDownload size={14} className="text-sky-600 shrink-0" />
-                    )}
-                    <span className="truncate">ดึงข้อมูล Sheets ➔ Supabase</span>
-                  </button>
 
                   {/* Row 4: ออกจากระบบ */}
                   <button 
@@ -2269,23 +2332,6 @@ export default function App() {
                     <span>โปรไฟล์</span>
                   </button>
 
-                  {/* Row 3: ดึงข้อมูล GAS -> Supabase */}
-                  <button 
-                    disabled={isSyncingGasToSupabase}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsProfileDropdownOpen(false);
-                      handleSyncGasToSupabase();
-                    }}
-                    className="w-full text-left px-3 py-2.5 text-xs text-sky-700 hover:bg-sky-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isSyncingGasToSupabase ? (
-                      <Loader2 size={14} className="animate-spin text-sky-600 shrink-0" />
-                    ) : (
-                      <CloudDownload size={14} className="text-sky-600 shrink-0" />
-                    )}
-                    <span className="truncate">ดึงข้อมูล Sheets ➔ Supabase</span>
-                  </button>
 
                   {/* Row 4: ออกจากระบบ */}
                   <button 
@@ -2392,23 +2438,6 @@ export default function App() {
                   <span>โปรไฟล์</span>
                 </button>
 
-                {/* Row 3: ดึงข้อมูล GAS -> Supabase */}
-                <button 
-                  disabled={isSyncingGasToSupabase}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsMobileProfileDropdownOpen(false);
-                    handleSyncGasToSupabase();
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs text-sky-700 hover:bg-sky-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2 disabled:opacity-50"
-                >
-                  {isSyncingGasToSupabase ? (
-                    <Loader2 size={14} className="animate-spin text-sky-600 shrink-0" />
-                  ) : (
-                    <CloudDownload size={14} className="text-sky-600 shrink-0" />
-                  )}
-                  <span className="truncate">ดึงข้อมูล Sheets ➔ Supabase</span>
-                </button>
 
                 {/* Row 4: ออกจากระบบ */}
                 <button 
@@ -2477,7 +2506,7 @@ export default function App() {
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} />
+                    <AppointmentManager currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} />
                 </div>
             )}
 

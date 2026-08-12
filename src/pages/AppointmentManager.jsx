@@ -19,21 +19,78 @@ import {
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 
-const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
+const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', suffix = '', formatter, className = '', title }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const startTimeRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  useEffect(() => {
+    const startVal = displayValue;
+    const endVal = Number(value) || 0;
+    
+    if (Math.abs(startVal - endVal) < (decimals > 0 ? 0.001 : 0.5)) {
+      setDisplayValue(endVal);
+      return;
+    }
+
+    startTimeRef.current = null;
+    const easeOutExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
+
+    const step = (timestamp) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
+      const easedProgress = easeOutExpo(progress);
+      const current = startVal + (endVal - startVal) * easedProgress;
+
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(step);
+      } else {
+        setDisplayValue(endVal);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [value, duration]);
+
+  const valToFormat = decimals > 0 ? displayValue : Math.round(displayValue);
+
+  const formattedStr = formatter 
+    ? formatter(valToFormat) 
+    : (decimals > 0 ? displayValue.toFixed(decimals) : Math.round(displayValue).toLocaleString('th-TH'));
+
+  return (
+    <span className={className} title={title || formattedStr}>
+      {prefix}{formattedStr}{suffix}
+    </span>
+  );
+};
+
+const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
   const [serverApptStats, setServerApptStats] = useState(null);
+  const [isStatsFetching, setIsStatsFetching] = useState(false);
 
   useEffect(() => {
     if (fetchAppointmentStats) {
-      fetchAppointmentStats().then(res => {
+      setIsStatsFetching(true);
+      fetchAppointmentStats(currentBranch).then(res => {
         if (res) setServerApptStats(res);
-      }).catch(err => console.error(err));
+      }).catch(err => console.error(err))
+      .finally(() => setIsStatsFetching(false));
     }
-  }, [fetchAppointmentStats]);
+  }, [fetchAppointmentStats, currentBranch, queueData]);
 
   // --- ใช้ Custom Hook แทนการประกาศ State แยกเอง ---
   const apptModal = useModal();
@@ -52,6 +109,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
 
   const initialApptState = { 
     hn: '', patientName: '', searchPatient: '', doctor: '', datetime: '', reason: '', status: 'pending',
+    branch_id: '',
     phones: [''], lineId: '', facebook: '', instagram: '', tiktok: '', serviceType: '', courses: [],
     postponeCount: 0,
     postpone1_date: '', postpone1_status: '',
@@ -198,8 +256,13 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   // เปลี่ยนชื่อฟังก์ชันเป็นของ AppointmentManager โดยเฉพาะ ป้องกันการชนกันของ Global Scope
   const handleOpenApptAdd = () => {
     setEditingId(null);
+    const defaultBranch = (currentBranch && currentBranch !== 'all') 
+      ? currentBranch 
+      : (branchesData?.[0]?.id || '');
+
     setFormData({ 
       ...initialApptState, 
+      branch_id: defaultBranch,
       doctor: currentUserIsDoctor ? currentUser.name : '' 
     });
     setIsViewMode(false);
@@ -209,6 +272,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   // เปลี่ยนชื่อฟังก์ชันเป็นของ AppointmentManager โดยเฉพาะ ป้องกันการชนกันของ Global Scope
   const handleOpenApptEdit = (appt, isView = false) => {
     setEditingId(appt.id);
+    const defaultBranch = appt.branch_id || appt.branchId || ((currentBranch && currentBranch !== 'all') ? currentBranch : (branchesData?.[0]?.id || ''));
     setFormData({ 
         hn: appt.hn || '', 
         patientName: appt.patientName || appt.name || '', 
@@ -217,6 +281,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
         datetime: appt.datetime || '', 
         reason: appt.reason || appt.category || '', 
         status: appt.status || appt.dealStatus || 'pending',
+        branch_id: defaultBranch,
         phones: parsePhones(appt.phone),
         lineId: appt.lineId || '',
         facebook: appt.facebook || '',
@@ -363,8 +428,11 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     const cleanPhones = formData.phones.map(p => String(p || '').trim()).filter(Boolean);
     const phonePayload = cleanPhones.length === 1 ? cleanPhones[0] : (cleanPhones.length > 1 ? cleanPhones : '');
 
+    const targetBranchId = formData.branch_id || (currentBranch && currentBranch !== 'all' ? currentBranch : (branchesData?.[0]?.id || ''));
+
     const payload = {
         id: editingId || `APPT${Date.now()}`, hn: finalHn, patientName: formData.patientName, datetime: formData.datetime, doctor: doctorName, reason: formData.reason, status: formData.status,
+        branch_id: targetBranchId, branchId: targetBranchId,
         phone: phonePayload, lineId: formData.lineId, facebook: formData.facebook, instagram: formData.instagram, tiktok: formData.tiktok, serviceType: formData.serviceType,
         rawDeliveryStart: isoDate, rawDateTime: isoDate, name: formData.patientName || finalHn, artist: doctorName, category: formData.reason, dealStatus: effectiveStatus,
         // ข้อมูลเลื่อนนัด
@@ -490,8 +558,85 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
     });
   }, [queueData, patientsData, patientCache]);
 
+  const [calendarViewInfo, setCalendarViewInfo] = useState({ viewMode: 'month', viewDate: new Date() });
+
+  const getApptDateObj = useCallback((appt) => {
+    if (!appt) return null;
+    const isoStr = getEffectiveApptIsoDate(appt);
+    if (isoStr) {
+      const d = new Date(isoStr);
+      if (!isNaN(d.getTime())) return d;
+    }
+    const rawStr = appt.raw_date_time || appt.created_at || appt.datetime || '';
+    if (rawStr) {
+      const match = String(rawStr).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (match) {
+        let day = parseInt(match[1], 10);
+        let month = parseInt(match[2], 10) - 1;
+        let year = parseInt(match[3], 10);
+        if (year > 2500) year -= 543;
+        return new Date(year, month, day);
+      }
+      const d = new Date(rawStr);
+      if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+  }, []);
+
+  const branchFilteredQueue = useMemo(() => {
+    const targetBranch = String(currentBranch || 'all').toLowerCase();
+    return augmentedQueueData.filter(appt => {
+      if (targetBranch === 'all') return true;
+      const bId = String(appt.branch_id || appt.branchId || '').toLowerCase();
+      return !bId || bId === 'all' || bId === targetBranch;
+    });
+  }, [augmentedQueueData, currentBranch]);
+
+  const calendarFilteredQueue = useMemo(() => {
+    const { viewMode: vMode, viewDate: vDate } = calendarViewInfo || {};
+    if (!vDate || !(vDate instanceof Date) || isNaN(vDate.getTime())) {
+      return branchFilteredQueue;
+    }
+
+    const targetYear = vDate.getFullYear();
+    const targetMonth = vDate.getMonth();
+    const targetDay = vDate.getDate();
+
+    const startOfWeek = new Date(targetYear, targetMonth, targetDay - vDate.getDay(), 0, 0, 0, 0);
+    const endOfWeek = new Date(targetYear, targetMonth, targetDay + (6 - vDate.getDay()), 23, 59, 59, 999);
+
+    return branchFilteredQueue.filter(appt => {
+      const apptDate = getApptDateObj(appt);
+      if (!apptDate) return true;
+
+      if (vMode === 'month') {
+        return apptDate.getFullYear() === targetYear && apptDate.getMonth() === targetMonth;
+      } else if (vMode === 'week' || vMode === 'list') {
+        return apptDate >= startOfWeek && apptDate <= endOfWeek;
+      } else if (vMode === 'day') {
+        return (
+          apptDate.getFullYear() === targetYear &&
+          apptDate.getMonth() === targetMonth &&
+          apptDate.getDate() === targetDay
+        );
+      }
+      return true;
+    });
+  }, [branchFilteredQueue, calendarViewInfo, getApptDateObj]);
+
+  const calendarPeriodText = useMemo(() => {
+    const { viewMode: vMode, viewDate: vDate } = calendarViewInfo || {};
+    if (!vDate || !(vDate instanceof Date) || isNaN(vDate.getTime())) return '';
+    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const yearBE = vDate.getFullYear() + 543;
+    if (vMode === 'month') return `${thaiMonths[vDate.getMonth()]} ${yearBE}`;
+    if (vMode === 'week' || vMode === 'list') return `สัปดาห์นี้`;
+    if (vMode === 'day') return `${vDate.getDate()} ${thaiMonths[vDate.getMonth()]} ${yearBE}`;
+    return '';
+  }, [calendarViewInfo]);
+
   const filteredData = useMemo(() => {
-    return augmentedQueueData.filter(a => 
+    return branchFilteredQueue.filter(a => 
       (a.patientName && a.patientName.includes(search)) || 
       (a.hn && a.hn.includes(search)) || 
       (a.doctor && a.doctor.includes(search)) ||
@@ -501,33 +646,55 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
       const dateB = getEffectiveApptIsoDate(b);
       return new Date(dateB || 0) - new Date(dateA || 0);
     });
-  }, [augmentedQueueData, search]);
+  }, [branchFilteredQueue, search]);
 
-  // --- [NEW] สรุปยอดสำหรับระบบนัดหมาย ---
+  // --- [NEW] สรุปยอดสำหรับระบบนัดหมาย (Dynamic ตามปฏิทิน) ---
   const stats = useMemo(() => {
     let todayCount = 0;
-    let pending = serverApptStats ? serverApptStats.pending : 0;
-    let confirmed = serverApptStats ? serverApptStats.completed : 0;
-    let cancelled = serverApptStats ? serverApptStats.cancelled : 0;
-    let total = serverApptStats ? serverApptStats.total : augmentedQueueData.length;
+    let pending = 0;
+    let confirmed = 0;
+    let cancelled = 0;
+    let total = calendarFilteredQueue.length;
 
     const now = new Date();
-    const todayStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()+543}`;
+    const dStr = String(now.getDate()).padStart(2, '0');
+    const mStr = String(now.getMonth() + 1).padStart(2, '0');
+    const yStr = String(now.getFullYear());
+    const thaiYStr = String(now.getFullYear() + 543);
+    const todayThaiStr = `${dStr}/${mStr}/${thaiYStr}`;
+    const todayIsoStr = `${yStr}-${mStr}-${dStr}`;
 
-    augmentedQueueData.forEach(appt => {
-        const effectiveDt = getEffectiveApptDatetimeStr(appt);
-        if (effectiveDt && effectiveDt.split(' ')[0] === todayStr) {
-            todayCount++;
-        }
-        if (!serverApptStats) {
-          if (appt.status === 'pending' || appt.dealStatus === 'pending') pending++;
-          else if (appt.status === 'confirmed' || appt.dealStatus === 'confirmed') confirmed++;
-          else if (appt.status === 'cancelled' || appt.dealStatus === 'cancelled') cancelled++;
-        }
+    // คำนวณยอดนัดวันนี้จากภาพรวมสาขา
+    branchFilteredQueue.forEach(appt => {
+      const effectiveDtStr = getEffectiveApptDatetimeStr(appt) || appt.datetime || appt.date || appt.rawDateTime || appt.raw_date_time || '';
+      const effectiveIsoStr = getEffectiveApptIsoDate(appt) || '';
+      if (
+        (effectiveDtStr && (effectiveDtStr.includes(todayThaiStr) || effectiveDtStr.includes(todayIsoStr))) ||
+        (effectiveIsoStr && effectiveIsoStr.startsWith(todayIsoStr))
+      ) {
+        todayCount++;
+      }
+    });
+
+    // คำนวณยอดสถานะนัดหมายตามช่วงเวลาปฏิทินที่เลือก
+    calendarFilteredQueue.forEach(appt => {
+      const effStatus = String(getEffectiveApptStatus(appt) || appt.status || appt.dealStatus || '').toLowerCase();
+      const statusObj = (dealStatuses || []).find(s => s.value === effStatus);
+      const label = String(statusObj ? statusObj.label : effStatus).toLowerCase();
+
+      if (effStatus === 'pending' || effStatus === 'รอยืนยัน' || label.includes('รอยืนยัน') || label.includes('pend')) {
+        pending++;
+      } else if (effStatus === 'cancelled' || effStatus === 'ยกเลิก' || label.includes('ยกเลิก') || label.includes('cancel')) {
+        cancelled++;
+      } else if (effStatus === 'confirmed' || effStatus === 'completed' || effStatus === 'done' || effStatus === 'ยืนยันแล้ว' || label.includes('ยืนยัน') || label.includes('confirm')) {
+        confirmed++;
+      } else {
+        pending++;
+      }
     });
 
     return { total, todayCount, pending, confirmed, cancelled };
-  }, [augmentedQueueData, serverApptStats]);
+  }, [branchFilteredQueue, calendarFilteredQueue, dealStatuses]);
 
   useEffect(() => {
     setVisibleCount(20);
@@ -791,7 +958,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
   const memoizedCalendarView = useMemo(() => {
       return (
          <CalendarView 
-            activities={augmentedQueueData} 
+            activities={branchFilteredQueue} 
             onEventClick={(ev) => handleOpenApptEdit(ev.originalData || ev, true)} 
             onDayClick={(date) => console.log('Day clicked:', date)} 
             dealStatuses={dealStatuses} 
@@ -800,9 +967,10 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
             onMonthChange={fetchQueueForMonth}
             isLoading={isQueueFetching}
             roleLabels={roleLabels}
+            onViewChange={setCalendarViewInfo}
          />
       );
-  }, [augmentedQueueData, staffData, fetchQueueForMonth, isQueueFetching, roleLabels, dealStatuses]); // อัปเดตปฏิทินเมื่อข้อมูลหรือสถานะการโหลดเปลี่ยน
+  }, [branchFilteredQueue, staffData, fetchQueueForMonth, isQueueFetching, roleLabels, dealStatuses]); // อัปเดตปฏิทินเมื่อข้อมูลหรือสถานะการโหลดเปลี่ยน
 
   return (
     <>
@@ -823,7 +991,7 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
           </div>
         </div>
 
-        {/* --- 2. Stats Section (ปรับเลย์เอาต์เหลือ 4 การ์ด) --- */}
+        {/* --- 2. Stats Section (ปรับเลย์เอาต์เหลือ 4 การ์ด + Dynamic ตามปฏิทิน) --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
               <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-indigo-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
@@ -834,7 +1002,9 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                   </div>
                 </div>
                 <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-indigo-600 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.todayCount))}`}>{formatStatNumber(stats.todayCount)}</p>
+                  <p className={`font-black text-indigo-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.todayCount))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                    <AnimatedNumber value={stats.todayCount} duration={750} formatter={formatStatNumber} />
+                  </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-indigo-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
@@ -842,11 +1012,16 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><CheckCircle2 size={20} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="ยืนยันแล้ว">ยืนยันแล้ว</p>
+                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight flex flex-col gap-0.5" title="ยืนยันแล้ว">
+                      <span>ยืนยันแล้ว</span>
+                      {calendarPeriodText && <span className="text-[9px] font-bold text-emerald-500 font-data font-normal">({calendarPeriodText})</span>}
+                    </p>
                   </div>
                 </div>
                 <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-emerald-600 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.confirmed))}`}>{formatStatNumber(stats.confirmed)}</p>
+                  <p className={`font-black text-emerald-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.confirmed))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                    <AnimatedNumber value={stats.confirmed} duration={750} formatter={formatStatNumber} />
+                  </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
@@ -854,11 +1029,16 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><Clock size={20} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="รอยืนยัน">รอยืนยัน</p>
+                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight flex flex-col gap-0.5" title="รอยืนยัน">
+                      <span>รอยืนยัน</span>
+                      {calendarPeriodText && <span className="text-[9px] font-bold text-amber-500 font-data font-normal">({calendarPeriodText})</span>}
+                    </p>
                   </div>
                 </div>
                 <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-amber-600 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.pending))}`}>{formatStatNumber(stats.pending)}</p>
+                  <p className={`font-black text-amber-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.pending))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                    <AnimatedNumber value={stats.pending} duration={750} formatter={formatStatNumber} />
+                  </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-amber-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
@@ -866,11 +1046,16 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                 <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><XCircle size={20} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="ยกเลิก">ยกเลิก</p>
+                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight flex flex-col gap-0.5" title="ยกเลิก">
+                      <span>ยกเลิก</span>
+                      {calendarPeriodText && <span className="text-[9px] font-bold text-rose-500 font-data font-normal">({calendarPeriodText})</span>}
+                    </p>
                   </div>
                 </div>
                 <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-rose-600 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.cancelled))}`}>{formatStatNumber(stats.cancelled)}</p>
+                  <p className={`font-black text-rose-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.cancelled))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                    <AnimatedNumber value={stats.cancelled} duration={750} formatter={formatStatNumber} />
+                  </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-rose-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
@@ -1141,6 +1326,20 @@ const AppointmentManager = ({ queueData, setQueueData, patientsData, setPatients
                         )}
                     </div>
                     
+                    {/* สาขา */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">สาขาที่นัดหมาย <span className="text-rose-500">*</span></label>
+                        <div className="relative">
+                            <CustomSelect 
+                                value={formData.branch_id} 
+                                onChange={(val) => setFormData({...formData, branch_id: val})} 
+                                options={(branchesData || []).map(b => ({ value: b.id, label: b.name }))} 
+                                placeholder="เลือกสาขา"
+                                disabled={isViewMode} 
+                            />
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">ประเภทบริการ</label>
                         <div className="relative">

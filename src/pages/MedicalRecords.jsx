@@ -106,6 +106,74 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const headerRef = React.useRef(null);
   const filterRef = React.useRef(null); // --- [NEW] เพิ่ม Ref สำหรับ Filter เพื่อให้มันขยายตัวได้ ---
 
+  // --- State สำหรับเก็บจำนวนประวัติการรักษาทั้งหมดจากตาราง treatments (อ่านจาก Cache ทันทีที่โหลดแอป) ---
+  const [treatmentCounts, setTreatmentCounts] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = localStorage.getItem('clinic_treatment_counts');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {};
+  });
+
+  const fetchCounts = React.useCallback(async () => {
+    try {
+      if (callAppScript) {
+        const res = await callAppScript('GET_TREATMENT_COUNTS', 'Treatments');
+        if (res?.status === 'success' && res.data) {
+          setTreatmentCounts(res.data);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching treatment counts:", err);
+    }
+  }, [callAppScript]);
+
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts, patientsData]);
+
+  const normalizeId = (str) => String(str || '').trim().toLowerCase().replace(/o/g, '0');
+
+  const getPatientTreatmentCount = React.useCallback((patient) => {
+    if (!patient) return 0;
+    if (Array.isArray(patient.opdRecords)) {
+      return patient.opdRecords.length;
+    }
+    if (patient.treatment_count !== undefined && patient.treatment_count !== null && patient.treatment_count !== '') {
+      return Number(patient.treatment_count) || 0;
+    }
+    if (patient.treatmentCount !== undefined && patient.treatmentCount !== null && patient.treatmentCount !== '') {
+      return Number(patient.treatmentCount) || 0;
+    }
+
+    const keysToTry = [
+      patient.hn,
+      patient.id,
+      getPatientId(patient),
+      patient.patient_id,
+      patient.patientId
+    ];
+
+    for (const key of keysToTry) {
+      if (!key || key === '-') continue;
+      const strKey = String(key).trim();
+      if (treatmentCounts[strKey] !== undefined) {
+        return treatmentCounts[strKey];
+      }
+      const lowerKey = strKey.toLowerCase();
+      if (treatmentCounts[lowerKey] !== undefined) {
+        return treatmentCounts[lowerKey];
+      }
+      const normKey = normalizeId(strKey);
+      if (treatmentCounts[normKey] !== undefined) {
+        return treatmentCounts[normKey];
+      }
+    }
+    return 0;
+  }, [treatmentCounts]);
+
   useEffect(() => {
     if (fetchPatientStats) {
       fetchPatientStats().then(res => {
@@ -1059,6 +1127,19 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     
     const updatedFormData = { ...formData, opdRecords: newRecords };
     setFormData(updatedFormData);
+    const pid = String(editingId || updatedFormData.hn || '').trim();
+    if (pid) {
+      const cnt = newRecords.length;
+      setTreatmentCounts(prev => {
+        const updated = { ...prev, [pid]: cnt, [pid.toLowerCase()]: cnt };
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('clinic_treatment_counts', JSON.stringify(updated));
+          }
+        } catch (e) {}
+        return updated;
+      });
+    }
 
     // อัปเดตรายการรักษาล่าสุด (recent treatments)
     if (newOpdRecord.tx && Array.isArray(newOpdRecord.tx)) {
@@ -1401,26 +1482,29 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   // การใช้ useMemo ห่อหุ้มการเรนเดอร์ตาราง จะทำหน้าที่เหมือน React.memo และแยก Component ออกมาในตัว
   // เพื่อป้องกันไม่ให้เบราว์เซอร์ต้องวาดข้อมูล 600 แถวใหม่ทุกครั้งที่ Header มีการขยับ (isRecordsScrolled เปลี่ยน)
   const memoizedPatientTableRows = useMemo(() => {
-    return sortedPatients.map((patient, index) => (
-      <tr key={`${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation">
-        <td className="py-4 pl-6 font-medium text-sky-600 kanit-text">{getPatientId(patient)}</td>
-        <td className="py-4 text-slate-700 font-medium font-data">{getPatientFullName(patient)}</td>
-        <td className="py-4 text-slate-600 font-medium font-data">{patient.nickname || '-'}</td>
-        <td className="py-4 text-slate-500">{patient.gender || '-'}</td><td className="py-4 text-slate-500">{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
-        <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
-        <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
-        <td className="py-4 text-center text-slate-500">{patient.opdRecords ? patient.opdRecords.length : 0}</td>
-        <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
-        <td className="py-4 text-right pr-4">
-          <div className="flex justify-end gap-2 transition-opacity">
-            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-sky-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
-            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไขข้อมูล"><Pencil size={18} /></button>
-            <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
-          </div>
-        </td>
-      </tr>
-    ));
-  }, [sortedPatients, isProcessing, processingPdpaHn]); // อัปเดตตารางเฉพาะตอนข้อมูลเปลี่ยนหรือเลื่อนโหลดเพิ่มเท่านั้น (Virtualization Concept)
+    return sortedPatients.map((patient, index) => {
+      const txCount = getPatientTreatmentCount(patient);
+      return (
+        <tr key={`${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation">
+          <td className="py-4 pl-6 font-medium text-sky-600 kanit-text">{getPatientId(patient)}</td>
+          <td className="py-4 text-slate-700 font-medium font-data">{getPatientFullName(patient)}</td>
+          <td className="py-4 text-slate-600 font-medium font-data">{patient.nickname || '-'}</td>
+          <td className="py-4 text-slate-500">{patient.gender || '-'}</td><td className="py-4 text-slate-500">{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
+          <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
+          <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
+          <td className="py-4 text-center text-slate-700 font-bold font-data">{txCount}</td>
+          <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
+          <td className="py-4 text-right pr-4">
+            <div className="flex justify-end gap-2 transition-opacity">
+              <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-sky-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
+              <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไขข้อมูล"><Pencil size={18} /></button>
+              <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
+            </div>
+          </td>
+        </tr>
+      );
+    });
+  }, [sortedPatients, isProcessing, processingPdpaHn, getPatientTreatmentCount]);
 
   const memoizedPatientMobileCards = useMemo(() => {
     return sortedPatients.map((patient, index) => {
@@ -1428,8 +1512,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         const ageStr = patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-';
         const lastVisitStr = patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit);
         
-        // เพิ่มตัวแปรเช็คผู้ป่วยใหม่ เพื่อทำป้ายสถานะให้หน้าตาเหมือนหน้านัดหมาย
-        const isNewPatient = !(patient.opdRecords && patient.opdRecords.length > 0);
+        const txCount = getPatientTreatmentCount(patient);
+        const isNewPatient = txCount === 0;
         
         return (
             <div key={`mobile-${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
@@ -1444,7 +1528,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                     </div>
                     <div className="text-right whitespace-nowrap bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 shrink-0 ml-2">
                         <span className="font-medium text-slate-500 text-[10px] sm:text-xs kanit-text">รับการรักษา</span>
-                        <span className="font-bold text-sky-600 text-xs sm:text-sm font-data mx-1">{patient.opdRecords ? patient.opdRecords.length : 0}</span>
+                        <span className="font-bold text-sky-600 text-xs sm:text-sm font-data mx-1">{txCount}</span>
                         <span className="font-medium text-slate-500 text-[10px] sm:text-xs kanit-text">ครั้ง</span>
                     </div>
                 </div>
@@ -1515,7 +1599,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
             </div>
         );
     });
-  }, [sortedPatients, isProcessing, processingPdpaHn]);
+  }, [sortedPatients, isProcessing, processingPdpaHn, getPatientTreatmentCount]);
 
   return (
     <>

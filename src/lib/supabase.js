@@ -56,7 +56,7 @@ const TABLE_COLUMNS = {
   ],
   treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
   branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at', 'is_deleted'],
-  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'deal_status', 'branch_id', 'notes', 'treated', 'is_treated', 'created_at', 'updated_at', 'is_deleted'],
+  queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'branch_id', 'notes', 'treated', 'created_at', 'updated_at', 'is_deleted'],
   pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'status', 'created_at', 'updated_at', 'is_deleted'],
   inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'lot_no', 'expire_date', 'receive_date', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
   inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at', 'updated_at', 'lot_no', 'expire_date', 'receive_date', 'product_id', 'branch_id', 'type', 'amount', 'balance', 'reason'],
@@ -694,24 +694,36 @@ export async function callSupabase(action, sheetName, payload = null) {
     }
 
     case 'GET_TREATMENTS_FOR_PATIENTS': {
-      const selectCols = (TABLE_COLUMNS.treatments || []).join(',') || '*';
       const patientIds = payload?.patientIds || [];
       if (!Array.isArray(patientIds) || patientIds.length === 0) {
         return { status: 'success', data: [] };
       }
-      const { data, error } = await supabase
+
+      const normPids = patientIds.map(id => String(id).trim().toLowerCase());
+      
+      // 1. อ่านจาก IndexedDB ก่อนเสมอ (ประหยัด Egress 100% บนการรีเฟรช!)
+      const localStoreTreatments = (await getLocalStore('treatments')) || [];
+      const cachedTx = localStoreTreatments.filter(t => {
+        if (!t) return false;
+        const pid = String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase();
+        return normPids.includes(pid);
+      });
+
+      // หากมีข้อมูลอยู่ใน IndexedDB แล้ว ให้คืนค่าจาก IndexedDB ทันทีโดยไม่ต้องต่อ Supabase
+      if (cachedTx.length > 0) {
+        return { status: 'success', data: cachedTx };
+      }
+
+      // 2. ดึงจาก Supabase เฉพาะเมื่อใน IndexedDB ยังไม่มีข้อมูลของคนไข้กลุ่มนี้
+      let { data, error } = await supabase
         .from('treatments')
-        .select(selectCols)
+        .select('*')
         .in('patient_id', patientIds)
         .order('created_at', { ascending: false });
 
       if (error) {
-        const fbRes = await supabase
-          .from('treatments')
-          .select('*')
-          .in('patient_id', patientIds)
-          .order('created_at', { ascending: false });
-        return { status: 'success', data: (fbRes.data || []).map(rowToJS) };
+        console.warn("GET_TREATMENTS_FOR_PATIENTS error:", error.message);
+        return { status: 'success', data: cachedTx };
       }
 
       const formattedData = (data || []).map(rowToJS);
@@ -720,6 +732,84 @@ export async function callSupabase(action, sheetName, payload = null) {
         await setLastSyncTime('treatments', new Date().toISOString());
       }
       return { status: 'success', data: formattedData };
+    }
+
+    case 'GET_TREATMENT_COUNTS': {
+      try {
+        const normalizeId = (str) => String(str || '').trim().toLowerCase().replace(/o/g, '0');
+        const countsMap = {};
+
+        // 1. อ่านจาก IndexedDB ก่อนเพื่อประหยัด Egress 100%
+        try {
+          const localTreatments = (await getLocalStore('treatments')) || [];
+          localTreatments.forEach(row => {
+            if (!row) return;
+            if (row.is_deleted === true || row.is_deleted === 'true') return;
+            const rawPid = String(row.patient_id || row.patientId || row.hn || '').trim();
+            if (rawPid && rawPid !== '-' && rawPid !== 'null' && rawPid !== 'undefined') {
+              const lowerPid = rawPid.toLowerCase();
+              const normPid = normalizeId(rawPid);
+              const currentCount = (countsMap[rawPid] || 0) + 1;
+              countsMap[rawPid] = currentCount;
+              countsMap[lowerPid] = currentCount;
+              countsMap[normPid] = currentCount;
+            }
+          });
+        } catch (e) {}
+
+        // อ่านจาก LocalStorage ด้วย
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            const saved = localStorage.getItem('clinic_treatment_counts');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              Object.assign(countsMap, parsed);
+            }
+          } catch (e) {}
+        }
+
+        // หากมีข้อมูลแคชในเครื่องอยู่แล้ว คืนค่าได้ทันทีโดยไม่ต้องต่อ Supabase (0 Egress)
+        if (Object.keys(countsMap).length > 0) {
+          return { status: 'success', data: countsMap };
+        }
+
+        // 2. ดึงจาก Supabase เฉพาะเมื่อในเครื่องไม่มีแคชเลย (ดึงเบาๆ เฉพาะ patient_id)
+        let data = null;
+        const res = await supabase.from('treatments').select('patient_id');
+        if (res.error) {
+          const fbRes = await supabase.from('treatments').select('*');
+          data = fbRes.data;
+        } else {
+          data = res.data;
+        }
+
+        (data || []).forEach(row => {
+          if (!row) return;
+          if (row.is_deleted === true || row.is_deleted === 'true') return;
+
+          const rawPid = String(row.patient_id || row.patientId || row.hn || row.patient_hn || row.id || '').trim();
+          if (rawPid && rawPid !== '-' && rawPid !== 'null' && rawPid !== 'undefined') {
+            const lowerPid = rawPid.toLowerCase();
+            const normPid = normalizeId(rawPid);
+
+            const currentCount = (countsMap[rawPid] || 0) + 1;
+            countsMap[rawPid] = currentCount;
+            countsMap[lowerPid] = currentCount;
+            countsMap[normPid] = currentCount;
+          }
+        });
+
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem('clinic_treatment_counts', JSON.stringify(countsMap));
+          } catch (e) {}
+        }
+
+        return { status: 'success', data: countsMap };
+      } catch (err) {
+        console.error("GET_TREATMENT_COUNTS exception:", err);
+        return { status: 'success', data: {} };
+      }
     }
 
     case 'GET_PATIENT_STATS': {
@@ -786,30 +876,69 @@ export async function callSupabase(action, sheetName, payload = null) {
 
     case 'GET_APPOINTMENT_STATS': {
       try {
-        const [
-          resTotal,
-          resCompleted,
-          resPending,
-          resCancelled
-        ] = await Promise.all([
-          supabase.from('queue').select('*', { count: 'exact', head: true }),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq.completed,deal_status.eq.completed,status.eq.done'),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq.pending,deal_status.eq.pending'),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq.cancelled,deal_status.eq.cancelled')
-        ]);
+        const branchFilter = params?.branch_id || params?.branchId || 'all';
+
+        let query = supabase.from('queue').select('status, raw_date_time, created_at, branch_id');
+        const { data, error } = await query;
+        if (error || !data) {
+          return { status: 'error', data: null };
+        }
+
+        const now = new Date();
+        const dStr = String(now.getDate()).padStart(2, '0');
+        const mStr = String(now.getMonth() + 1).padStart(2, '0');
+        const yStr = String(now.getFullYear());
+        const thaiYStr = String(now.getFullYear() + 543);
+        const todayThaiStr = `${dStr}/${mStr}/${thaiYStr}`;
+        const todayIsoStr = `${yStr}-${mStr}-${dStr}`;
+
+        const targetBranch = String(branchFilter).toLowerCase();
+
+        let todayCount = 0;
+        let confirmed = 0;
+        let pending = 0;
+        let cancelled = 0;
+        let total = 0;
+
+        data.forEach(item => {
+          const itemBranch = String(item.branch_id || item.branchId || '').toLowerCase();
+          if (targetBranch !== 'all' && itemBranch && itemBranch !== 'all' && itemBranch !== targetBranch) {
+            return; // Skip items belonging to a different branch
+          }
+
+          total++;
+
+          const rawDt = String(item.raw_date_time || item.created_at || '');
+          if (rawDt.includes(todayThaiStr) || rawDt.includes(todayIsoStr)) {
+            todayCount++;
+          }
+
+          const st = String(item.status || '').toLowerCase();
+          if (st === 'pending' || st === 'รอยืนยัน' || st.includes('pend') || (st.includes('ยืนยัน') && st.includes('รอ'))) {
+            pending++;
+          } else if (st === 'cancelled' || st === 'ยกเลิก' || st.includes('cancel')) {
+            cancelled++;
+          } else if (st === 'confirmed' || st === 'completed' || st === 'done' || st === 'ยืนยันแล้ว' || st.includes('confirm') || st.includes('ยืนยัน')) {
+            confirmed++;
+          } else {
+            pending++;
+          }
+        });
 
         return {
           status: 'success',
           data: {
-            total: resTotal.count || 0,
-            completed: resCompleted.count || 0,
-            pending: resPending.count || 0,
-            cancelled: resCancelled.count || 0
+            total,
+            todayCount,
+            confirmed,
+            completed: confirmed,
+            pending,
+            cancelled
           }
         };
       } catch (e) {
         console.error('GET_APPOINTMENT_STATS error:', e);
-        return { status: 'error', data: { total: 0, completed: 0, pending: 0, cancelled: 0 } };
+        return { status: 'error', data: null };
       }
     }
 
