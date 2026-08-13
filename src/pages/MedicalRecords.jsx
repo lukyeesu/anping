@@ -16,6 +16,8 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
+import { supabase } from '../lib/supabase';
+import { subscribeStoreUpdates } from '../lib/offlineStore';
 
 const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats }) => {
   // --- 1. State Declarations ---
@@ -809,6 +811,82 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     if (opdCalView === 'years') setOpdYearPageStart(Math.floor((opdCalDate.getFullYear() + 543) / 12) * 12);
   }, [opdCalView, opdCalDate]);
 
+  // 🌟 Real-time OPD Treatment Listener & Sync: อัปเดตประวัติการรักษา OPD แบบเรียลไทม์ขณะเปิด Modal อยู่
+  useEffect(() => {
+    if (!medModal.isOpen) return;
+    const currentPatientId = editingId || formData.hn || formData.id;
+    if (!currentPatientId) return;
+
+    let isSubscribed = true;
+
+    const refreshModalTreatments = async () => {
+      try {
+        if (fetchPatientTreatments) {
+          const freshTreatments = await fetchPatientTreatments(currentPatientId);
+          if (isSubscribed && freshTreatments && Array.isArray(freshTreatments)) {
+            const sorted = getSortedOpdRecords(freshTreatments);
+            setFormData(prev => ({
+              ...prev,
+              opdRecords: sorted
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Error refreshing modal treatments in real-time:', err);
+      }
+    };
+
+    // 1. ฟัง Supabase Realtime Postgres Changes บนตาราง treatments แบบเรียลไทม์
+    let supabaseChannel = null;
+    if (supabase) {
+      supabaseChannel = supabase
+        .channel(`modal-treatments-live-${currentPatientId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'treatments' },
+          () => {
+            refreshModalTreatments();
+          }
+        )
+        .subscribe();
+    }
+
+    // 2. ฟัง BroadcastChannel เมื่อมีการบันทึกประวัติการรักษาจากแท็บอื่นหรือหน้าอื่น
+    const unsubscribeBroadcast = subscribeStoreUpdates((eventData) => {
+      if (eventData && (eventData.type === 'STORE_UPDATED' || eventData.storeName === 'treatments' || eventData.storeName === 'patients' || eventData.action === 'NETWORK_RECONNECTED')) {
+        refreshModalTreatments();
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+      if (supabase && supabaseChannel) {
+        supabase.removeChannel(supabaseChannel);
+      }
+      if (typeof unsubscribeBroadcast === 'function') {
+        unsubscribeBroadcast();
+      }
+    };
+  }, [medModal.isOpen, editingId, formData.hn, formData.id, fetchPatientTreatments]);
+
+  // 🌟 Real-time PatientsData Sync: อัปเดต opdRecords จาก patientsData ของ App.jsx ทันทีที่ App.jsx ซิงค์ข้อมูลใหม่
+  useEffect(() => {
+    if (!medModal.isOpen) return;
+    const currentPatientId = editingId || formData.hn || formData.id;
+    if (!currentPatientId) return;
+
+    const matchedPatient = patientsData.find(p => (p.id === currentPatientId || p.hn === currentPatientId));
+    if (matchedPatient && matchedPatient.opdRecords && Array.isArray(matchedPatient.opdRecords)) {
+      const sorted = getSortedOpdRecords(matchedPatient.opdRecords);
+      setFormData(prev => {
+        if (JSON.stringify(prev.opdRecords) !== JSON.stringify(sorted)) {
+          return { ...prev, opdRecords: sorted };
+        }
+        return prev;
+      });
+    }
+  }, [patientsData, medModal.isOpen, editingId, formData.hn, formData.id]);
+
   // --- 5. Event Handlers ---
   const handleOpenCalendar = () => {
     if (dobWrapperRef.current) {
@@ -869,8 +947,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
     const sortedOpd = getSortedOpdRecords(parsedOpd);
 
+    const savedBranch = patient.branchId || patient.branch_id || '';
     setFormData({ 
       ...initialFormState, ...patient, hn: patient.hn || patient.id,
+      branchId: savedBranch,
+      branch_id: savedBranch,
       prefix: patient.prefix || parsed.prefix,
       firstName: patient.firstName || parsed.firstName, 
       lastName: patient.lastName || parsed.lastName, 
@@ -892,8 +973,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   const handleOpenAdd = () => {
     setEditingId(null);
+    const defaultBranchId = (currentBranch && currentBranch !== 'all') ? currentBranch : (branchesData[0]?.id || '');
     // Fix: Don't generate HN yet to prevent race condition, do it on save
-    setFormData({ ...initialFormState, hn: '', createdAt: new Date().toISOString(), opdRecords: [] });
+    setFormData({ 
+      ...initialFormState, 
+      hn: '', 
+      branchId: defaultBranchId, 
+      branch_id: defaultBranchId, 
+      createdAt: new Date().toISOString(), 
+      opdRecords: [] 
+    });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(false); medModal.open();
   };
 
@@ -1058,7 +1147,13 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
               diagnosis: String(updatedRecord.diagnosis || updatedRecord.dx || ''),
               treatment_detail: String(updatedRecord.treatmentDetail || updatedRecord.note || ''),
               prescription: updatedRecord.prescription || updatedRecord.tx || [],
-              vital_signs: updatedRecord.vitalSigns || { bp: updatedRecord.bp, pulse: updatedRecord.pulse, weight: updatedRecord.weight, temp: updatedRecord.temp },
+              vital_signs: {
+                bp: updatedRecord.bp || updatedRecord.vitalSigns?.bp || '',
+                pulse: updatedRecord.pulse || updatedRecord.vitalSigns?.pulse || '',
+                weight: updatedRecord.weight || updatedRecord.vitalSigns?.weight || '',
+                height: updatedRecord.height || updatedRecord.vitalSigns?.height || '',
+                temp: updatedRecord.temp || updatedRecord.vitalSigns?.temp || ''
+              },
               attachments: updatedRecord.attachments || [],
               cost: Number(updatedRecord.cost || 0),
               branch_id: String(updatedRecord.branchId || currentBranch?.id || ''),
@@ -1196,7 +1291,13 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
           diagnosis: String(newOpdRecord.diagnosis || newOpdRecord.dx || ''),
           treatment_detail: String(newOpdRecord.treatmentDetail || newOpdRecord.note || ''),
           prescription: newOpdRecord.prescription || newOpdRecord.tx || [],
-          vital_signs: newOpdRecord.vitalSigns || { bp: newOpdRecord.bp, pulse: newOpdRecord.pulse, weight: newOpdRecord.weight, temp: newOpdRecord.temp },
+          vital_signs: {
+            bp: newOpdRecord.bp || newOpdRecord.vitalSigns?.bp || '',
+            pulse: newOpdRecord.pulse || newOpdRecord.vitalSigns?.pulse || '',
+            weight: newOpdRecord.weight || newOpdRecord.vitalSigns?.weight || '',
+            height: newOpdRecord.height || newOpdRecord.vitalSigns?.height || '',
+            temp: newOpdRecord.temp || newOpdRecord.vitalSigns?.temp || ''
+          },
           attachments: newOpdRecord.attachments || [],
           cost: Number(newOpdRecord.cost || 0),
           branch_id: String(newOpdRecord.branchId || currentBranch?.id || '')
@@ -1309,7 +1410,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       if (editingId) {
         setPatientsData(patientsData.map(p => (p.hn || p.id) === editingId ? { ...p, ...combinedData } : p));
       } else {
-        const newPatient = { ...combinedData, lastVisit: new Date().toISOString().split('T')[0], branchId: currentBranch === 'all' ? 'b1' : currentBranch };
+        const targetBranchId = combinedData.branchId ?? combinedData.branch_id ?? '';
+        const newPatient = { ...combinedData, branchId: targetBranchId, branch_id: targetBranchId, lastVisit: new Date().toISOString().split('T')[0] };
         setPatientsData([newPatient, ...patientsData]);
       }
       
@@ -1865,31 +1967,97 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       {medModal.isOpen && (
         <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${medModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            {/* แก้ไข UX/UI ส่วนหัว Modal เวชระเบียน ให้เรียบร้อย สวยงามบนมือถือ */}
-            <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0 z-10 gap-2.5">
-              <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
-                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-xs shrink-0">
-                    {isViewMode ? <FileText className="w-4 h-4 sm:w-5 sm:h-5" /> : (editingId ? <Pencil className="w-4 h-4 sm:w-5 sm:h-5" /> : <Plus className="w-4 h-4 sm:w-5 sm:h-5" />)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm sm:text-lg font-bold text-slate-800 kanit-text truncate leading-tight">
-                    {editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName}` : 'เพิ่มเวชระเบียนใหม่'}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5">
-                    {editingId && (
-                      <span className="inline-flex items-center gap-1 bg-sky-100/80 text-sky-800 border border-sky-200/80 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold kanit-text shrink-0">
-                        <Activity size={11} className="text-sky-600" />
-                        การรักษา {formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง
+            {/* ส่วนหัว Modal เวชระเบียน - ดีไซน์พรีเมียม สวยงามทั้ง Mobile และ Desktop */}
+            <div className="p-3.5 sm:p-5 border-b border-slate-100 bg-white shrink-0 z-10">
+              {/* แถบหลัก Top Row */}
+              <div className="flex items-center justify-between gap-3">
+                {/* ฝั่งซ้าย: รูปไอคอน + ชื่อคนไข้/HN + อายุ */}
+                <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
+                  <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${editingId ? 'bg-sky-50 text-sky-600 border border-sky-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                    {isViewMode ? <FileText className="w-5 h-5" /> : (editingId ? <Pencil className="w-5 h-5" /> : <Plus className="w-5 h-5" />)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text truncate leading-tight">
+                      {editingId ? `${formData.hn} - ${formData.prefix}${formData.firstName} ${formData.lastName}` : 'เพิ่มเวชระเบียนใหม่'}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5">
+                      {editingId && (
+                        <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-200/60 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold kanit-text shrink-0">
+                          <Activity size={11} className="text-sky-500" />
+                          การรักษา {formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง
+                        </span>
+                      )}
+                      <span className="text-xs sm:text-sm text-slate-500 kanit-text truncate">
+                        {editingId ? `อายุ ${calculatedAge}` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน'}
                       </span>
-                    )}
-                    <span className="text-xs sm:text-sm text-slate-500 kanit-text truncate">
-                      {editingId ? `อายุ ${calculatedAge}` : 'กรอกข้อมูลผู้ป่วยให้ครบถ้วน'}
-                    </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* ฝั่งขวา Desktop (sm:flex): เวลาลงทะเบียน + เลือกสาขา + ปุ่มปิด Modal */}
+                <div className="hidden md:flex items-center gap-2.5 shrink-0">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/70 kanit-text font-medium whitespace-nowrap shadow-2xs">
+                    <Clock size={14} className="text-slate-400 shrink-0" />
+                    <span className="whitespace-nowrap">ลงทะเบียน: {formatDateTime(formData.createdAt)}</span>
+                  </div>
+
+                  <div className={`text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-xl border kanit-text transition-colors shrink-0 ${(formData.branchId || formData.branch_id) ? 'bg-sky-50/80 text-slate-700 border-sky-200/80' : 'bg-amber-50/90 text-amber-800 border-amber-200/90'}`}>
+                    <Building2 size={14} className={`shrink-0 ${(formData.branchId || formData.branch_id) ? 'text-sky-500' : 'text-amber-500'}`} />
+                    <span className="text-slate-500 text-xs font-medium shrink-0">สาขา:</span>
+                    <select
+                      disabled={isViewMode}
+                      value={formData.branchId || formData.branch_id || ''}
+                      onChange={(e) => setFormData({ ...formData, branchId: e.target.value, branch_id: e.target.value })}
+                      className={`bg-transparent border-0 text-slate-800 font-semibold text-xs focus:ring-0 focus:outline-none disabled:cursor-not-allowed pr-1 py-0 truncate max-w-[160px] ${isViewMode ? 'appearance-none cursor-default' : 'cursor-pointer'}`}
+                    >
+                      <option value="" className="text-amber-700 font-normal">-- ระบุสาขา --</option>
+                      {branchesData && branchesData.length > 0 ? (
+                        branchesData.map(b => (
+                          <option key={b.id} value={b.id} className="text-slate-800 font-normal">{b.name || b.clinicName || b.id}</option>
+                        ))
+                      ) : (
+                        <option value="main" className="text-slate-800 font-normal">สาขาหลัก</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-2 transition-colors ml-1"><X size={18} /></button>
+                </div>
+
+                {/* ฝั่งขวา Mobile (md:hidden): ปุ่ม X อย่างเดียว */}
+                <div className="flex md:hidden items-center shrink-0">
+                  <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full p-2 transition-colors"><X size={18} /></button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button type="button" onClick={closeMedModal} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 shadow-xs border border-slate-200 hover:bg-slate-50 transition-colors"><X size={18} /></button>
+
+              {/* Mobile Sub-Header (md:hidden): แบ่งเวลากับสาขาอย่างละครึ่ง (50% / 50%) ในแถวเดียวกัน */}
+              <div className="flex md:hidden items-center w-full gap-2 mt-2.5 pt-2.5 border-t border-slate-100">
+                {/* 50% ฝั่งซ้าย: วันที่และเวลาลงทะเบียน */}
+                <div className="w-1/2 flex items-center justify-center gap-1.5 text-[10px] sm:text-[11px] text-slate-600 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-200/70 kanit-text font-medium whitespace-nowrap min-w-0 shadow-2xs h-8">
+                  <Clock size={11} className="text-slate-400 shrink-0" />
+                  <span className="truncate">{formatDateTime(formData.createdAt)}</span>
+                </div>
+
+                {/* 50% ฝั่งขวา: ปุ่มเลือกสาขา */}
+                <div className={`w-1/2 text-[10px] sm:text-[11px] font-medium flex items-center justify-start gap-1 px-2 py-1.5 rounded-lg border kanit-text transition-colors min-w-0 h-8 ${(formData.branchId || formData.branch_id) ? 'bg-sky-50 text-slate-700 border-sky-200/80' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                  <Building2 size={11} className={`shrink-0 ${(formData.branchId || formData.branch_id) ? 'text-sky-500' : 'text-amber-500'}`} />
+                  <span className="text-slate-500 text-[10px] sm:text-[11px] font-medium shrink-0">สาขา:</span>
+                  <select
+                    disabled={isViewMode}
+                    value={formData.branchId || formData.branch_id || ''}
+                    onChange={(e) => setFormData({ ...formData, branchId: e.target.value, branch_id: e.target.value })}
+                    className={`bg-transparent border-0 text-slate-800 font-semibold text-[10px] sm:text-[11px] focus:ring-0 focus:outline-none disabled:cursor-not-allowed pl-0.5 pr-0 py-0 truncate flex-1 min-w-0 text-left ${isViewMode ? 'appearance-none cursor-default' : 'cursor-pointer'}`}
+                  >
+                    <option value="" className="text-amber-700 font-normal">-- ระบุสาขา --</option>
+                    {branchesData && branchesData.length > 0 ? (
+                      branchesData.map(b => (
+                        <option key={b.id} value={b.id} className="text-slate-800 font-normal">{b.name || b.clinicName || b.id}</option>
+                      ))
+                    ) : (
+                      <option value="main" className="text-slate-800 font-normal">สาขาหลัก</option>
+                    )}
+                  </select>
+                </div>
               </div>
             </div>
             
@@ -1926,9 +2094,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                           </button>
                         </>
                       )}
-                      <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 kanit-text">
-                        <Clock size={16} className="text-slate-400" /><span>ลงทะเบียน: {formatDateTime(formData.createdAt)}</span>
-                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">

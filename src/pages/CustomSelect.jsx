@@ -111,7 +111,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                 }
             >
                 <span className={`truncate ${compact ? 'font-medium text-slate-600 text-sm kanit-text' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
-                {(!compact || fullWidth) && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
+                {!disabled && (!compact || fullWidth) && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && createPortal(
                 <div ref={dropdownRef} style={dropdownStyle} className={`bg-white border border-slate-200 rounded-2xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'origin-bottom' : 'origin-top'} zoom-in-95 max-h-48 ${compact ? 'max-w-[90vw]' : ''}`}>
