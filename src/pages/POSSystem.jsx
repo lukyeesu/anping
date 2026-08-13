@@ -1192,7 +1192,7 @@ const POSSystem = ({
                       {discount > 0 && (
                          <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
                             {discountType === 'percent' 
-                               ? `(${formatCurrency(discountAmount)} ฿)` 
+                               ? `(${formatCurrency(discountAmount)} บาท)` 
                                : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
                          </span>
                       )}

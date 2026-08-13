@@ -402,7 +402,7 @@ export const getPatientLastVisitStr = (p) => {
     return `${year}${month}${day}${hour}${minute}`;
 };
 
-export const formatCurPrint = (amount) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount || 0);
+export const formatCurPrint = (amount) => new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount) || 0);
 
 export const bahtTextPrint = (amount) => {
     if (!amount || amount === 0) return 'ศูนย์บาทถ้วน';
@@ -429,13 +429,178 @@ export const bahtTextPrint = (amount) => {
     return result;
 };
 
+// 🌟 Smart Resolver: ดึงข้อมูลสาขา/คลินิกอย่างแม่นยำ ไม่ว่าชื่อฟิลด์จะเป็น camelCase หรือ snake_case
+export const resolveBranchInfo = (branchesData = [], branchIdOrName = '', fallbackBranchId = '') => {
+  const safeBranches = Array.isArray(branchesData) ? branchesData : [];
+  const searchKey = (branchIdOrName && branchIdOrName !== 'all') 
+    ? branchIdOrName 
+    : ((fallbackBranchId && fallbackBranchId !== 'all') ? fallbackBranchId : '');
+  
+  let match = safeBranches.find(b => 
+    b && (
+      String(b.id) === String(searchKey) || 
+      String(b.name) === String(searchKey) || 
+      String(b.clinicName) === String(searchKey) || 
+      String(b.clinic_name) === String(searchKey) ||
+      String(b.clinicRegName) === String(searchKey) ||
+      String(b.clinic_reg_name) === String(searchKey)
+    )
+  );
+
+  if (!match && safeBranches.length > 0) {
+    match = safeBranches[0];
+  }
+  if (!match) match = {};
+
+  const clinicName = match.clinicName || match.clinic_name || match.clinicRegName || match.clinic_reg_name || match.name || "อันผิงคลินิก (Anping Clinic)";
+  const clinicAddress = match.address || match.clinicAddress || match.clinic_address || "123/45 ถนนอโศก-ดินแดง แขวงห้วยขวาง เขตห้วยขวาง กรุงเทพมหานคร 10310";
+  const clinicPhone = match.phone || match.clinicPhone || match.clinic_phone || match.tel || "02-123-4567";
+  const licenseNumber = match.licenseNumber || match.license_number || match.clinicLicense || match.clinic_license || match.license || '';
+  const taxId = match.taxId || match.tax_id || match.clinicTax || match.clinic_tax || match.clinicTaxId || match.clinic_tax_id || match.taxIdNo || match.tax_no || match.tax_number || match.tax || '';
+  const logoUrl = match.logo || match.logoUrl || match.logo_url || '';
+  const email = match.email || match.clinic_email || '';
+
+  return {
+    branch: match,
+    clinicName,
+    clinicAddress,
+    clinicPhone,
+    licenseNumber,
+    taxId,
+    logoUrl,
+    email
+  };
+};
+
+// 🌟 Smart Resolver: ดึงข้อมูลคนไข้อย่างแม่นยำ รองรับทุกชื่อฟิลด์ทั้งระบบ (curAddress, phones, idCard, etc.)
+export const resolvePatientInfo = (patient = {}) => {
+  if (!patient || typeof patient !== 'object') patient = {};
+
+  // 1. Name Resolution
+  let prefix = patient.prefix || '';
+  let firstName = patient.firstName || patient.first_name || '';
+  let lastName = patient.lastName || patient.last_name || '';
+  let fullName = '';
+
+  if (firstName || lastName) {
+    fullName = `${prefix ? prefix + ' ' : ''}${firstName} ${lastName}`.trim();
+  } else if (patient.name) {
+    const parsed = parsePatientName(patient.name);
+    prefix = prefix || parsed.prefix;
+    firstName = parsed.firstName;
+    lastName = parsed.lastName;
+    fullName = patient.name;
+  } else {
+    fullName = '-';
+  }
+
+  // 2. HN / Patient ID
+  const hn = patient.hn || patient.id || patient.patient_id || patient.patientId || '-';
+  const hnNumberOnly = String(hn).replace(/^HN/i, '');
+
+  // 3. Phones
+  let phone = '-';
+  if (Array.isArray(patient.phones) && patient.phones.length > 0) {
+    phone = patient.phones.filter(Boolean).join(', ');
+  } else if (Array.isArray(patient.phone) && patient.phone.length > 0) {
+    phone = patient.phone.filter(Boolean).join(', ');
+  } else {
+    phone = patient.phone || patient.phone1 || patient.mobile || patient.tel || '-';
+  }
+
+  // 4. DOB & Age
+  const dob = patient.dob || patient.birthdate || patient.birth_date || '';
+  const ageStr = dob ? getAgeString(dob) : (patient.age ? `${patient.age} ปี` : '-');
+
+  // 5. ID Card / Passport
+  const idCard = patient.idCard || patient.id_card || patient.citizenId || patient.citizen_id || patient.passport || '-';
+
+  // 6. Address Resolution (รองรับ curAddress, address, moo, road, subDistrict, district, province, zipcode)
+  const address = patient.curAddress || patient.address || '';
+  const moo = patient.curMoo || patient.moo || '';
+  const road = patient.curRoad || patient.road || '';
+  const subDistrict = patient.curSubDistrict || patient.subDistrict || patient.subdistrict || '';
+  const district = patient.curDistrict || patient.district || '';
+  const province = patient.curProvince || patient.province || '';
+  const zipcode = patient.curZipcode || patient.zipcode || patient.zip_code || '';
+
+  const fullAddress = [
+    address,
+    moo ? `ม.${moo}` : '',
+    road ? `ถ.${road}` : '',
+    subDistrict ? `ต.${subDistrict}` : '',
+    district ? `อ.${district}` : '',
+    province ? `จ.${province}` : '',
+    zipcode
+  ].filter(Boolean).join(' ').trim() || address || '-';
+
+  // 7. Registration Date
+  let regDateStr = '-';
+  if (patient.createdAt || patient.created_at) {
+    const cd = new Date(patient.createdAt || patient.created_at);
+    if (!isNaN(cd.getTime())) {
+      const d = String(cd.getDate()).padStart(2, '0');
+      const m = String(cd.getMonth() + 1).padStart(2, '0');
+      const y = cd.getFullYear() + 543;
+      regDateStr = `${d}/${m}/${y}`;
+    }
+  }
+
+  return {
+    patient,
+    prefix,
+    firstName,
+    lastName,
+    fullName,
+    hn,
+    hnNumberOnly,
+    phone,
+    dob,
+    ageStr,
+    idCard,
+    address,
+    moo,
+    road,
+    subDistrict,
+    district,
+    province,
+    zipcode,
+    fullAddress,
+    regDateStr,
+    nickname: patient.nickname || '',
+    gender: patient.gender || '-',
+    nationality: patient.nationality || '-',
+    ethnicity: patient.ethnicity || '-',
+    religion: patient.religion || '-',
+    occupation: patient.occupation || '-',
+    emName: patient.emName || patient.emergency_name || '-',
+    emRelation: patient.emRelation || patient.emergency_relation || '-',
+    emAddress: patient.emAddress || patient.emergency_address || '-',
+    chiefComplaint: patient.chiefComplaint || patient.chief_complaint || '-',
+    bloodGroup: patient.bloodGroup || patient.blood_group || '-',
+    allergies: patient.allergies || '-',
+    underlyingDisease: patient.underlyingDisease || patient.underlying_disease || '-'
+  };
+};
+
+// 🌟 Smart Resolver: ดึงข้อมูลสัญญาณชีพอย่างแม่นยำ รองรับ vital_signs object และ direct properties
+export const resolveVitalSigns = (record = {}) => {
+  if (!record || typeof record !== 'object') record = {};
+  const vs = record.vital_signs || record.vitalSigns || {};
+
+  return {
+    temp: record.temp || vs.temp || vs.temperature || '-',
+    pulse: record.pulse || record.pr || vs.pr || vs.pulse || vs.heart_rate || '-',
+    bp: record.bp || vs.bp || vs.blood_pressure || '-',
+    weight: record.weight || vs.weight || '-',
+    height: record.height || vs.height || '-'
+  };
+};
+
 export const globalGenerateInformedConsentHtml = (patient, branchesData = [], currentBranch = '') => {
-    const branchIdToUse = (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "อันผิงคลินิก (Anping Clinic)";
-    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
-    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
-    const logoUrl = targetBranch.logo || '';
+    const bInfo = resolveBranchInfo(branchesData, patient?.branchId || patient?.branch_id, currentBranch);
+    const pInfo = resolvePatientInfo(patient);
+    const { clinicName, clinicAddress, clinicPhone, logoUrl } = bInfo;
     
     const formattedDate = patient.informedConsentTimestamp 
         ? new Date(patient.informedConsentTimestamp).toLocaleDateString('th-TH', {
@@ -566,40 +731,16 @@ export const globalGenerateInformedConsentHtml = (patient, branchesData = [], cu
 };
 
 export const globalGenerateRecordHtml = (patient, branchesData = [], currentBranch = '') => {
-    const branchIdToUse = (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
-    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
-    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
-    const logoUrl = targetBranch.logo || '';
-
-    let regDateStr = '-';
-    if (patient.createdAt) {
-        const cd = new Date(patient.createdAt);
-        if (!isNaN(cd.getTime())) {
-            const cdDay = String(cd.getDate()).padStart(2, '0');
-            const cdMonth = String(cd.getMonth() + 1).padStart(2, '0');
-            const cdYear = cd.getFullYear() + 543;
-            regDateStr = `${cdDay}/${cdMonth}/${cdYear}`;
-        }
-    } else {
-        const today = new Date();
-        const d = String(today.getDate()).padStart(2, '0');
-        const m = String(today.getMonth() + 1).padStart(2, '0');
-        const y = today.getFullYear() + 543;
-        regDateStr = `${d}/${m}/${y}`;
-    }
-
-    const ageStr = patient.dob ? getAgeString(patient.dob) : '';
-    const phone = Array.isArray(patient.phones) ? patient.phones[0] : (patient.phone || patient.phone1 || '');
-    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
+    const bInfo = resolveBranchInfo(branchesData, patient?.branchId || patient?.branch_id, currentBranch);
+    const pInfo = resolvePatientInfo(patient);
+    const { clinicName, clinicAddress, clinicPhone, logoUrl } = bInfo;
 
     return `
     <!DOCTYPE html>
     <html lang="th">
     <head>
         <meta charset="UTF-8">
-        <title>ใบเวชระเบียน - ${patient.hn}</title>
+        <title>ใบเวชระเบียน - ${pInfo.hn}</title>
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
             body { font-family: 'Sarabun', sans-serif; font-size: 14px; color: #000; margin: 0; padding: 0; }
@@ -645,61 +786,61 @@ export const globalGenerateRecordHtml = (patient, branchesData = [], currentBran
                 <div class="doc-info">
                     <div class="doc-info-row">
                         <span style="width: 45px; text-align: right; margin-right: 5px; font-size: 16px;">HN</span>
-                        <span class="value w-auto" style="width: 140px; margin-right: 0; font-size: 16px; text-align: left; padding-left: 8px;">${hnNumberOnly}</span>
+                        <span class="value w-auto" style="width: 140px; margin-right: 0; font-size: 16px; text-align: left; padding-left: 8px;">${pInfo.hnNumberOnly}</span>
                     </div>
                     <div class="doc-info-row">
                         <span style="width: 45px; text-align: right; margin-right: 5px;">วันที่</span>
-                        <span class="value w-auto" style="width: 140px; margin-right: 0; text-align: left; padding-left: 8px;">${regDateStr}</span>
+                        <span class="value w-auto" style="width: 140px; margin-right: 0; text-align: left; padding-left: 8px;">${pInfo.regDateStr}</span>
                     </div>
                 </div>
             </div>
             <div class="title">ใบเวชระเบียน</div>
             <div class="row">
-                <span class="label">ชื่อ</span><span class="value">${patient.prefix ? patient.prefix + ' ' : ''}${patient.firstName || ''}</span>
-                <span class="label">นามสกุล</span><span class="value">${patient.lastName || ''}</span>
-                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 150px;">${patient.nickname || ''}</span>
+                <span class="label">ชื่อ</span><span class="value">${pInfo.prefix ? pInfo.prefix + ' ' : ''}${pInfo.firstName}</span>
+                <span class="label">นามสกุล</span><span class="value">${pInfo.lastName}</span>
+                <span class="label">ชื่อเล่น</span><span class="value w-auto" style="width: 150px;">${pInfo.nickname}</span>
             </div>
             <div class="row">
-                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 150px;">${patient.dob || ''}</span>
-                <span class="label">อายุ</span><span class="value w-auto" style="width: 100px;">${ageStr}</span>
-                <span class="label">เลขบัตรประชาชน</span><span class="value">${patient.idCard || ''}</span>
+                <span class="label">วันเดือนปีเกิด</span><span class="value w-auto" style="width: 150px;">${pInfo.dob}</span>
+                <span class="label">อายุ</span><span class="value w-auto" style="width: 100px;">${pInfo.ageStr}</span>
+                <span class="label">เลขบัตรประชาชน</span><span class="value">${pInfo.idCard}</span>
             </div>
             <div class="row">
-                <span class="label">บ้านเลขที่</span><span class="value w-auto" style="width: 250px;">${patient.address || ''}</span>
-                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 80px;">${patient.moo || ''}</span>
-                <span class="label">ถนน</span><span class="value">${patient.road || ''}</span>
+                <span class="label">บ้านเลขที่</span><span class="value w-auto" style="width: 250px;">${pInfo.address}</span>
+                <span class="label">หมู่ที่</span><span class="value w-auto" style="width: 80px;">${pInfo.moo}</span>
+                <span class="label">ถนน</span><span class="value">${pInfo.road}</span>
             </div>
             <div class="row">
-                <span class="label">ตำบล</span><span class="value">${patient.subDistrict || ''}</span>
-                <span class="label">อำเภอ</span><span class="value">${patient.district || ''}</span>
-                <span class="label">จังหวัด</span><span class="value">${patient.province || ''}</span>
-                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 100px;">${patient.zipcode || ''}</span>
+                <span class="label">ตำบล</span><span class="value">${pInfo.subDistrict}</span>
+                <span class="label">อำเภอ</span><span class="value">${pInfo.district}</span>
+                <span class="label">จังหวัด</span><span class="value">${pInfo.province}</span>
+                <span class="label">รหัสไปรษณีย์</span><span class="value w-auto" style="width: 100px;">${pInfo.zipcode}</span>
             </div>
             <div class="row">
-                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${phone}</span>
-                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 100px;">${patient.nationality || ''}</span>
-                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 100px;">${patient.ethnicity || ''}</span>
-                <span class="label">ศาสนา</span><span class="value">${patient.religion || ''}</span>
+                <span class="label">เบอร์โทรศัพท์</span><span class="value w-auto" style="width: 150px;">${pInfo.phone}</span>
+                <span class="label">สัญชาติ</span><span class="value w-auto" style="width: 100px;">${pInfo.nationality}</span>
+                <span class="label">เชื้อชาติ</span><span class="value w-auto" style="width: 100px;">${pInfo.ethnicity}</span>
+                <span class="label">ศาสนา</span><span class="value">${pInfo.religion}</span>
             </div>
             <div class="row">
-                <span class="label">อาชีพ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.occupation || ''}</span>
+                <span class="label">อาชีพ</span><span class="value" style="text-align: left; padding-left: 8px;">${pInfo.occupation}</span>
             </div>
             <div class="row">
-                <span class="label">ชื่อผู้ติดต่อกรณีฉุกเฉิน</span><span class="value">${patient.emName || ''}</span>
-                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 200px;">${patient.emRelation || ''}</span>
+                <span class="label">ชื่อผู้ติดต่อกรณีฉุกเฉิน</span><span class="value">${pInfo.emName}</span>
+                <span class="label">เกี่ยวข้องเป็น</span><span class="value w-auto" style="width: 200px;">${pInfo.emRelation}</span>
             </div>
             <div class="row">
-                <span class="label">ที่อยู่ที่ติดต่อได้</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.emAddress || ''}</span>
+                <span class="label">ที่อยู่ที่ติดต่อได้</span><span class="value" style="text-align: left; padding-left: 8px;">${pInfo.emAddress}</span>
             </div>
             <div class="row">
-                <span class="label">อาการที่จะตรวจ</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.chiefComplaint || ''}</span>
+                <span class="label">อาการที่จะตรวจ</span><span class="value" style="text-align: left; padding-left: 8px;">${pInfo.chiefComplaint}</span>
             </div>
             <div class="row">
-                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 150px;">${patient.bloodGroup || ''}</span>
-                <span class="label">การแพ้ยา</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.allergies || ''}</span>
+                <span class="label">หมู่เลือด</span><span class="value w-auto" style="width: 150px;">${pInfo.bloodGroup}</span>
+                <span class="label">การแพ้ยา</span><span class="value" style="text-align: left; padding-left: 8px;">${pInfo.allergies}</span>
             </div>
             <div class="row">
-                <span class="label">โรคประจำตัว</span><span class="value" style="text-align: left; padding-left: 8px;">${patient.underlyingDisease || ''}</span>
+                <span class="label">โรคประจำตัว</span><span class="value" style="text-align: left; padding-left: 8px;">${pInfo.underlyingDisease}</span>
             </div>
         </div>
     </body>
@@ -708,22 +849,15 @@ export const globalGenerateRecordHtml = (patient, branchesData = [], currentBran
 };
 
 export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData = [], currentBranch = '') => {
-    // ลำดับความสำคัญ: 1. สาขาที่บันทึกในประวัติ (record), 2. สาขาปัจจุบันที่เลือกในเมนู, 3. สาขาที่คนไข้ลงทะเบียน
-    const branchIdToUse = (record && record.branchId) || (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
-    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
-    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
-    const logoUrl = targetBranch.logo || '';
+    const bInfo = resolveBranchInfo(branchesData, record?.branchId || record?.branch_id || patient?.branchId || patient?.branch_id, currentBranch);
+    const pInfo = resolvePatientInfo(patient);
+    const vsInfo = resolveVitalSigns(record);
+    const { clinicName, clinicAddress, clinicPhone, logoUrl } = bInfo;
 
-    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
-    const fullName = `${patient.prefix || ''}${patient.firstName || ''} ${patient.lastName || ''}`.trim();
     const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
-    const ageStr = patient.dob ? getAgeString(patient.dob) : '';
     const txText = Array.isArray(record.tx) ? record.tx.filter(t => t).join(', ') : (record.tx || '-');
 
-    // ดึงชื่อแพทย์ประจำเคส หากไม่มีหรือระบุเป็นขีดจะใช้แพทย์ตั้งต้นของคลินิก
-    let doctorNameDisplay = (record && record.doctor || '').trim();
+    let doctorNameDisplay = (record && (record.doctor || record.doctor_name || record.doctorName) || '').trim();
     if (!doctorNameDisplay || doctorNameDisplay === '-') {
         doctorNameDisplay = '';
     }
@@ -733,7 +867,7 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
     <html lang="th">
     <head>
         <meta charset="UTF-8">
-        <title>ใบ OPD - ${patient.hn}</title>
+        <title>ใบ OPD - ${pInfo.hn}</title>
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
             body { font-family: 'Sarabun', sans-serif; font-size: 13px; color: #000; margin: 0; padding: 0; }
@@ -797,7 +931,7 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
                 <div class="doc-info" style="width: 300px;">
                     <div class="doc-info-row" style="font-size: 20px; margin-bottom: 10px;">
                         <span style="margin-right: 15px;">HN</span>
-                        <span>${hnNumberOnly}</span>
+                        <span>${pInfo.hnNumberOnly}</span>
                     </div>
                     <div class="doc-info-row" style="font-size: 14px;">
                         <span>วันที่:</span>
@@ -808,28 +942,28 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
                 </div>
             </div>
             <div class="row">
-                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${fullName}</span>
-                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${patient.nickname || '-'}</span>
-                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${patient.gender || '-'}</span>
+                <span class="label">ชื่อผู้ป่วย:</span><span class="value left">${pInfo.fullName}</span>
+                <span class="label">ชื่อเล่น:</span><span class="value w-auto" style="width: 80px;">${pInfo.nickname || '-'}</span>
+                <span class="label">เพศ:</span><span class="value w-auto" style="width: 60px;">${pInfo.gender}</span>
             </div>
             <div class="row">
-                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${patient.idCard || '-'}</span>
-                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${ageStr}</span>
-                <span class="label">โทร:</span><span class="value">${patient.phones && patient.phones[0] ? patient.phones[0] : (patient.phone || patient.phone1 || '-')}</span>
+                <span class="label">เลขบัตรประชาชน:</span><span class="value left" style="width: 140px; flex-grow: 0;">${pInfo.idCard}</span>
+                <span class="label">อายุ:</span><span class="value w-auto" style="width: 100px;">${pInfo.ageStr}</span>
+                <span class="label">โทร:</span><span class="value">${pInfo.phone}</span>
             </div>
             <div class="row">
-                <span class="label">ที่อยู่:</span><span class="value left">${patient.address || ''} ม.${patient.moo || '-'} ถ.${patient.road || '-'} ต.${patient.subDistrict || '-'} อ.${patient.district || '-'} จ.${patient.province || ''} ${patient.zipcode || ''}</span>
+                <span class="label">ที่อยู่:</span><span class="value left">${pInfo.fullAddress}</span>
             </div>
             <div class="row">
-                <span class="label">โรคประจำตัว:</span><span class="value left">${patient.underlyingDisease || 'ไม่มี'}</span>
-                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${patient.allergies || 'ไม่มี'}</span>
+                <span class="label">โรคประจำตัว:</span><span class="value left">${pInfo.underlyingDisease}</span>
+                <span class="label">แพ้ยา/อาหาร:</span><span class="value left">${pInfo.allergies}</span>
             </div>
             <div class="vitals">
-                T: <span class="val-box">${record.temp || ''}</span> &deg;C &nbsp;&nbsp;&nbsp;
-                P: <span class="val-box">${record.pulse || ''}</span> /min &nbsp;&nbsp;&nbsp;
-                BP: <span class="val-box" style="min-width: 60px;">${record.bp || ''}</span> mmHg &nbsp;&nbsp;&nbsp;
-                น้ำหนัก: <span class="val-box">${record.weight || ''}</span> kg &nbsp;&nbsp;&nbsp;
-                ส่วนสูง: <span class="val-box">${record.height || ''}</span> cm
+                T: <span class="val-box">${vsInfo.temp}</span> &deg;C &nbsp;&nbsp;&nbsp;
+                P: <span class="val-box">${vsInfo.pulse}</span> /min &nbsp;&nbsp;&nbsp;
+                BP: <span class="val-box" style="min-width: 60px;">${vsInfo.bp}</span> mmHg &nbsp;&nbsp;&nbsp;
+                น้ำหนัก: <span class="val-box">${vsInfo.weight}</span> kg &nbsp;&nbsp;&nbsp;
+                ส่วนสูง: <span class="val-box">${vsInfo.height}</span> cm
             </div>
             <div class="main-content">
                 <div class="left-column">
@@ -857,31 +991,22 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
 };
 
 export const globalGenerateMedicalCertificateHtml = (patient, record, branchesData = [], currentBranch = '', staffData = []) => {
-    const branchIdToUse = (record && record.branchId) || (currentBranch && currentBranch !== 'all' ? currentBranch : '') || (patient && patient.branchId);
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "ไม่มีข้อมูลชื่อคลินิก";
-    const clinicAddress = targetBranch.address || "ไม่มีข้อมูลที่อยู่คลินิก";
-    const clinicPhone = targetBranch.phone || "ไม่มีข้อมูลเบอร์โทรคลินิก";
-    const logoUrl = targetBranch.logo || '';
+    const bInfo = resolveBranchInfo(branchesData, record?.branchId || record?.branch_id || patient?.branchId || patient?.branch_id, currentBranch);
+    const pInfo = resolvePatientInfo(patient);
+    const { clinicName, clinicAddress, clinicPhone, logoUrl } = bInfo;
 
-    const doctorName = record.doctor || '-';
-    // ป้องกัน Error กรณี staffData ไม่ใช่ Array หรือถูกส่งมาเป็น undefined
+    const doctorName = record.doctor || record.doctor_name || record.doctorName || '-';
     const safeStaffData = Array.isArray(staffData) ? staffData : [];
     const doctorStaff = safeStaffData.find(staff => {
       const sName = `${staff.prefix || ''}${staff.firstName || ''} ${staff.lastName || ''}`.trim();
       return sName.includes(doctorName.replace(/^(นพ\.|พญ\.|พท\.|พจ\.)\s*/, '')) || doctorName.includes(staff.firstName || '');
     }) || {};
-    const licenseNumber = doctorStaff.licenseNumber || '-';
+    const licenseNumber = doctorStaff.licenseNumber || doctorStaff.license_number || '-';
     const doctorPosition = doctorStaff.position || 'แพทย์';
 
-    const hnNumberOnly = (patient.hn || '').replace(/^HN/i, '');
-    const fullName = `${patient.prefix || ''}${patient.firstName || ''} ${patient.lastName || ''}`.trim();
-    
     const recordDate = record.datetime ? record.datetime.split(' ')[0] : '';
     let displayDate = '-';
-    // ดึงเลขเอกสารที่บันทึกไว้ในฐานข้อมูล ถ้าไม่มีจะเว้นว่างไว้เพื่อรอระบบสร้าง
-    let docNumber = record.medCertNumber || ''; 
-    // ตัวแปรสำหรับแยกวันที่ออกเป็น วัน เดือน ปี เพื่อใช้ในย่อหน้าสุดท้าย
+    let docNumber = record.medCertNumber || record.med_cert_number || ''; 
     let printDay = '....', printMonth = '..................', printYear = '........';
     
     if (recordDate) {
@@ -890,12 +1015,10 @@ export const globalGenerateMedicalCertificateHtml = (patient, record, branchesDa
         const monthName = months[parseInt(m, 10) - 1] || '';
         displayDate = `${parseInt(d, 10)} ${monthName} ${y}`;
         
-        // เก็บค่าแยกไว้ใช้
         printDay = parseInt(d, 10);
         printMonth = monthName;
         printYear = y;
 
-        // หากเป็นการกดพรีวิวดู โดยยังไม่มีการเซฟเลขลงฐานข้อมูล
         if (!docNumber) {
             const adYear = parseInt(y, 10) - 543;
             const mm = m.padStart(2, '0');
@@ -903,16 +1026,15 @@ export const globalGenerateMedicalCertificateHtml = (patient, record, branchesDa
         }
     }
 
-    const ageStr = patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี ' + (getAgeString(patient.dob).split(' ')[2] || '0') + ' เดือน' : '';
+    const ageStr = pInfo.ageStr;
 
-    // ฟังก์ชันคำนวณขนาดฟอนต์อัตโนมัติสำหรับชื่อที่ยาวเกินไป
     const getSigFontSize = (name) => {
         const len = (name || '').length;
         if (len >= 35) return '11px';
         if (len >= 25) return '13px';
         return '15px';
     };
-    const patientFontSize = getSigFontSize(fullName);
+    const patientFontSize = getSigFontSize(pInfo.fullName);
     const doctorFontSize = getSigFontSize(doctorName);
 
     return `
@@ -920,7 +1042,7 @@ export const globalGenerateMedicalCertificateHtml = (patient, record, branchesDa
     <html lang="th">
     <head>
         <meta charset="UTF-8">
-        <title>ใบรับรองแพทย์ - ${patient.hn}</title>
+        <title>ใบรับรองแพทย์ - ${pInfo.hn}</title>
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
         <style>
             /* Impeccable Style Resets & Base */
@@ -986,10 +1108,10 @@ export const globalGenerateMedicalCertificateHtml = (patient, record, branchesDa
                     เลขที่ใบประกอบโรคศิลป์ ${licenseNumber}
                 </div>
                 <div class="content-line">
-                    ได้ตรวจร่างกายของ ${fullName}
+                    ได้ตรวจร่างกายของ ${pInfo.fullName}
                 </div>
                 <div class="content-line">
-                    เลขที่ผู้ป่วย HN ${hnNumberOnly}
+                    เลขที่ผู้ป่วย HN ${pInfo.hnNumberOnly}
                 </div>
                 <div class="content-line">
                     อายุ ${ageStr}
@@ -1010,7 +1132,7 @@ export const globalGenerateMedicalCertificateHtml = (patient, record, branchesDa
         <div class="signature-section">
             <div class="signature-box">
                 <div class="signature-text">ลงชื่อ ............................................. ผู้รับ</div>
-                <div class="signature-text" style="font-size: ${patientFontSize};">( ${fullName} )</div>
+                <div class="signature-text" style="font-size: ${patientFontSize};">( ${pInfo.fullName} )</div>
             </div>
             <div class="signature-box">
                 <div class="signature-text" style="margin-bottom: 5px;">ลงชื่อ ............................................. แพทย์ผู้ตรวจ</div>
@@ -1024,14 +1146,9 @@ export const globalGenerateMedicalCertificateHtml = (patient, record, branchesDa
 `;
 };
 
-export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData, posProducts, currentBranch = '') => {
-    const branchIdToUse = (txn.branchId && txn.branchId !== 'all') ? txn.branchId : (currentBranch !== 'all' ? currentBranch : '');
-    const targetBranch = branchesData.find(b => b.id === branchIdToUse) || branchesData[0] || {};
-    const clinicName = targetBranch.clinicName || targetBranch.name || "ยังไม่ได้ระบุชื่อคลินิก";
-    const clinicAddress = targetBranch.address ?? "ยังไม่ได้ระบุที่อยู่";
-    const clinicPhone = targetBranch.phone ?? "ยังไม่ได้ระบุเบอร์โทร";
-    const taxId = targetBranch.taxId ?? "ยังไม่ได้ระบุเลขประจำตัวผู้เสียภาษี";
-    const logoUrl = targetBranch.logo || '';
+export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsData = [], posProducts = [], currentBranch = '') => {
+    const bInfo = resolveBranchInfo(branchesData, txn?.branchId || txn?.branch_id, currentBranch);
+    const { clinicName, clinicAddress, clinicPhone, taxId, logoUrl } = bInfo;
 
     const dateObj = new Date(txn.createdAt || txn.date || new Date());
     const d = String(dateObj.getDate()).padStart(2, '0');
@@ -1040,7 +1157,7 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
     const timeStr = dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     const dateStr = `${d}/${m}/${y} ${timeStr} น.`;
 
-    const receiptNo = txn.id || txn.receiptNo;
+    const receiptNo = txn.id || txn.receiptNo || txn.receipt_no || '-';
     let customerName = txn.patientName || (txn.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)';
     let customerHN = '-';
     
@@ -1048,10 +1165,10 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
         const parts = customerName.split(' - ');
         customerHN = parts[0];
         customerName = parts.slice(1).join(' - ');
-    } else if (txn.patientId) {
-        customerHN = txn.patientId;
-    } else if (txn.rawTx?.patientId) {
-        customerHN = txn.rawTx.patientId;
+    } else if (txn.patientId || txn.patient_id) {
+        customerHN = txn.patientId || txn.patient_id;
+    } else if (txn.rawTx?.patientId || txn.rawTx?.patient_id) {
+        customerHN = txn.rawTx.patientId || txn.rawTx.patient_id;
     } else if (txn.hn) {
         customerHN = txn.hn;
     }
@@ -1060,26 +1177,81 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
     let customerTaxId = '-';
     let customerPhone = '-';
 
-    const pInfo = patientsData.find(p => (p.id || p.hn) === customerHN);
-    if (pInfo) {
-        customerAddress = `${pInfo.curAddress || pInfo.address || ''} ${pInfo.curMoo || pInfo.moo ? 'ม.'+(pInfo.curMoo || pInfo.moo) : ''} ${pInfo.curRoad || pInfo.road ? 'ถ.'+(pInfo.curRoad || pInfo.road) : ''} ${pInfo.curSubDistrict || pInfo.subDistrict || ''} ${pInfo.curDistrict || pInfo.district || ''} ${pInfo.curProvince || pInfo.province || ''} ${pInfo.curZipcode || pInfo.zipcode || ''}`.trim() || '-';
-        customerTaxId = pInfo.idCard || '-';
-        customerPhone = Array.isArray(pInfo.phones) && pInfo.phones.length > 0 ? pInfo.phones[0] : (pInfo.phone || pInfo.phone1 || '-');
+    const safePatients = Array.isArray(patientsData) ? patientsData : [];
+    const pInfoObj = safePatients.find(p => (p.id || p.hn) === customerHN || p.id === txn.patientId || p.hn === txn.patientId);
+    if (pInfoObj) {
+        const pInfo = resolvePatientInfo(pInfoObj);
+        if (pInfo.fullName && pInfo.fullName !== '-') {
+            customerName = pInfo.fullName;
+        }
+        customerAddress = pInfo.fullAddress;
+        customerTaxId = pInfo.idCard;
+        customerPhone = pInfo.phone;
     }
+
+    customerName = (customerName || '').trim();
+    customerAddress = (customerAddress || '').trim();
+    customerTaxId = (customerTaxId || '').trim();
+    customerPhone = (customerPhone || '').trim();
 
     const cashierName = "Admin User";
     
-    const itemsToPrint = txn.rawTx?.items || txn.items || [{name: txn.category || 'รายการ', quantity: 1, price: txn.amount, total: txn.amount}];
-    const subtotal = txn.rawTx?.subtotal || txn.subtotal || txn.amount || 0;
-    const discountAmount = txn.rawTx?.discountAmount || txn.discountAmount || 0;
-    const taxMode = txn.rawTx?.taxMode || txn.taxMode || 'none';
-    const vatRate = txn.rawTx?.vatRate || txn.vatRate || 7;
-    const vatAmount = txn.rawTx?.vatAmount || txn.vatAmount || 0;
-    const grandTotal = txn.rawTx?.grandTotal || txn.grandTotal || txn.amount || 0;
+    // 🌟 Parsing Items safely (รองรับทั้ง Array, JSON string จาก Supabase/IndexedDB, หรือ Single Transaction)
+    let itemsToPrint = [];
+    let rawItems = txn.rawTx?.items || txn.items;
+    if (typeof rawItems === 'string') {
+        try {
+            rawItems = JSON.parse(rawItems);
+        } catch (e) {
+            rawItems = null;
+        }
+    }
+    if (Array.isArray(rawItems) && rawItems.length > 0) {
+        itemsToPrint = rawItems;
+    } else {
+        const fallAmount = Number(txn.amount || txn.grandTotal || 0);
+        itemsToPrint = [{
+            name: txn.category || txn.description || 'รายการสินค้า/บริการ',
+            quantity: 1,
+            price: fallAmount,
+            total: fallAmount
+        }];
+    }
+
+    // 🌟 Robust Amount & Tax Calculation
+    let subtotal = Number(txn.rawTx?.subtotal ?? txn.subtotal ?? 0);
+    let discountAmount = Number(txn.rawTx?.discountAmount ?? txn.discountAmount ?? txn.discount_amount ?? 0);
+    let vatAmount = Number(txn.rawTx?.vatAmount ?? txn.vatAmount ?? txn.vat_amount ?? 0);
+    let grandTotal = Number(txn.rawTx?.grandTotal ?? txn.grandTotal ?? txn.amount ?? 0);
+    const taxMode = txn.rawTx?.taxMode || txn.taxMode || txn.tax_mode || 'none';
+    const vatRate = Number(txn.rawTx?.vatRate || txn.vatRate || txn.vat_rate || 7);
     const paymentMethod = txn.method || txn.paymentMethod || txn.rawTx?.paymentMethod || 'cash';
-    
+
+    if (!subtotal) {
+        const itemsSum = itemsToPrint.reduce((sum, item) => sum + Number(item.total || (Number(item.quantity || 1) * Number(item.price || 0))), 0);
+        subtotal = itemsSum > 0 ? itemsSum : (grandTotal || Number(txn.amount || 0));
+    }
+
     const afterDiscount = Math.max(0, subtotal - discountAmount);
-    const priceExcludingVat = taxMode === 'include' ? (grandTotal - vatAmount) : afterDiscount;
+
+    if (taxMode === 'include') {
+        if (!grandTotal) grandTotal = afterDiscount || Number(txn.amount || 0);
+        if (!vatAmount && grandTotal > 0) {
+            vatAmount = grandTotal - (grandTotal / (1 + (vatRate / 100)));
+        }
+    } else if (taxMode === 'exclude') {
+        if (!vatAmount && afterDiscount > 0) {
+            vatAmount = afterDiscount * (vatRate / 100);
+        }
+        if (!grandTotal) {
+            grandTotal = afterDiscount + vatAmount;
+        }
+    } else {
+        vatAmount = 0;
+        if (!grandTotal) grandTotal = afterDiscount || Number(txn.amount || 0);
+    }
+
+    const priceExcludingVat = taxMode === 'include' ? Math.max(0, grandTotal - vatAmount) : afterDiscount;
 
     let paymentMethodThai = 'เงินสด';
     if (paymentMethod === 'transfer') paymentMethodThai = 'โอนเงิน';
@@ -1089,31 +1261,39 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
     let itemsHtml = '';
     if (format === 'A4') {
         itemsHtml = itemsToPrint.map((item, index) => {
-            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
+            const itemName = item.name || item.title || 'รายการ';
+            const itemQty = Number(item.quantity || item.qty || 1);
+            const itemPrice = Number(item.price || item.unitPrice || 0);
+            const itemTotal = Number(item.total || (itemQty * itemPrice));
+            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === itemName)?.isVatable);
             if (isVat) hasVatableItems = true;
             const vatMark = isVat ? ' <span style="color:#0ea5e9; font-size:10px; font-weight:bold;">(V)</span>' : '';
             return `
             <tr>
                 <td class="text-center">${index + 1}</td>
-                <td>${item.name}${vatMark}</td>
-                <td class="text-center">${Number(item.quantity).toFixed(2)}</td>
-                <td class="text-right">${formatCurPrint(item.price)}</td>
+                <td>${itemName}${vatMark}</td>
+                <td class="text-center">${itemQty.toFixed(2)}</td>
+                <td class="text-right">${formatCurPrint(itemPrice)}</td>
                 <td class="text-right">0.00</td>
-                <td class="text-right font-bold">${formatCurPrint(item.total)}</td>
+                <td class="text-right font-bold">${formatCurPrint(itemTotal)}</td>
             </tr>
         `}).join('');
     } else {
         itemsHtml = itemsToPrint.map(item => {
-            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === item.name)?.isVatable);
+            const itemName = item.name || item.title || 'รายการ';
+            const itemQty = Number(item.quantity || item.qty || 1);
+            const itemPrice = Number(item.price || item.unitPrice || 0);
+            const itemTotal = Number(item.total || (itemQty * itemPrice));
+            const isVat = item.isVatable !== undefined ? !!item.isVatable : !!(posProducts && posProducts.find(p => p.name === itemName)?.isVatable);
             if (isVat) hasVatableItems = true;
             const vatMark = isVat ? ' <span style="font-size:10px;">(V)</span>' : '';
             return `
             <div style="display: flex; justify-content: space-between; margin-bottom: 6px; page-break-inside: avoid;">
                 <div style="flex: 1; padding-right: 10px;">
-                    <div style="font-weight: bold; margin-bottom: 2px;">${item.name}${vatMark}</div>
-                    <div style="color: #64748b; font-size: 11px;">${item.quantity} x ${formatCurPrint(item.price)}</div>
+                    <div style="font-weight: bold; margin-bottom: 2px;">${itemName}${vatMark}</div>
+                    <div style="color: #64748b; font-size: 11px;">${itemQty} x ${formatCurPrint(itemPrice)}</div>
                 </div>
-                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurPrint(item.total)}</div>
+                <div style="text-align: right; font-weight: bold; white-space: nowrap; align-self: flex-end;">${formatCurPrint(itemTotal)}</div>
             </div>
         `}).join('');
     }
@@ -1177,17 +1357,17 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                             </div>
                         </div>
                         <div style="font-size: 13px; line-height: 1.6; color: #0f172a; display: flex; flex-direction: column; justify-content: flex-end; flex: 1;">
-                            <div style="display: flex;">
-                                <div style="width: 85px; font-weight: 700; color: #1e293b;">ลูกค้า:</div>
-                                <div>${customerName}</div>
+                            <div style="display: flex; align-items: baseline;">
+                                <div style="width: 80px; min-width: 80px; flex-shrink: 0; font-weight: 700; color: #1e293b;">ลูกค้า:</div>
+                                <div style="flex: 1;">${customerName}</div>
                             </div>
-                            <div style="display: flex;">
-                                <div style="width: 85px; font-weight: 700; color: #1e293b;">ที่อยู่:</div>
-                                <div>${customerAddress}</div>
+                            <div style="display: flex; align-items: baseline;">
+                                <div style="width: 80px; min-width: 80px; flex-shrink: 0; font-weight: 700; color: #1e293b;">ที่อยู่:</div>
+                                <div style="flex: 1;">${customerAddress}</div>
                             </div>
-                            <div style="display: flex;">
-                                <div style="width: 85px; font-weight: 700; color: #1e293b;">เลขที่ภาษี:</div>
-                                <div>${customerTaxId}</div>
+                            <div style="display: flex; align-items: baseline;">
+                                <div style="width: 80px; min-width: 80px; flex-shrink: 0; font-weight: 700; color: #1e293b;">เลขที่ภาษี:</div>
+                                <div style="flex: 1;">${customerTaxId}</div>
                             </div>
                         </div>
                     </div>

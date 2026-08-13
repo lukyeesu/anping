@@ -2344,7 +2344,7 @@ const FinancePage = ({
                                 </div>
                                 <div className="hidden sm:block min-w-[80px] text-right">
                                    <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
-                                   <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)}฿</div>
+                                   <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)} บาท</div>
                                 </div>
                                 {(formData.items || []).length > 1 && (
                                    <button
@@ -2413,7 +2413,7 @@ const FinancePage = ({
                                     financeGrandTotal = financeAfterDiscount;
                                 }
 
-                                const grandTotalStr = formatCurrency(financeGrandTotal) + "฿";
+                                const grandTotalStr = formatCurrency(financeGrandTotal) + " บาท";
                                 const grandTotalLen = grandTotalStr.length;
                                 const grandTotalTextClass = grandTotalLen > 15 ? 'text-lg sm:text-xl' : (grandTotalLen > 12 ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl');
 
@@ -2429,7 +2429,7 @@ const FinancePage = ({
                                             {formData.discount > 0 && (
                                                <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
                                                   {formData.discountType === 'percent' 
-                                                     ? `(${formatCurrency(financeDiscountAmount)} ฿)` 
+                                                     ? `(${formatCurrency(financeDiscountAmount)} บาท)` 
                                                      : `(${Number(((Number(formData.discount) || 0) * 100 / (financeSubtotal || 1)).toFixed(2))}%)`}
                                                </span>
                                             )}
@@ -2443,7 +2443,7 @@ const FinancePage = ({
                                                placeholder="0.00"
                                             />
                                             <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px]">
-                                               <button type="button" onClick={() => setFormData({...formData, discountType: 'amount'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
+                                               <button type="button" onClick={() => setFormData({...formData, discountType: 'amount'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>บาท</button>
                                                <div className="w-px bg-slate-200"></div>
                                                <button type="button" onClick={() => setFormData({...formData, discountType: 'percent'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
                                             </div>
@@ -2793,7 +2793,7 @@ const FinancePage = ({
                               financeGrandTotal = financeAfterDiscount;
                           }
 
-                          const grandTotalStr = formatCurrency(financeGrandTotal) + "฿";
+                          const grandTotalStr = formatCurrency(financeGrandTotal) + " บาท";
                           const grandTotalLen = grandTotalStr.length;
                           const grandTotalTextClass = grandTotalLen > 15 ? 'text-lg sm:text-xl' : (grandTotalLen > 12 ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl');
 
@@ -2809,7 +2809,7 @@ const FinancePage = ({
                                       {posEditForm.discountValue > 0 && (
                                          <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
                                             {posEditForm.discountType === 'percent' 
-                                               ? `(${formatCurrency(financeDiscountAmount)} ฿)` 
+                                               ? `(${formatCurrency(financeDiscountAmount)} บาท)` 
                                                : `(${Number(((Number(posEditForm.discountValue) || 0) * 100 / (financeSubtotal || 1)).toFixed(2))}%)`}
                                          </span>
                                       )}
@@ -2884,7 +2884,7 @@ const FinancePage = ({
                                       <span className="font-bold kanit-text shrink-0 text-sky-50">ยอดสุทธิ</span>
                                    </div>
                                    <span className={`font-black font-data text-right w-full sm:w-auto break-all leading-tight ${grandTotalTextClass}`}>
-                                      {formatCurrency(financeGrandTotal)}฿
+                                      {formatCurrency(financeGrandTotal)} บาท
                                    </span>
                                 </div>
                              </div>
