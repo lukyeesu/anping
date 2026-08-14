@@ -2622,13 +2622,17 @@ export default function App() {
                 <div className="w-full mx-auto px-0 py-0">
                     <ReportsManager
                         patientsData={patientsData}
+                        setPatientsData={setPatientsData}
                         posHistoryData={posHistoryData}
+                        setPosHistoryData={setPosHistoryData}
                         branchesData={branchesData}
                         posProducts={posProducts}
                         isGlobalLoading={isGlobalLoading}
                         showToast={showToast}
                         currentBranch={currentBranch}
                         staffData={staffData}
+                        callAppScript={callAppScript}
+                        fetchPatientsPaginated={fetchPatientsPaginated}
                     />
                 </div>
             )}

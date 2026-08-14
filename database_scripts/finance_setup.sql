@@ -70,7 +70,8 @@ CREATE OR REPLACE FUNCTION get_finance_stats(
     end_date text,
     branch_filter text,
     type_filter text,
-    search_query text
+    search_query text,
+    category_filter text DEFAULT 'all'
 ) RETURNS json AS $$
 DECLARE
     total_income numeric := 0;
@@ -87,6 +88,11 @@ BEGIN
     FROM public.finance_all_transactions
     WHERE timestamp_date >= start_date AND timestamp_date <= end_date
       AND (branch_filter = 'all' OR branch_id = branch_filter)
+      AND (
+          category_filter = 'all' OR
+          (category_filter = 'รายได้จาก POS' AND (category = 'รายได้จาก POS' OR is_auto = true)) OR
+          (category = category_filter)
+      )
       AND (
           search_query = '' OR 
           note ILIKE '%' || search_query || '%' OR 

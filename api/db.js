@@ -508,7 +508,43 @@ export default async function handler(req, res) {
         });
       }
 
+      case 'GET_REPORT_DOCUMENT_STATS': {
+        const branchId = payload?.branchId || payload?.branch_id;
+        
+        let pQuery = supabaseAdmin.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false');
+        let cQuery = supabaseAdmin.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false').eq('informed_consent_status', 'green');
+        let oQuery = supabaseAdmin.from('treatments').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false');
+        let mQuery = supabaseAdmin.from('treatments').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false').not('med_cert_number', 'is', null).neq('med_cert_number', '');
+        let rQuery = supabaseAdmin.from('pos_transactions').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false').or('status.is.null,status.neq.cancelled');
 
+        if (branchId && branchId !== 'all') {
+          oQuery = oQuery.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+          mQuery = mQuery.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+          rQuery = rQuery.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+        }
+
+        const [
+          resPatients,
+          resConsent,
+          resOpd,
+          resMedCert,
+          resReceipts
+        ] = await Promise.all([
+          pQuery, cQuery, oQuery, mQuery, rQuery
+        ]);
+
+        const records = resPatients.count || 0;
+        const consents = resConsent.count || 0;
+        const opds = resOpd.count || 0;
+        const medcerts = resMedCert.count || 0;
+        const receipts = resReceipts.count || 0;
+        const total = records + opds + receipts + medcerts + consents;
+
+        return res.status(200).json({
+          status: 'success',
+          data: { total, records, opds, receipts, medcerts, consents }
+        });
+      }
 
       default:
         return res.status(400).json({ status: 'error', message: `Unsupported action: ${action}` });

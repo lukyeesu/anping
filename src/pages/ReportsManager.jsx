@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import MedicalRecords from './MedicalRecords';
 import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
+import { getLocalStore } from '../lib/offlineStore';
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -18,14 +19,155 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData = [], posProducts = [], isGlobalLoading, showToast, currentBranch, staffData = [] }) => {
+const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [], setPosHistoryData, branchesData = [], posProducts = [], isGlobalLoading, showToast, currentBranch, staffData = [], callAppScript, fetchPatientsPaginated }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [docServerStats, setDocServerStats] = useState(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+
+  // States สำหรับเก็บข้อมูลที่รวมกับ IndexedDB และข้อมูล Paginated
+  const [localPatients, setLocalPatients] = useState(patientsData || []);
+  const [localPosHistory, setLocalPosHistory] = useState(posHistoryData || []);
+  const [hasMoreServer, setHasMoreServer] = useState(true);
 
   const headerRef = useRef(null);
   const filterRef = useRef(null);
+
+  // 🌟 1. ดึงข้อมูลจาก IndexedDB (patients, treatments, pos_transactions) ที่เคยโหลดมาจากหน้าอื่น (0 Egress)
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncFromIndexedDB = async () => {
+      try {
+        const [dbPatients, dbTreatments, dbPosTx] = await Promise.all([
+          getLocalStore('patients').catch(() => []),
+          getLocalStore('treatments').catch(() => []),
+          getLocalStore('pos_transactions').catch(() => [])
+        ]);
+
+        if (!isMounted) return;
+
+        // Map Treatments จาก IndexedDB
+        const txMap = {};
+        (dbTreatments || []).forEach(t => {
+          if (!t) return;
+          const pid = String(t.patient_id || t.patientId || t.hn || '').trim();
+          if (pid) {
+            const lower = pid.toLowerCase();
+            const norm = lower.replace(/o/g, '0');
+            if (!txMap[pid]) txMap[pid] = [];
+            if (!txMap[lower]) txMap[lower] = txMap[pid];
+            if (!txMap[norm]) txMap[norm] = txMap[pid];
+            txMap[pid].push(t);
+          }
+        });
+
+        // Merge patients จาก IndexedDB เข้ากับ patientsData prop
+        const patMap = new Map();
+        [...(patientsData || []), ...(dbPatients || [])].forEach(p => {
+          if (!p) return;
+          const key = String(p.id || p.hn || '').trim();
+          if (!key) return;
+
+          const existing = patMap.get(key) || p;
+          let opdList = existing.opdRecords || existing.opd_records || existing.treatments || [];
+          if (typeof opdList === 'string' && opdList.startsWith('[')) {
+            try { opdList = JSON.parse(opdList); } catch (e) {}
+          }
+          if (!Array.isArray(opdList)) opdList = [];
+
+          const pId = String(p.id || '').trim();
+          const pHn = String(p.hn || '').trim();
+          const pNorm = (pId || pHn).toLowerCase().replace(/o/g, '0');
+          const fetchedTx = txMap[pId] || txMap[pHn] || txMap[pNorm] || [];
+
+          const finalOpd = fetchedTx.length > 0 ? fetchedTx : opdList;
+          patMap.set(key, { ...existing, ...p, opdRecords: finalOpd });
+        });
+
+        const mergedPatients = Array.from(patMap.values());
+
+        // Merge pos_transactions จาก IndexedDB เข้ากับ posHistoryData prop
+        const posMap = new Map();
+        [...(posHistoryData || []), ...(dbPosTx || [])].forEach(tx => {
+          if (!tx) return;
+          const key = String(tx.id || tx.receiptNo || tx.receipt_no || '').trim();
+          if (key) posMap.set(key, tx);
+        });
+
+        const mergedPos = Array.from(posMap.values());
+
+        if (isMounted) {
+          if (mergedPatients.length > 0) setLocalPatients(mergedPatients);
+          if (mergedPos.length > 0) setLocalPosHistory(mergedPos);
+        }
+      } catch (e) {
+        console.error("IndexedDB Reports sync error:", e);
+      }
+    };
+
+    syncFromIndexedDB();
+    return () => { isMounted = false; };
+  }, []);
+
+  // ซิงค์เมื่อ props อัปเดตข้อมูลใหม่
+  useEffect(() => {
+    if (patientsData && patientsData.length > 0) {
+      setLocalPatients(prev => {
+        const patMap = new Map();
+        [...prev, ...patientsData].forEach(p => {
+          if (!p) return;
+          const key = String(p.id || p.hn || '').trim();
+          if (key) {
+            const existing = patMap.get(key) || {};
+            patMap.set(key, { ...existing, ...p });
+          }
+        });
+        return Array.from(patMap.values());
+      });
+    }
+  }, [patientsData]);
+
+  useEffect(() => {
+    if (posHistoryData && posHistoryData.length > 0) {
+      setLocalPosHistory(prev => {
+        const posMap = new Map();
+        [...prev, ...posHistoryData].forEach(tx => {
+          if (!tx) return;
+          const key = String(tx.id || tx.receiptNo || tx.receipt_no || '').trim();
+          if (key) posMap.set(key, tx);
+        });
+        return Array.from(posMap.values());
+      });
+    }
+  }, [posHistoryData]);
+
+  // 🌟 ดึงสรุปจำนวนเอกสารตรงจาก Server (0 Egress / High Performance HEAD Count)
+  useEffect(() => {
+    let isMounted = true;
+    setIsStatsLoading(true);
+
+    const loadStats = async () => {
+      try {
+        if (callAppScript) {
+          const res = await callAppScript('GET_REPORT_DOCUMENT_STATS', 'System', { branchId: currentBranch });
+          if (isMounted && res?.status === 'success' && res.data) {
+            setDocServerStats(res.data);
+            setIsStatsLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("loadReportStats error:", e);
+      }
+      if (isMounted) setIsStatsLoading(false);
+    };
+
+    loadStats();
+    return () => { isMounted = false; };
+  }, [currentBranch, callAppScript]);
 
   // 1. รวบรวมและจัดเตรียมข้อมูลเอกสารทั้งหมด (Normalize Data) - OPTIMIZED
   const allDocuments = useMemo(() => {
@@ -33,8 +175,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
     const nowIso = new Date().toISOString();
 
     // 1.1 เวชระเบียน (Medical Records), ประวัติการรักษา (OPD) และ ใบรับรองแพทย์
-    patientsData.forEach(p => {
-        // [FIX] ตรวจสอบและซ่อมแซมข้อมูลชื่อให้สมบูรณ์ (ให้ตรงกับ Logic ใน MedicalRecords)
+    localPatients.forEach(p => {
         const parsed = parsePatientName(getPatientFullName(p));
         const fullPatient = {
             ...p,
@@ -44,73 +185,88 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
         };
 
         const patientName = getPatientFullName(fullPatient);
-        const recDate = fullPatient.createdAt || nowIso;
+        const recDate = fullPatient.createdAt || fullPatient.created_at || nowIso;
+        const patientHn = fullPatient.hn || fullPatient.id;
         
         // เพิ่มเวชระเบียน
         docs.push({
-            id: `REC-${fullPatient.hn || fullPatient.id}`,
+            id: `REC-${patientHn}`,
             type: 'record',
             typeLabel: 'เวชระเบียนผู้ป่วย',
             date: recDate,
             timestamp: new Date(recDate).getTime(),
             patientName: patientName || 'ไม่ระบุชื่อ',
-            refNo: fullPatient.hn || fullPatient.id,
+            refNo: patientHn,
             rawData: fullPatient
         });
 
         // เพิ่มใบยินยอมการรักษา (ถ้าลงชื่อยินยอมเรียบร้อยแล้ว)
-        if (fullPatient.informedConsentStatus === 'green') {
-            const consentDate = fullPatient.informedConsentTimestamp 
-                ? new Date(fullPatient.informedConsentTimestamp).toISOString()
+        const isConsentAgreed = fullPatient.informedConsentStatus === 'green' || 
+                               fullPatient.informed_consent_status === 'green' ||
+                               fullPatient.consentStatus === 'green' ||
+                               fullPatient.consent_status === 'green';
+
+        if (isConsentAgreed) {
+            const consentDate = fullPatient.informedConsentTimestamp || fullPatient.informed_consent_timestamp 
+                ? new Date(fullPatient.informedConsentTimestamp || fullPatient.informed_consent_timestamp).toISOString()
                 : recDate;
             docs.push({
-                id: `CONSENT-${fullPatient.hn || fullPatient.id}`,
+                id: `CONSENT-${patientHn}`,
                 type: 'consent',
                 typeLabel: 'ใบยินยอมรับการรักษาพยาบาล',
                 date: consentDate,
                 timestamp: new Date(consentDate).getTime(),
                 patientName: patientName || 'ไม่ระบุชื่อ',
-                refNo: fullPatient.hn || fullPatient.id,
+                refNo: patientHn,
                 rawData: fullPatient
             });
         }
 
         // เพิ่มประวัติการรักษา (OPD) และ ใบรับรองแพทย์
-        if (fullPatient.opdRecords && fullPatient.opdRecords.length > 0) {
-            fullPatient.opdRecords.forEach((opd, idx) => {
+        const opdList = fullPatient.opdRecords || fullPatient.opd_records || fullPatient.treatments || [];
+        if (Array.isArray(opdList) && opdList.length > 0) {
+            opdList.forEach((opd, idx) => {
                 let opdIsoDate = nowIso;
-                if (opd.datetime) {
+                const dateRaw = opd.datetime || opd.created_at || opd.createdAt;
+                if (dateRaw) {
                     try {
-                        const parts = opd.datetime.split(' ');
-                        const dParts = parts[0].split('/');
-                        if (dParts.length === 3) {
-                            opdIsoDate = new Date(parseInt(dParts[2])-543, parseInt(dParts[1])-1, parseInt(dParts[0])).toISOString();
+                        if (dateRaw.includes('/')) {
+                            const parts = dateRaw.split(' ');
+                            const dParts = parts[0].split('/');
+                            if (dParts.length === 3) {
+                                opdIsoDate = new Date(parseInt(dParts[2])-543, parseInt(dParts[1])-1, parseInt(dParts[0])).toISOString();
+                            }
+                        } else {
+                            opdIsoDate = new Date(dateRaw).toISOString();
                         }
                     } catch { /* Ignore invalid date format */ }
                 }
 
+                const opdKey = opd.id || idx;
+
                 // ประวัติการรักษา (OPD)
                 docs.push({
-                    id: `OPD-${fullPatient.hn || fullPatient.id}-${idx}`,
+                    id: `OPD-${patientHn}-${opdKey}`,
                     type: 'opd',
                     typeLabel: 'ประวัติการรักษา (OPD)',
                     date: opdIsoDate,
                     timestamp: new Date(opdIsoDate).getTime(),
                     patientName: patientName || 'ไม่ระบุชื่อ',
-                    refNo: `${fullPatient.hn || fullPatient.id} (ครั้งที่ ${fullPatient.opdRecords.length - idx})`,
-                    rawData: { opd, patient: fullPatient, index: idx, visitNumber: fullPatient.opdRecords.length - idx }
+                    refNo: `${patientHn} (ครั้งที่ ${opdList.length - idx})`,
+                    rawData: { opd, patient: fullPatient, index: idx, visitNumber: opdList.length - idx }
                 });
 
                 // เพิ่มใบรับรองแพทย์ (ถ้ามีการรันเลขที่เอกสารแล้ว)
-                if (opd.medCertNumber) {
+                const medCertNo = opd.medCertNumber || opd.med_cert_number || opd.medCertNo || opd.med_cert_no;
+                if (medCertNo) {
                     docs.push({
-                        id: `MEDCERT-${fullPatient.hn || fullPatient.id}-${idx}`,
+                        id: `MEDCERT-${patientHn}-${opdKey}`,
                         type: 'medcert',
                         typeLabel: 'ใบรับรองแพทย์',
                         date: opdIsoDate,
                         timestamp: new Date(opdIsoDate).getTime(),
                         patientName: patientName || 'ไม่ระบุชื่อ',
-                        refNo: opd.medCertNumber,
+                        refNo: medCertNo,
                         rawData: { opd, patient: fullPatient, index: idx }
                     });
                 }
@@ -119,17 +275,19 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
     });
 
     // 1.2 ใบเสร็จรับเงิน (Receipts)
-    posHistoryData.forEach(tx => {
-        if (tx.status !== 'cancelled') {
-            const txDate = tx.createdAt || tx.date || nowIso;
+    localPosHistory.forEach(tx => {
+        const txStatus = tx.status || tx.deal_status || tx.rawTx?.status;
+        if (txStatus !== 'cancelled') {
+            const txDate = tx.createdAt || tx.created_at || tx.date || nowIso;
+            const receiptId = tx.id || tx.receiptNo || tx.receipt_no || '-';
             docs.push({
-                id: `POS-${tx.id}`,
+                id: `POS-${receiptId}`,
                 type: 'receipt',
                 typeLabel: 'ใบเสร็จรับเงิน',
                 date: txDate,
                 timestamp: new Date(txDate).getTime(),
-                patientName: tx.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)',
-                refNo: tx.id,
+                patientName: tx.patientName || tx.patient_name || (tx.rawTx?.patientName) || 'ลูกค้าทั่วไป (ไม่ระบุ)',
+                refNo: receiptId,
                 rawData: tx
             });
         }
@@ -137,7 +295,7 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
 
     // เรียงลำดับจากใหม่ไปเก่า
     return docs.sort((a, b) => b.timestamp - a.timestamp);
-  }, [patientsData, posHistoryData]);
+  }, [localPatients, localPosHistory]);
 
   // 2. กรองข้อมูลตามการค้นหาและประเภท
   const filteredDocs = useMemo(() => {
@@ -149,19 +307,31 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
       });
   }, [allDocuments, search, filterType]);
 
-  // 3. สถิติสรุปเอกสาร
+  // 3. สถิติสรุปเอกสาร (ใช้ผลลัพธ์คำนวณรวมจาก Server โดยตรง - 0 Egress)
   const stats = useMemo(() => {
-      const total = allDocuments.length;
-      let recs = 0, opds = 0, receipts = 0, medcerts = 0, consents = 0;
+      if (docServerStats) {
+          return {
+              total: docServerStats.total || 0,
+              records: docServerStats.records || 0,
+              opds: docServerStats.opds || 0,
+              receipts: docServerStats.receipts || 0,
+              medcerts: docServerStats.medcerts || 0,
+              consents: docServerStats.consents || 0
+          };
+      }
+
+      let localRecs = 0, localOpds = 0, localReceipts = 0, localMedcerts = 0, localConsents = 0;
       allDocuments.forEach(d => {
-          if (d.type === 'record') recs++;
-          else if (d.type === 'opd') opds++;
-          else if (d.type === 'receipt') receipts++;
-          else if (d.type === 'medcert') medcerts++;
-          else if (d.type === 'consent') consents++;
+          if (d.type === 'record') localRecs++;
+          else if (d.type === 'opd') localOpds++;
+          else if (d.type === 'receipt') localReceipts++;
+          else if (d.type === 'medcert') localMedcerts++;
+          else if (d.type === 'consent') localConsents++;
       });
-      return { total, records: recs, opds, receipts, medcerts, consents };
-  }, [allDocuments]);
+
+      const total = localRecs + localOpds + localReceipts + localMedcerts + localConsents;
+      return { total, records: localRecs, opds: localOpds, receipts: localReceipts, medcerts: localMedcerts, consents: localConsents };
+  }, [docServerStats, allDocuments]);
 
   // 4. การจัดการเลือกเอกสาร (Checkbox)
   const toggleSelection = (id) => {
@@ -349,39 +519,98 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
   // Infinite Scroll & Sticky Behavior
   const [visibleCount, setVisibleCount] = useState(20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false);
   const visibleDocs = filteredDocs.slice(0, visibleCount);
 
-  useEffect(() => {
-    const mainElement = document.querySelector('main') || window;
-    const handleScroll = rAFThrottle((e) => {
-      if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
-      const target = e.target || mainElement;
-      const { scrollTop, clientHeight, scrollHeight } = target;
-      
-      if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
-      else headerRef.current.classList.remove('is-scrolled');
+  // ฟังก์ชันดึงข้อมูลเพิ่มเมื่อเลื่อนลงสุด (Infinite Scroll)
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMoreRef.current) return;
 
-      if (filterRef.current && headerRef.current) {
-          const headerRect = headerRef.current.getBoundingClientRect();
-          const filterRect = filterRef.current.getBoundingClientRect();
-          if (filterRect.top <= headerRect.bottom + 1) filterRef.current.classList.add('is-scrolled');
-          else filterRef.current.classList.remove('is-scrolled');
+    // 1. ถ้ายังมีข้อมูลที่แคชอยู่ใน filteredDocs แต่ยังไม่ได้แสดง ให้ขยาย visibleCount เพิ่ม
+    if (visibleCount < filteredDocs.length) {
+      setVisibleCount(prev => Math.min(prev + 20, filteredDocs.length));
+      return;
+    }
+
+    // 2. ถ้าแสดงข้อมูลในเครื่องครบแล้ว ให้ดึงข้อมูลหน้าถัดไปจาก Server และซิงค์ลง IndexedDB
+    if (hasMoreServer && fetchPatientsPaginated) {
+      isLoadingMoreRef.current = true;
+      setIsLoadingMore(true);
+
+      const offset = localPatients.length;
+      fetchPatientsPaginated({ offset, limit: 20 })
+        .then(res => {
+          if (res?.status === 'success' && Array.isArray(res.patients) && res.patients.length > 0) {
+            setLocalPatients(prev => {
+              const existingIds = new Set(prev.map(p => String(p.id || p.hn).trim()));
+              const newPats = res.patients.filter(p => !existingIds.has(String(p.id || p.hn).trim()));
+              const updated = [...prev, ...newPats];
+              if (setPatientsData) setPatientsData(updated);
+              return updated;
+            });
+            setHasMoreServer(res.hasMore !== false);
+            setVisibleCount(prev => prev + 20);
+          } else {
+            setHasMoreServer(false);
+          }
+        })
+        .catch(err => {
+          console.error("ReportsManager handleLoadMore error:", err);
+        })
+        .finally(() => {
+          isLoadingMoreRef.current = false;
+          setIsLoadingMore(false);
+        });
+    }
+  }, [visibleCount, filteredDocs.length, hasMoreServer, fetchPatientsPaginated, localPatients.length, setPatientsData]);
+
+  useEffect(() => {
+    const mainElement = document.querySelector('main');
+
+    const handleScroll = rAFThrottle(() => {
+      let scrollTop = 0;
+      let clientHeight = 0;
+      let scrollHeight = 0;
+
+      const scrollTarget = (mainElement && mainElement.scrollHeight > mainElement.clientHeight) ? mainElement : window;
+
+      if (scrollTarget === window) {
+        scrollTop = window.scrollY || document.documentElement.scrollTop;
+        clientHeight = window.innerHeight;
+        scrollHeight = document.documentElement.scrollHeight;
+      } else {
+        scrollTop = mainElement.scrollTop;
+        clientHeight = mainElement.clientHeight;
+        scrollHeight = mainElement.scrollHeight;
       }
 
-      if (scrollTop + clientHeight >= scrollHeight - 100) {
-        if (visibleCount < filteredDocs.length && !isLoadingMore) {
-           setIsLoadingMore(true);
-           setTimeout(() => {
-              setVisibleCount(prev => prev + 10);
-              setIsLoadingMore(false);
-           }, 1000);
-        }
+      if (headerRef.current) {
+        if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+        else headerRef.current.classList.remove('is-scrolled');
+      }
+
+      if (filterRef.current && headerRef.current) {
+        const headerRect = headerRef.current.getBoundingClientRect();
+        const filterRect = filterRef.current.getBoundingClientRect();
+        if (filterRect.top <= headerRect.bottom + 1) filterRef.current.classList.add('is-scrolled');
+        else filterRef.current.classList.remove('is-scrolled');
+      }
+
+      if (scrollTop + clientHeight >= scrollHeight - 300) {
+        handleLoadMore();
       }
     });
 
-    mainElement.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleScroll);
-  }, [visibleCount, filteredDocs.length, isLoadingMore]);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    if (mainElement) {
+      mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (mainElement) mainElement.removeEventListener('scroll', handleScroll);
+    };
+  }, [handleLoadMore]);
 
   return (
     <div className="fade-in pb-10 relative flex flex-col h-full w-full">
@@ -412,42 +641,42 @@ const ReportsManager = ({ patientsData = [], posHistoryData = [], branchesData =
                 <div className="w-10 h-10 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl flex items-center justify-center shrink-0"><LayoutList size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">เอกสารทั้งหมด</p></div>
               </div>
-              <div className="relative z-10 mt-auto"><p className="font-black text-slate-800 font-data text-2xl sm:text-3xl">{stats.total}</p></div>
+              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-slate-800 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.total)}</p>}</div>
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-xl flex items-center justify-center shrink-0"><Users size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">เวชระเบียน</p></div>
               </div>
-              <div className="relative z-10 mt-auto"><p className="font-black text-indigo-600 font-data text-2xl sm:text-3xl">{stats.records}</p></div>
+              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-indigo-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.records)}</p>}</div>
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl flex items-center justify-center shrink-0"><Stethoscope size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบ OPD</p></div>
               </div>
-              <div className="relative z-10 mt-auto"><p className="font-black text-emerald-600 font-data text-2xl sm:text-3xl">{stats.opds}</p></div>
+              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-emerald-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.opds)}</p>}</div>
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl flex items-center justify-center shrink-0"><FileText size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบรับรองแพทย์</p></div>
               </div>
-              <div className="relative z-10 mt-auto"><p className="font-black text-rose-600 font-data text-2xl sm:text-3xl">{stats.medcerts}</p></div>
+              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-rose-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.medcerts)}</p>}</div>
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl flex items-center justify-center shrink-0"><HeartPulse size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบยินยอมรักษา</p></div>
               </div>
-              <div className="relative z-10 mt-auto"><p className="font-black text-amber-600 font-data text-2xl sm:text-3xl">{stats.consents}</p></div>
+              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-amber-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.consents)}</p>}</div>
             </div>
             <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 mb-2 relative z-10">
                 <div className="w-10 h-10 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl flex items-center justify-center shrink-0"><Receipt size={20} /></div>
                 <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบเสร็จ</p></div>
               </div>
-              <div className="relative z-10 mt-auto"><p className="font-black text-sky-600 font-data text-2xl sm:text-3xl">{stats.receipts}</p></div>
+              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-sky-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.receipts)}</p>}</div>
             </div>
          </div>
       </div>

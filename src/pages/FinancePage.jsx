@@ -101,7 +101,41 @@ const FinancePage = ({
 
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState(() => getFinInitialState('fin_filterType', 'all')); // 'all' | 'income' | 'expense' | 'pos' | 'manual'
+  const [filterCategory, setFilterCategory] = useState(() => getFinInitialState('fin_filterCategory', 'all'));
   const [filterBranch, setFilterBranch] = useState(() => getFinInitialState('fin_filterBranch', 'all'));
+
+  // Master list ของทุกหมวดหมู่ที่มีอยู่ในระบบ (เพื่อไม่ให้หมวดไม่อื่นหายไปเวลากดเลือกตัวกรอง)
+  const [masterCategories, setMasterCategories] = useState([]);
+
+  // ดึงหมวดหมู่ทั้งหมดจาก IndexedDB เมื่อเริ่มเปิดหน้า
+  useEffect(() => {
+    let isMounted = true;
+    const loadAllCategoriesFromStore = async () => {
+      try {
+        const [revs, exps, pos] = await Promise.all([
+          getLocalStore('finance_revenue').catch(() => []),
+          getLocalStore('finance_expenses').catch(() => []),
+          getLocalStore('pos_transactions').catch(() => [])
+        ]);
+        if (!isMounted) return;
+
+        const catSet = new Set();
+        (revs || []).forEach(r => { if (r.category && !r.is_deleted) catSet.add(String(r.category).trim()); });
+        (exps || []).forEach(e => { if (e.category && !e.is_deleted) catSet.add(String(e.category).trim()); });
+        if ((pos || []).length > 0) catSet.add('รายได้จาก POS');
+
+        if (catSet.size > 0) {
+          setMasterCategories(prev => {
+            const combined = new Set([...prev, ...catSet]);
+            return Array.from(combined).sort((a, b) => a.localeCompare(b, 'th'));
+          });
+        }
+      } catch (e) {}
+    };
+
+    loadAllCategoriesFromStore();
+    return () => { isMounted = false; };
+  }, []);
 
   // --- [NEW/MODIFIED] State สำหรับ Filter รวมกลุ่มแบบใหม่ (จำค่าลง localStorage) ---
   const [timeFilterMode, setTimeFilterMode] = useState(() => getFinInitialState('fin_timeFilterMode', 'month')); // 'all', 'month', 'year', 'range'
@@ -118,8 +152,9 @@ const FinancePage = ({
 
   useEffect(() => {
     localStorage.setItem('fin_filterType', JSON.stringify(filterType));
+    localStorage.setItem('fin_filterCategory', JSON.stringify(filterCategory));
     localStorage.setItem('fin_filterBranch', JSON.stringify(filterBranch));
-  }, [filterType, filterBranch]);
+  }, [filterType, filterCategory, filterBranch]);
 
   // --- [NEW] State สำหรับ Modal ปฏิทินเลือกช่วงเวลา ---
   const [showFinRangeCalendar, setShowFinRangeCalendar] = useState(false);
@@ -442,6 +477,8 @@ const FinancePage = ({
 
       setFormData({
         id: '',
+        originalId: '',
+        originalType: 'income',
         date: `${d}/${m}/${y} ${hh}:${mm}:${ss}`,
         type: 'income',
         category: '',
@@ -771,8 +808,10 @@ const FinancePage = ({
                   end_date: endDate,
                   branch_filter: filterBranch,
                   type_filter: filterType,
-                  search_query: s
+                  search_query: s,
+                  category_filter: filterCategory
               });
+
               if (!error && data) {
                   const total_income = Number(data.total_income) || 0;
                   const total_expense = Number(data.total_expense) || 0;
@@ -798,10 +837,81 @@ const FinancePage = ({
                   });
                   setIsStatsFromServer(true);
               } else {
-                  setIsStatsFromServer(false);
+                  // Fallback query if RPC parameter mismatch or offline
+                  let catQuery = supabase.from('finance_all_transactions')
+                      .select('type, amount, is_auto, status')
+                      .gte('timestamp_date', startDate)
+                      .lte('timestamp_date', endDate)
+                      .or('is_deleted.is.null,is_deleted.eq.false')
+                      .neq('status', 'cancelled');
+
+                  if (filterBranch !== 'all') {
+                      catQuery = catQuery.eq('branch_id', filterBranch);
+                  }
+                  if (filterType === 'income') catQuery = catQuery.eq('type', 'income');
+                  else if (filterType === 'expense') catQuery = catQuery.eq('type', 'expense');
+                  else if (filterType === 'pos') catQuery = catQuery.eq('is_auto', true);
+                  else if (filterType === 'manual') catQuery = catQuery.eq('is_auto', false);
+
+                  if (filterCategory !== 'all') {
+                      if (filterCategory === 'รายได้จาก POS') {
+                          catQuery = catQuery.or('category.eq.รายได้จาก POS,is_auto.eq.true');
+                      } else {
+                          catQuery = catQuery.eq('category', filterCategory);
+                      }
+                  }
+
+                  if (s) {
+                      catQuery = catQuery.or(`note.ilike.%${s}%,category.ilike.%${s}%,patient_name.ilike.%${s}%,id.ilike.%${s}%`);
+                  }
+
+                  const { data: catStatsRows, error: catErr } = await catQuery;
+                  if (!catErr && catStatsRows) {
+                      let total_income = 0;
+                      let total_expense = 0;
+                      let count_income = 0;
+                      let count_expense = 0;
+
+                      catStatsRows.forEach(row => {
+                          const amt = Number(row.amount || 0);
+                          if (row.type === 'income') {
+                              total_income += amt;
+                              count_income++;
+                          } else if (row.type === 'expense') {
+                              total_expense += amt;
+                              count_expense++;
+                          } else {
+                              total_income += amt;
+                              count_income++;
+                          }
+                      });
+
+                      const netIncome = total_income - total_expense;
+                      let costPercent = 0;
+                      let marginPercent = 0;
+                      if (total_income > 0) {
+                          costPercent = (total_expense / total_income) * 100;
+                          marginPercent = (netIncome / total_income) * 100;
+                      }
+
+                      setStatsData({
+                          income: total_income,
+                          expense: total_expense,
+                          balance: netIncome,
+                          totalIncome: total_income,
+                          totalExpense: total_expense,
+                          netIncome,
+                          transactionsCount: count_income + count_expense,
+                          costPercent,
+                          marginPercent
+                      });
+                      setIsStatsFromServer(true);
+                  } else {
+                      setIsStatsFromServer(false);
+                  }
               }
           } catch(e) { 
-              console.error(e); 
+              console.error("fetchStats error:", e); 
               setIsStatsFromServer(false);
           }
       }
@@ -819,6 +929,14 @@ const FinancePage = ({
           else if (filterType === 'expense') query = query.eq('type', 'expense');
           else if (filterType === 'pos') query = query.eq('is_auto', true);
           else if (filterType === 'manual') query = query.eq('is_auto', false);
+
+          if (filterCategory !== 'all') {
+              if (filterCategory === 'รายได้จาก POS') {
+                  query = query.or(`category.eq.รายได้จาก POS,is_auto.eq.true`);
+              } else {
+                  query = query.eq('category', filterCategory);
+              }
+          }
 
           if (s) {
               query = query.or(`note.ilike.%${s}%,category.ilike.%${s}%,patient_name.ilike.%${s}%,id.ilike.%${s}%`);
@@ -908,7 +1026,7 @@ const FinancePage = ({
       setPage(0);
       setHasMore(true);
       fetchStatsAndData(0, true);
-  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+  }, [search, filterType, filterCategory, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
   // --- Realtime Delta Sync Listener for Finance Page (0ms UI Update when other devices add/edit/delete) ---
   const handleRealtimeFinanceChange = useCallback((table, payload) => {
@@ -1027,7 +1145,7 @@ const FinancePage = ({
       }
     });
     return () => unsubscribe();
-  }, [search, filterType, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+  }, [search, filterType, filterCategory, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
   useEffect(() => {
     if (Array.isArray(posHistoryData) && posHistoryData.length > 0) {
@@ -1086,6 +1204,12 @@ const FinancePage = ({
     if (filterType === 'pos' && !tx.isAuto && !tx.is_auto) return false;
     if (filterType === 'manual' && (tx.isAuto || tx.is_auto)) return false;
 
+    // 2.1 Category Filter
+    if (filterCategory !== 'all') {
+      const txCat = String(tx.category || (tx.isAuto || tx.is_auto ? 'รายได้จาก POS' : '')).trim();
+      if (txCat !== filterCategory) return false;
+    }
+
     // 3. Search Filter
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
@@ -1111,7 +1235,50 @@ const FinancePage = ({
     }
 
     return true;
-  }, [filterBranch, filterType, search, timeFilterMode, filterMonth, filterYear, dateRange]);
+  }, [filterBranch, filterType, filterCategory, search, timeFilterMode, filterMonth, filterYear, dateRange]);
+
+  const [showCatSuggestions, setShowCatSuggestions] = useState(false);
+
+  // สะสมหมวดหมู่ที่ตรวจพบเข้าสู่ masterCategories เพื่อป้องกันตัวเลือกหมวดหมู่อื่นหายเมื่อกดกรอง
+  useEffect(() => {
+    if (Array.isArray(financeTransactions) && financeTransactions.length > 0) {
+      setMasterCategories(prev => {
+        const catSet = new Set(prev);
+        financeTransactions.forEach(tx => {
+          if (tx.is_deleted || tx.isDeleted || tx.status === 'cancelled') return;
+          const cat = String(tx.category || (tx.isAuto || tx.is_auto ? 'รายได้จาก POS' : '')).trim();
+          if (cat) catSet.add(cat);
+        });
+        const arr = Array.from(catSet).sort((a, b) => a.localeCompare(b, 'th'));
+        if (arr.length === prev.length && arr.every((v, i) => v === prev[i])) return prev;
+        return arr;
+      });
+    }
+  }, [financeTransactions]);
+
+  // สกัดเฉพาะ หมวดหมู่ (Category) ที่มีอยู่จริงในตารางแบบ Unique ไม่ซ้ำกัน (โดยรักษาตัวเลือกหมวดหมู่อื่นไว้ไม่ให้หายไป)
+  const uniqueCategories = useMemo(() => {
+    const catSet = new Set(masterCategories);
+    (financeTransactions || []).forEach(tx => {
+      if (tx.is_deleted || tx.isDeleted || tx.status === 'cancelled') return;
+      const cat = String(tx.category || (tx.isAuto || tx.is_auto ? 'รายได้จาก POS' : '')).trim();
+      if (cat) catSet.add(cat);
+    });
+    return Array.from(catSet).sort((a, b) => a.localeCompare(b, 'th'));
+  }, [masterCategories, financeTransactions]);
+
+  const categoryOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'ทุกหมวดหมู่' },
+      ...uniqueCategories.map(c => ({ value: c, label: c }))
+    ];
+  }, [uniqueCategories]);
+
+  const filteredCatSuggestions = useMemo(() => {
+    const q = String(formData.category || '').trim().toLowerCase();
+    if (!q) return uniqueCategories;
+    return uniqueCategories.filter(c => c.toLowerCase().includes(q));
+  }, [uniqueCategories, formData.category]);
 
   const visibleTransactions = useMemo(() => {
     return (financeTransactions || []).filter(isTxMatchingFilters);
@@ -1228,6 +1395,8 @@ const FinancePage = ({
 
       setFormData({
          id: tx.id,
+         originalId: tx.id,
+         originalType: tx.type || (tx.id?.startsWith('INC') ? 'income' : 'expense'),
          date: editDateStr,
          type: tx.type,
          category: tx.category,
@@ -1246,6 +1415,22 @@ const FinancePage = ({
       });
       setIsModalClosing(false);
       setIsModalOpen(true);
+  };
+
+  const handleTypeSelect = (newType) => {
+      setFormData(prev => {
+        let updatedId = prev.id;
+        if (updatedId) {
+          if (newType === 'income') {
+            if (updatedId.startsWith('EXP-')) updatedId = 'INC-' + updatedId.substring(4);
+            else if (updatedId.startsWith('EXP')) updatedId = 'INC' + updatedId.substring(3);
+          } else if (newType === 'expense') {
+            if (updatedId.startsWith('INC-')) updatedId = 'EXP-' + updatedId.substring(4);
+            else if (updatedId.startsWith('INC')) updatedId = 'EXP' + updatedId.substring(3);
+          }
+        }
+        return { ...prev, type: newType, id: updatedId };
+      });
   };
 
   const handleDeleteTransaction = async (tx) => {
@@ -1307,6 +1492,9 @@ const FinancePage = ({
 
     setIsProcessing(true);
     const isEdit = !!formData.id;
+    const originalId = formData.originalId || formData.id;
+    const originalType = formData.originalType || formData.type;
+    const typeChanged = isEdit && (originalType !== formData.type);
 
     const convertThaiToISO = (thaiDateTimeStr) => {
         if (!thaiDateTimeStr) return new Date().toISOString();
@@ -1360,8 +1548,27 @@ const FinancePage = ({
         financeGrandTotal = financeAfterDiscount;
     }
 
+    // คำนวณ ID ใหม่ และเปลี่ยน Prefix (INC/EXP) ให้ตรงตามประเภทปัจจุบัน
+    let targetId = formData.id;
+    if (!isEdit) {
+      targetId = `${formData.type === 'income' ? 'INC' : 'EXP'}-${Date.now()}`;
+    } else {
+      const targetPrefix = formData.type === 'income' ? 'INC' : 'EXP';
+      if (targetId.startsWith('INC-') && formData.type === 'expense') {
+        targetId = 'EXP-' + targetId.substring(4);
+      } else if (targetId.startsWith('EXP-') && formData.type === 'income') {
+        targetId = 'INC-' + targetId.substring(4);
+      } else if (targetId.startsWith('INC') && formData.type === 'expense') {
+        targetId = 'EXP' + targetId.substring(3);
+      } else if (targetId.startsWith('EXP') && formData.type === 'income') {
+        targetId = 'INC' + targetId.substring(3);
+      } else if ((formData.type === 'income' && !targetId.startsWith('INC')) || (formData.type === 'expense' && !targetId.startsWith('EXP'))) {
+        targetId = `${targetPrefix}-${Date.now()}`;
+      }
+    }
+
     const newTx = {
-      id: isEdit ? formData.id : `${formData.type === 'income' ? 'INC' : 'EXP'}-${Date.now()}`,
+      id: targetId,
       date: isoDate,
       type: formData.type,
       amount: financeGrandTotal,
@@ -1384,12 +1591,32 @@ const FinancePage = ({
     };
 
     try {
-      const sheetName = newTx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
-      const res = await callAppScript('SAVE_DATA', sheetName, newTx);
+      const newSheetName = newTx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
+      const oldSheetName = originalType === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
+
+      // 1. บันทึกรายการไปยังตารางเป้าหมายใหม่ (finance_revenue หรือ finance_expenses)
+      const res = await callAppScript('SAVE_DATA', newSheetName, newTx);
 
       if (res.status === 'success') {
+          // 2. หากเป็นการแก้ไขและมีการเปลี่ยนประเภท (หรือ ID เปลี่ยน) ให้ลบรายการเดิมออกจากตารางเก่าใน Supabase
+          if (isEdit && (typeChanged || originalId !== targetId)) {
+            try {
+              await callAppScript('DELETE_DATA', oldSheetName, { id: originalId });
+            } catch (delErr) {
+              console.warn("Failed to delete old transaction from " + oldSheetName + ":", delErr);
+            }
+
+            // ลบรายการเดิมออกจาก IndexedDB Store เก่า และบันทึกรายการลง Store ใหม่
+            const oldStoreName = originalType === 'income' ? 'finance_revenue' : 'finance_expenses';
+            const newStoreName = newTx.type === 'income' ? 'finance_revenue' : 'finance_expenses';
+            try {
+              await upsertLocalStore(oldStoreName, [{ id: originalId, is_deleted: true }], { broadcast: false });
+              await upsertLocalStore(newStoreName, [newTx], { broadcast: false });
+            } catch (idbErr) {}
+          }
+
           fetchStatsAndData(0, true);
-          showToast(isEdit ? 'แก้ไขรายการสำเร็จ' : 'บันทึกรายการสำเร็จ', 'success');
+          showToast(isEdit ? 'แก้ไขและย้ายรายการสำเร็จ' : 'บันทึกรายการสำเร็จ', 'success');
           closeManualModal();
       } else {
           throw new Error(res.message);
@@ -1462,7 +1689,7 @@ const FinancePage = ({
     const scrollTarget = mainElement !== window ? mainElement : window;
     scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
     return () => scrollTarget.removeEventListener('scroll', handleScroll);
-  }, [hasMore, isFetchingData, filterBranch, filterType, search, timeFilterMode, filterMonth, filterYear, dateRange]);
+  }, [hasMore, isFetchingData, filterBranch, filterType, filterCategory, search, timeFilterMode, filterMonth, filterYear, dateRange]);
   // -----------------------------
 
   return (
@@ -1559,12 +1786,13 @@ const FinancePage = ({
                
                <button 
                  onClick={() => setShowMobileFilters(!showMobileFilters)} 
-                 className={`lg:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                 className={`lg:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterCategory !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                >
                   {showMobileFilters ? <ChevronUp size={18} /> : <Filter size={18} />}
                </button>
 
                <div className="hidden lg:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
+                 {/* 1. ประเภท */}
                  <div className="w-[100px] relative">
                    <CustomSelect 
                      value={filterType} 
@@ -1580,6 +1808,17 @@ const FinancePage = ({
                    />
                  </div>
                  
+                 {/* 2. หมวดหมู่ */}
+                 <div className="w-[130px] relative">
+                   <CustomSelect 
+                     value={filterCategory} 
+                     onChange={(val) => setFilterCategory(val)} 
+                     options={categoryOptions}
+                     compact fullWidth className="w-full"
+                   />
+                 </div>
+
+                 {/* 3. สาขา */}
                  <div className="w-[110px] relative">
                    <CustomSelect 
                      value={filterBranch} 
@@ -1592,6 +1831,7 @@ const FinancePage = ({
                    />
                  </div>
 
+                 {/* 4. วันที่ */}
                  <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[36px] z-[45]">
                     <div className="w-[110px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
                         <CustomSelect 
@@ -1629,9 +1869,12 @@ const FinancePage = ({
             <div className={`lg:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-500' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-300'}`}>
                <div className={showMobileFilters ? 'overflow-visible' : 'overflow-hidden'}>
                  <div className={`flex flex-col gap-2 pt-3 mt-1 border-t border-slate-100 relative z-[60] transition-transform ${showMobileFilters ? 'translate-y-0 ease-out duration-500' : '-translate-y-4 ease-in duration-300'}`}>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                      <div className="relative">
                        <CustomSelect value={filterType} onChange={(val) => setFilterType(val)} options={[{value: 'all', label: 'ทั้งหมด'}, {value: 'income', label: 'รายรับ'}, {value: 'expense', label: 'รายจ่าย'}, {value: 'pos', label: 'POS'}, {value: 'manual', label: 'Manual'}]} compact fullWidth className="w-full" />
+                     </div>
+                     <div className="relative">
+                       <CustomSelect value={filterCategory} onChange={(val) => setFilterCategory(val)} options={categoryOptions} compact fullWidth className="w-full" />
                      </div>
                      <div className="relative">
                        <CustomSelect value={filterBranch} onChange={(val) => setFilterBranch(val)} options={[{value: 'all', label: 'ทุกสาขา'}, ...(branchesData || []).map(b => ({value: b.id, label: b.name}))]} compact fullWidth className="w-full" />
@@ -2158,11 +2401,11 @@ const FinancePage = ({
 
                     {/* ข้อมูลพื้นฐาน */}
                     <div className="grid grid-cols-2 gap-3 mb-2">
-                       <div onClick={() => setFormData({...formData, type: 'income'})} className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'income' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                       <div onClick={() => handleTypeSelect('income')} className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'income' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.type === 'income' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-100 text-slate-400'}`}><TrendingUp size={20} /></div>
                           <span className={`font-bold kanit-text ${formData.type === 'income' ? 'text-emerald-700' : 'text-slate-500'}`}>รายรับ</span>
                        </div>
-                       <div onClick={() => setFormData({...formData, type: 'expense'})} className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'expense' ? 'border-rose-500 bg-rose-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                       <div onClick={() => handleTypeSelect('expense')} className={`p-4 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-2 ${formData.type === 'expense' ? 'border-rose-500 bg-rose-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.type === 'expense' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20' : 'bg-slate-100 text-slate-400'}`}><TrendingDown size={20} /></div>
                           <span className={`font-bold kanit-text ${formData.type === 'expense' ? 'text-rose-700' : 'text-slate-500'}`}>รายจ่าย</span>
                        </div>
@@ -2195,7 +2438,41 @@ const FinancePage = ({
                           </div>
                           <div>
                              <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมวดหมู่ <span className="text-rose-500">*</span></label>
-                             <input required type="text" placeholder="เช่น ค่าเช่า, ค่าน้ำไฟ" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all" />
+                             <div className="relative group">
+                                <input 
+                                   required 
+                                   type="text" 
+                                   placeholder="พิมพ์หรือเลือกหมวดหมู่..." 
+                                   value={formData.category} 
+                                   onChange={e => {
+                                      setFormData({...formData, category: e.target.value});
+                                      setShowCatSuggestions(true);
+                                   }} 
+                                   onFocus={() => setShowCatSuggestions(true)}
+                                   onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
+                                   className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all" 
+                                />
+                                {showCatSuggestions && filteredCatSuggestions.length > 0 && (
+                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-xl border border-slate-100 z-[220] overflow-hidden modal-animate-in max-h-[180px] overflow-y-auto custom-scrollbar">
+                                      <div className="p-1">
+                                         {filteredCatSuggestions.map((cat, idx) => (
+                                            <div
+                                               key={idx}
+                                               onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  setFormData({...formData, category: cat});
+                                                  setShowCatSuggestions(false);
+                                               }}
+                                               className="px-3.5 py-2 rounded-xl hover:bg-sky-50 hover:text-sky-600 cursor-pointer text-xs font-bold font-data text-slate-700 transition-colors flex items-center justify-between"
+                                            >
+                                               <span>{cat}</span>
+                                               <Tag size={12} className="text-slate-400 opacity-60" />
+                                            </div>
+                                         ))}
+                                      </div>
+                                   </div>
+                                )}
+                             </div>
                           </div>
                        </div>
 

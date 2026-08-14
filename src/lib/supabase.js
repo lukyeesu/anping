@@ -1043,6 +1043,49 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
     }
 
+    case 'GET_REPORT_DOCUMENT_STATS': {
+      try {
+        const branchId = payload?.branchId || payload?.branch_id;
+        
+        let pQuery = supabase.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false');
+        let cQuery = supabase.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false').eq('informed_consent_status', 'green');
+        let oQuery = supabase.from('treatments').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false');
+        let mQuery = supabase.from('treatments').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false').not('med_cert_number', 'is', null).neq('med_cert_number', '');
+        let rQuery = supabase.from('pos_transactions').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false').or('status.is.null,status.neq.cancelled');
+
+        if (branchId && branchId !== 'all') {
+          oQuery = oQuery.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+          mQuery = mQuery.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+          rQuery = rQuery.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+        }
+
+        const [
+          resPatients,
+          resConsent,
+          resOpd,
+          resMedCert,
+          resReceipts
+        ] = await Promise.all([
+          pQuery, cQuery, oQuery, mQuery, rQuery
+        ]);
+
+        const records = resPatients.count || 0;
+        const consents = resConsent.count || 0;
+        const opds = resOpd.count || 0;
+        const medcerts = resMedCert.count || 0;
+        const receipts = resReceipts.count || 0;
+        const total = records + opds + receipts + medcerts + consents;
+
+        return {
+          status: 'success',
+          data: { total, records, opds, receipts, medcerts, consents }
+        };
+      } catch (e) {
+        console.error('GET_REPORT_DOCUMENT_STATS error:', e);
+        return { status: 'error', data: { total: 0, records: 0, opds: 0, receipts: 0, medcerts: 0, consents: 0 } };
+      }
+    }
+
     case 'GET_EXECUTIVE_SUMMARY': {
       try {
         const { startDate, endDate, branchId } = payload || {};
