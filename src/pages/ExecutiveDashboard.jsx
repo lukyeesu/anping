@@ -361,8 +361,42 @@ const ExecutiveDashboard = ({
     });
   }, [allTransactions, selectedBranch, timeRange, customStartDate, customEndDate]);
 
-  // Calculate Financial Summary (จากระบบสรุปผลหลังบ้าน)
+  // Calculate Financial Summary (จากระบบสรุปผลหลังบ้าน พร้อม Fallback จากข้อมูล POS ในเครื่อง)
   const summary = useMemo(() => {
+    // คำนวณจำนวนบิล POS ตามช่วงเวลาและสาขาจาก posHistoryData (Fallback)
+    const localPosCount = (posHistoryData || []).filter(tx => {
+      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch && tx.branch_id !== selectedBranch) return false;
+      if (tx.status === 'cancelled') return false;
+      const txDate = parseDate(tx.datetime || tx.timestamp || tx.createdAt || tx.date || tx.created_at);
+      if (!txDate) return false;
+      const now = new Date();
+      if (timeRange === 'today') {
+        return txDate.getDate() === now.getDate() &&
+               txDate.getMonth() === now.getMonth() &&
+               txDate.getFullYear() === now.getFullYear();
+      } else if (timeRange === 'week') {
+        const limit = new Date(); limit.setDate(now.getDate() - 7); limit.setHours(0, 0, 0, 0);
+        return txDate >= limit && txDate <= now;
+      } else if (timeRange === 'month') {
+        const limit = new Date(now.getFullYear(), now.getMonth(), 1);
+        return txDate >= limit && txDate <= now;
+      } else if (timeRange === 'year') {
+        const limit = new Date(now.getFullYear(), 0, 1);
+        return txDate >= limit && txDate <= now;
+      } else if (timeRange === 'custom') {
+        if (customStartDate) {
+          const s = new Date(customStartDate); s.setHours(0, 0, 0, 0);
+          if (txDate < s) return false;
+        }
+        if (customEndDate) {
+          const e = new Date(customEndDate); e.setHours(23, 59, 59, 999);
+          if (txDate > e) return false;
+        }
+        return true;
+      }
+      return true;
+    }).length;
+
     if (execSummary) {
       return {
         income: execSummary.totalIncome || 0,
@@ -373,7 +407,9 @@ const ExecutiveDashboard = ({
         transfer: execSummary.paymentMethods?.transfer || 0,
         card: execSummary.paymentMethods?.card || 0,
         qr: execSummary.paymentMethods?.qr || 0,
-        checkoutsCount: execSummary.queueStats?.completed || 0
+        checkoutsCount: (execSummary.posCount !== undefined && execSummary.posCount !== null)
+          ? execSummary.posCount 
+          : (execSummary.checkoutsCount !== undefined && execSummary.checkoutsCount !== null ? execSummary.checkoutsCount : localPosCount)
       };
     }
     return {
@@ -385,9 +421,9 @@ const ExecutiveDashboard = ({
       transfer: 0,
       card: 0,
       qr: 0,
-      checkoutsCount: 0
+      checkoutsCount: localPosCount
     };
-  }, [execSummary]);
+  }, [execSummary, posHistoryData, selectedBranch, timeRange, customStartDate, customEndDate]);
 
   // Calculate Staff Performance Rank (sales & commissions)
   const staffStats = useMemo(() => {

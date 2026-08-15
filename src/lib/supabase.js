@@ -1144,34 +1144,61 @@ export async function callSupabase(action, sheetName, payload = null) {
         const rawQueueList = (queueRes.data || []).map(rowToJS);
         const rawPatientList = patientRes.data || [];
 
-        const isDateInRange = (dStr) => {
-          if (!startDate || !endDate) return true;
-          if (!dStr) return true;
-          try {
-            const dt = new Date(dStr);
-            if (isNaN(dt.getTime())) return true;
-            const y = dt.getFullYear();
-            const m = String(dt.getMonth() + 1).padStart(2, '0');
-            const d = String(dt.getDate()).padStart(2, '0');
-            const ymd = `${y}-${m}-${d}`;
-            return ymd >= startDate && ymd <= endDate;
-          } catch(e) {
-            return true;
+        const parseToYMD = (dStr) => {
+          if (!dStr) return null;
+          const str = String(dStr).trim();
+          // Check DD/MM/YYYY
+          const ddmmyyyy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (ddmmyyyy) {
+            let day = parseInt(ddmmyyyy[1], 10);
+            let month = parseInt(ddmmyyyy[2], 10);
+            let year = parseInt(ddmmyyyy[3], 10);
+            if (year > 2400) year -= 543;
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           }
+          // Check YYYY-MM-DD
+          const yyyymmdd = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if (yyyymmdd) {
+            let year = parseInt(yyyymmdd[1], 10);
+            let month = parseInt(yyyymmdd[2], 10);
+            let day = parseInt(yyyymmdd[3], 10);
+            if (year > 2400) year -= 543;
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          }
+          try {
+            const dt = new Date(str);
+            if (!isNaN(dt.getTime())) {
+              let year = dt.getFullYear();
+              if (year > 2400) year -= 543;
+              const m = String(dt.getMonth() + 1).padStart(2, '0');
+              const d = String(dt.getDate()).padStart(2, '0');
+              return `${year}-${m}-${d}`;
+            }
+          } catch(e) {}
+          return null;
         };
 
-        const posList = rawPosList.filter(tx => isDateInRange(tx.date || tx.createdAt || tx.created_at));
-        const revList = rawRevList.filter(tx => isDateInRange(tx.date || tx.createdAt || tx.created_at));
-        const expList = rawExpList.filter(tx => isDateInRange(tx.date || tx.createdAt || tx.created_at));
-        const queueList = rawQueueList.filter(q => isDateInRange(q.rawDateTime || q.raw_date_time || q.createdAt || q.created_at));
-        const patientList = rawPatientList.filter(p => isDateInRange(p.created_at));
+        const isDateInRange = (dStr) => {
+          if (!startDate || !endDate) return true;
+          const ymd = parseToYMD(dStr);
+          if (!ymd) return true;
+          return ymd >= startDate && ymd <= endDate;
+        };
+
+        const posList = rawPosList.filter(tx => isDateInRange(tx.datetime || tx.timestamp || tx.date || tx.createdAt || tx.created_at));
+        const revList = rawRevList.filter(tx => isDateInRange(tx.datetime || tx.timestamp || tx.date || tx.createdAt || tx.created_at));
+        const expList = rawExpList.filter(tx => isDateInRange(tx.datetime || tx.timestamp || tx.date || tx.createdAt || tx.created_at));
+        const queueList = rawQueueList.filter(q => isDateInRange(q.rawDateTime || q.raw_date_time || q.datetime || q.createdAt || q.created_at));
+        const patientList = rawPatientList.filter(p => isDateInRange(p.created_at || p.createdAt));
 
         let posTotalIncome = 0;
+        let posCount = 0;
         const paymentMethods = { cash: 0, transfer: 0, card: 0, qr: 0, other: 0 };
         const productSales = {};
 
         posList.forEach(tx => {
           if (tx.status === 'cancelled') return;
+          posCount += 1;
           const net = parseFloat(tx.netAmount || tx.totalAmount || tx.netTotal || tx.grandTotal || tx.amount || 0) || 0;
           posTotalIncome += net;
 
@@ -1212,7 +1239,7 @@ export async function callSupabase(action, sheetName, payload = null) {
           if (method.includes('cash') || method.includes('สด')) paymentMethods.cash += amt;
           else if (method.includes('transfer') || method.includes('โอน') || method.includes('promptpay')) paymentMethods.transfer += amt;
           else if (method.includes('card') || method.includes('เครดิต')) paymentMethods.card += amt;
-          else if (method.includes('qr')) paymentMethods.qr += amt;
+          else if (method.includes('qr')) paymentMethods.qr += net || amt;
           else paymentMethods.other += amt;
         });
 
@@ -1317,6 +1344,8 @@ export async function callSupabase(action, sheetName, payload = null) {
             topProducts,
             topDoctors,
             queueStats,
+            posCount,
+            checkoutsCount: posCount,
             newPatientsCount: patientList.length,
             branchSummary,
             dailyTrend
