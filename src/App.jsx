@@ -1483,10 +1483,20 @@ export default function App() {
       });
     } else if (sheetName === 'Queue') {
       setQueueData(prev => {
-        const idx = prev.findIndex(q => 
-          (targetId && String(q.id || '').trim() === targetId) ||
-          (q.patientId && String(q.patientId) === String(payload.patientId) && q.date === payload.date && q.time === payload.time)
-        );
+        const payloadHn = String(payload.hn || payload.patientId || '').trim();
+        const payloadDate = String(payload.rawDateTime || payload.datetime || payload.date || '').trim();
+
+        const idx = prev.findIndex(q => {
+          const qId = String(q.id || '').trim();
+          if (targetId && qId && qId === targetId) return true;
+          
+          const qHn = String(q.hn || q.patientId || '').trim();
+          const qDate = String(q.rawDateTime || q.datetime || q.date || '').trim();
+          if (payloadHn && qHn && payloadHn === qHn && payloadDate && qDate && payloadDate === qDate) return true;
+          
+          return false;
+        });
+
         if (idx >= 0) {
           const next = [...prev];
           next[idx] = { ...next[idx], ...payload };

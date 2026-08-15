@@ -356,19 +356,36 @@ const PatientModal = React.memo(({
                             <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
                               <input 
                                   type="text"
-                                  className={`${theme.input} bg-white py-2 text-sm font-data pr-10`}
+                                  className={`${theme.input} bg-white py-2 text-sm font-data ${treatment ? 'pr-14' : 'pr-10'}`}
                                   value={treatment} 
                                   onChange={(e) => {
                                       const updatedTx = [...newOpdRecord.tx];
                                       updatedTx[txIndex] = e.target.value;
-                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                   }} 
                                   onFocus={() => setOpenTxDropdownIndex(txIndex)}
                                   onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
                                   placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
                               />
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+                                {treatment && (
+                                  <button
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      const updatedTx = [...newOpdRecord.tx];
+                                      updatedTx[txIndex] = '';
+                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                                    title="ล้างข้อมูล"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                )}
+                                <div className="pointer-events-none text-slate-400">
+                                  <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                                </div>
                               </div>
                               {openTxDropdownIndex === txIndex && (
                                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
@@ -380,7 +397,7 @@ const PatientModal = React.memo(({
                                             e.preventDefault();
                                             const updatedTx = [...newOpdRecord.tx];
                                             updatedTx[txIndex] = p.name;
-                                            setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                            setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                             setOpenTxDropdownIndex(null);
                                           }}
                                           className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatment === p.name ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
@@ -399,14 +416,14 @@ const PatientModal = React.memo(({
                             {newOpdRecord.tx.length > 1 && (
                               <button type="button" onClick={() => {
                                   const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
-                                  setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                  setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                               }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center shrink-0">
                                 <Trash2 size={16} />
                               </button>
                             )}
                           </div>
                         ))}
-                        <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
+                        <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, ''], prescription: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
                           <Plus size={16} /> เพิ่มรายการรักษา
                         </button>
                       </div>

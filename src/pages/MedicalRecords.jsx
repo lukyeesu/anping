@@ -89,9 +89,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   // ฟังก์ชันจัดการเมื่อเลือกการรักษา
   const handleSelectTreatment = (treatmentName, txIndex) => {
-    const updatedTx = [...newOpdRecord.tx];
+    const updatedTx = [...(newOpdRecord.tx || [])];
     updatedTx[txIndex] = treatmentName;
-    setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+    setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
     setOpenTxDropdownIndex(null);
     
     // อัปเดตรายการรักษาล่าสุด (เอาไปไว้บนสุด และจำกัดแค่ 5 ชื่อ)
@@ -1146,7 +1146,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
               chief_complaint: String(updatedRecord.chiefComplaint || updatedRecord.cc || ''),
               diagnosis: String(updatedRecord.diagnosis || updatedRecord.dx || ''),
               treatment_detail: String(updatedRecord.treatmentDetail || updatedRecord.note || ''),
-              prescription: updatedRecord.prescription || updatedRecord.tx || [],
+              prescription: Array.isArray(updatedRecord.tx) && updatedRecord.tx.length > 0 
+                ? updatedRecord.tx 
+                : (updatedRecord.prescription || []),
               vital_signs: {
                 bp: updatedRecord.bp || updatedRecord.vitalSigns?.bp || '',
                 pulse: updatedRecord.pulse || updatedRecord.vitalSigns?.pulse || '',
@@ -1184,10 +1186,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
   const handleOpenOpdForm = (index = null, record = null) => {
     if (index !== null && record) { 
-      setEditingOpdIndex(index); 
+      setEditingOpdIndex(index);
+      const initialTx = Array.isArray(record.tx) && record.tx.length > 0 
+        ? record.tx 
+        : (Array.isArray(record.prescription) && record.prescription.length > 0 
+            ? record.prescription 
+            : (record.tx ? [record.tx] : (record.prescription ? [record.prescription] : [''])));
       setNewOpdRecord({
         ...record,
-        tx: Array.isArray(record.tx) ? record.tx : (record.tx ? [record.tx] : ['']),
+        tx: [...initialTx],
+        prescription: [...initialTx],
         branchId: record.branchId || (currentBranch !== 'all' ? currentBranch : '')
       }); 
     } 
@@ -1198,7 +1206,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       setNewOpdRecord({ 
           ...initialOpdState, 
           datetime: formatDateTime(new Date().toISOString()), 
-          tx: [''], 
+          tx: [''],
+          prescription: [''],
           branchId: currentBranch !== 'all' ? currentBranch : '',
           doctor: isDoctor ? currentUser.name : ''
       }); 
@@ -1234,9 +1243,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
         return;
     }
     setIsProcessing(true);
+
+    const validTx = Array.isArray(newOpdRecord.tx) 
+      ? newOpdRecord.tx.map(t => typeof t === 'string' ? t.trim() : t).filter(Boolean)
+      : (newOpdRecord.tx ? [String(newOpdRecord.tx).trim()] : []);
+
+    const recordToSave = {
+      ...newOpdRecord,
+      tx: validTx,
+      prescription: validTx
+    };
+
     let newRecords = [...(formData.opdRecords || [])];
-    if (editingOpdIndex !== null) newRecords[editingOpdIndex] = newOpdRecord;
-    else newRecords = [newOpdRecord, ...newRecords];
+    if (editingOpdIndex !== null) newRecords[editingOpdIndex] = recordToSave;
+    else newRecords = [recordToSave, ...newRecords];
     
     newRecords = getSortedOpdRecords(newRecords);
     
@@ -1257,17 +1277,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
     }
 
     // อัปเดตรายการรักษาล่าสุด (recent treatments)
-    if (newOpdRecord.tx && Array.isArray(newOpdRecord.tx)) {
-      const validTx = newOpdRecord.tx.filter(Boolean);
-      if (validTx.length > 0) {
-        setRecentTreatments(prev => {
-          const updated = [...validTx, ...prev.filter(t => !validTx.includes(t))].slice(0, 5);
-          return updated;
-        });
-      }
+    if (validTx.length > 0) {
+      setRecentTreatments(prev => {
+        const updated = [...validTx, ...prev.filter(t => !validTx.includes(t))].slice(0, 5);
+        return updated;
+      });
     }
 
-      const combinedData = {
+    const combinedData = {
       ...updatedFormData,
       name: `${updatedFormData.prefix}${updatedFormData.firstName} ${updatedFormData.lastName}`.trim(),
       phone: updatedFormData.phones && updatedFormData.phones.length > 0 ? updatedFormData.phones[0] : '',
@@ -1278,29 +1295,29 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       await callAppScript('SAVE_DATA', 'Patients', combinedData);
 
       // 🌟 บันทึกลงตาราง treatments โดยตรง
-      if (newOpdRecord) {
+      if (recordToSave) {
         const patientId = String(editingId || updatedFormData.hn || '').trim();
         const treatmentRow = {
-          id: String(newOpdRecord.id || `TRT_${patientId}_${Date.now()}`),
+          id: String(recordToSave.id || `TRT_${patientId}_${Date.now()}`),
           patient_id: patientId,
-          datetime: String(newOpdRecord.datetime || new Date().toISOString()),
-          date: String(newOpdRecord.date || (newOpdRecord.datetime ? newOpdRecord.datetime.split(' ')[0] : '')),
-          time: String(newOpdRecord.time || (newOpdRecord.datetime ? newOpdRecord.datetime.split(' ')[1] || '' : '')),
-          doctor: String(newOpdRecord.doctor || ''),
-          chief_complaint: String(newOpdRecord.chiefComplaint || newOpdRecord.cc || ''),
-          diagnosis: String(newOpdRecord.diagnosis || newOpdRecord.dx || ''),
-          treatment_detail: String(newOpdRecord.treatmentDetail || newOpdRecord.note || ''),
-          prescription: newOpdRecord.prescription || newOpdRecord.tx || [],
+          datetime: String(recordToSave.datetime || new Date().toISOString()),
+          date: String(recordToSave.date || (recordToSave.datetime ? recordToSave.datetime.split(' ')[0] : '')),
+          time: String(recordToSave.time || (recordToSave.datetime ? recordToSave.datetime.split(' ')[1] || '' : '')),
+          doctor: String(recordToSave.doctor || ''),
+          chief_complaint: String(recordToSave.chiefComplaint || recordToSave.cc || ''),
+          diagnosis: String(recordToSave.diagnosis || recordToSave.dx || ''),
+          treatment_detail: String(recordToSave.treatmentDetail || recordToSave.note || ''),
+          prescription: validTx,
           vital_signs: {
-            bp: newOpdRecord.bp || newOpdRecord.vitalSigns?.bp || '',
-            pulse: newOpdRecord.pulse || newOpdRecord.vitalSigns?.pulse || '',
-            weight: newOpdRecord.weight || newOpdRecord.vitalSigns?.weight || '',
-            height: newOpdRecord.height || newOpdRecord.vitalSigns?.height || '',
-            temp: newOpdRecord.temp || newOpdRecord.vitalSigns?.temp || ''
+            bp: recordToSave.bp || recordToSave.vitalSigns?.bp || '',
+            pulse: recordToSave.pulse || recordToSave.vitalSigns?.pulse || '',
+            weight: recordToSave.weight || recordToSave.vitalSigns?.weight || '',
+            height: recordToSave.height || recordToSave.vitalSigns?.height || '',
+            temp: recordToSave.temp || recordToSave.vitalSigns?.temp || ''
           },
-          attachments: newOpdRecord.attachments || [],
-          cost: Number(newOpdRecord.cost || 0),
-          branch_id: String(newOpdRecord.branchId || currentBranch?.id || '')
+          attachments: recordToSave.attachments || [],
+          cost: Number(recordToSave.cost || 0),
+          branch_id: String(recordToSave.branchId || currentBranch?.id || '')
         };
         await callAppScript('SAVE_DATA', 'Treatments', treatmentRow).catch(console.error);
       }
@@ -2573,19 +2590,36 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                 <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
                                   <input 
                                       type="text"
-                                      className={`${theme.input} bg-white py-2 text-sm font-data pr-10`}
+                                      className={`${theme.input} bg-white py-2 text-sm font-data ${treatment ? 'pr-14' : 'pr-10'}`}
                                       value={treatment} 
                                       onChange={(e) => {
                                           const updatedTx = [...newOpdRecord.tx];
                                           updatedTx[txIndex] = e.target.value;
-                                          setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                          setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                       }} 
                                       onFocus={() => setOpenTxDropdownIndex(txIndex)}
                                       onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
                                       placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
                                   />
-                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                    <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+                                    {treatment && (
+                                      <button
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          const updatedTx = [...newOpdRecord.tx];
+                                          updatedTx[txIndex] = '';
+                                          setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                                        title="ล้างข้อมูล"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                    <div className="pointer-events-none text-slate-400">
+                                      <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                                    </div>
                                   </div>
                                   
                                   {openTxDropdownIndex === txIndex && (
@@ -2647,14 +2681,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                                 {newOpdRecord.tx.length > 1 && (
                                   <button type="button" onClick={() => {
                                       const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
-                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx});
+                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                   }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center shrink-0">
                                     <Trash2 size={16} />
                                   </button>
                                 )}
                               </div>
                             ))}
-                            <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
+                            <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, ''], prescription: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
                               <Plus size={16} /> เพิ่มรายการรักษา
                             </button>
                           </div>

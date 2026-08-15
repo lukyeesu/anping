@@ -218,7 +218,7 @@ export function rowToJS(row) {
 export function jsToRow(payload, tableName = '') {
   if (!payload) return {};
   
-  const recordId = String(payload.hn || payload.id || payload.username || `REC_${Date.now()}`);
+  const recordId = String(payload.id || payload.hn || payload.username || `REC_${Date.now()}`);
 
   const rawRow = {
     id: recordId,

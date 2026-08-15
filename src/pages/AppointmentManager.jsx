@@ -458,9 +458,13 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         
         // อัปเดตข้อมูลใน UI ทันทีไม่ต้องรอโหลดใหม่
         if (editingId) {
-            setQueueData(prev => prev.map(appt => appt.id === editingId ? { ...appt, ...payload } : appt));
+            setQueueData(prev => prev.map(appt => String(appt.id) === String(editingId) ? { ...appt, ...payload } : appt));
         } else {
-            setQueueData(prev => [...prev, payload]);
+            setQueueData(prev => {
+                const exists = prev.some(a => String(a.id) === String(payload.id));
+                if (exists) return prev.map(a => String(a.id) === String(payload.id) ? { ...a, ...payload } : a);
+                return [...prev, payload];
+            });
         }
         
         apptModal.close(); 
@@ -524,7 +528,18 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
   }, [queueData, patientsData, patientCache]);
 
   const augmentedQueueData = useMemo(() => {
-    return queueData.map(appt => {
+    const seenIds = new Set();
+    const uniqueQueue = [];
+    (queueData || []).forEach(item => {
+      const key = item.id ? String(item.id).trim() : null;
+      if (key) {
+        if (seenIds.has(key)) return;
+        seenIds.add(key);
+      }
+      uniqueQueue.push(item);
+    });
+
+    return uniqueQueue.map(appt => {
       const hn = appt.hn || '';
       // 1. ดึงชื่อที่มีบันทึกอยู่ในตาราง queue โดยตรงก่อนเป็นอันดับแรก (Primary Source of Truth)
       const directName = appt.patientName || appt.patient_name || appt.name;
