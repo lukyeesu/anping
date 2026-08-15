@@ -1563,10 +1563,18 @@ export const getEffectiveApptIsoDate = (appt) => {
     if (!appt) return '';
     for (let i = 4; i >= 1; i--) {
         const pDate = appt[`postpone${i}_date`];
-        if (pDate) return parseThaiDateToISO(pDate) || '';
+        if (pDate) {
+            const parsed = parseAnyDate(pDate);
+            if (parsed) return parsed.toISOString();
+        }
     }
-    if (appt.rawPostponedDate) return appt.rawPostponedDate;
-    return appt.rawDeliveryStart || appt.rawDateTime || parseThaiDateToISO(appt.datetime) || '';
+    if (appt.rawPostponedDate || appt.postponedDate) {
+        const parsed = parseAnyDate(appt.rawPostponedDate || appt.postponedDate);
+        if (parsed) return parsed.toISOString();
+    }
+    const rawVal = appt.rawDeliveryStart || appt.rawDateTime || appt.raw_date_time || appt.datetime || appt.created_at || '';
+    const parsed = parseAnyDate(rawVal);
+    return parsed ? parsed.toISOString() : '';
 };
 
 export const parseThaiDateToISO = (thaiDateTimeStr) => {

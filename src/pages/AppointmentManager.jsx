@@ -73,7 +73,7 @@ const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', 
   );
 };
 
-const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, staffData = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
+const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -577,25 +577,19 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
   const getApptDateObj = useCallback((appt) => {
     if (!appt) return null;
-    const isoStr = getEffectiveApptIsoDate(appt);
-    if (isoStr) {
-      const d = new Date(isoStr);
-      if (!isNaN(d.getTime())) return d;
-    }
-    const rawStr = appt.raw_date_time || appt.created_at || appt.datetime || '';
-    if (rawStr) {
-      const match = String(rawStr).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (match) {
-        let day = parseInt(match[1], 10);
-        let month = parseInt(match[2], 10) - 1;
-        let year = parseInt(match[3], 10);
-        if (year > 2500) year -= 543;
-        return new Date(year, month, day);
+    for (let i = 4; i >= 1; i--) {
+      const pDate = appt[`postpone${i}_date`];
+      if (pDate) {
+        const parsed = parseAnyDate(pDate);
+        if (parsed) return parsed;
       }
-      const d = new Date(rawStr);
-      if (!isNaN(d.getTime())) return d;
     }
-    return null;
+    if (appt.rawPostponedDate || appt.postponedDate) {
+      const parsed = parseAnyDate(appt.rawPostponedDate || appt.postponedDate);
+      if (parsed) return parsed;
+    }
+    const rawVal = appt.rawDeliveryStart || appt.rawDateTime || appt.raw_date_time || appt.datetime || appt.created_at || '';
+    return parseAnyDate(rawVal);
   }, []);
 
   const branchFilteredQueue = useMemo(() => {
@@ -650,18 +644,113 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
     return '';
   }, [calendarViewInfo]);
 
-  const filteredData = useMemo(() => {
-    return branchFilteredQueue.filter(a => 
-      (a.patientName && a.patientName.includes(search)) || 
-      (a.hn && a.hn.includes(search)) || 
-      (a.doctor && a.doctor.includes(search)) ||
-      (a.reason && a.reason.includes(search))
-    ).sort((a, b) => {
-      const dateA = getEffectiveApptIsoDate(a);
-      const dateB = getEffectiveApptIsoDate(b);
-      return new Date(dateB || 0) - new Date(dateA || 0);
+  // ดึงรายการประเภทบริการจากตารางสินค้า/บริการ (posProducts / setting_pos) เฉพาะที่เป็นบริการ (ไม่เอาสินค้าเด็ดขาด)
+  const serviceOptions = useMemo(() => {
+    const rawServices = (posProducts || []).filter(p => {
+      if (!p || !p.name) return false;
+      if (p.is_deleted || p.isDeleted) return false;
+      if (p.isActive === false || p.is_active === false) return false;
+
+      // 1. ตรวจสอบว่าเป็นสินค้า (Stock / Product) หรือไม่ -> ถ้าใช่ ตัดออกทันที ไม่เอาสินค้า
+      const isStock = Boolean(
+        p.stockManaged === true || 
+        p.stock_managed === true || 
+        p.stockManaged === 'true' || 
+        p.stock_managed === 'true' || 
+        p.itemKind === 'stock' || 
+        p.kind === 'stock' || 
+        (typeof p.id === 'string' && p.id.toLowerCase().startsWith('prod'))
+      );
+      if (isStock) return false;
+
+      // 2. ตรวจสอบหมวดหมู่ (Category) -> ถ้าเป็นหมวดสินค้า, ยา, เวชภัณฑ์ ให้ตัดออก
+      const catStr = String(p.category || p.type || '').toLowerCase();
+      if (catStr === 'สินค้า' || catStr === 'ยา' || catStr === 'เวชภัณฑ์' || catStr === 'stock' || catStr === 'product') {
+        return false;
+      }
+
+      return true; // เอาเฉพาะ บริการ / หัตถการ / การตรวจรักษา
     });
-  }, [branchFilteredQueue, search]);
+
+    const list = rawServices.map(s => {
+      const name = String(s.name || '').trim();
+      const priceNum = Number(s.price);
+      const priceStr = (!isNaN(priceNum) && priceNum > 0) ? ` (${priceNum.toLocaleString()} บาท)` : '';
+      return {
+        value: name,
+        label: `${name}${priceStr}`
+      };
+    });
+
+    if (list.length === 0) {
+      return [
+        { value: '', label: 'เลือกประเภทบริการ' },
+        { value: 'ตรวจโรคทั่วไป', label: 'ตรวจโรคทั่วไป' },
+        { value: 'ทันตกรรม', label: 'ทันตกรรม' },
+        { value: 'ความงาม/ผิวพรรณ', label: 'ความงาม/ผิวพรรณ' },
+        { value: 'ศัลยกรรม', label: 'ศัลยกรรม' },
+        { value: 'ตรวจสุขภาพ', label: 'ตรวจสุขภาพ' },
+        { value: 'ติดตามอาการ', label: 'ติดตามอาการ' }
+      ];
+    }
+
+    return [{ value: '', label: 'เลือกประเภทบริการ' }, ...list];
+  }, [posProducts]);
+
+  const filteredData = useMemo(() => {
+    const now = new Date();
+    const nowTime = now.getTime();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+    return branchFilteredQueue.filter(a => {
+      if (!a) return false;
+      const q = String(search || '').trim().toLowerCase();
+      if (!q) return true;
+      return (
+        (a.patientName && a.patientName.toLowerCase().includes(q)) || 
+        (a.hn && a.hn.toLowerCase().includes(q)) || 
+        (a.doctor && a.doctor.toLowerCase().includes(q)) ||
+        (a.reason && a.reason.toLowerCase().includes(q)) ||
+        (a.phone && a.phone.includes(q))
+      );
+    }).sort((a, b) => {
+      const dateA = getApptDateObj(a);
+      const dateB = getApptDateObj(b);
+      const timeA = dateA ? dateA.getTime() : 0;
+      const timeB = dateB ? dateB.getTime() : 0;
+
+      if (!timeA && !timeB) return 0;
+      if (!timeA) return 1;
+      if (!timeB) return -1;
+
+      // จัดแบ่งกลุ่มความสำคัญ (Priority Tier):
+      // Tier 1: นัดหมายวันนี้ที่กำลังจะถึงในอนาคต (Today Upcoming: เวลา >= ตอนนี้) -> เรียงตามเวลาจากเร็วไปช้า
+      // Tier 2: นัดหมายวันนี้ที่ผ่านเวลาไปแล้ว (Today Past: เวลาช่วงเช้าของวันนี้) -> เรียงตามเวลาจากล่าสุดลงไป
+      // Tier 3: นัดหมายในวันถัดๆ ไปในอนาคต (Future: พรุ่งนี้ -> สัปดาห์หน้า -> เดือนหน้า) -> เรียงจากใกล้วันนี้ไปหาอนาคต
+      // Tier 4: นัดหมายในอดีต (Past: เมื่อวาน -> สัปดาห์ก่อน -> เดือนก่อน) -> เรียงจากอดีตล่าสุดลงไปหาอดีตที่นานกว่า
+
+      const getTier = (time) => {
+        if (time >= todayStart && time <= todayEnd) {
+          return time >= nowTime ? 1 : 2;
+        }
+        return time > todayEnd ? 3 : 4;
+      };
+
+      const tierA = getTier(timeA);
+      const tierB = getTier(timeB);
+
+      if (tierA !== tierB) {
+        return tierA - tierB;
+      }
+
+      // ภายใน Tier เดียวกัน:
+      if (tierA === 1) return timeA - timeB; // นัดวันนี้ที่กำลังจะถึง -> เร็วสุดขึ้นก่อน
+      if (tierA === 2) return timeB - timeA; // นัดวันนี้ที่ผ่านมาแล้ว -> เพิ่งผ่านมาล่าสุดขึ้นก่อน
+      if (tierA === 3) return timeA - timeB; // อนาคตวันถัดๆ ไป -> พรุ่งนี้ -> สัปดาห์หน้า -> เดือนหน้า
+      return timeB - timeA; // อดีตที่ผ่านมา -> เมื่อวาน -> สัปดาห์ก่อน
+    });
+  }, [branchFilteredQueue, search, getApptDateObj]);
 
   // --- [NEW] สรุปยอดสำหรับระบบนัดหมาย (Dynamic ตามปฏิทิน) ---
   const stats = useMemo(() => {
@@ -1361,7 +1450,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                             <CustomSelect 
                                 value={formData.serviceType} 
                                 onChange={(val) => setFormData({...formData, serviceType: val})} 
-                                options={[{value:'', label:'เลือกประเภทบริการ'}, 'ตรวจโรคทั่วไป', 'ทันตกรรม', 'ความงาม/ผิวพรรณ', 'ศัลยกรรม', 'ตรวจสุขภาพ', 'ติดตามอาการ']} 
+                                options={serviceOptions} 
                                 disabled={isViewMode} 
                             />
                         </div>
