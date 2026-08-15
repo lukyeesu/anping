@@ -532,13 +532,18 @@ const PatientModal = React.memo(({
                                       </div>
                                       {record.note && <div className="mt-1 text-slate-400 italic">* {record.note}</div>}
                                   </div>
-                                  <div className="pt-2 mt-1 border-t border-slate-200/60 flex items-center justify-between">
-                                      <span className="text-[10px] font-semibold text-slate-400">สาขา / แพทย์</span>
-                                      <div className="flex flex-col items-end">
-                                          <span className="text-[10px] font-bold text-sky-600 uppercase">{branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}</span>
-                                          <span className="font-medium text-slate-600 font-data flex items-center gap-1 text-[11px]"><User size={10}/> {record.doctor || '-'}</span>
-                                      </div>
-                                  </div>
+                                  <div className="pt-2 mt-1 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                           <div className="flex items-center gap-1.5 shrink-0">
+                                               <span className="text-[10px] font-semibold text-slate-400">สาขา:</span>
+                                               <span className="text-[10px] font-bold text-sky-600 uppercase bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100/80">
+                                                   {branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}
+                                               </span>
+                                           </div>
+                                           <div className="flex items-center gap-1 text-[11px] text-slate-700 font-medium font-data min-w-0">
+                                               <User size={12} className="text-sky-500 shrink-0" />
+                                               <span className="truncate" title={record.doctor || '-'}>{record.doctor || '-'}</span>
+                                           </div>
+                                       </div>
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                                   <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="flex items-center justify-center gap-1.5 py-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 rounded-xl transition-colors font-medium text-[11px] kanit-text shadow-sm">
