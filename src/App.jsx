@@ -346,7 +346,7 @@ export default function App() {
 
   const isLoggingOutRef = useRef(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (isLoggingOutRef.current) return;
     isLoggingOutRef.current = true;
 
@@ -365,12 +365,16 @@ export default function App() {
         localStorage.removeItem('clinic_session_token');
         try {
           Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('sb-') || key.includes('auth-token')) {
+            if (key.startsWith('sb-') || key.includes('auth-token') || key.startsWith('clinic_')) {
               localStorage.removeItem(key);
             }
           });
         } catch (e) {}
       }
+
+      // 🛡️ ระบบความปลอดภัยสูงสุด: ล้างข้อมูลทั้งหมดใน IndexedDB ทันทีเมื่อ Logout หรือโดนระงับบัญชี เพื่อป้องกันข้อมูลหลุด
+      await clearAllLocalStores();
+      console.log('%c🛡️ [Security] IndexedDB has been completely purged upon logout/suspension! ✨', 'color: #ef4444; font-weight: bold;');
     } catch (e) {
       console.error('[App.jsx] Logout error:', e);
     } finally {

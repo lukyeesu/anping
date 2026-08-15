@@ -395,24 +395,40 @@ export async function setLastSyncTime(storeName, timestamp) {
   }
 }
 
-// Safeguard 4: Force Hard Refresh & Clear All Local Stores
+// Safeguard 4: Force Hard Refresh & Clear All Local Stores (Privacy & Security Wipeout)
 export async function clearAllLocalStores() {
   STORES.forEach(s => { memoryStore[s] = []; });
+  Object.keys(memoryStore).forEach(k => {
+    if (k.startsWith('_sync_')) delete memoryStore[k];
+  });
+
   if (!isIndexedDBSupported) {
     broadcastStoreChange('*', 'CLEAR_ALL');
     return true;
   }
   try {
     const db = await openDB();
-    STORES.forEach(storeName => {
-      const transaction = db.transaction(storeName, 'readwrite');
-      const store = transaction.objectStore(storeName);
-      store.clear();
-    });
+    const existingStores = Array.from(db.objectStoreNames);
+    if (existingStores.length > 0) {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction(existingStores, 'readwrite');
+        existingStores.forEach(storeName => {
+          transaction.objectStore(storeName).clear();
+        });
+        transaction.oncomplete = () => resolve(true);
+        transaction.onerror = () => reject(transaction.error);
+      });
+    }
     broadcastStoreChange('*', 'CLEAR_ALL');
     return true;
   } catch (err) {
     console.warn('[OfflineStore] Failed to clear local stores:', err);
+    try {
+      if (typeof window !== 'undefined' && window.indexedDB) {
+        window.indexedDB.deleteDatabase(DB_NAME);
+      }
+    } catch (e) {}
+    broadcastStoreChange('*', 'CLEAR_ALL');
     return false;
   }
 }

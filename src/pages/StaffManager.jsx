@@ -1271,6 +1271,22 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       console.log('[StaffManager] 5. กำลังปิด Modal staffModal.close()');
       staffModal.close();
       console.log('[StaffManager] 6. ปิด Modal สำเร็จ');
+
+      // หากเป็นบัญชีที่กำลังใช้งานอยู่ แล้วถูกระงับการใช้งาน ให้บังคับ Logout และล้าง IndexedDB ทันที
+      if (payload.role === 'suspended' || payload.status === 'suspended' || payload.isActive === false) {
+        const isSelf = currentUser && (
+          String(finalId).toLowerCase() === String(currentUser.id).toLowerCase() ||
+          (cleanUsername && currentUser.username && String(cleanUsername).toLowerCase() === String(currentUser.username).toLowerCase()) ||
+          (computedEmail && currentUser.email && String(computedEmail).toLowerCase() === String(currentUser.email).toLowerCase())
+        );
+
+        if (isSelf && handleLogout) {
+          showToast('บัญชีนี้ถูกระงับการใช้งาน ระบบกำลังออกจากระบบและล้างข้อมูลความปลอดภัย...', 'danger');
+          setTimeout(() => {
+            handleLogout();
+          }, 400);
+        }
+      }
     } catch(err) {
       console.error('[StaffManager] ERROR จับข้อผิดพลาดได้:', err);
       showToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึก', 'danger');
