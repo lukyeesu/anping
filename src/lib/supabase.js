@@ -692,6 +692,9 @@ export async function callSupabase(action, sheetName, payload = null) {
       const sortKey = payload?.sortKey || 'created_at';
       const sortDir = payload?.sortDir || 'desc';
 
+      // 1. ซิงค์ตารางคนไข้แบบ Differential Sync (Zero Egress Reconcile ~0.035 KB)
+      await differentialSyncTable('patients', selectCols);
+
       let colSort = 'created_at';
       if (sortKey === 'id' || sortKey === 'hn') colSort = 'id';
       else if (sortKey === 'firstName' || sortKey === 'name') colSort = 'first_name';
@@ -699,44 +702,38 @@ export async function callSupabase(action, sheetName, payload = null) {
       else if (sortKey === 'age' || sortKey === 'dob') colSort = 'dob';
       else if (sortKey === 'createdAt') colSort = 'created_at';
 
-      let query = supabase.from('patients').select(selectCols, { count: 'exact' });
-      query = query.or('is_deleted.is.null,is_deleted.eq.false');
+      const localPatients = (await getLocalStore('patients')) || [];
+      let filtered = localPatients.filter(p => !p.is_deleted && !p.isDeleted);
 
       if (search) {
-        query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,id.ilike.%${search}%,id_card.ilike.%${search}%,phone.ilike.%${search}%,nickname.ilike.%${search}%`);
+        filtered = filtered.filter(p => {
+          const fn = String(p.first_name || p.firstName || '').toLowerCase();
+          const ln = String(p.last_name || p.lastName || '').toLowerCase();
+          const fullName = `${fn} ${ln}`.trim();
+          const hn = String(p.id || p.hn || '').toLowerCase();
+          const idCard = String(p.id_card || p.idCard || '').toLowerCase();
+          const phone = String(p.phone || '').toLowerCase();
+          const nick = String(p.nickname || '').toLowerCase();
+          return fullName.includes(search) || hn.includes(search) || idCard.includes(search) || phone.includes(search) || nick.includes(search);
+        });
       }
 
-      query = query.order(colSort, { ascending: sortDir === 'asc' });
-      query = query.range(offset, offset + limit - 1);
-
-      let { data, count, error } = await query;
-
-      if (error) {
-        let fbQuery = supabase.from('patients').select('*', { count: 'exact' });
-        fbQuery = fbQuery.or('is_deleted.is.null,is_deleted.eq.false');
-        if (search) {
-          fbQuery = fbQuery.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,id.ilike.%${search}%,id_card.ilike.%${search}%,phone.ilike.%${search}%,nickname.ilike.%${search}%`);
+      filtered.sort((a, b) => {
+        let valA = a[colSort] || a[sortKey] || '';
+        let valB = b[colSort] || b[sortKey] || '';
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return sortDir === 'asc' ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
         }
-        fbQuery = fbQuery.order(colSort, { ascending: sortDir === 'asc' });
-        fbQuery = fbQuery.range(offset, offset + limit - 1);
-        const fbRes = await fbQuery;
-        data = fbRes.data;
-        count = fbRes.count;
-      }
+        return sortDir === 'asc' ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+      });
 
-      const formattedData = (data || []).map(rowToJS);
-      const nowIso = new Date().toISOString();
-
-      if (formattedData.length > 0) {
-        await upsertLocalStore('patients', formattedData, { broadcast: false });
-        await setLastSyncTime('patients', nowIso);
-      }
+      const pagedData = filtered.slice(offset, offset + limit);
 
       return { 
         status: 'success', 
-        data: formattedData, 
-        totalCount: count || formattedData.length, 
-        hasMore: count ? (offset + limit) < count : formattedData.length === limit 
+        data: pagedData, 
+        totalCount: filtered.length, 
+        hasMore: (offset + limit) < filtered.length 
       };
     }
 

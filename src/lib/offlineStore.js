@@ -1,5 +1,5 @@
 // IndexedDB Storage & Delta Sync Helper for ClinicHub
-// Includes 5 Critical Safeguards: Multi-Tab Sync, Reconnect Catch-up, Incognito Fallback, Soft Delete Filtering & Force Cache Purge
+// Includes 5 Critical Safeguards: Multi-Tab Sync, Reconnect Catch-up, Incognito Fallback, Soft Delete Filtering & Privacy Wipeout
 
 const DB_NAME = 'ClinicHub_OfflineStore';
 const DB_VERSION = 2;
@@ -31,6 +31,15 @@ const syncChannel = (typeof window !== 'undefined' && 'BroadcastChannel' in wind
 const memoryStore = {};
 STORES.forEach(s => { memoryStore[s] = []; });
 let isIndexedDBSupported = true;
+let isDatabasePurged = false;
+
+export function resetDatabasePurgedFlag() {
+  isDatabasePurged = false;
+}
+
+export function getIsDatabasePurged() {
+  return isDatabasePurged;
+}
 
 function broadcastStoreChange(storeName, action = 'UPDATE') {
   if (syncChannel) {
@@ -60,14 +69,19 @@ function broadcastStoreChange(storeName, action = 'UPDATE') {
 // Safeguard 2: Automatic Reconnect Event Listener
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
+    if (isDatabasePurged) return;
     console.log('[OfflineStore] Network reconnected. Broadcasting sync check...');
     broadcastStoreChange('*', 'NETWORK_RECONNECTED');
   });
 }
 
-function openDB() {
+function openDB(force = false) {
+  if (isDatabasePurged && !force) {
+    return Promise.reject(new Error('IndexedDB is currently locked until user logs in.'));
+  }
+
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
+    if (typeof window === 'undefined' || !window.indexedDB) {
       isIndexedDBSupported = false;
       reject(new Error('IndexedDB is not supported in this browser'));
       return;
@@ -93,7 +107,6 @@ function openDB() {
     };
 
     request.onerror = (event) => {
-      isIndexedDBSupported = false;
       reject(event.target.error);
     };
   });
@@ -101,6 +114,9 @@ function openDB() {
 
 // Get all items from a table in IndexedDB (or Memory Fallback)
 export async function getLocalStore(storeName) {
+  if (isDatabasePurged) {
+    return [];
+  }
   if (!isIndexedDBSupported) {
     return (memoryStore[storeName] || []).filter(item => !item.is_deleted && !item.isDeleted);
   }
@@ -124,13 +140,13 @@ export async function getLocalStore(storeName) {
       };
     });
   } catch (err) {
-    console.warn(`[OfflineStore] Failed to get local store ${storeName}, using memory fallback:`, err);
     return (memoryStore[storeName] || []).filter(item => !item.is_deleted && !item.isDeleted);
   }
 }
 
 // Upsert (add or update) items in IndexedDB
 export async function upsertLocalStore(storeName, items, options = {}) {
+  if (isDatabasePurged) return;
   const shouldBroadcast = options.broadcast !== false;
   if (!Array.isArray(items) || items.length === 0) return;
 
@@ -177,13 +193,13 @@ export async function upsertLocalStore(storeName, items, options = {}) {
       transaction.onerror = () => reject(transaction.error);
     });
   } catch (err) {
-    console.warn(`[OfflineStore] Failed to upsert local store ${storeName}:`, err);
     if (shouldBroadcast) broadcastStoreChange(storeName, 'UPSERT');
   }
 }
 
 // Replace entire store (used for full initial load or hard reset)
 export async function replaceLocalStore(storeName, items, options = {}) {
+  if (isDatabasePurged) return;
   const shouldBroadcast = options.broadcast !== false;
   memoryStore[storeName] = Array.isArray(items) ? items.filter(x => !x.is_deleted && !x.isDeleted) : [];
 
@@ -215,13 +231,13 @@ export async function replaceLocalStore(storeName, items, options = {}) {
       transaction.onerror = () => reject(transaction.error);
     });
   } catch (err) {
-    console.warn(`[OfflineStore] Failed to replace local store ${storeName}:`, err);
     if (shouldBroadcast) broadcastStoreChange(storeName, 'REPLACE');
   }
 }
 
 // Delete a specific item from IndexedDB and memoryStore
 export async function deleteFromLocalStore(storeName, itemId, options = {}) {
+  if (isDatabasePurged) return;
   const shouldBroadcast = options.broadcast !== false;
   if (!itemId) return;
   const targetId = String(itemId).trim();
@@ -253,15 +269,13 @@ export async function deleteFromLocalStore(storeName, itemId, options = {}) {
       transaction.onerror = () => reject(transaction.error);
     });
   } catch (err) {
-    console.warn(`[OfflineStore] Failed to delete from local store ${storeName}:`, err);
     if (shouldBroadcast) broadcastStoreChange(storeName, 'DELETE');
   }
 }
 
-// Reconcile local store with authoritative server items:
-// - If scopeFilterFn is provided: replaces only the scoped subset, deleting any scoped item not present in serverItems.
-// - If scopeFilterFn is null: replaces the entire store with serverItems.
+// Reconcile local store with authoritative server items
 export async function reconcileLocalStore(storeName, serverItems = [], scopeFilterFn = null, options = {}) {
+  if (isDatabasePurged) return [];
   const shouldBroadcast = options.broadcast !== false;
   const cleanServerItems = Array.isArray(serverItems)
     ? serverItems.filter(x => x && !x.is_deleted && !x.isDeleted)
@@ -289,6 +303,9 @@ export async function reconcileLocalStore(storeName, serverItems = [], scopeFilt
 
 // Differential sync comparison between local store and server manifest ({ id, updated_at, is_deleted })
 export async function diffLocalStore(storeName, serverManifest = [], scopeFilterFn = null) {
+  if (isDatabasePurged) {
+    return { idsToFetch: [], deletedIds: [], localItems: [] };
+  }
   const localItems = await getLocalStore(storeName);
   const inScopeLocal = typeof scopeFilterFn === 'function' ? localItems.filter(scopeFilterFn) : localItems;
 
@@ -313,7 +330,7 @@ export async function diffLocalStore(storeName, serverManifest = [], scopeFilter
   const deletedIds = [];
   const idsToFetch = [];
 
-  // 1. ตรวจหารายการที่ถูกลบไปแล้วบน Server (มีในเครื่อง แต่ไม่มีบน Server หรือถูก flag is_deleted)
+  // 1. ตรวจหารายการที่ถูกลบไปแล้วบน Server
   for (const [localId] of localMap.entries()) {
     const serverEntry = serverMap.get(localId);
     if (!serverEntry || serverEntry.is_deleted) {
@@ -321,23 +338,20 @@ export async function diffLocalStore(storeName, serverManifest = [], scopeFilter
     }
   }
 
-  // 2. ตรวจหารายการใหม่ หรือรายการที่มีการแก้ไขบน Server (updated_at ฝั่ง Server ใหม่กว่า)
+  // 2. ตรวจหารายการใหม่ หรือรายการที่มีการแก้ไขบน Server
   for (const [serverId, serverEntry] of serverMap.entries()) {
     if (serverEntry.is_deleted) continue;
 
     const localItem = localMap.get(serverId);
     if (!localItem) {
-      // รายการใหม่ที่เพิ่งเพิ่มเข้ามาบน Server
       idsToFetch.push(serverId);
     } else {
-      // เปรียบเทียบ timestamp
       const serverTime = serverEntry.updated_at ? new Date(serverEntry.updated_at).getTime() : 0;
       const localTime = (localItem.updated_at || localItem.updatedAt || localItem.created_at || localItem.createdAt)
         ? new Date(localItem.updated_at || localItem.updatedAt || localItem.created_at || localItem.createdAt).getTime()
         : 0;
 
       if (serverTime && localTime && serverTime > (localTime + 500)) {
-        // มีการแก้ไขบน Server ให้โหลดเฉพาะแถวนี้มาอัปเดต
         idsToFetch.push(serverId);
       } else if (serverTime && !localTime) {
         idsToFetch.push(serverId);
@@ -345,7 +359,7 @@ export async function diffLocalStore(storeName, serverManifest = [], scopeFilter
     }
   }
 
-  // 3. ลบรายการที่ถูกลบออกจาก IndexedDB ทันทีแบบเงียบๆ
+  // 3. ลบรายการที่ถูกลบออกจาก IndexedDB ทันที
   for (const delId of deletedIds) {
     await deleteFromLocalStore(storeName, delId, { broadcast: false });
   }
@@ -359,6 +373,7 @@ export async function diffLocalStore(storeName, serverManifest = [], scopeFilter
 
 // Last Sync Metadata Management
 export async function getLastSyncTime(storeName) {
+  if (isDatabasePurged) return null;
   if (!isIndexedDBSupported) return memoryStore[`_sync_${storeName}`] || null;
   try {
     const db = await openDB();
@@ -379,6 +394,7 @@ export async function getLastSyncTime(storeName) {
 }
 
 export async function setLastSyncTime(storeName, timestamp) {
+  if (isDatabasePurged) return;
   const ts = timestamp || new Date().toISOString();
   memoryStore[`_sync_${storeName}`] = ts;
   if (!isIndexedDBSupported) return;
@@ -390,47 +406,64 @@ export async function setLastSyncTime(storeName, timestamp) {
       store.put({ key: storeName, timestamp: ts });
       transaction.oncomplete = () => resolve(true);
     });
-  } catch (err) {
-    console.warn(`[OfflineStore] Failed to set last sync time for ${storeName}:`, err);
-  }
+  } catch (err) {}
 }
 
 // Safeguard 4: Force Hard Refresh & Clear All Local Stores (Privacy & Security Wipeout)
 export async function clearAllLocalStores() {
-  STORES.forEach(s => { memoryStore[s] = []; });
-  Object.keys(memoryStore).forEach(k => {
-    if (k.startsWith('_sync_')) delete memoryStore[k];
-  });
+  isDatabasePurged = true;
 
-  if (!isIndexedDBSupported) {
+  // 1. ล้าง Memory Store ทั้งหมด
+  STORES.forEach(s => { memoryStore[s] = []; });
+  Object.keys(memoryStore).forEach(k => delete memoryStore[k]);
+
+  if (typeof window === 'undefined' || !window.indexedDB) {
     broadcastStoreChange('*', 'CLEAR_ALL');
     return true;
   }
+
+  // 2. เคลียร์ข้อมูลในทุก Object Store แบบ Transaction
   try {
-    const db = await openDB();
-    const existingStores = Array.from(db.objectStoreNames);
-    if (existingStores.length > 0) {
-      await new Promise((resolve, reject) => {
-        const transaction = db.transaction(existingStores, 'readwrite');
-        existingStores.forEach(storeName => {
-          transaction.objectStore(storeName).clear();
+    const db = await openDB(true);
+    if (db) {
+      const existingStores = Array.from(db.objectStoreNames);
+      if (existingStores.length > 0) {
+        await new Promise((resolve) => {
+          const transaction = db.transaction(existingStores, 'readwrite');
+          existingStores.forEach(storeName => {
+            try {
+              transaction.objectStore(storeName).clear();
+            } catch (e) {}
+          });
+          transaction.oncomplete = () => {
+            db.close();
+            resolve(true);
+          };
+          transaction.onerror = () => {
+            db.close();
+            resolve(false);
+          };
         });
-        transaction.oncomplete = () => resolve(true);
-        transaction.onerror = () => reject(transaction.error);
-      });
-    }
-    broadcastStoreChange('*', 'CLEAR_ALL');
-    return true;
-  } catch (err) {
-    console.warn('[OfflineStore] Failed to clear local stores:', err);
-    try {
-      if (typeof window !== 'undefined' && window.indexedDB) {
-        window.indexedDB.deleteDatabase(DB_NAME);
+      } else {
+        db.close();
       }
-    } catch (e) {}
-    broadcastStoreChange('*', 'CLEAR_ALL');
-    return false;
+    }
+  } catch (err) {
+    console.warn('[OfflineStore] Failed to clear stores in transaction:', err);
   }
+
+  // 3. สั่ง Delete Database ทันทีเพื่อล้างข้อมูลจากเครื่องให้สะอาด 100%
+  try {
+    await new Promise((resolve) => {
+      const delReq = indexedDB.deleteDatabase(DB_NAME);
+      delReq.onsuccess = () => resolve(true);
+      delReq.onerror = () => resolve(false);
+      delReq.onblocked = () => resolve(false);
+    });
+  } catch (e) {}
+
+  broadcastStoreChange('*', 'CLEAR_ALL');
+  return true;
 }
 
 // Subscribe to store updates across browser tabs and within the same tab

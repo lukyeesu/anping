@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
 import { callSupabase, supabase, jsToRow, rowToJS } from './lib/supabase';
-import { subscribeStoreUpdates, clearAllLocalStores, getLocalStore, upsertLocalStore, deleteFromLocalStore } from './lib/offlineStore';
+import { subscribeStoreUpdates, clearAllLocalStores, getLocalStore, upsertLocalStore, deleteFromLocalStore, resetDatabasePurgedFlag } from './lib/offlineStore';
 import { ToastContainer } from './global/helpers';
 import { triggerGlobalToast } from './global/helpers';
 import ResetPasswordScreen from './pages/ResetPasswordScreen';
@@ -23,6 +23,8 @@ import {
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, formatTreatmentRecord, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from './global/helpers';
+
+// ... other imports if any
 import ProfileManager from './pages/ProfileManager';
 import LoginScreen from './pages/LoginScreen';
 import SettingsManager from './pages/SettingsManager';
@@ -305,6 +307,8 @@ export default function App() {
   }, [isMobileProfileDropdownOpen]);
 
   const handleLogin = (staff, token) => {
+    resetDatabasePurgedFlag();
+
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem('clinic_isLoggedIn', 'true');
       localStorage.setItem('clinic_currentUser', JSON.stringify(staff));
@@ -355,10 +359,17 @@ export default function App() {
         globalAlert.close();
       }
       
-      if (supabase && supabase.auth) {
-        supabase.auth.signOut().catch(() => {});
+      // 1. ยกเลิก Realtime Channels ทันที เพื่อป้องกัน background events เขียนข้อมูลกลับลง IndexedDB
+      if (supabase) {
+        try {
+          supabase.removeAllChannels();
+        } catch (e) {}
+        if (supabase.auth) {
+          supabase.auth.signOut().catch(() => {});
+        }
       }
       
+      // 2. ล้าง LocalStorage
       if (typeof window !== 'undefined' && window.localStorage) {
         localStorage.removeItem('clinic_isLoggedIn');
         localStorage.removeItem('clinic_currentUser');
@@ -372,7 +383,7 @@ export default function App() {
         } catch (e) {}
       }
 
-      // 🛡️ ระบบความปลอดภัยสูงสุด: ล้างข้อมูลทั้งหมดใน IndexedDB ทันทีเมื่อ Logout หรือโดนระงับบัญชี เพื่อป้องกันข้อมูลหลุด
+      // 3. 🛡️ ระบบความปลอดภัยสูงสุด: ล้างและทำลายฐานข้อมูล IndexedDB ทันทีเมื่อ Logout หรือโดนระงับบัญชี เพื่อป้องกันข้อมูลหลุด
       await clearAllLocalStores();
       console.log('%c🛡️ [Security] IndexedDB has been completely purged upon logout/suspension! ✨', 'color: #ef4444; font-weight: bold;');
     } catch (e) {
