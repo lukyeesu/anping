@@ -220,6 +220,143 @@ export async function replaceLocalStore(storeName, items, options = {}) {
   }
 }
 
+// Delete a specific item from IndexedDB and memoryStore
+export async function deleteFromLocalStore(storeName, itemId, options = {}) {
+  const shouldBroadcast = options.broadcast !== false;
+  if (!itemId) return;
+  const targetId = String(itemId).trim();
+
+  // Update memory fallback
+  if (memoryStore[storeName]) {
+    const existingIdx = memoryStore[storeName].findIndex(x => String(x.id || x.hn || x.username || '').trim() === targetId);
+    if (existingIdx >= 0) {
+      memoryStore[storeName].splice(existingIdx, 1);
+    }
+  }
+
+  if (!isIndexedDBSupported) {
+    if (shouldBroadcast) broadcastStoreChange(storeName, 'DELETE');
+    return;
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      store.delete(targetId);
+
+      transaction.oncomplete = () => {
+        if (shouldBroadcast) broadcastStoreChange(storeName, 'DELETE');
+        resolve(true);
+      };
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (err) {
+    console.warn(`[OfflineStore] Failed to delete from local store ${storeName}:`, err);
+    if (shouldBroadcast) broadcastStoreChange(storeName, 'DELETE');
+  }
+}
+
+// Reconcile local store with authoritative server items:
+// - If scopeFilterFn is provided: replaces only the scoped subset, deleting any scoped item not present in serverItems.
+// - If scopeFilterFn is null: replaces the entire store with serverItems.
+export async function reconcileLocalStore(storeName, serverItems = [], scopeFilterFn = null, options = {}) {
+  const shouldBroadcast = options.broadcast !== false;
+  const cleanServerItems = Array.isArray(serverItems)
+    ? serverItems.filter(x => x && !x.is_deleted && !x.isDeleted)
+    : [];
+
+  const serverMap = new Map();
+  cleanServerItems.forEach(item => {
+    const id = String(item.id || item.hn || item.username || '').trim();
+    if (id) serverMap.set(id, { ...item, id });
+  });
+
+  let finalList = [];
+  if (typeof scopeFilterFn === 'function') {
+    const currentLocal = await getLocalStore(storeName);
+    const outOfScope = currentLocal.filter(item => !scopeFilterFn(item));
+    const serverReconciled = Array.from(serverMap.values());
+    finalList = [...outOfScope, ...serverReconciled];
+  } else {
+    finalList = Array.from(serverMap.values());
+  }
+
+  await replaceLocalStore(storeName, finalList, { broadcast: shouldBroadcast });
+  return finalList;
+}
+
+// Differential sync comparison between local store and server manifest ({ id, updated_at, is_deleted })
+export async function diffLocalStore(storeName, serverManifest = [], scopeFilterFn = null) {
+  const localItems = await getLocalStore(storeName);
+  const inScopeLocal = typeof scopeFilterFn === 'function' ? localItems.filter(scopeFilterFn) : localItems;
+
+  const localMap = new Map();
+  inScopeLocal.forEach(item => {
+    const id = String(item.id || item.hn || item.username || '').trim();
+    if (id) localMap.set(id, item);
+  });
+
+  const serverMap = new Map();
+  (serverManifest || []).forEach(m => {
+    const id = String(m.id || m.hn || m.username || '').trim();
+    if (id) {
+      serverMap.set(id, {
+        id,
+        updated_at: m.updated_at || m.created_at || null,
+        is_deleted: !!(m.is_deleted || m.isDeleted)
+      });
+    }
+  });
+
+  const deletedIds = [];
+  const idsToFetch = [];
+
+  // 1. ตรวจหารายการที่ถูกลบไปแล้วบน Server (มีในเครื่อง แต่ไม่มีบน Server หรือถูก flag is_deleted)
+  for (const [localId] of localMap.entries()) {
+    const serverEntry = serverMap.get(localId);
+    if (!serverEntry || serverEntry.is_deleted) {
+      deletedIds.push(localId);
+    }
+  }
+
+  // 2. ตรวจหารายการใหม่ หรือรายการที่มีการแก้ไขบน Server (updated_at ฝั่ง Server ใหม่กว่า)
+  for (const [serverId, serverEntry] of serverMap.entries()) {
+    if (serverEntry.is_deleted) continue;
+
+    const localItem = localMap.get(serverId);
+    if (!localItem) {
+      // รายการใหม่ที่เพิ่งเพิ่มเข้ามาบน Server
+      idsToFetch.push(serverId);
+    } else {
+      // เปรียบเทียบ timestamp
+      const serverTime = serverEntry.updated_at ? new Date(serverEntry.updated_at).getTime() : 0;
+      const localTime = (localItem.updated_at || localItem.updatedAt || localItem.created_at || localItem.createdAt)
+        ? new Date(localItem.updated_at || localItem.updatedAt || localItem.created_at || localItem.createdAt).getTime()
+        : 0;
+
+      if (serverTime && localTime && serverTime > (localTime + 500)) {
+        // มีการแก้ไขบน Server ให้โหลดเฉพาะแถวนี้มาอัปเดต
+        idsToFetch.push(serverId);
+      } else if (serverTime && !localTime) {
+        idsToFetch.push(serverId);
+      }
+    }
+  }
+
+  // 3. ลบรายการที่ถูกลบออกจาก IndexedDB ทันทีแบบเงียบๆ
+  for (const delId of deletedIds) {
+    await deleteFromLocalStore(storeName, delId, { broadcast: false });
+  }
+
+  return {
+    idsToFetch,
+    deletedIds,
+    localItems
+  };
+}
+
 // Last Sync Metadata Management
 export async function getLastSyncTime(storeName) {
   if (!isIndexedDBSupported) return memoryStore[`_sync_${storeName}`] || null;

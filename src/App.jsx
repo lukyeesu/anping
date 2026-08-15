@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
 import { callSupabase, supabase, jsToRow, rowToJS } from './lib/supabase';
-import { subscribeStoreUpdates, clearAllLocalStores, getLocalStore, upsertLocalStore } from './lib/offlineStore';
+import { subscribeStoreUpdates, clearAllLocalStores, getLocalStore, upsertLocalStore, deleteFromLocalStore } from './lib/offlineStore';
 import { ToastContainer } from './global/helpers';
 import { triggerGlobalToast } from './global/helpers';
 import ResetPasswordScreen from './pages/ResetPasswordScreen';
@@ -1708,6 +1708,28 @@ export default function App() {
   const syncLocalStateOnDelete = (sheetName, payload) => {
     if (!payload) return;
     const targetId = String(payload.id || payload.hn || '').trim();
+    if (!targetId) return;
+
+    const mapSheetToStore = {
+      Patients: 'patients',
+      Queue: 'queue',
+      Inventory: 'inventory',
+      InventoryLogs: 'inventory_logs',
+      setting_pos: 'setting_pos',
+      Branches: 'branches',
+      POS_Transactions: 'pos_transactions',
+      Staff: 'staff',
+      Staff_Schedules: 'staff_schedules',
+      Finance_Revenue: 'finance_revenue',
+      Finance_Expenses: 'finance_expenses',
+      Treatments: 'treatments',
+      Settings: 'settings'
+    };
+
+    const storeName = mapSheetToStore[sheetName];
+    if (storeName) {
+      deleteFromLocalStore(storeName, targetId).catch(() => {});
+    }
 
     if (sheetName === 'Patients') {
       setPatientsData(prev => prev.filter(p => String(p.id || p.hn) !== targetId));
@@ -1720,14 +1742,11 @@ export default function App() {
     } else if (sheetName === 'Branches') {
       setBranchesData(prev => prev.filter(b => String(b.id) !== targetId));
     } else if (sheetName === 'POS_Transactions') {
-      upsertLocalStore('pos_transactions', [{ id: targetId, is_deleted: true }]).catch(() => {});
       setPosHistoryData(prev => prev.filter(t => String(t.id || t.receiptNo || t.receipt_no || '').trim() !== targetId));
       setFinanceData(prev => prev.filter(f => String(f.id || f.receiptNo || f.receipt_no || '').trim() !== targetId));
     } else if (sheetName === 'Staff') {
       setStaffData(prev => prev.filter(s => String(s.id) !== targetId));
     } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {
-      const storeName = sheetName === 'Finance_Revenue' ? 'finance_revenue' : 'finance_expenses';
-      upsertLocalStore(storeName, [{ id: targetId, is_deleted: true }]).catch(() => {});
       setFinanceData(prev => prev.filter(f => String(f.id) !== targetId));
     } else if (sheetName === 'Treatments') {
       setPatientsData(prev => prev.map(p => {
@@ -1946,10 +1965,20 @@ export default function App() {
           if (eventType === 'INSERT' || eventType === 'UPDATE') {
             if (newRow) {
               const jsRow = rowToJS(newRow);
+              console.log(
+                `%c⚡ [Realtime Sync: ${table}]%c 📡 ${eventType} received! ID: ${jsRow.id || jsRow.hn}`,
+                'color: #059669; font-weight: bold; background: #ecfdf5; padding: 2px 6px; border-radius: 4px;',
+                'color: #047857; font-weight: 600;'
+              );
               syncLocalStateOnSave(sheetName, jsRow);
             }
           } else if (eventType === 'DELETE') {
             if (oldRow && oldRow.id) {
+              console.log(
+                `%c⚡ [Realtime Sync: ${table}]%c 🗑️ DELETE received! ID: ${oldRow.id}`,
+                'color: #dc2626; font-weight: bold; background: #fef2f2; padding: 2px 6px; border-radius: 4px;',
+                'color: #b91c1c; font-weight: 600;'
+              );
               syncLocalStateOnDelete(sheetName, { id: oldRow.id });
             }
           }

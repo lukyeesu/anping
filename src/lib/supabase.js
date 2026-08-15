@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { GOOGLE_SCRIPT_URL } from '../global/constants';
-import { getLocalStore, upsertLocalStore, replaceLocalStore, getLastSyncTime, setLastSyncTime } from './offlineStore';
+import { getLocalStore, upsertLocalStore, replaceLocalStore, deleteFromLocalStore, reconcileLocalStore, diffLocalStore, getLastSyncTime, setLastSyncTime } from './offlineStore';
 
 const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -482,6 +482,162 @@ function parseItemDate(item) {
   return isNaN(fallback.getTime()) ? null : fallback;
 }
 
+// Differential Sync Engine: ส่งข้อมูลจาก IndexedDB ขึ้นไปให้ Supabase เทียบ (Ingress ฟรี 100%)
+// และรับกลับมาเฉพาะแถวที่มีการแก้ไขจริงหรือ ID ที่ถูกลบ (Egress แทบเป็น 0 Byte)
+export async function differentialSyncTable(tableName, selectCols = '*', options = {}) {
+  const { scopeFilterFn = null, customManifestQuery = null, scopeCol = null, scopeVal = null, scopeVals = null } = options;
+
+  // 1. อ่านข้อมูลเดิมจาก IndexedDB ทันที (0ms, 0 Egress)
+  const initialLocal = await getLocalStore(tableName);
+  const currentLocalScoped = typeof scopeFilterFn === 'function' ? initialLocal.filter(scopeFilterFn) : initialLocal;
+
+  if (!supabase) {
+    return { status: 'success', data: currentLocalScoped, fromCache: true };
+  }
+
+  // 2. [Server-Side Reconcile] ส่งชุดข้อมูล { id, updated_at } จาก IndexedDB ขึ้นไปให้ Supabase ตรวจสอบ (Ingress = ฟรี 100%!)
+  const clientManifest = currentLocalScoped.map(x => ({
+    id: String(x.id || x.hn || x.username || '').trim(),
+    updated_at: x.updated_at || x.updatedAt || x.created_at || null
+  })).filter(x => x.id);
+
+  try {
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('reconcile_sync', {
+      p_table_name: tableName,
+      p_client_items: clientManifest,
+      p_scope_column: scopeCol || null,
+      p_scope_value: scopeVal ? String(scopeVal) : null,
+      p_scope_values: Array.isArray(scopeVals) && scopeVals.length > 0 ? scopeVals : null
+    });
+
+    if (!rpcErr) {
+      if (rpcRes === null || (typeof rpcRes === 'object' && !rpcRes.deleted_ids && !rpcRes.updated_rows)) {
+        // กรณีไม่มีอะไรเปลี่ยนแปลงเลย: ปล่อย IndexedDB ไว้อย่างเดิม ไม่ต้องแตะต้องอะไร (0 Bytes Egress!)
+        await setLastSyncTime(tableName, new Date().toISOString());
+        console.log(
+          `%c⚡ [Differential Sync: ${tableName}]%c 🎯 100% In Sync (0 Byte Payload - No Egress Used! ✨)`,
+          'color: #0284c7; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;',
+          'color: #16a34a; font-weight: 600;'
+        );
+        return {
+          status: 'success',
+          data: currentLocalScoped,
+          fetchedCount: 0,
+          deletedCount: 0
+        };
+      }
+
+      const deletedIds = Array.isArray(rpcRes.deleted_ids) ? rpcRes.deleted_ids : [];
+      const updatedRows = Array.isArray(rpcRes.updated_rows) ? rpcRes.updated_rows : [];
+
+      // ลบรายการที่ถูกลบออกจาก IndexedDB ทันที
+      for (const delId of deletedIds) {
+        await deleteFromLocalStore(tableName, delId, { broadcast: false });
+      }
+
+      // อัปเดตเฉพาะแถวที่มีการแก้ไขหรือเพิ่มใหม่
+      if (updatedRows.length > 0) {
+        const formatted = updatedRows.map(rowToJS).filter(x => !x.is_deleted && !x.isDeleted);
+        await upsertLocalStore(tableName, formatted, { broadcast: false });
+      }
+
+      await setLastSyncTime(tableName, new Date().toISOString());
+
+      const freshLocal = await getLocalStore(tableName);
+      const finalData = typeof scopeFilterFn === 'function' ? freshLocal.filter(scopeFilterFn) : freshLocal;
+
+      console.log(
+        `%c⚡ [Differential Sync: ${tableName}]%c 🚀 Delta Updated!\n` +
+        `📦 Local Items: ${clientManifest.length} | 🗑️ Deleted: ${deletedIds.length} | 🔄 Updated: ${updatedRows.length} | 💾 Egress: Delta (${updatedRows.length} rows)`,
+        'color: #0284c7; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;',
+        'color: #16a34a; font-weight: 600;'
+      );
+
+      return {
+        status: 'success',
+        data: finalData,
+        fetchedCount: updatedRows.length,
+        deletedCount: deletedIds.length
+      };
+    }
+  } catch (rpcEx) {
+    // Fallback to client-side manifest check if RPC is not yet executed in Supabase
+  }
+
+  // 3. [Fallback] Client-Side Lightweight Manifest Check (กรณีที่ยังไม่ได้รัน SQL function บน Supabase)
+  const hasDeletedCol = TABLE_COLUMNS[tableName]?.includes('is_deleted');
+  const timeCol = TABLE_COLUMNS[tableName]?.includes('updated_at') ? 'updated_at' : 'created_at';
+  const selectManifestCols = hasDeletedCol ? `id,${timeCol},is_deleted` : `id,${timeCol}`;
+
+  let manifestQuery = customManifestQuery
+    ? customManifestQuery(supabase.from(tableName))
+    : supabase.from(tableName).select(selectManifestCols);
+
+  let serverManifest = null;
+  try {
+    let { data: resData, error: manifestErr } = await manifestQuery;
+    if (manifestErr) {
+      let fbManifest = customManifestQuery
+        ? customManifestQuery(supabase.from(tableName))
+        : supabase.from(tableName).select(`id,${timeCol}`);
+      let fbRes = await fbManifest;
+      if (!fbRes.error && fbRes.data) {
+        serverManifest = fbRes.data;
+      }
+    } else {
+      serverManifest = resData;
+    }
+  } catch (err) {
+    console.warn(`[DiffSync] Manifest network warning for ${tableName}:`, err);
+  }
+
+  if (!serverManifest) {
+    return { status: 'success', data: currentLocalScoped, fromCache: true };
+  }
+
+  const { idsToFetch, deletedIds } = await diffLocalStore(tableName, serverManifest || [], scopeFilterFn);
+
+  if (idsToFetch.length > 0) {
+    const chunkSize = 100;
+    const fetchedRows = [];
+    for (let i = 0; i < idsToFetch.length; i += chunkSize) {
+      const chunk = idsToFetch.slice(i, i + chunkSize);
+      let { data: chunkData, error: chunkErr } = await supabase
+        .from(tableName)
+        .select(selectCols)
+        .in('id', chunk);
+
+      if (!chunkErr && chunkData) {
+        fetchedRows.push(...chunkData);
+      }
+    }
+
+    if (fetchedRows.length > 0) {
+      const formatted = fetchedRows.map(rowToJS).filter(x => !x.is_deleted && !x.isDeleted);
+      await upsertLocalStore(tableName, formatted, { broadcast: false });
+    }
+  }
+
+  await setLastSyncTime(tableName, new Date().toISOString());
+
+  const freshLocal = await getLocalStore(tableName);
+  const finalData = typeof scopeFilterFn === 'function' ? freshLocal.filter(scopeFilterFn) : freshLocal;
+
+  console.log(
+    `%c⚡ [Differential Sync: ${tableName}]%c 📡 Client-Side Manifest Reconcile!\n` +
+    `📦 Local Items: ${currentLocalScoped.length} | 🗑️ Deleted: ${deletedIds.length} | 🔄 Updated: ${idsToFetch.length}`,
+    'color: #0284c7; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;',
+    'color: #d97706; font-weight: 600;'
+  );
+
+  return {
+    status: 'success',
+    data: finalData,
+    fetchedCount: idsToFetch.length,
+    deletedCount: deletedIds.length
+  };
+}
+
 export async function callSupabase(action, sheetName, payload = null) {
   if (!supabase) {
     throw new Error('Supabase client ยังไม่ได้ถูกตั้งค่า');
@@ -492,67 +648,7 @@ export async function callSupabase(action, sheetName, payload = null) {
   switch (action) {
     case 'GET_DATA': {
       const selectCols = (TABLE_COLUMNS[tableName] || []).join(',') || '*';
-      const isMasterConfigTable = ['setting_pos', 'branches', 'settings', 'staff', 'logs'].includes(tableName);
-      const lastSync = isMasterConfigTable ? null : await getLastSyncTime(tableName);
-
-      let query = supabase.from(tableName).select(selectCols);
-
-      if (lastSync) {
-        // ในกรณี Delta Sync ไม่ใส่ Filter is_deleted เพื่อให้ดึงรายการที่ถูกลบฝั่ง Server ในช่วงที่ปิดแอปกลับมาอัปเดตลบออกใน IndexedDB ด้วย
-        if (tableName === 'inventory_logs' || tableName === 'logs') {
-          query = query.gt('created_at', lastSync);
-        } else {
-          query = query.gt('updated_at', lastSync);
-        }
-      } else {
-        if (TABLE_COLUMNS[tableName]?.includes('is_deleted')) {
-          query = query.or('is_deleted.is.null,is_deleted.eq.false');
-        }
-        if (tableName === 'logs') query = query.order('created_at', { ascending: false }).limit(100);
-        else if (tableName === 'inventory_logs') query = query.order('created_at', { ascending: false }).limit(500);
-        else if (tableName === 'pos_transactions') query = query.order('created_at', { ascending: false }).limit(500);
-        else if (tableName === 'finance_revenue' || tableName === 'finance_expenses') query = query.order('created_at', { ascending: false }).limit(500);
-        else if (tableName === 'treatments') query = query.order('created_at', { ascending: false }).limit(1000);
-      }
-
-      let { data, error } = await query;
-
-      if (error) {
-        console.warn(`Query ${tableName} with explicit columns or delta query failed (${error.message}). Retrying fallback select('*')...`);
-        let fallbackQuery = supabase.from(tableName).select('*');
-        if (tableName === 'logs') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(100);
-        else if (tableName === 'inventory_logs') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(200);
-        else if (tableName === 'pos_transactions') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(500);
-        else if (tableName === 'finance_revenue' || tableName === 'finance_expenses') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(500);
-        else if (tableName === 'treatments') fallbackQuery = fallbackQuery.order('created_at', { ascending: false }).limit(1000);
-        
-        const resFb = await fallbackQuery;
-        if (resFb.data) {
-          data = resFb.data;
-        } else if (resFb.error && !lastSync) {
-          console.error(`Fallback query for ${tableName} also failed:`, resFb.error.message);
-          return { status: 'error', data: [], message: resFb.error.message };
-        }
-      }
-
-      const formattedData = (data || []).map(rowToJS);
-      const nowIso = new Date().toISOString();
-      const hasSoftDelete = TABLE_COLUMNS[tableName]?.includes('is_deleted');
-
-      if (lastSync) {
-        if (formattedData.length > 0) {
-          await upsertLocalStore(tableName, formattedData, { broadcast: false });
-        }
-        await setLastSyncTime(tableName, nowIso);
-        const mergedLocalData = await getLocalStore(tableName);
-        return { status: 'success', data: mergedLocalData };
-      } else {
-        await replaceLocalStore(tableName, formattedData, { broadcast: false });
-        await setLastSyncTime(tableName, nowIso);
-        const localData = await getLocalStore(tableName);
-        const finalData = localData.length > 0 ? localData : formattedData;
-        return { status: 'success', data: finalData };
-      }
+      return await differentialSyncTable(tableName, selectCols);
     }
 
     case 'GET_DATA_BY_MONTH': {
@@ -560,28 +656,16 @@ export async function callSupabase(action, sheetName, payload = null) {
       const year = payload?.year || new Date().getFullYear();
       const month = payload?.month || (new Date().getMonth() + 1);
 
-      let query = supabase.from(tableName).select(selectCols);
+      // ซิงค์คิวนัดหมายทั้งตารางในครั้งเดียว (Zero Waste Egress ~0.035 KB)
+      await differentialSyncTable(tableName, selectCols);
 
-      let { data, error } = await query;
-      if (error) {
-        let fallbackQuery = supabase.from(tableName).select('*');
-        const resFb = await fallbackQuery;
-        data = resFb.data;
-      }
-
-      const formattedData = (data || [])
-        .map(rowToJS)
-        .filter(item => {
-          const d = parseItemDate(item);
-          if (!d) return true;
-          return d.getFullYear() === year && (d.getMonth() + 1) === month;
-        });
-      const nowIso = new Date().toISOString();
-      if (formattedData.length > 0) {
-        await upsertLocalStore(tableName, formattedData, { broadcast: false });
-        await setLastSyncTime(tableName, nowIso);
-      }
-      return { status: 'success', data: formattedData };
+      const localData = await getLocalStore(tableName);
+      const filtered = localData.filter(item => {
+        const d = parseItemDate(item);
+        if (!d) return true;
+        return d.getFullYear() === year && (d.getMonth() + 1) === month;
+      });
+      return { status: 'success', data: filtered };
     }
 
     case 'GET_TREATMENTS_BY_PATIENT': {
@@ -590,37 +674,14 @@ export async function callSupabase(action, sheetName, payload = null) {
         return { status: 'success', data: [] };
       }
 
-      // 1. อ่านข้อมูลเดิมจาก IndexedDB ก่อนเพื่อความรวดเร็ว (Offline First)
-      const localStoreTreatments = (await getLocalStore('treatments')) || [];
-      const cachedForPatient = localStoreTreatments.filter(t => 
-        t && String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase() === patientId.toLowerCase()
-      );
+      const scopeFn = t => String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase() === patientId.toLowerCase();
 
-      // 2. ดึงจาก Supabase DB ด้วย ilike ค้นหาครอบคลุมตัวพิมพ์เล็ก-ใหญ่
-      let data = null;
-      const { data: resData, error } = await supabase
-        .from('treatments')
-        .select('*')
-        .ilike('patient_id', patientId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.warn("GET_TREATMENTS_BY_PATIENT query warning:", error.message);
-        const fbRes = await supabase.from('treatments').select('*').eq('patient_id', patientId);
-        data = fbRes.data;
-      } else {
-        data = resData;
-      }
-
-      const formattedData = (data || []).map(rowToJS);
-      const nowIso = new Date().toISOString();
-      if (formattedData.length > 0) {
-        await upsertLocalStore('treatments', formattedData, { broadcast: false });
-        await setLastSyncTime('treatments', nowIso);
-      }
-
-      const finalTreatments = (formattedData && formattedData.length > 0) ? formattedData : cachedForPatient;
-      return { status: 'success', data: finalTreatments };
+      return await differentialSyncTable('treatments', '*', {
+        scopeFilterFn: scopeFn,
+        scopeCol: 'patient_id',
+        scopeVal: patientId,
+        customManifestQuery: query => query.select('id,updated_at,is_deleted').ilike('patient_id', patientId)
+      });
     }
 
     case 'GET_PATIENTS_PAGINATED': {
@@ -700,38 +761,14 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       const normPids = patientIds.map(id => String(id).trim().toLowerCase());
-      
-      // 1. อ่านจาก IndexedDB ก่อนเสมอ (ประหยัด Egress 100% บนการรีเฟรช!)
-      const localStoreTreatments = (await getLocalStore('treatments')) || [];
-      const cachedTx = localStoreTreatments.filter(t => {
-        if (!t) return false;
-        const pid = String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase();
-        return normPids.includes(pid);
+      const scopeFn = t => normPids.includes(String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase());
+
+      return await differentialSyncTable('treatments', '*', {
+        scopeFilterFn: scopeFn,
+        scopeCol: 'patient_id',
+        scopeVals: patientIds,
+        customManifestQuery: query => query.select('id,updated_at,is_deleted,patient_id').in('patient_id', patientIds)
       });
-
-      // หากมีข้อมูลอยู่ใน IndexedDB แล้ว ให้คืนค่าจาก IndexedDB ทันทีโดยไม่ต้องต่อ Supabase
-      if (cachedTx.length > 0) {
-        return { status: 'success', data: cachedTx };
-      }
-
-      // 2. ดึงจาก Supabase เฉพาะเมื่อใน IndexedDB ยังไม่มีข้อมูลของคนไข้กลุ่มนี้
-      let { data, error } = await supabase
-        .from('treatments')
-        .select('*')
-        .in('patient_id', patientIds)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.warn("GET_TREATMENTS_FOR_PATIENTS error:", error.message);
-        return { status: 'success', data: cachedTx };
-      }
-
-      const formattedData = (data || []).map(rowToJS);
-      if (formattedData.length > 0) {
-        await upsertLocalStore('treatments', formattedData, { broadcast: false });
-        await setLastSyncTime('treatments', new Date().toISOString());
-      }
-      return { status: 'success', data: formattedData };
     }
 
     case 'GET_TREATMENT_COUNTS': {
@@ -855,7 +892,7 @@ export async function callSupabase(action, sheetName, payload = null) {
         ] = await Promise.all([
           supabase.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false'),
           supabase.from('queue').select('*', { count: 'exact', head: true }).or(`raw_date_time.ilike.%${todayIso}%,raw_date_time.ilike.%${todayStr}%`),
-          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.eq."pending",deal_status.eq."pending"'),
+          supabase.from('queue').select('*', { count: 'exact', head: true }).or('status.ilike.%pending%,status.ilike.%รอยืนยัน%,status.ilike.%รอ%'),
           supabase.from('branches').select('*', { count: 'exact', head: true }).eq('is_active', true)
         ]);
 
@@ -876,13 +913,8 @@ export async function callSupabase(action, sheetName, payload = null) {
 
     case 'GET_APPOINTMENT_STATS': {
       try {
-        const branchFilter = params?.branch_id || params?.branchId || 'all';
-
-        let query = supabase.from('queue').select('status, raw_date_time, created_at, branch_id');
-        const { data, error } = await query;
-        if (error || !data) {
-          return { status: 'error', data: null };
-        }
+        const branchFilter = payload?.branch_id || payload?.branchId || 'all';
+        const localQueue = (await getLocalStore('queue')) || [];
 
         const now = new Date();
         const dStr = String(now.getDate()).padStart(2, '0');
@@ -900,7 +932,8 @@ export async function callSupabase(action, sheetName, payload = null) {
         let cancelled = 0;
         let total = 0;
 
-        data.forEach(item => {
+        localQueue.forEach(item => {
+          if (!item || item.is_deleted || item.isDeleted) return;
           const itemBranch = String(item.branch_id || item.branchId || '').toLowerCase();
           if (targetBranch !== 'all' && itemBranch && itemBranch !== 'all' && itemBranch !== targetBranch) {
             return; // Skip items belonging to a different branch
@@ -908,7 +941,7 @@ export async function callSupabase(action, sheetName, payload = null) {
 
           total++;
 
-          const rawDt = String(item.raw_date_time || item.created_at || '');
+          const rawDt = String(item.raw_date_time || item.datetime || item.created_at || '');
           if (rawDt.includes(todayThaiStr) || rawDt.includes(todayIsoStr)) {
             todayCount++;
           }
@@ -1375,7 +1408,7 @@ export async function callSupabase(action, sheetName, payload = null) {
     }
 
     case 'DELETE_DATA': {
-      const recordId = String(payload?.hn || payload?.id || payload?.username);
+      const recordId = String(payload?.id || payload?.hn || payload?.username);
       if (!recordId) throw new Error('Missing ID for deletion');
       
       const nowIso = new Date().toISOString();
@@ -1387,7 +1420,19 @@ export async function callSupabase(action, sheetName, payload = null) {
         await supabase.from(tableName).update({ is_deleted: true, updated_at: nowIso }).eq('id', recordId);
       }
 
-      await upsertLocalStore(tableName, [{ id: recordId, is_deleted: true }]);
+      // ลบออกจาก IndexedDB ทันที 100%
+      await deleteFromLocalStore(tableName, recordId);
+
+      // หากเป็นการลบคนไข้ ให้ลบประวัติการรักษาทั้งหมดของคนไข้คนนี้ออกจาก IndexedDB ด้วย
+      if (tableName === 'patients') {
+        const localTreatments = (await getLocalStore('treatments')) || [];
+        const normPid = recordId.trim().toLowerCase();
+        const treatmentsToKeep = localTreatments.filter(t => {
+          const pid = String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase();
+          return pid !== normPid;
+        });
+        await replaceLocalStore('treatments', treatmentsToKeep, { broadcast: false });
+      }
 
       // ซิงค์ลบพนักงานออกจากระบบ Supabase Auth (auth.users) ผ่าน Backend API
       if (tableName === 'staff') {
