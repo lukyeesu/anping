@@ -276,22 +276,59 @@ const PatientModal = React.memo(({
                   <Package size={20} /> คอร์ส/แพ็กเกจ คงเหลือ
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {formData.courses && formData.courses.filter(c => c.remainingSessions > 0).length > 0 ? (
-                    formData.courses.filter(c => c.remainingSessions > 0).map(course => (
-                      <div key={course.id} className="bg-indigo-50/30 p-4 rounded-2xl border border-indigo-100 flex flex-col gap-2 shadow-sm">
-                        <div className="flex justify-between items-start">
-                          <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-100/50 px-2 py-0.5 rounded-md">คงเหลือ {course.remainingSessions}/{course.totalSessions}</div>
-                          <div className="text-[10px] text-slate-400 font-data">{formatDate(course.purchasedAt)}</div>
+                  {formData.courses && formData.courses.filter(c => !c.isDeleted).length > 0 ? (
+                    formData.courses.filter(c => !c.isDeleted).map(course => {
+                      const cName = course.courseName || course.course_name || course.name;
+                      const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 0;
+                      const total = Number(course.totalSessions ?? course.total_sessions) || 1;
+                      const pDate = course.purchasedAt || course.purchased_at;
+                      const isFinished = rem === 0;
+
+                      return (
+                        <div key={course.id} className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 group ${
+                          isFinished 
+                            ? 'bg-slate-50/60 border-slate-200/80 shadow-2xs opacity-75' 
+                            : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md'
+                        }`}>
+                          <div>
+                            <h5  className={`font-bold kanit-text text-sm sm:text-base leading-snug line-clamp-2 ${isFinished ? 'text-slate-600' : 'text-slate-800'}`}>
+                              {cName}
+                            </h5>
+                          </div>
+
+                          <div className={`p-2.5 rounded-xl border ${isFinished ? 'bg-slate-100/70 border-slate-200/60' : 'bg-slate-50 border-slate-100'}`}>
+                            <div className="flex justify-between items-baseline mb-1.5">
+                              <span className={`text-[11px] font-semibold kanit-text ${isFinished ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {isFinished ? 'สถานะ: ใช้ครบแล้ว' : 'คงเหลือ'}
+                              </span>
+                              <div className="text-right font-data">
+                                <span className={`text-sm font-black ${isFinished ? 'text-slate-500' : 'text-indigo-600'}`}>{rem}</span>
+                                <span className="text-xs font-bold text-slate-400">/{total} ครั้ง</span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${isFinished ? 'bg-slate-300' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`} 
+                                style={{ width: `${Math.min(100, Math.max(0, (rem / total) * 100))}%` }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 font-data pt-1 border-t border-slate-100">
+                            <span>ซื้อ: {formatDate(pDate)}</span>
+                            {isFinished ? (
+                              <span className="px-2 py-0.5 rounded-md bg-slate-200/70 text-slate-500 font-bold text-[10px] kanit-text">
+                                จบคอร์สแล้ว
+                              </span>
+                            ) : (course.isShareable !== false && course.is_shareable !== false ? (
+                              <span className="text-emerald-600 font-bold text-[10px] kanit-text">แชร์ได้</span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 kanit-text">ใช้เฉพาะบุคคล</span>
+                            ))}
+                          </div>
                         </div>
-                        <h5 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight line-clamp-2 min-h-[2.5rem]">{course.name}</h5>
-                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
-                          <div 
-                            className="bg-indigo-500 h-full transition-all duration-500" 
-                            style={{ width: `${(course.remainingSessions / course.totalSessions) * 100}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <div className="md:col-span-3 py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                        <p className="text-slate-400 kanit-text text-sm italic">ยังไม่มีคอร์สคงเหลือในขณะนี้</p>

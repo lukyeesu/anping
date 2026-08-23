@@ -541,7 +541,8 @@ export default function App() {
         resBranches,
         resStaff,
         resSettings,
-        resStaffSchedules
+        resStaffSchedules,
+        resCourses
       ] = await Promise.all([
         callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset: 0, limit: 20 }).catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'POS_Transactions').catch(err => ({ status: 'error', data: [], message: err?.message })),
@@ -551,7 +552,8 @@ export default function App() {
         callAppScript('GET_DATA', 'Branches').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Staff').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Settings').catch(err => ({ status: 'error', data: [], message: err?.message })),
-        callAppScript('GET_DATA', 'Staff_Schedules').catch(err => ({ status: 'error', data: [], message: err?.message }))
+        callAppScript('GET_DATA', 'Staff_Schedules').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'PatientCourses').catch(err => ({ status: 'error', data: [], message: err?.message }))
       ]);
 
       if (resPatients?.status === 'success') { 
@@ -622,6 +624,9 @@ export default function App() {
       if (resPosItems?.status === 'success') {
         const rawPosItems = Array.isArray(resPosItems.data) ? resPosItems.data : [];
         setPosProducts(rawPosItems);
+      }
+      if (resCourses?.status === 'success') {
+        setPatientCoursesData(Array.isArray(resCourses.data) ? resCourses.data : []);
       }
 
       const combinedFinanceData = []; // Removed global finance fetch to save Egress. FinancePage now fetches directly.
@@ -983,6 +988,7 @@ export default function App() {
   const [inventoryData, setInventoryData] = useState([]);
   const [inventoryLogsData, setInventoryLogsData] = useState([]);
   const [posHistoryData, setPosHistoryData] = useState([]);
+  const [patientCoursesData, setPatientCoursesData] = useState([]);
 
   // --- Auto Print OPD from URL (LINE Webhook) ---
   useEffect(() => {
@@ -1543,6 +1549,7 @@ export default function App() {
         return [payload, ...prev];
       });
     } else if (sheetName === 'setting_pos') {
+      upsertLocalStore('setting_pos', [payload]).catch(() => {});
       setPosProducts(prev => {
         const idx = prev.findIndex(i => 
           (targetId && String(i.id || i.code || '').trim() === targetId) ||
@@ -1607,7 +1614,20 @@ export default function App() {
           type: 'income',
           subtotal: Number(payload.total_amount ?? payload.totalAmount ?? 0),
           discount_amount: Number(payload.discount ?? payload.discountAmount ?? 0),
-          is_deleted: !!(payload.is_deleted || payload.isDeleted)
+          is_deleted: !!(payload.is_deleted || payload.isDeleted),
+          doctorName: payload.doctorName || payload.doctor_name || payload.doctor || '',
+          doctor_name: payload.doctorName || payload.doctor_name || payload.doctor || '',
+          doctorId: payload.doctorId || payload.doctor_id || '',
+          doctor_id: payload.doctorId || payload.doctor_id || '',
+          sellerName: payload.sellerName || payload.seller_name || payload.staffName || payload.staff_name || '',
+          seller_name: payload.sellerName || payload.seller_name || payload.staffName || payload.staff_name || '',
+          sellerId: payload.sellerId || payload.seller_id || payload.staffId || payload.staff_id || '',
+          seller_id: payload.sellerId || payload.seller_id || payload.staffId || payload.staff_id || '',
+          staffName: payload.staffName || payload.staff_name || payload.sellerName || payload.seller_name || '',
+          staff_name: payload.staffName || payload.staff_name || payload.sellerName || payload.seller_name || '',
+          staffId: payload.staffId || payload.staff_id || payload.sellerId || payload.seller_id || '',
+          staff_id: payload.staffId || payload.staff_id || payload.sellerId || payload.seller_id || '',
+          rawTx: payload
         };
         if (idx >= 0) {
           const next = [...prev];
@@ -1717,6 +1737,17 @@ export default function App() {
           });
         });
       }
+    } else if (sheetName === 'PatientCourses' || sheetName === 'patient_courses' || sheetName === 'Patient_Courses') {
+      upsertLocalStore('patient_courses', [payload]).catch(() => {});
+      setPatientCoursesData(prev => {
+        const idx = prev.findIndex(c => String(c.id).trim() === targetId);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
     }
   };
 
@@ -1738,7 +1769,10 @@ export default function App() {
       Finance_Revenue: 'finance_revenue',
       Finance_Expenses: 'finance_expenses',
       Treatments: 'treatments',
-      Settings: 'settings'
+      Settings: 'settings',
+      PatientCourses: 'patient_courses',
+      patient_courses: 'patient_courses',
+      Patient_Courses: 'patient_courses'
     };
 
     const storeName = mapSheetToStore[sheetName];
@@ -1763,6 +1797,8 @@ export default function App() {
       setStaffData(prev => prev.filter(s => String(s.id) !== targetId));
     } else if (sheetName === 'Finance_Revenue' || sheetName === 'Finance_Expenses') {
       setFinanceData(prev => prev.filter(f => String(f.id) !== targetId));
+    } else if (sheetName === 'PatientCourses' || sheetName === 'patient_courses' || sheetName === 'Patient_Courses') {
+      setPatientCoursesData(prev => prev.filter(c => String(c.id).trim() !== targetId));
     } else if (sheetName === 'Treatments') {
       setPatientsData(prev => prev.map(p => {
         if (p.opdRecords && p.opdRecords.some(t => String(t.id || '').trim() === targetId)) {
@@ -1972,7 +2008,8 @@ export default function App() {
             finance_expenses: 'Finance_Expenses',
             staff: 'Staff',
             staff_schedules: 'Staff_Schedules',
-            settings: 'Settings'
+            settings: 'Settings',
+            patient_courses: 'PatientCourses'
           };
           const sheetName = mapTableToSheet[table];
           if (!sheetName) return;
@@ -2020,11 +2057,17 @@ export default function App() {
         if (storeName === 'inventory' || storeName === '*') {
           getLocalStore('inventory').then(data => data && data.length && setInventoryData(data));
         }
+        if (storeName === 'setting_pos' || storeName === '*') {
+          getLocalStore('setting_pos').then(data => data && setPosProducts(data));
+        }
         if (storeName === 'staff' || storeName === '*') {
           getLocalStore('staff').then(data => data && data.length && setStaffData(data));
         }
         if (storeName === 'pos_transactions' || storeName === '*') {
           getLocalStore('pos_transactions').then(data => data && data.length && setPosHistoryData([...data].reverse()));
+        }
+        if (storeName === 'patient_courses' || storeName === '*') {
+          getLocalStore('patient_courses').then(data => data && setPatientCoursesData(data));
         }
       }
     });
@@ -2546,6 +2589,7 @@ export default function App() {
                         staffData={staffData}
                         branchesData={branchesData}
                         currentBranch={currentBranch}
+                        posProducts={posProducts}
                         isGlobalLoading={isGlobalLoading}
                         showToast={showToast}
                         callAppScript={callAppScript}
@@ -2555,13 +2599,13 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} />
                 </div>
             )}
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} staffData={staffData} posProducts={posProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} />
+                    <AppointmentManager currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} staffData={staffData} posProducts={posProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} />
                 </div>
             )}
 
@@ -2577,6 +2621,8 @@ export default function App() {
                         setProducts={setPosProducts}
                         patientsData={patientsData}
                         setPatientsData={setPatientsData}
+                        patientCoursesData={patientCoursesData}
+                        setPatientCoursesData={setPatientCoursesData}
                         posHistoryData={posHistoryData}
                         setPosHistoryData={setPosHistoryData}
                         inventoryData={inventoryData}

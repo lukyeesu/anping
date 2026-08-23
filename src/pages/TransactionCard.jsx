@@ -35,6 +35,12 @@ const TransactionCard = React.memo(({ tx, openDetailModal, handlePrintReceipt, h
             <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
                 {tx.note || '-'}
             </div>
+            {(tx.doctorName || tx.doctor_name || tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && (
+                <div className="flex flex-wrap items-center gap-x-2 text-[11px] font-data mt-1">
+                    {(tx.doctorName || tx.doctor_name) && <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">🩺 {tx.doctorName || tx.doctor_name}</span>}
+                    {(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">💼 {tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name}</span>}
+                </div>
+            )}
         </div>
 
         <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">

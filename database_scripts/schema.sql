@@ -454,3 +454,41 @@ CREATE POLICY "Allow authenticated full access" ON public.settings FOR ALL TO au
 DROP POLICY IF EXISTS "Allow public all" ON public.logs;
 DROP POLICY IF EXISTS "Allow authenticated full access" ON public.logs;
 CREATE POLICY "Allow authenticated full access" ON public.logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- 15. Enable Supabase Realtime for Clinic Tables
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.setting_pos;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.inventory;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.queue;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.patients;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.pos_transactions;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.branches;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.staff;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.patient_courses;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
+

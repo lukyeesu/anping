@@ -73,7 +73,7 @@ const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', 
   );
 };
 
-const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
+const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -1303,24 +1303,47 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
       {apptModal.isOpen && (
         <div className={`fixed inset-0 z-[170] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${apptModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-2xl max-h-[80dvh] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${apptModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 z-10 gap-3">
               <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner shrink-0">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                  editingId ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-sky-50 text-sky-600 border border-sky-100'
+                }`}>
                   {isViewMode ? <FileText className="w-5 h-5 sm:w-6 sm:h-6" /> : (editingId ? <Pencil className="w-5 h-5 sm:w-6 sm:h-6" /> : <CalendarRange className="w-5 h-5 sm:w-6 sm:h-6" />)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm sm:text-xl font-bold text-slate-800 kanit-text truncate leading-tight">{isViewMode ? 'รายละเอียดการนัดหมาย' : (editingId ? 'แก้ไขข้อมูลนัดหมาย' : 'เพิ่มนัดหมายใหม่')}</h3>
-                  <p className="text-[10px] sm:text-sm text-slate-500 kanit-text truncate leading-tight mt-0.5">{isViewMode ? 'ข้อมูลการนัดหมายสำหรับเรียกดู' : 'ระบุรายละเอียดการนัดหมายคนไข้ล่วงหน้า'}</p>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text truncate leading-tight">
+                    {formData.hn || formData.patientName 
+                      ? `${formData.hn ? `${formData.hn} - ` : ''}${formData.patientName || formData.searchPatient || ''}` 
+                      : (isViewMode ? 'รายละเอียดการนัดหมาย' : (editingId ? 'แก้ไขข้อมูลนัดหมาย' : 'เพิ่มนัดหมายใหม่'))}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
+                    {/* ป้ายสถานะ */}
+                    {(() => {
+                      const st = getStatusInfo(formData.status);
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold kanit-text border shrink-0 ${st.colorClass}`}>
+                          {st.label}
+                        </span>
+                      );
+                    })()}
+                    {/* ป้ายสาขา */}
+                    <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-600 border border-slate-200/80 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium kanit-text shrink-0">
+                      <Building2 size={11} className="text-slate-400" />
+                      {(() => {
+                        const bObj = (branchesData || []).find(b => b.id === (formData.branch_id || formData.branchId));
+                        return bObj ? bObj.name : 'สาขาหลัก';
+                      })()}
+                    </span>
+                  </div>
                 </div>
+              </div>
+              <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
                 {formData.createdAt && (
-                  <div className="hidden sm:flex text-[11px] font-medium text-slate-500 items-center gap-1.5 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60 kanit-text shadow-sm shrink-0">
-                    <Clock size={14} className="text-slate-400" />
+                  <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/70 kanit-text font-medium whitespace-nowrap">
+                    <Clock size={13} className="text-slate-400 shrink-0" />
                     <span>นัดเมื่อ: {formatDateTime(formData.createdAt)}</span>
                   </div>
                 )}
-              </div>
-              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                {/* เหลือแค่ปุ่มปิด X ด้านบน */}
                 <button onClick={apptModal.close} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 sm:p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"><X size={18} className="sm:w-5 sm:h-5" /></button>
               </div>
             </div>
@@ -1338,31 +1361,44 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                     
                     {/* ค้นหา HN หรือ ชื่อคนไข้ (เพิ่ม z-index ป้องกัน Dropdown โดนช่องอื่นทับ) */}
                     <div className="md:col-span-2 relative" style={{ zIndex: 20 }}>
-                        {/* แสดงคอร์สคงเหลือเมื่อเลือกคนไข้แล้ว (ในหน้านัดหมาย) */}
-                        {formData.hn && (
-                            <div className="mb-4 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-col gap-2 shadow-sm animate-in fade-in slide-in-from-top-1">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-full max-w-[8px] h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-                                        <span className="text-[11px] font-black text-indigo-700 kanit-text uppercase tracking-wider">คอร์ส/แพ็กเกจ คงเหลือ</span>
+                        {/* แสดงคอร์สคงเหลือเมื่อเลือกคนไข้แล้ว (เฉพาะคอร์สที่เหลือ > 0 เท่านั้น ถ้าไม่มีไม่ต้องแสดง) */}
+                        {(() => {
+                            if (!formData.hn) return null;
+                            const normHn = String(formData.hn || '').trim().toLowerCase();
+                            const courses = (patientCoursesData || []).filter(c => {
+                                const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+                                const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
+                                return cPid === normHn && rem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                            });
+                            if (courses.length === 0) return null;
+                            return (
+                                <div className="mb-4 p-3.5 sm:p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex flex-col gap-2.5 shadow-xs animate-in fade-in slide-in-from-top-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 animate-pulse"></div>
+                                            <span className="text-xs font-bold text-indigo-700 kanit-text whitespace-nowrap shrink-0">คอร์ส/แพ็กเกจ คงเหลือ</span>
+                                        </div>
+                                        <span className="text-[11px] font-bold text-indigo-500 font-data shrink-0">{formData.hn}</span>
                                     </div>
-                                    <span className="text-[10px] font-bold text-indigo-400 font-data">HN: {formData.hn}</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {courses.map(c => {
+                                            const cName = c.courseName || c.course_name || c.name;
+                                            const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 1;
+                                            const total = Number(c.totalSessions ?? c.total_sessions) || 1;
+                                            return (
+                                                <div key={c.id}  className="px-3 py-1.5 bg-white border border-indigo-100/90 hover:border-indigo-300 rounded-xl text-xs font-bold text-indigo-700 kanit-text shadow-2xs inline-flex items-center gap-2 transition-all cursor-default">
+                                                    <Package size={13} className="text-indigo-500 shrink-0" />
+                                                    <span className="leading-tight">{cName}</span>
+                                                    <span className="inline-flex items-center justify-center leading-none px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-data text-[11px] font-black border border-indigo-100 shrink-0">
+                                                        {rem}/{total}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {(() => {
-                                        const p = patientsData.find(patient => (patient.id || patient.hn) === formData.hn);
-                                        const courses = p?.courses?.filter(c => c.remainingSessions > 0) || [];
-                                        if (courses.length === 0) return <span className="text-[10px] text-slate-400 kanit-text italic py-1">ไม่มีคอร์สคงเหลือในประวัติ</span>;
-                                        return courses.map(c => (
-                                            <div key={c.id} className="px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl text-[10px] font-bold text-indigo-600 kanit-text shadow-sm flex items-center gap-1.5">
-                                                <Package size={12} className="text-indigo-400" />
-                                                {c.name} ({c.remainingSessions}/{c.totalSessions})
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                         <label className="block text-sm font-semibold text-slate-600 mb-1.5 ml-1 kanit-text">ข้อมูลผู้ป่วย (ค้นหาด้วย HN หรือ ชื่อ) <span className="text-rose-500">*</span></label>
                         <div className="relative">
                            <input 

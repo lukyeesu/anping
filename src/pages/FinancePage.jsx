@@ -586,8 +586,24 @@ const FinancePage = ({
           financeGrandTotal = financeAfterDiscount;
       }
 
+      const docObj = (staffData || []).find(s => s.id === posEditForm.doctorId);
+      const sellerObj = (staffData || []).find(s => s.id === (posEditForm.sellerId || posEditForm.staffId));
+
       const updatedTx = {
         ...posEditForm,
+        doctorId: docObj ? docObj.id : '',
+        doctor_id: docObj ? docObj.id : '',
+        doctorName: docObj ? docObj.name : '',
+        doctor_name: docObj ? docObj.name : '',
+        doctor: docObj ? docObj.name : '',
+        sellerId: sellerObj ? sellerObj.id : '',
+        seller_id: sellerObj ? sellerObj.id : '',
+        sellerName: sellerObj ? sellerObj.name : '',
+        seller_name: sellerObj ? sellerObj.name : '',
+        staffId: sellerObj ? sellerObj.id : '',
+        staff_id: sellerObj ? sellerObj.id : '',
+        staffName: sellerObj ? sellerObj.name : '',
+        staff_name: sellerObj ? sellerObj.name : '',
         createdAt: newIsoDate,
         date: newIsoDate,
         subtotal: financeSubtotal,
@@ -601,7 +617,7 @@ const FinancePage = ({
         netAmount: financeGrandTotal,
         discount: financeDiscountAmount,
         items: posEditForm.items,
-        patientName: patientSearchQuery,
+        patientName: patientSearchQuery || posEditForm.patientName || '',
         hn: posEditForm.patientId || posEditForm.hn || null
       };
       delete updatedTx.displayDate;
@@ -981,7 +997,14 @@ const FinancePage = ({
                       items: parsedItems,
                       patientName: tx.patient_name,
                       isAuto: tx.is_auto,
-                      amount: Number(tx.amount) || 0
+                      amount: Number(tx.amount) || 0,
+                      doctorName: tx.doctor_name || tx.doctorName || matchedPos?.doctorName || matchedPos?.doctor_name || matchedPos?.doctor || '',
+                      doctorId: tx.doctor_id || tx.doctorId || matchedPos?.doctorId || matchedPos?.doctor_id || '',
+                      sellerName: tx.seller_name || tx.sellerName || tx.staff_name || tx.staffName || matchedPos?.sellerName || matchedPos?.seller_name || matchedPos?.staffName || matchedPos?.staff_name || '',
+                      sellerId: tx.seller_id || tx.sellerId || tx.staff_id || tx.staffId || matchedPos?.sellerId || matchedPos?.seller_id || matchedPos?.staffId || matchedPos?.staff_id || '',
+                      staffName: tx.staff_name || tx.staffName || tx.seller_name || tx.sellerName || matchedPos?.staffName || matchedPos?.staff_name || matchedPos?.sellerName || matchedPos?.seller_name || '',
+                      staffId: tx.staff_id || tx.staffId || tx.seller_id || tx.sellerId || matchedPos?.staffId || matchedPos?.staff_id || matchedPos?.sellerId || matchedPos?.seller_id || '',
+                      rawTx: matchedPos || tx
                   };
               });
 
@@ -993,7 +1016,21 @@ const FinancePage = ({
 
               if (formatted.length < PAGE_SIZE) setHasMore(false);
               setFinanceTransactions(prev => {
-                  const newTxs = isReset ? formatted : [...prev, ...formatted];
+                  const updatedFormatted = formatted.map(f => {
+                    const existing = (prev || []).find(p => String(p.id).trim() === String(f.id).trim());
+                    if (!existing) return f;
+                    return {
+                      ...f,
+                      doctorName: f.doctorName || existing.doctorName || existing.doctor_name || '',
+                      doctorId: f.doctorId || existing.doctorId || existing.doctor_id || '',
+                      sellerName: f.sellerName || existing.sellerName || existing.seller_name || existing.staffName || existing.staff_name || '',
+                      sellerId: f.sellerId || existing.sellerId || existing.seller_id || existing.staffId || existing.staff_id || '',
+                      staffName: f.staffName || existing.staffName || existing.staff_name || existing.sellerName || existing.seller_name || '',
+                      staffId: f.staffId || existing.staffId || existing.staff_id || existing.sellerId || existing.seller_id || '',
+                      rawTx: f.rawTx || existing.rawTx || f
+                    };
+                  });
+                  const newTxs = isReset ? updatedFormatted : [...prev, ...updatedFormatted];
                   const seen = new Set();
                   return newTxs.filter(tx => {
                       if (seen.has(tx.id)) return false;
@@ -1095,7 +1132,14 @@ const FinancePage = ({
       is_auto: table === 'pos_transactions' ? true : (jsRow.is_auto !== undefined ? jsRow.is_auto : !!jsRow.isAuto),
       amount: Number(jsRow.amount ?? jsRow.net_amount ?? jsRow.netAmount ?? 0),
       category: jsRow.category || (table === 'pos_transactions' ? 'รายได้จาก POS' : ''),
-      status: jsRow.status || 'completed'
+      status: jsRow.status || 'completed',
+      doctorName: jsRow.doctor_name || jsRow.doctorName || jsRow.doctor || '',
+      doctorId: jsRow.doctor_id || jsRow.doctorId || '',
+      sellerName: jsRow.seller_name || jsRow.sellerName || jsRow.staff_name || jsRow.staffName || '',
+      sellerId: jsRow.seller_id || jsRow.sellerId || jsRow.staff_id || jsRow.staffId || '',
+      staffName: jsRow.staff_name || jsRow.staffName || jsRow.seller_name || jsRow.sellerName || '',
+      staffId: jsRow.staff_id || jsRow.staffId || jsRow.seller_id || jsRow.sellerId || '',
+      rawTx: jsRow
     };
 
     setFinanceTransactions(prev => {
@@ -1176,7 +1220,14 @@ const FinancePage = ({
             type: 'income',
             subtotal: Number(posTx.total_amount ?? posTx.totalAmount ?? 0),
             discount_amount: Number(posTx.discount ?? posTx.discountAmount ?? 0),
-            is_deleted: !!(posTx.is_deleted || posTx.isDeleted)
+            is_deleted: !!(posTx.is_deleted || posTx.isDeleted),
+            doctorName: posTx.doctorName || posTx.doctor_name || posTx.doctor || '',
+            doctorId: posTx.doctorId || posTx.doctor_id || '',
+            sellerName: posTx.sellerName || posTx.seller_name || posTx.staffName || posTx.staff_name || '',
+            sellerId: posTx.sellerId || posTx.seller_id || posTx.staffId || posTx.staff_id || '',
+            staffName: posTx.staffName || posTx.staff_name || posTx.sellerName || posTx.seller_name || '',
+            staffId: posTx.staffId || posTx.staff_id || posTx.sellerId || posTx.seller_id || '',
+            rawTx: posTx
           };
           if (idx >= 0) {
             next[idx] = { ...next[idx], ...mappedItem };
@@ -1340,11 +1391,11 @@ const FinancePage = ({
 
 
   const handleEditTransaction = (tx) => {
-      if (tx.isAuto) {
-        const originalTx = posHistoryData.find(p => p.id === tx.id || p.receiptNo === tx.id);
+      if (tx.isAuto || tx.category === 'รายได้จาก POS') {
+        const originalTx = (posHistoryData || []).find(p => p.id === tx.id || p.receiptNo === tx.id || p.receipt_no === tx.id) || tx.rawTx || tx;
         if (originalTx) {
           let editDateStr = '';
-          const txDateToUse = originalTx.createdAt || originalTx.date || tx.date;
+          const txDateToUse = originalTx.createdAt || originalTx.created_at || originalTx.date || tx.date;
           if (txDateToUse) {
               const dObj = new Date(txDateToUse);
               if (!isNaN(dObj.getTime())) {
@@ -1360,13 +1411,24 @@ const FinancePage = ({
               }
           }
 
+          const curDoctorId = originalTx.doctorId || originalTx.doctor_id || (staffData || []).find(s => s.name === originalTx.doctorName || s.name === originalTx.doctor_name || s.name === originalTx.doctor)?.id || '';
+          const curSellerId = originalTx.sellerId || originalTx.seller_id || originalTx.staffId || originalTx.staff_id || (staffData || []).find(s => s.name === originalTx.sellerName || s.name === originalTx.seller_name || s.name === originalTx.staffName || s.name === originalTx.staff_name)?.id || '';
+
           setPosEditForm({
             ...originalTx,
+            doctorId: curDoctorId,
+            doctor_id: curDoctorId,
+            doctorName: originalTx.doctorName || originalTx.doctor_name || originalTx.doctor || '',
+            doctor_name: originalTx.doctorName || originalTx.doctor_name || originalTx.doctor || '',
+            sellerId: curSellerId,
+            seller_id: curSellerId,
+            sellerName: originalTx.sellerName || originalTx.seller_name || originalTx.staffName || originalTx.staff_name || '',
+            seller_name: originalTx.sellerName || originalTx.seller_name || originalTx.staffName || originalTx.staff_name || '',
             status: originalTx.status || 'completed',
             displayDate: editDateStr,
             items: originalTx.items ? [...originalTx.items] : []
           });
-          setPatientSearchQuery(originalTx.patientName || '');
+          setPatientSearchQuery(originalTx.patientName || originalTx.patient_name || '');
           setIsPosEditClosing(false);
           setIsPosEditModalOpen(true);
         } else {
@@ -2163,6 +2225,11 @@ const FinancePage = ({
                               <div className="pl-1">
                                   <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedTxn.rawTx?.patientName || selectedTxn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
                                   <p className="text-xs text-slate-500 font-data mt-1.5 flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/> {formatDate(selectedTxn.date)} {formatTime(selectedTxn.date)} น.</p>
+                                  <div className="mt-2 pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 kanit-text">
+                                      <span>🩺 แพทย์: <strong className="text-slate-800">{selectedTxn.rawTx?.doctorName || selectedTxn.rawTx?.doctor_name || selectedTxn.doctorName || selectedTxn.doctor_name || '-'}</strong></span>
+                                      <span className="text-slate-300">|</span>
+                                      <span>💼 ผู้ขาย: <strong className="text-slate-800">{selectedTxn.rawTx?.sellerName || selectedTxn.rawTx?.seller_name || selectedTxn.rawTx?.staffName || selectedTxn.rawTx?.staff_name || selectedTxn.sellerName || selectedTxn.seller_name || selectedTxn.staffName || selectedTxn.staff_name || '-'}</strong></span>
+                                  </div>
                               </div>
                           </div>
                           <div className="p-4 rounded-xl border bg-slate-50 border-slate-100">
@@ -2910,6 +2977,70 @@ const FinancePage = ({
                       <button type="button" onClick={() => { setPosEditForm({...posEditForm, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} className="ml-2 text-emerald-400 hover:text-rose-500 transition-colors"><X size={14} /></button>
                     </div>
                   )}
+                </div>
+
+                <div className="p-4 rounded-2xl border bg-amber-50/40 border-amber-200/80 space-y-3 mt-4">
+                   <div className="flex items-center gap-2">
+                       <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-amber-500"><Award size={12}/></div>
+                       <p className="text-[11px] sm:text-xs font-bold text-amber-900 kanit-text uppercase tracking-wider">ข้อมูลแพทย์ผู้ตรวจรักษา & ผู้แนะนำ/ผู้ขาย</p>
+                   </div>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                       <div>
+                           <label className="block text-[10px] font-bold text-slate-600 mb-1 kanit-text flex items-center gap-1">
+                               <Stethoscope size={12} className="text-emerald-600"/> แพทย์ผู้ตรวจรักษา (ค่า DF)
+                           </label>
+                           <select
+                               value={posEditForm.doctorId || ''}
+                               onChange={e => {
+                                   const docId = e.target.value;
+                                   const doc = (staffData || []).find(s => s.id === docId);
+                                   setPosEditForm({
+                                       ...posEditForm,
+                                       doctorId: docId,
+                                       doctor_id: docId,
+                                       doctorName: doc ? doc.name : '',
+                                       doctor_name: doc ? doc.name : '',
+                                       doctor: doc ? doc.name : ''
+                                   });
+                               }}
+                               className="w-full px-4 py-2.5 bg-white rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 kanit-text cursor-pointer"
+                           >
+                               <option value="">- ไม่ระบุแพทย์ (ขายเฉพาะสินค้า) -</option>
+                               {(staffData || []).filter(s => s.role === 'doctor' || s.position?.includes('แพทย์') || s.role === 'admin' || s.employmentType === 'doctor').map(d => (
+                                   <option key={d.id} value={d.id}>{d.name} ({d.position || 'แพทย์'})</option>
+                               ))}
+                           </select>
+                       </div>
+                       <div>
+                           <label className="block text-[10px] font-bold text-slate-600 mb-1 kanit-text flex items-center gap-1">
+                               <Award size={12} className="text-amber-500"/> ผู้แนะนำ / ผู้ขาย (ค่าคอมยอดขาย)
+                           </label>
+                           <select
+                               value={posEditForm.sellerId || posEditForm.staffId || ''}
+                               onChange={e => {
+                                   const sellerId = e.target.value;
+                                   const seller = (staffData || []).find(s => s.id === sellerId);
+                                   setPosEditForm({
+                                       ...posEditForm,
+                                       sellerId: sellerId,
+                                       seller_id: sellerId,
+                                       sellerName: seller ? seller.name : '',
+                                       seller_name: seller ? seller.name : '',
+                                       staffId: sellerId,
+                                       staff_id: sellerId,
+                                       staffName: seller ? seller.name : '',
+                                       staff_name: seller ? seller.name : ''
+                                   });
+                               }}
+                               className="w-full px-4 py-2.5 bg-white rounded-2xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 kanit-text cursor-pointer"
+                           >
+                               <option value="">- ไม่ระบุผู้ขาย / แคชเชียร์ -</option>
+                               {(staffData || []).map(s => (
+                                   <option key={s.id} value={s.id}>{s.name} ({s.position || s.role})</option>
+                               ))}
+                           </select>
+                       </div>
+                   </div>
                 </div>
 
                 <div className="bg-slate-50/50 p-4 sm:p-5 rounded-3xl border border-slate-100 flex flex-col mt-4">

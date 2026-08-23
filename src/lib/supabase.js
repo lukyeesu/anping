@@ -23,6 +23,16 @@ if (!clientInstance && supabaseUrl && supabaseAnonKey) {
 
 export const supabase = clientInstance;
 
+// Auto Cache Schema Version Check (ช่วยให้เครื่องที่เคยบันทึกค่าเก่า ดึงข้อมูลล่าสุดจาก Supabase ทันทีเมื่อเปิด/รีเฟรช โดยไม่ต้องสั่งล้างแคชด้วยตนเอง)
+const CACHE_SCHEMA_VERSION = 'v3_staff_df_comm_fix_2026';
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+  const currentVer = localStorage.getItem('clinic_cache_schema_version');
+  if (currentVer !== CACHE_SCHEMA_VERSION) {
+    replaceLocalStore('staff', []).catch(() => {});
+    localStorage.setItem('clinic_cache_schema_version', CACHE_SCHEMA_VERSION);
+  }
+}
+
 const TABLE_MAP = {
   'Patients': 'patients',
   'Branches': 'branches',
@@ -37,7 +47,10 @@ const TABLE_MAP = {
   'Staff_Schedules': 'staff_schedules',
   'Settings': 'settings',
   'Logs': 'logs',
-  'Treatments': 'treatments'
+  'Treatments': 'treatments',
+  'PatientCourses': 'patient_courses',
+  'Patient_Courses': 'patient_courses',
+  'patient_courses': 'patient_courses'
 };
 
 const TABLE_COLUMNS = {
@@ -54,10 +67,24 @@ const TABLE_COLUMNS = {
     'informed_consent_risk_agreed', 'informed_consent_voluntary_agreed', 'informed_consent_signature_url', 'informed_consent_doc_id',
     'branch_id', 'created_at', 'updated_at', 'is_deleted'
   ],
+  patient_courses: [
+    'id', 'patient_id', 'patient_name', 'product_id', 'course_name', 
+    'total_sessions', 'used_sessions', 'remaining_sessions', 'price', 
+    'pos_transaction_id', 'receipt_no', 'branch_id', 'status', 
+    'is_shareable', 'shared_patient_ids', 'expire_date', 'notes', 
+    'purchased_at', 'created_at', 'updated_at', 'is_deleted'
+  ],
   treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'med_cert_number', 'created_at', 'updated_at', 'is_deleted'],
   branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at', 'is_deleted'],
   queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'branch_id', 'notes', 'treated', 'created_at', 'updated_at', 'is_deleted'],
-  pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'status', 'created_at', 'updated_at', 'is_deleted'],
+  pos_transactions: [
+    'id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 
+    'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 
+    'staff_name', 'staff_id', 'staff_commission',
+    'doctor_id', 'doctor_name', 'doctor_commission',
+    'seller_id', 'seller_name', 'seller_commission',
+    'date', 'time', 'status', 'transaction_type', 'created_at', 'updated_at', 'is_deleted'
+  ],
   inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'lot_no', 'expire_date', 'receive_date', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
   inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at', 'updated_at', 'lot_no', 'expire_date', 'receive_date', 'product_id', 'branch_id', 'type', 'amount', 'balance', 'reason'],
   setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'icon', 'stock_managed', 'is_course', 'course_sessions', 'min_stock', 'is_vatable', 'is_active', 'created_at', 'updated_at', 'is_deleted'],
@@ -71,6 +98,7 @@ const TABLE_COLUMNS = {
     'cur_address', 'cur_moo', 'cur_road', 'cur_sub_district', 'cur_district', 'cur_province', 'cur_zipcode', 
     'em_name', 'em_relation', 'em_phone', 'em_address', 
     'salary', 'base_salary', 'employment_type', 
+    'df_rate', 'df_type', 'df_condition', 'df_threshold',
     'commission_rate', 'commission_type', 'commission_condition', 'commission_threshold', 
     'ot_rate', 'branch_id', 'photo', 'schedule', 'is_active', 'created_at', 'updated_at'
   ],
@@ -100,7 +128,9 @@ export function rowToJS(row) {
     jsObj[camelKey] = val;
   }
   if (row.category || row.type) {
-    jsObj.category = row.category || row.type;
+    const catVal = row.category || row.type;
+    jsObj.category = catVal;
+    jsObj.type = catVal;
   }
   if (row.stock_managed !== undefined || row.stockManaged !== undefined) {
     jsObj.stockManaged = parseBool(row.stock_managed ?? row.stockManaged);
@@ -174,6 +204,47 @@ export function rowToJS(row) {
     jsObj.expireDate = val;
     jsObj.expire_date = val;
   }
+  if (row.total_sessions !== undefined || row.totalSessions !== undefined) {
+    jsObj.totalSessions = Number(row.total_sessions ?? row.totalSessions ?? 1);
+    jsObj.total_sessions = jsObj.totalSessions;
+  }
+  if (row.used_sessions !== undefined || row.usedSessions !== undefined) {
+    jsObj.usedSessions = Number(row.used_sessions ?? row.usedSessions ?? 0);
+    jsObj.used_sessions = jsObj.usedSessions;
+  }
+  if (row.remaining_sessions !== undefined || row.remainingSessions !== undefined) {
+    jsObj.remainingSessions = Number(row.remaining_sessions ?? row.remainingSessions ?? 0);
+    jsObj.remaining_sessions = jsObj.remainingSessions;
+  }
+  if (row.is_shareable !== undefined || row.isShareable !== undefined) {
+    jsObj.isShareable = parseBool(row.is_shareable ?? row.isShareable ?? true);
+    jsObj.is_shareable = jsObj.isShareable;
+  }
+  if (row.shared_patient_ids !== undefined || row.sharedPatientIds !== undefined) {
+    let sIds = row.shared_patient_ids ?? row.sharedPatientIds;
+    if (typeof sIds === 'string') {
+      try { sIds = JSON.parse(sIds); } catch(e) { sIds = []; }
+    }
+    jsObj.sharedPatientIds = Array.isArray(sIds) ? sIds : [];
+    jsObj.shared_patient_ids = jsObj.sharedPatientIds;
+  }
+  if (row.course_name || row.courseName) {
+    jsObj.courseName = row.course_name || row.courseName;
+    jsObj.course_name = jsObj.courseName;
+  }
+  if (row.patient_id || row.patientId) {
+    jsObj.patientId = row.patient_id || row.patientId;
+    jsObj.patient_id = jsObj.patientId;
+  }
+  if (row.purchased_at || row.purchasedAt) {
+    jsObj.purchasedAt = row.purchased_at || row.purchasedAt;
+    jsObj.purchased_at = jsObj.purchasedAt;
+  }
+  if (row.transaction_type !== undefined || row.transactionType !== undefined) {
+    jsObj.transactionType = String(row.transaction_type ?? row.transactionType ?? 'sale');
+    jsObj.transaction_type = jsObj.transactionType;
+  }
+
   if (row.receive_date !== undefined || row.receiveDate !== undefined) {
     const val = row.receive_date ?? row.receiveDate ?? '';
     jsObj.receiveDate = val;
@@ -212,6 +283,59 @@ export function rowToJS(row) {
     else if (row.status === 'treated' || row.status === 'completed' || row.deal_status === 'completed') jsObj.treated = true;
     else jsObj.treated = false;
   }
+
+  // Robust Staff DF & Commission Mappings (ทั้ง camelCase และ snake_case ซิงค์ตรงกัน 100%)
+  if (row.df_rate !== undefined || row.dfRate !== undefined) {
+    const v = Number((row.dfRate !== undefined ? row.dfRate : row.df_rate) || 0);
+    jsObj.dfRate = v;
+    jsObj.df_rate = v;
+  }
+  if (row.df_type !== undefined || row.dfType !== undefined) {
+    const v = String((row.dfType !== undefined ? row.dfType : row.df_type) || 'percent');
+    jsObj.dfType = v;
+    jsObj.df_type = v;
+  }
+  if (row.df_condition !== undefined || row.dfCondition !== undefined) {
+    const v = String((row.dfCondition !== undefined ? row.dfCondition : row.df_condition) || 'all');
+    jsObj.dfCondition = v;
+    jsObj.df_condition = v;
+  }
+  if (row.df_threshold !== undefined || row.dfThreshold !== undefined) {
+    const v = Number((row.dfThreshold !== undefined ? row.dfThreshold : row.df_threshold) || 0);
+    jsObj.dfThreshold = v;
+    jsObj.df_threshold = v;
+  }
+  if (row.commission_rate !== undefined || row.commissionRate !== undefined) {
+    const v = Number((row.commissionRate !== undefined ? row.commissionRate : row.commission_rate) || 0);
+    jsObj.commissionRate = v;
+    jsObj.commission_rate = v;
+  }
+  if (row.commission_type !== undefined || row.commissionType !== undefined) {
+    const v = String((row.commissionType !== undefined ? row.commissionType : row.commission_type) || 'percent');
+    jsObj.commissionType = v;
+    jsObj.commission_type = v;
+  }
+  if (row.commission_condition !== undefined || row.commissionCondition !== undefined) {
+    const v = String((row.commissionCondition !== undefined ? row.commissionCondition : row.commission_condition) || 'all');
+    jsObj.commissionCondition = v;
+    jsObj.commission_condition = v;
+  }
+  if (row.commission_threshold !== undefined || row.commissionThreshold !== undefined) {
+    const v = Number((row.commissionThreshold !== undefined ? row.commissionThreshold : row.commission_threshold) || 0);
+    jsObj.commissionThreshold = v;
+    jsObj.commission_threshold = v;
+  }
+  if (row.base_salary !== undefined || row.baseSalary !== undefined) {
+    const v = Number((row.baseSalary !== undefined ? row.baseSalary : row.base_salary) || 0);
+    jsObj.baseSalary = v;
+    jsObj.base_salary = v;
+  }
+  if (row.ot_rate !== undefined || row.otRate !== undefined) {
+    const v = Number((row.otRate !== undefined ? row.otRate : row.ot_rate) || 0);
+    jsObj.otRate = v;
+    jsObj.ot_rate = v;
+  }
+
   return jsObj;
 }
 
@@ -228,7 +352,7 @@ export function jsToRow(payload, tableName = '') {
   // อัปเดตคอลัมน์ camelCase ทั้งหมดให้กลายเป็น snake_case อัตโนมัติสำหรับตาราง PostgreSQL
   for (const [key, val] of Object.entries(payload)) {
     if (val === null || val === undefined) continue;
-    if (key === 'data' || key === 'updatedBy' || key === 'updatedById' || key === 'opdRecords' || key === 'courses') continue;
+    if (key === 'data' || key === 'updatedBy' || key === 'updatedById' || key === 'opdRecords') continue;
     
     // ป้องกันไม่ให้คอลัมน์แบบ snake_case ตัวเก่าใน payload มาเขียนทับค่าใหม่ที่เพิ่งแก้ไขใน camelCase
     if (key.includes('_')) {
@@ -416,12 +540,73 @@ export function jsToRow(payload, tableName = '') {
 
   if (payload.schedule !== undefined) rawRow.schedule = payload.schedule;
 
-  // Safe Numeric Mappings
-  const numFields = ['salary', 'amount', 'totalAmount', 'total_amount', 'discount', 'netAmount', 'net_amount', 'costPrice', 'cost_price', 'sellingPrice', 'selling_price', 'price', 'age', 'stockQuantity', 'stock_quantity', 'minStock', 'min_stock', 'commission_rate', 'ot_rate'];
-  for (const field of numFields) {
-    if (payload[field] !== undefined && payload[field] !== null && payload[field] !== '') {
-      const snakeKey = field.replace(/([A-Z])/g, '_$1').toLowerCase();
-      const numVal = Number(String(payload[field]).replace(/[^0-9.-]/g, ''));
+  if (payload.totalSessions !== undefined || payload.total_sessions !== undefined) rawRow.total_sessions = Number(payload.totalSessions ?? payload.total_sessions ?? 1);
+  if (payload.usedSessions !== undefined || payload.used_sessions !== undefined) rawRow.used_sessions = Number(payload.usedSessions ?? payload.used_sessions ?? 0);
+  if (payload.remainingSessions !== undefined || payload.remaining_sessions !== undefined) rawRow.remaining_sessions = Number(payload.remainingSessions ?? payload.remaining_sessions ?? 0);
+  if (payload.isShareable !== undefined || payload.is_shareable !== undefined) rawRow.is_shareable = parseBool(payload.isShareable ?? payload.is_shareable);
+  if (payload.sharedPatientIds !== undefined || payload.shared_patient_ids !== undefined) rawRow.shared_patient_ids = payload.sharedPatientIds ?? payload.shared_patient_ids;
+  if (payload.courseName || payload.course_name) rawRow.course_name = String(payload.courseName || payload.course_name);
+  if (payload.patientId || payload.patient_id) rawRow.patient_id = String(payload.patientId || payload.patient_id);
+  if (payload.patientName || payload.patient_name) rawRow.patient_name = String(payload.patientName || payload.patient_name);
+  if (payload.purchasedAt || payload.purchased_at) rawRow.purchased_at = payload.purchasedAt || payload.purchased_at;
+  if (payload.posTransactionId || payload.pos_transaction_id) rawRow.pos_transaction_id = payload.posTransactionId || payload.pos_transaction_id;
+  if (payload.receiptNo || payload.receipt_no) rawRow.receipt_no = payload.receiptNo || payload.receipt_no;
+  if (payload.transactionType !== undefined || payload.transaction_type !== undefined) rawRow.transaction_type = String(payload.transactionType ?? payload.transaction_type);
+
+  // Explicit Staff DF & Commission Mappings (camelCase ได้สิทธิ์ก่อนเสมอเพื่อป้องกันค่าเก่าใน snake_case มาทับ)
+  if (payload.commissionRate !== undefined || payload.commission_rate !== undefined) {
+    const v = Number((payload.commissionRate !== undefined ? payload.commissionRate : payload.commission_rate) || 0);
+    rawRow.commission_rate = v;
+  }
+  if (payload.commissionType !== undefined || payload.commission_type !== undefined) {
+    rawRow.commission_type = String(payload.commissionType || payload.commission_type || 'percent');
+  }
+  if (payload.commissionCondition !== undefined || payload.commission_condition !== undefined) {
+    rawRow.commission_condition = String(payload.commissionCondition || payload.commission_condition || 'all');
+  }
+  if (payload.commissionThreshold !== undefined || payload.commission_threshold !== undefined) {
+    rawRow.commission_threshold = Number(payload.commissionThreshold ?? payload.commission_threshold ?? 0);
+  }
+  if (payload.dfRate !== undefined || payload.df_rate !== undefined) {
+    rawRow.df_rate = Number((payload.dfRate !== undefined ? payload.dfRate : payload.df_rate) || 0);
+  }
+  if (payload.dfType !== undefined || payload.df_type !== undefined) {
+    rawRow.df_type = String(payload.dfType || payload.df_type || 'percent');
+  }
+  if (payload.dfCondition !== undefined || payload.df_condition !== undefined) {
+    rawRow.df_condition = String(payload.dfCondition || payload.df_condition || 'all');
+  }
+  if (payload.dfThreshold !== undefined || payload.df_threshold !== undefined) {
+    rawRow.df_threshold = Number(payload.dfThreshold ?? payload.df_threshold ?? 0);
+  }
+  if (payload.baseSalary !== undefined || payload.base_salary !== undefined) {
+    rawRow.base_salary = Number((payload.baseSalary !== undefined ? payload.baseSalary : payload.base_salary) || 0);
+  }
+  if (payload.otRate !== undefined || payload.ot_rate !== undefined) {
+    rawRow.ot_rate = Number((payload.otRate !== undefined ? payload.otRate : payload.ot_rate) || 0);
+  }
+
+  // Safe Numeric Mappings with camelCase precedence
+  const numericKeyPairs = [
+    ['salary', 'salary'],
+    ['totalAmount', 'total_amount'],
+    ['discount', 'discount'],
+    ['netAmount', 'net_amount'],
+    ['costPrice', 'cost_price'],
+    ['sellingPrice', 'selling_price'],
+    ['price', 'price'],
+    ['age', 'age'],
+    ['stockQuantity', 'stock_quantity'],
+    ['minStock', 'min_stock'],
+    ['totalSessions', 'total_sessions'],
+    ['usedSessions', 'used_sessions'],
+    ['remainingSessions', 'remaining_sessions']
+  ];
+
+  for (const [camelKey, snakeKey] of numericKeyPairs) {
+    const rawVal = payload[camelKey] !== undefined ? payload[camelKey] : payload[snakeKey];
+    if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+      const numVal = Number(String(rawVal).replace(/[^0-9.-]/g, ''));
       if (!isNaN(numVal)) {
         rawRow[snakeKey] = numVal;
       }
@@ -487,8 +672,8 @@ function parseItemDate(item) {
 export async function differentialSyncTable(tableName, selectCols = '*', options = {}) {
   const { scopeFilterFn = null, customManifestQuery = null, scopeCol = null, scopeVal = null, scopeVals = null } = options;
 
-  // 1. อ่านข้อมูลเดิมจาก IndexedDB ทันที (0ms, 0 Egress)
-  const initialLocal = await getLocalStore(tableName);
+  // 1. อ่านข้อมูลเดิมจาก IndexedDB ทันที และ Normalize ด้วย rowToJS (0ms, 0 Egress)
+  const initialLocal = (await getLocalStore(tableName)).map(rowToJS);
   const currentLocalScoped = typeof scopeFilterFn === 'function' ? initialLocal.filter(scopeFilterFn) : initialLocal;
 
   if (!supabase) {
@@ -543,7 +728,7 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
 
       await setLastSyncTime(tableName, new Date().toISOString());
 
-      const freshLocal = await getLocalStore(tableName);
+      const freshLocal = (await getLocalStore(tableName)).map(rowToJS);
       const finalData = typeof scopeFilterFn === 'function' ? freshLocal.filter(scopeFilterFn) : freshLocal;
 
       console.log(
@@ -559,9 +744,11 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
         fetchedCount: updatedRows.length,
         deletedCount: deletedIds.length
       };
+    } else {
+      console.warn(`[DiffSync RPC warning for ${tableName}]:`, rpcErr);
     }
   } catch (rpcEx) {
-    // Fallback to client-side manifest check if RPC is not yet executed in Supabase
+    console.warn(`[DiffSync RPC exception for ${tableName}]:`, rpcEx);
   }
 
   // 3. [Fallback] Client-Side Lightweight Manifest Check (กรณีที่ยังไม่ได้รัน SQL function บน Supabase)
@@ -607,6 +794,14 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
         .select(selectCols)
         .in('id', chunk);
 
+      if (chunkErr) {
+        const fbChunk = await supabase.from(tableName).select('*').in('id', chunk);
+        if (!fbChunk.error && fbChunk.data) {
+          chunkData = fbChunk.data;
+          chunkErr = null;
+        }
+      }
+
       if (!chunkErr && chunkData) {
         fetchedRows.push(...chunkData);
       }
@@ -620,7 +815,7 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
 
   await setLastSyncTime(tableName, new Date().toISOString());
 
-  const freshLocal = await getLocalStore(tableName);
+  const freshLocal = (await getLocalStore(tableName)).map(rowToJS);
   const finalData = typeof scopeFilterFn === 'function' ? freshLocal.filter(scopeFilterFn) : freshLocal;
 
   console.log(
@@ -1120,6 +1315,46 @@ export async function callSupabase(action, sheetName, payload = null) {
       try {
         const { startDate, endDate, branchId } = payload || {};
 
+        // 1. เรียกใช้งาน RPC get_executive_dashboard_data บน Supabase โดยตรง (Single Source of Truth)
+        try {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('get_executive_dashboard_data', {
+            start_date: startDate,
+            end_date: endDate,
+            branch_filter: branchId || 'all'
+          });
+          if (!rpcErr && rpcData && rpcData.summary) {
+            const s = rpcData.summary;
+            return {
+              status: 'success',
+              summary: {
+                totalIncome: Number(s.total_income) || 0,
+                posTotalIncome: Number(s.pos_total_income) || 0,
+                manualRevenueIncome: Number(s.manual_revenue_income) || 0,
+                totalExpense: Number(s.total_expense) || 0,
+                netProfit: Number(s.net_profit) || 0,
+                profitMargin: Number(s.profit_margin) || 0,
+                posCount: Number(s.pos_count) || 0,
+                averageTicket: Number(s.average_ticket) || 0,
+                paymentMethods: {
+                  cash: Number(s.payment_methods?.cash) || 0,
+                  transfer: Number(s.payment_methods?.transfer) || 0,
+                  card: Number(s.payment_methods?.card) || 0,
+                  qr: Number(s.payment_methods?.qr) || 0,
+                  other: Number(s.payment_methods?.other) || 0
+                },
+                topProducts: rpcData.top_products || [],
+                staffStats: rpcData.staff_stats || [],
+                topDoctors: rpcData.top_doctors || [],
+                branchSummary: rpcData.branch_summary || [],
+                dailyTrend: rpcData.daily_trend || [],
+                queueStats: rpcData.queue_stats || {}
+              }
+            };
+          }
+        } catch (rpcErr) {
+          console.warn('RPC get_executive_dashboard_data fallback to query:', rpcErr);
+        }
+
         let posQuery = supabase.from('pos_transactions').select('*');
         if (branchId && branchId !== 'all') posQuery = posQuery.eq('branch_id', branchId);
 
@@ -1191,6 +1426,28 @@ export async function callSupabase(action, sheetName, payload = null) {
         const queueList = rawQueueList.filter(q => isDateInRange(q.rawDateTime || q.raw_date_time || q.datetime || q.createdAt || q.created_at));
         const patientList = rawPatientList.filter(p => isDateInRange(p.created_at || p.createdAt));
 
+        const getPosNetAmount = (tx) => {
+          if (!tx) return 0;
+          if (tx.net_amount !== undefined && tx.net_amount !== null && !isNaN(Number(tx.net_amount))) {
+            return Number(tx.net_amount);
+          }
+          if (tx.netAmount !== undefined && tx.netAmount !== null && !isNaN(Number(tx.netAmount))) {
+            return Number(tx.netAmount);
+          }
+          if (tx.grand_total !== undefined && tx.grand_total !== null && !isNaN(Number(tx.grand_total))) {
+            return Number(tx.grand_total);
+          }
+          if (tx.grandTotal !== undefined && tx.grandTotal !== null && !isNaN(Number(tx.grandTotal))) {
+            return Number(tx.grandTotal);
+          }
+          if (tx.amount !== undefined && tx.amount !== null && !isNaN(Number(tx.amount))) {
+            return Number(tx.amount);
+          }
+          const total = Number(tx.total_amount ?? tx.totalAmount ?? tx.total ?? 0) || 0;
+          const discount = Number(tx.discount ?? tx.discount_amount ?? tx.discountAmount ?? 0) || 0;
+          return Math.max(0, total - discount);
+        };
+
         let posTotalIncome = 0;
         let posCount = 0;
         const paymentMethods = { cash: 0, transfer: 0, card: 0, qr: 0, other: 0 };
@@ -1199,7 +1456,7 @@ export async function callSupabase(action, sheetName, payload = null) {
         posList.forEach(tx => {
           if (tx.status === 'cancelled') return;
           posCount += 1;
-          const net = parseFloat(tx.netAmount || tx.totalAmount || tx.netTotal || tx.grandTotal || tx.amount || 0) || 0;
+          const net = getPosNetAmount(tx);
           posTotalIncome += net;
 
           const method = (tx.paymentMethod || tx.method || 'cash').toLowerCase();
@@ -1215,13 +1472,20 @@ export async function callSupabase(action, sheetName, payload = null) {
           }
           if (Array.isArray(items)) {
             items.forEach(it => {
+              if (!it || !it.name) return;
               const name = it.name || it.productName || 'สินค้าทั่วไป';
+              const itId = String(it.id || '');
+              // ข้ามรายการที่เป็นการตัดคอร์ส / ตัดรอบ / หมายเหตุ / รายการฟรีที่ไม่มีราคา
+              if (name.includes('ตัดรอบ') || name.includes('ตัดคอร์ส') || name.includes('หมายเหตุ') || itId.startsWith('REDEEM_')) return;
+              if (Number(it.price || 0) === 0 && Number(it.total || 0) === 0) return;
+
               const qty = parseInt(it.quantity || it.qty || 1) || 1;
               const price = parseFloat(it.price || it.unitPrice || 0) || 0;
-              const lineTotal = parseFloat(it.total || (qty * price)) || 0;
+              let lineTotal = parseFloat(it.total !== undefined ? it.total : (qty * price)) || 0;
+              if (net === 0) lineTotal = 0;
 
               if (!productSales[name]) {
-                productSales[name] = { name, qty: 0, total: 0 };
+                productSales[name] = { id: itId || name, name, qty: 0, total: 0 };
               }
               productSales[name].qty += qty;
               productSales[name].total += lineTotal;
@@ -1239,7 +1503,7 @@ export async function callSupabase(action, sheetName, payload = null) {
           if (method.includes('cash') || method.includes('สด')) paymentMethods.cash += amt;
           else if (method.includes('transfer') || method.includes('โอน') || method.includes('promptpay')) paymentMethods.transfer += amt;
           else if (method.includes('card') || method.includes('เครดิต')) paymentMethods.card += amt;
-          else if (method.includes('qr')) paymentMethods.qr += net || amt;
+          else if (method.includes('qr')) paymentMethods.qr += amt;
           else paymentMethods.other += amt;
         });
 
@@ -1256,8 +1520,7 @@ export async function callSupabase(action, sheetName, payload = null) {
         const profitMargin = totalIncome > 0 ? Number(((netProfit / totalIncome) * 100).toFixed(2)) : 0;
 
         const topProducts = Object.values(productSales)
-          .sort((a, b) => b.total - a.total)
-          .slice(0, 5);
+          .sort((a, b) => b.total - a.total);
 
         const doctorCases = {};
         queueList.forEach(q => {
@@ -1280,7 +1543,7 @@ export async function callSupabase(action, sheetName, payload = null) {
         posList.forEach(tx => {
           if (tx.status === 'cancelled') return;
           const bId = tx.branchId || tx.branch_id || 'main';
-          const net = parseFloat(tx.netAmount || tx.totalAmount || tx.amount || 0) || 0;
+          const net = getPosNetAmount(tx);
           if (!branchSummary[bId]) branchSummary[bId] = { branchId: bId, income: 0, expense: 0, profit: 0 };
           branchSummary[bId].income += net;
         });
@@ -1307,7 +1570,7 @@ export async function callSupabase(action, sheetName, payload = null) {
           if (tx.status === 'cancelled') return;
           const dateStr = tx.date ? String(tx.date).split('T')[0] : (tx.created_at ? String(tx.created_at).split('T')[0] : '');
           if (!dateStr) return;
-          const net = parseFloat(tx.netAmount || tx.totalAmount || tx.amount || 0) || 0;
+          const net = getPosNetAmount(tx);
           if (!dailyTrendMap[dateStr]) dailyTrendMap[dateStr] = { date: dateStr, income: 0, expense: 0, profit: 0 };
           dailyTrendMap[dateStr].income += net;
         });
@@ -1396,7 +1659,7 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       const row = jsToRow(payload, tableName);
-      const { error } = await supabase.from(tableName).upsert(row);
+      const { data: upsertData, error } = await supabase.from(tableName).upsert(row).select();
       if (error) {
         console.error("🔥 SUPABASE UPSERT ERROR:", error);
         throw error;
@@ -1426,7 +1689,8 @@ export async function callSupabase(action, sheetName, payload = null) {
         } catch (e) {}
       }
 
-      const savedJsRow = rowToJS(row);
+      const authoritativeRow = (upsertData && upsertData.length > 0) ? upsertData[0] : row;
+      const savedJsRow = rowToJS(authoritativeRow);
       await upsertLocalStore(tableName, [savedJsRow]);
       await setLastSyncTime(tableName, new Date().toISOString());
 

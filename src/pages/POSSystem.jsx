@@ -6,7 +6,7 @@ import CatalogManager from './CatalogManager';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
 import { supabase } from '../lib/supabase';
-import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, generateNextReceiptId, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -24,14 +24,16 @@ import { theme } from '../global/theme';
 const POSSystem = ({ 
     products = [], setProducts, 
     patientsData = [], setPatientsData, 
+    patientCoursesData = [], setPatientCoursesData,
     posHistoryData = [], setPosHistoryData, 
     inventoryData = [], setInventoryData,
     setInventoryLogsData,
+    staffData = [],
     currentBranch,
     branchesData = [],
     showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert,
     showMobileBars,
-    handlePrintReceipt // <--- เพิ่ม Props นี้
+    handlePrintReceipt
 }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,6 +42,47 @@ const POSSystem = ({
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [discount, setDiscount] = useState(0);
+  
+  // State สำหรับเลือกแพทย์ผู้ตรวจและผู้แนะนำ/ผู้ขาย (Dual Commission)
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
+  const [selectedSellerId, setSelectedSellerId] = useState('');
+  const [doctorIsSeller, setDoctorIsSeller] = useState(true);
+
+  // รายชื่อแพทย์สำหรับเลือกใน POS
+  const doctorsList = useMemo(() => {
+    return (staffData || []).filter(s => s.role === 'doctor' || s.position?.includes('แพทย์') || s.role === 'admin');
+  }, [staffData]);
+
+  // ตั้งค่าแพทย์อัตโนมัติจาก OPD ของคนไข้ (หากเป็นการขายสินค้าทั่วไป สามารถเว้นว่างได้)
+  useEffect(() => {
+    if (selectedPatientId) {
+      const patient = (patientsData || []).find(p => p && ((p.id && String(p.id) === String(selectedPatientId)) || (p.hn && String(p.hn) === String(selectedPatientId))));
+      const opdList = Array.isArray(patient?.opdRecords) ? patient.opdRecords : [];
+      const latestOpd = opdList[0];
+      const docName = latestOpd?.doctor || patient?.doctor || '';
+      if (docName) {
+        const matchedDoc = (staffData || []).find(s => s.name === docName || s.name.includes(docName) || docName.includes(s.name));
+        if (matchedDoc) {
+          setSelectedDoctorId(matchedDoc.id);
+          if (doctorIsSeller) setSelectedSellerId(matchedDoc.id);
+          return;
+        }
+      }
+    }
+    // หากไม่มี OPD และในตะกร้าไม่มีบริการ/หัตถการ (ขายเฉพาะสินค้า/ครีม) ให้เว้นว่างแพทย์ได้
+    const hasServiceInCart = cart.some(it => it.product?.category === 'บริการ' || it.product?.category === 'หัตถการ' || it.product?.type === 'service');
+    if (!hasServiceInCart && !selectedPatientId) {
+      // ปล่อยว่างแพทย์สำหรับการขายสินค้าหน้าร้านทั่วไป
+      if (doctorIsSeller && !selectedDoctorId) {
+        setDoctorIsSeller(false);
+      }
+    }
+  }, [selectedPatientId, patientsData, staffData, cart, doctorIsSeller, selectedDoctorId]);
+  
+  // State สำหรับคอร์สแชร์ (Cross-Patient Shared Courses)
+  const [isShareCourseModalOpen, setIsShareCourseModalOpen] = useState(false);
+  const [shareOwnerSearch, setShareOwnerSearch] = useState('');
+  const [selectedOwnerPatient, setSelectedOwnerPatient] = useState(null);
   
   // --- แก้ไข: ให้ดึงค่าเริ่มต้นจาก LocalStorage ---
   const [discountType, setDiscountType] = useState(() => {
@@ -142,6 +185,64 @@ const POSSystem = ({
 
   // --- เพิ่ม State ควบคุมการเปิดปิดตะกร้าบนมือถือ ---
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [activeCourseTooltip, setActiveCourseTooltip] = useState(null);
+  const hoverTimerRef = useRef(null);
+  const touchTimerRef = useRef(null);
+
+  const calculateTooltipPosition = (target, courseInfo) => {
+    try {
+      if (!target || typeof target.getBoundingClientRect !== 'function') return null;
+      const rect = target.getBoundingClientRect();
+      if (!rect) return null;
+      const midX = rect.left + rect.width / 2;
+      const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
+      const maxTooltipWidth = Math.min(200, screenWidth - 32);
+      const halfWidth = maxTooltipWidth / 2;
+      const clampedX = Math.max(halfWidth + 16, Math.min(screenWidth - halfWidth - 16, midX));
+      const isNearTop = rect.top < 110;
+      return {
+        ...courseInfo,
+        x: clampedX,
+        y: isNearTop ? rect.bottom + 6 : rect.top - 6,
+        placement: isNearTop ? 'bottom' : 'top'
+      };
+    } catch (err) {
+      console.warn('[POS Tooltip] Error:', err);
+      return null;
+    }
+  };
+
+  const handleCourseMouseEnter = (e, courseInfo) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    const target = e.currentTarget;
+    hoverTimerRef.current = setTimeout(() => {
+      const pos = calculateTooltipPosition(target, courseInfo);
+      if (pos) setActiveCourseTooltip(pos);
+    }, 1000); // หน่วงเวลา 1.0s ตอน hover
+  };
+
+  const handleCourseMouseLeave = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setActiveCourseTooltip(null);
+  };
+
+  const handleCourseTouchStart = (e, courseInfo) => {
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+    const target = e.currentTarget;
+    touchTimerRef.current = setTimeout(() => {
+      const pos = calculateTooltipPosition(target, courseInfo);
+      if (pos) {
+        setActiveCourseTooltip(pos);
+        setTimeout(() => setActiveCourseTooltip(null), 3000);
+      }
+    }, 1000); // หน่วงเวลา 1.0s สำหรับการกดแตะค้างบนมือถือ
+  };
+
+  const handleCourseTouchEnd = () => {
+    // หากแตะธรรมดาเพื่อเลือกคอร์ส หรือปล่อยนิ้วก่อน 2.5s ให้ยกเลิกการโชว์ Tooltip ทันที
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+  };
+
 
   // --- [NEW] State สำหรับระบบจับเวลา QR Code ---
   const [qrCountdown, setQrCountdown] = useState(300); // 300 วินาที = 5 นาที
@@ -210,19 +311,20 @@ const POSSystem = ({
     let newCartItems = []; // เริ่มต้นด้วยตะกร้าว่างเปล่าเสมอเพื่อล้างของเก่า
 
     if (patientId) {
-      const patient = patientsData.find(p => (p.id || p.hn) === patientId);
+      const patient = (patientsData || []).find(p => p && (p.id || p.hn) === patientId);
       // เช็คว่าคนไข้มีประวัติการรักษา (OPD) หรือไม่
-      if (patient && patient.opdRecords && patient.opdRecords.length > 0) {
-        const latestOpd = patient.opdRecords[0]; // ดึงประวัติใบล่าสุด (index 0)
+      const opdList = Array.isArray(patient?.opdRecords) ? patient.opdRecords : [];
+      if (opdList.length > 0) {
+        const latestOpd = opdList[0]; // ดึงประวัติใบล่าสุด (index 0)
 
         // 1. นำการรักษา (Tx) มาเทียบกับ Catalog สินค้า POS
-        if (latestOpd.tx) {
+        if (latestOpd && latestOpd.tx) {
           const treatments = Array.isArray(latestOpd.tx) ? latestOpd.tx : [latestOpd.tx];
           treatments.forEach(tName => {
-            if (!tName) return;
-            const matchedProduct = products.find(p => p.name === tName);
+            if (!tName || typeof tName !== 'string') return;
+            const matchedProduct = (products || []).find(p => p && p.name === tName);
             if (matchedProduct) {
-              const existing = newCartItems.find(item => item.product.id === matchedProduct.id);
+              const existing = newCartItems.find(item => item && item.product && item.product.id === matchedProduct.id);
               if (existing) existing.quantity += 1;
               else newCartItems.push({ product: matchedProduct, quantity: 1 });
             } else {
@@ -243,7 +345,7 @@ const POSSystem = ({
         }
 
         // 2. นำหมายเหตุ (Note) มาใส่ตะกร้าด้วยในฐานะข้อความแจ้งเตือน (ราคา 0 บาท)
-        if (latestOpd.note) {
+        if (latestOpd && latestOpd.note) {
           newCartItems.push({
             product: {
               id: `NOTE_${Date.now()}`,
@@ -378,21 +480,139 @@ const POSSystem = ({
   const confirmPayment = async () => {
     setIsProcessingPayment(true);
     
+    // ดึงชื่อคนไข้จริงโดยตัด prefix HN ออก
+    let cleanPatientName = '';
+    if (selectedPatientId) {
+        const patientObj = (patientsData || []).find(p => (p.id || p.hn) === selectedPatientId);
+        if (patientObj) {
+            cleanPatientName = patientObj.name || `${patientObj.prefix || ''}${patientObj.firstName || ''} ${patientObj.lastName || ''}`.trim();
+        }
+    }
+    if (!cleanPatientName) {
+        if (patientSearchTerm) {
+            cleanPatientName = patientSearchTerm.includes(' - ') 
+                ? patientSearchTerm.split(' - ').slice(1).join(' - ').trim() 
+                : patientSearchTerm.trim();
+        } else {
+            cleanPatientName = 'ลูกค้าทั่วไป (ไม่ระบุ)';
+        }
+    }
+
+    // คำนวณค่า DF หัตถการ และค่าคอมมิชชั่นยอดขาย
+    const doctorObj = (staffData || []).find(s => s.id === selectedDoctorId);
+    const sellerObj = (staffData || []).find(s => s.id === (doctorIsSeller ? selectedDoctorId : selectedSellerId));
+
+    let doctorCommission = 0;
+    let sellerCommission = 0;
+
+    let treatmentTotal = 0;
+    let productSalesTotal = 0;
+
+    cart.forEach(it => {
+      const p = it.product;
+      const isService = p.category === 'บริการ' || p.category === 'หัตถการ' || p.type === 'service';
+      const itemTotal = Number(p.price || 0) * Number(it.quantity || 1);
+      if (isService) {
+        treatmentTotal += itemTotal;
+      } else {
+        productSalesTotal += itemTotal;
+      }
+    });
+
+    // 1. คำนวณ DF ให้แพทย์ (จากยอดหัตถการ หรือยอดบิล โดยตรวจสอบเงื่อนไขเคสรายวัน)
+    if (doctorObj) {
+      const dfRate = Number(doctorObj.dfRate || doctorObj.df_rate || doctorObj.commissionRate || doctorObj.commission_rate || 0);
+      const dfType = doctorObj.dfType || doctorObj.df_type || doctorObj.commissionType || doctorObj.commission_type || 'percent';
+      const dfCondition = doctorObj.dfCondition || doctorObj.df_condition || 'all';
+      const dfThreshold = Number(doctorObj.dfThreshold || doctorObj.df_threshold || 1);
+
+      // นับจำนวนเคสของแพทย์ในวันนี้เพื่อตรวจเงื่อนไข Threshold
+      const todayDocCases = (posHistoryData || []).filter(tx => 
+        tx.status !== 'cancelled' && 
+        (tx.doctorId === selectedDoctorId || tx.doctor_id === selectedDoctorId || tx.doctorName === doctorObj.name || tx.doctor_name === doctorObj.name) && 
+        isSameDay(tx.createdAt || tx.date, new Date())
+      ).length + 1; // +1 สำหรับบิลปัจจุบัน
+
+      const isEligibleForDf = dfCondition !== 'threshold' || todayDocCases >= dfThreshold;
+
+      if (dfRate > 0 && isEligibleForDf) {
+        if (dfType === 'percent') {
+          doctorCommission = Math.round(treatmentTotal > 0 ? (treatmentTotal * (dfRate / 100)) : (grandTotal * (dfRate / 100)));
+        } else {
+          doctorCommission = dfRate;
+        }
+      }
+    }
+
+    // 2. คำนวณค่าคอมมิชชั่นยอดขายให้ผู้แนะนำ/ผู้ขาย (จากยอดขายสินค้า/คอร์ส หรือยอดบิล)
+    if (sellerObj) {
+      const salesRate = Number(sellerObj.commissionRate || sellerObj.commission_rate || 0);
+      const salesType = sellerObj.commissionType || sellerObj.commission_type || 'percent';
+      const salesCondition = sellerObj.commissionCondition || sellerObj.commission_condition || 'all';
+      const salesThreshold = Number(sellerObj.commissionThreshold || sellerObj.commission_threshold || 1);
+
+      const effectiveSellerId = doctorIsSeller ? selectedDoctorId : selectedSellerId;
+      const todaySellerSales = (posHistoryData || []).filter(tx => 
+        tx.status !== 'cancelled' && 
+        (tx.sellerId === effectiveSellerId || tx.seller_id === effectiveSellerId || tx.staffId === effectiveSellerId || tx.staff_id === effectiveSellerId || tx.staffName === sellerObj.name || tx.staff_name === sellerObj.name) && 
+        isSameDay(tx.createdAt || tx.date, new Date())
+      ).length + 1;
+
+      const isEligibleForSales = salesCondition !== 'threshold' || todaySellerSales >= salesThreshold;
+
+      if (salesRate > 0 && isEligibleForSales) {
+        if (salesType === 'percent') {
+          sellerCommission = Math.round(productSalesTotal > 0 ? (productSalesTotal * (salesRate / 100)) : (grandTotal * (salesRate / 100)));
+        } else {
+          sellerCommission = salesRate;
+        }
+      }
+    }
+
     // สร้าง Payload ข้อมูลบิลเพื่อส่งไปบันทึกในฐานข้อมูล
-    const receiptId = `REC${Date.now()}`; // สร้าง ID บิลแบบง่ายๆ
+    const isAnyRedeem = cart.some(item => !!item.product.isRedeem);
+    const receiptId = await generateNextReceiptId(posHistoryData, supabase);
     const transactionData = {
         id: receiptId,
-        patientId: selectedPatientId,
-        hn: selectedPatientId,
-        patientName: patientSearchTerm || 'ลูกค้าทั่วไป (ไม่ระบุ)',
+        receiptNo: receiptId,
+        receipt_no: receiptId,
+        patientId: selectedPatientId || '',
+        hn: selectedPatientId || '',
+        patientName: cleanPatientName,
+        patient_name: cleanPatientName,
         branchId: currentBranch === 'all' ? 'b1' : currentBranch, // บันทึกว่าขายที่สาขาไหน
+        doctorId: selectedDoctorId || '',
+        doctor_id: selectedDoctorId || '',
+        doctorName: doctorObj?.name || '',
+        doctor_name: doctorObj?.name || '',
+        doctorCommission: doctorCommission,
+        doctor_commission: doctorCommission,
+        sellerId: doctorIsSeller ? (selectedDoctorId || '') : (selectedSellerId || ''),
+        seller_id: doctorIsSeller ? (selectedDoctorId || '') : (selectedSellerId || ''),
+        sellerName: sellerObj?.name || doctorObj?.name || '',
+        seller_name: sellerObj?.name || doctorObj?.name || '',
+        sellerCommission: sellerCommission,
+        seller_commission: sellerCommission,
+        staffId: doctorIsSeller ? (selectedDoctorId || '') : (selectedSellerId || ''),
+        staff_id: doctorIsSeller ? (selectedDoctorId || '') : (selectedSellerId || ''),
+        staffName: sellerObj?.name || doctorObj?.name || cleanPatientName,
+        staff_name: sellerObj?.name || doctorObj?.name || cleanPatientName,
+        staffCommission: sellerCommission,
+        staff_commission: sellerCommission,
+        transactionType: isAnyRedeem ? 'course_redeem' : 'sale',
+        transaction_type: isAnyRedeem ? 'course_redeem' : 'sale',
         items: cart.map(item => ({
             id: item.product.id,
             name: item.product.name,
             price: item.product.price,
             quantity: item.quantity,
             total: item.product.price * item.quantity,
-            isVatable: !!item.product.isVatable // เก็บประวัติไปด้วยว่ารายการนี้ตอนขายคิด VAT หรือไม่
+            isVatable: !!item.product.isVatable,
+            isRedeem: !!item.product.isRedeem,
+            courseId: item.product.courseId || '',
+            courseName: item.product.courseName || item.product.name,
+            ownerPatientId: item.product.ownerPatientId || '',
+            ownerPatientName: item.product.ownerPatientName || ''
         })),
         subtotal: subtotal,
         discountValue: discount,
@@ -497,49 +717,74 @@ const POSSystem = ({
             }
         }
 
-        // --- เพิ่มระบบจัดการคอร์ส/แพ็กเกจ ---
-        let updatedPatientForState = null;
-        if (selectedPatientId && patientsData.length > 0) {
-            const currentPatient = patientsData.find(p => (p.id || p.hn) === selectedPatientId);
-            if (currentPatient) {
-                let updatedCourses = currentPatient.courses ? [...currentPatient.courses] : [];
-                let hasChanges = false;
+        // --- เพิ่มระบบจัดการคอร์ส/แพ็กเกจ (ตาราง patient_courses) ---
+        const newCoursesToSave = [];
+        const updatedCoursesToSave = [];
 
-                cart.forEach(item => {
-                    // 1. กรณีซื้อคอร์สใหม่ (สินค้าปกติที่มี flag isCourse และไม่ใช่การตัดยอด)
-                    if (item.product.isCourse && !item.product.isRedeem) {
-                        for (let i = 0; i < item.quantity; i++) {
-                            updatedCourses.push({
-                                id: `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                                productId: item.product.id,
-                                name: item.product.name,
-                                totalSessions: Number(item.product.courseSessions) || 1,
-                                remainingSessions: Number(item.product.courseSessions) || 1,
-                                purchasedAt: new Date().toISOString()
-                            });
-                        }
-                        hasChanges = true;
-                    }
-                    
-                    // 2. กรณีตัดคอร์ส (Redeem)
-                    if (item.product.isRedeem && item.product.courseId) {
-                        updatedCourses = updatedCourses.map(c => {
-                            if (c.id === item.product.courseId) {
-                                return { ...c, remainingSessions: Math.max(0, c.remainingSessions - item.quantity) };
-                            }
-                            return c;
-                        });
-                        hasChanges = true;
-                    }
-                });
-
-                if (hasChanges) {
-                    const updatedPatient = { ...currentPatient, courses: updatedCourses };
-                    backgroundTasks.push(callAppScript('SAVE_DATA', 'Patients', updatedPatient));
-                    updatedPatientForState = updatedPatient;
+        cart.forEach(item => {
+            // 1. กรณีซื้อคอร์สใหม่ (สินค้าปกติที่มี flag isCourse และไม่ใช่การตัดยอด)
+            if (item.product.isCourse && !item.product.isRedeem) {
+                for (let i = 0; i < item.quantity; i++) {
+                    const sessionCount = Number(item.product.courseSessions || item.product.course_sessions) || 1;
+                    const courseId = `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                    const newCourse = {
+                        id: courseId,
+                        patientId: selectedPatientId || '',
+                        patient_id: selectedPatientId || '',
+                        patientName: cleanPatientName,
+                        patient_name: cleanPatientName,
+                        productId: item.product.id,
+                        product_id: item.product.id,
+                        courseName: item.product.name,
+                        course_name: item.product.name,
+                        totalSessions: sessionCount,
+                        total_sessions: sessionCount,
+                        usedSessions: 0,
+                        used_sessions: 0,
+                        remainingSessions: sessionCount,
+                        remaining_sessions: sessionCount,
+                        price: Number(item.product.price) || 0,
+                        posTransactionId: receiptId,
+                        pos_transaction_id: receiptId,
+                        receiptNo: receiptId,
+                        receipt_no: receiptId,
+                        branchId: currentBranch === 'all' ? 'b1' : currentBranch,
+                        branch_id: currentBranch === 'all' ? 'b1' : currentBranch,
+                        status: 'active',
+                        isShareable: true,
+                        is_shareable: true,
+                        sharedPatientIds: [],
+                        shared_patient_ids: [],
+                        purchasedAt: new Date().toISOString(),
+                        purchased_at: new Date().toISOString()
+                    };
+                    backgroundTasks.push(callAppScript('SAVE_DATA', 'PatientCourses', newCourse));
+                    newCoursesToSave.push(newCourse);
                 }
             }
-        }
+
+            // 2. กรณีตัดคอร์ส (Redeem)
+            if (item.product.isRedeem && item.product.courseId) {
+                const targetCourse = (patientCoursesData || []).find(c => c.id === item.product.courseId);
+                if (targetCourse) {
+                    const currentUsed = Number(targetCourse.usedSessions ?? targetCourse.used_sessions) || 0;
+                    const currentRem = Number(targetCourse.remainingSessions ?? targetCourse.remaining_sessions) || 1;
+                    const newUsed = currentUsed + item.quantity;
+                    const newRem = Math.max(0, currentRem - item.quantity);
+                    const updatedCourse = {
+                        ...targetCourse,
+                        usedSessions: newUsed,
+                        used_sessions: newUsed,
+                        remainingSessions: newRem,
+                        remaining_sessions: newRem,
+                        status: newRem === 0 ? 'completed' : 'active',
+                        updated_at: new Date().toISOString()
+                    };
+                    backgroundTasks.push(callAppScript('SAVE_DATA', 'PatientCourses', updatedCourse));
+                    updatedCoursesToSave.push(updatedCourse);
+                }
+            }
+        });
 
         // ประมวลผล Task ทั้งหมดพร้อมกัน (ช่วยให้ทำรายการเสร็จเร็วขึ้นหลายเท่าตัว)
         if (backgroundTasks.length > 0) {
@@ -551,8 +796,18 @@ const POSSystem = ({
             setInventoryData(localInvData);
             setInventoryLogsData(prev => [...localLogs, ...prev]);
         }
-        if (updatedPatientForState && setPatientsData) {
-            setPatientsData(prev => prev.map(p => (p.id || p.hn) === selectedPatientId ? updatedPatientForState : p));
+        if (setPatientCoursesData && (newCoursesToSave.length > 0 || updatedCoursesToSave.length > 0)) {
+            setPatientCoursesData(prev => {
+                let next = [...prev];
+                updatedCoursesToSave.forEach(u => {
+                    const idx = next.findIndex(c => c.id === u.id);
+                    if (idx >= 0) next[idx] = u;
+                });
+                if (newCoursesToSave.length > 0) {
+                    next = [...newCoursesToSave, ...next];
+                }
+                return next;
+            });
         }
 
         // อัปเดต State ประวัติการขายทันทีเพื่อให้แสดงใน Modal
@@ -621,20 +876,50 @@ const POSSystem = ({
   };
 
   const handleEditTxn = () => {
-    setHistoryEditForm({ ...selectedHistoryTxn });
+    const rawTxn = { ...selectedHistoryTxn };
+    const curDoctorId = rawTxn.doctorId || rawTxn.doctor_id || (staffData || []).find(s => s.name === rawTxn.doctorName || s.name === rawTxn.doctor_name || s.name === rawTxn.doctor)?.id || '';
+    const curSellerId = rawTxn.sellerId || rawTxn.seller_id || rawTxn.staffId || rawTxn.staff_id || (staffData || []).find(s => s.name === rawTxn.sellerName || s.name === rawTxn.seller_name || s.name === rawTxn.staffName || s.name === rawTxn.staff_name)?.id || '';
+
+    setHistoryEditForm({
+      ...rawTxn,
+      doctorId: curDoctorId,
+      doctor_id: curDoctorId,
+      sellerId: curSellerId,
+      seller_id: curSellerId
+    });
     setIsEditingHistory(true);
   };
 
   const handleSaveTxnEdit = async () => {
     setIsSavingHistory(true);
     try {
-        await callAppScript('SAVE_DATA', 'POS_Transactions', historyEditForm);
+        const docObj = (staffData || []).find(s => s.id === historyEditForm.doctorId);
+        const sellerObj = (staffData || []).find(s => s.id === (historyEditForm.sellerId || historyEditForm.staffId));
+
+        const payloadToSave = {
+            ...historyEditForm,
+            doctorId: docObj ? docObj.id : '',
+            doctor_id: docObj ? docObj.id : '',
+            doctorName: docObj ? docObj.name : '',
+            doctor_name: docObj ? docObj.name : '',
+            doctor: docObj ? docObj.name : '',
+            sellerId: sellerObj ? sellerObj.id : '',
+            seller_id: sellerObj ? sellerObj.id : '',
+            sellerName: sellerObj ? sellerObj.name : '',
+            seller_name: sellerObj ? sellerObj.name : '',
+            staffId: sellerObj ? sellerObj.id : '',
+            staff_id: sellerObj ? sellerObj.id : '',
+            staffName: sellerObj ? sellerObj.name : '',
+            staff_name: sellerObj ? sellerObj.name : ''
+        };
+
+        await callAppScript('SAVE_DATA', 'POS_Transactions', payloadToSave);
         // อัปเดตข้อมูลในตารางหลัก
         if (setPosHistoryData) {
-            setPosHistoryData(prev => prev.map(t => (t.id === historyEditForm.id || t.receiptNo === historyEditForm.id || t.receipt_no === historyEditForm.receiptNo) ? { ...t, ...historyEditForm } : t));
+            setPosHistoryData(prev => prev.map(t => (t.id === payloadToSave.id || t.receiptNo === payloadToSave.id || t.receipt_no === payloadToSave.receiptNo) ? { ...t, ...payloadToSave } : t));
         }
         // อัปเดตข้อมูลในหน้าดูรายละเอียด
-        setSelectedHistoryTxn(historyEditForm);
+        setSelectedHistoryTxn(payloadToSave);
         setIsEditingHistory(false);
         showToast('บันทึกการแก้ไขบิลสำเร็จ', 'success');
     } catch (error) {
@@ -1018,60 +1303,103 @@ const POSSystem = ({
 
           {/* คอร์สคงเหลือของลูกค้า (แสดงเฉพาะเมื่อเลือกลูกค้า) */}
           {selectedPatientId && (
-            <div className="relative z-10 px-3 sm:px-4 py-2 bg-indigo-50/30 border-b border-indigo-100 shrink-0 overflow-x-auto custom-scrollbar no-drag-zone">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                <span className="text-[10px] font-bold text-indigo-700 kanit-text uppercase tracking-wider">คอร์สคงเหลือ</span>
+            <div className="relative z-10 px-3 sm:px-4 py-2.5 bg-indigo-50/30 border-b border-indigo-100 shrink-0 no-drag-zone">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                  <span className="text-[10px] font-bold text-indigo-700 kanit-text uppercase tracking-wider">คอร์สที่ใช้ได้</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareOwnerSearch('');
+                    setSelectedOwnerPatient(null);
+                    setIsShareCourseModalOpen(true);
+                  }}
+                  className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold kanit-text flex items-center gap-1 transition-all shadow-sm active:scale-95 shrink-0"
+                >
+                  <Users size={11} /> + ใช้คอร์สแชร์
+                </button>
               </div>
-              <div className="flex gap-2 pb-1">
+              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
                 {(() => {
-                  const patient = patientsData.find(p => (p.id || p.hn) === selectedPatientId);
-                  const activeCourses = patient?.courses?.filter(c => c.remainingSessions > 0) || [];
+                  const normPid = String(selectedPatientId || '').trim().toLowerCase();
+                  // ค้นหาจาก patientCoursesData เป็นหลัก ถ้าไม่มีให้ fallback หาจาก patient.courses
+                  const activeCourses = (patientCoursesData || []).filter(c => {
+                    if (!c) return false;
+                    const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+                    const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
+                    return cPid === normPid && rem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                  });
 
                   if (activeCourses.length === 0) {
-                    return <div className="text-[10px] text-slate-400 kanit-text py-1 italic">ไม่มีคอร์สคงเหลือ</div>;
+                    return <div className="text-[10px] text-slate-400 kanit-text py-1 italic">ไม่มีคอร์สส่วนตัวคงเหลือ</div>;
                   }
 
-                  return activeCourses.map(course => (
-                    <button
-                      key={course.id}
-                      onClick={() => {
-                        // ตรวจสอบก่อนว่ามีการกดตัดคอร์สนี้ไปในตะกร้าหรือยัง
-                        const isAlreadyInCart = cart.some(item => item.product.courseId === course.id);
-                        if (isAlreadyInCart) {
-                          showToast('รายการนี้อยู่ในตะกร้าแล้ว', 'warning');
-                          return;
-                        }
+                  return activeCourses.map(course => {
+                    const courseName = course.courseName || course.course_name || course.name;
+                    const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 1;
+                    const total = Number(course.totalSessions ?? course.total_sessions) || 1;
+                    const isAlreadyInCart = cart.some(item => item?.product?.courseId === course?.id);
 
-                        const courseProduct = products.find(p => p.id === course.productId) || {
-                          id: course.productId,
-                          name: course.name,
-                          price: 0,
-                          type: 'คอร์สเดิม',
-                          icon: 'Package'
-                        };
+                    return (
+                      <button
+                        key={course.id}
+                        onMouseEnter={(e) => handleCourseMouseEnter(e, { name: courseName, rem, total })}
+                        onMouseLeave={handleCourseMouseLeave}
+                        onTouchStart={(e) => handleCourseTouchStart(e, { name: courseName, rem, total })}
+                        onTouchEnd={handleCourseTouchEnd}
+                        onClick={() => {
+                          if (isAlreadyInCart) {
+                            showToast('รายการนี้อยู่ในตะกร้าแล้ว', 'info');
+                            return;
+                          }
 
-                        // เพิ่มรายการตัดคอร์สเข้าตะกร้า
-                        const redeemItem = {
-                          product: { 
-                            ...courseProduct, 
-                            id: `REDEEM_${course.id}`, 
-                            price: 0, 
-                            isRedeem: true, 
-                            courseId: course.id,
-                            name: `ตัดรอบ: ${course.name} (${course.remainingSessions}/${course.totalSessions})`
-                          },
-                          quantity: 1
-                        };
-                        setCart(prev => [...prev, redeemItem]);
-                        showToast(`เพิ่มการตัดคอร์ส ${course.name} เข้าตะกร้า`, 'success');
-                      }}
-                      className="shrink-0 px-3 py-2 bg-white border border-indigo-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all shadow-sm active:scale-95 text-left group"
-                    >
-                      <div className="text-[10px] font-bold text-slate-400 kanit-text group-hover:text-indigo-500 transition-colors">คงเหลือ {course.remainingSessions}/{course.totalSessions}</div>
-                      <div className="text-xs font-bold text-slate-700 kanit-text truncate max-w-[120px]">{course.name}</div>
-                    </button>
-                  ));
+                          const courseProduct = products.find(p => p.id === course.productId) || {
+                            id: course.productId,
+                            name: courseName,
+                            price: 0,
+                            type: 'คอร์สเดิม',
+                            icon: 'Package'
+                          };
+
+                          const redeemItem = {
+                            product: { 
+                              ...courseProduct, 
+                              id: `REDEEM_${course.id}`, 
+                              price: 0, 
+                              isRedeem: true, 
+                              courseId: course.id,
+                              courseName: courseName,
+                              name: `${courseName} (${rem}/${total})`
+                            },
+                            quantity: 1
+                          };
+                          setCart(prev => [...prev, redeemItem]);
+                          showToast(`เพิ่มการตัดคอร์ส ${courseName} เข้าตะกร้า`, 'success');
+                        }}
+                        className={`shrink-0 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95 text-left group border ${
+                          isAlreadyInCart
+                            ? 'bg-gradient-to-r from-indigo-600 to-purple-600 border-indigo-600 text-white shadow-indigo-200 ring-2 ring-indigo-400/40'
+                            : 'bg-white border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className={`text-[10px] font-bold kanit-text ${isAlreadyInCart ? 'text-indigo-100' : 'text-slate-400 group-hover:text-indigo-500'}`}>
+                            คงเหลือ {rem}/{total}
+                          </span>
+                          {isAlreadyInCart && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded-md">
+                              <CheckCircle2 size={10} className="text-emerald-300" /> ในตะกร้า
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-xs font-bold kanit-text truncate max-w-[130px] pointer-events-none ${isAlreadyInCart ? 'text-white font-black' : 'text-slate-700'}`}>
+                          {courseName}
+                        </div>
+                      </button>
+                    );
+                  });
                 })()}
               </div>
             </div>
@@ -1100,7 +1428,11 @@ const POSSystem = ({
                              <div className="flex-1 min-w-0 pt-1">
                                <div className="flex justify-between items-start gap-2">
                                  <h4 className={`font-bold text-sm sm:text-base kanit-text leading-tight ${item.product.isNote ? 'text-amber-700' : item.product.isRedeem ? 'text-indigo-700' : 'text-slate-800'}`}>
-                                   {item.product.isRedeem && <span className="mr-1.5 px-1.5 py-0.5 bg-indigo-500 text-white text-[9px] rounded uppercase font-black tracking-tighter align-middle">ตัดคอร์ส</span>}
+                                   {item.product.isRedeem && (
+                                      <span className={`mr-1.5 px-1.5 py-0.5 text-white text-[9px] rounded uppercase font-black tracking-tighter align-middle ${item.product.ownerPatientName ? 'bg-purple-600' : 'bg-indigo-500'}`}>
+                                        {item.product.ownerPatientName ? 'ตัดคอร์สแชร์' : 'ตัดคอร์ส'}
+                                      </span>
+                                    )}
                                    {item.product.name}
                                    {item.product.isVatable && <span className="ml-1.5 px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[10px] rounded border border-sky-200 font-bold tracking-tighter align-middle">(V)</span>}
                                  </h4>
@@ -1355,8 +1687,8 @@ const POSSystem = ({
       </div>
 
       {/* Checkout Modal */}
-      {checkoutModal.isOpen && (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${checkoutModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      {checkoutModal.isOpen && createPortal(
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${checkoutModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden ${checkoutModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
@@ -1371,6 +1703,50 @@ const POSSystem = ({
                   <p className="text-[11px] sm:text-xs text-sky-600 font-bold kanit-text mb-0.5 relative z-10 uppercase tracking-wider">ยอดสุทธิที่ต้องชำระ</p>
                   <h2 className="text-3xl sm:text-4xl font-black text-sky-600 font-data tracking-tighter relative z-10 leading-none py-1">{formatCurrency(grandTotal)}</h2>
                </div>
+
+                {/* เลือกผู้แนะนำ / ผู้ขาย (ค่าคอมมิชชั่นยอดขาย) */}
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5 shrink-0">
+                   <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5">
+                         <Award size={14} className="text-amber-500" /> ผู้แนะนำ / ผู้ขาย
+                      </label>
+                      {selectedDoctorId && (
+                         <label className="flex items-center gap-1.5 text-[11px] font-bold text-sky-600 kanit-text cursor-pointer select-none bg-sky-50 px-2 py-0.5 rounded-lg border border-sky-100">
+                            <input
+                               type="checkbox"
+                               checked={doctorIsSeller}
+                               onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setDoctorIsSeller(checked);
+                                  if (checked) setSelectedSellerId(selectedDoctorId);
+                               }}
+                               className="rounded text-sky-500 focus:ring-0 cursor-pointer"
+                            />
+                            แพทย์แนะนำ/ขายเอง
+                         </label>
+                      )}
+                   </div>
+
+                   {doctorIsSeller && selectedDoctorId ? (
+                      <div className="px-3 py-2 bg-sky-50/50 rounded-xl border border-sky-100 text-xs font-bold text-sky-700 kanit-text flex items-center justify-between">
+                         <span className="flex items-center gap-1.5">✨ แพทย์แนะนำเอง</span>
+                         <span className="text-[10px] text-sky-600 font-medium bg-white px-2 py-0.5 rounded-md border border-sky-200 shadow-xs">
+                            {(staffData || []).find(s => s.id === selectedDoctorId)?.name || 'แพทย์จาก OPD'}
+                         </span>
+                      </div>
+                   ) : (
+                      <select
+                         value={selectedSellerId}
+                         onChange={(e) => setSelectedSellerId(e.target.value)}
+                         className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-amber-500 kanit-text cursor-pointer"
+                      >
+                         <option value="">- เลือกผู้ขาย / ผู้แนะนำ (ไม่ระบุก็ได้) -</option>
+                         {staffData.map(s => (
+                            <option key={s.id} value={s.id}>{s.name} ({s.position || s.role})</option>
+                         ))}
+                      </select>
+                   )}
+                </div>
 
                <div className="space-y-3 shrink-0">
                   <label className="block text-sm font-bold text-slate-700 kanit-text">เลือกวิธีชำระเงิน</label>
@@ -1437,12 +1813,13 @@ const POSSystem = ({
                </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* History Modal */}
-      {historyModal.isOpen && (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${historyModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      {historyModal.isOpen && createPortal(
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${historyModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${historyModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0 z-10">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
@@ -1528,6 +1905,11 @@ const POSSystem = ({
                                         <div className="pl-1">
                                             <p className="font-bold text-slate-800 text-sm sm:text-base kanit-text">{selectedHistoryTxn.patientName || 'ลูกค้าทั่วไป (ไม่ระบุ)'}</p>
                                             <p className="text-xs text-slate-500 font-data mt-1.5 flex items-center gap-1.5"><Clock size={12} className="text-slate-400"/> {formatDateTime(selectedHistoryTxn.createdAt)}</p>
+                                            <div className="mt-2 pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 kanit-text">
+                                                <span>🩺 แพทย์: <strong className="text-slate-800">{selectedHistoryTxn.doctorName || selectedHistoryTxn.doctor_name || '-'}</strong></span>
+                                                <span className="text-slate-300">|</span>
+                                                <span>💼 ผู้ขาย: <strong className="text-slate-800">{selectedHistoryTxn.sellerName || selectedHistoryTxn.seller_name || selectedHistoryTxn.staffName || selectedHistoryTxn.staff_name || '-'}</strong></span>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -1576,6 +1958,72 @@ const POSSystem = ({
                                         </div>
                                     )}
                                 </div>
+
+                                {isEditingHistory && (
+                                    <div className="md:col-span-2 p-4 rounded-xl border bg-amber-50/40 border-amber-200/80 space-y-3 relative z-10">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-6 h-6 rounded-full bg-white shadow-sm flex items-center justify-center text-amber-500"><Award size={12}/></div>
+                                            <p className="text-[11px] sm:text-xs font-bold text-amber-900 kanit-text uppercase tracking-wider">ข้อมูลแพทย์ผู้ตรวจรักษา & ผู้แนะนำ/ผู้ขาย</p>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-600 mb-1 kanit-text flex items-center gap-1">
+                                                    <Stethoscope size={12} className="text-emerald-600"/> แพทย์ผู้ตรวจรักษา (ค่า DF)
+                                                </label>
+                                                <select
+                                                    value={historyEditForm.doctorId || ''}
+                                                    onChange={e => {
+                                                        const docId = e.target.value;
+                                                        const doc = (staffData || []).find(s => s.id === docId);
+                                                        setHistoryEditForm({
+                                                            ...historyEditForm,
+                                                            doctorId: docId,
+                                                            doctor_id: docId,
+                                                            doctorName: doc ? doc.name : '',
+                                                            doctor_name: doc ? doc.name : '',
+                                                            doctor: doc ? doc.name : ''
+                                                        });
+                                                    }}
+                                                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 kanit-text cursor-pointer"
+                                                >
+                                                    <option value="">- ไม่ระบุแพทย์ (ขายเฉพาะสินค้า) -</option>
+                                                    {doctorsList.map(d => (
+                                                        <option key={d.id} value={d.id}>{d.name} ({d.position || 'แพทย์'})</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-600 mb-1 kanit-text flex items-center gap-1">
+                                                    <Award size={12} className="text-amber-500"/> ผู้แนะนำ / ผู้ขาย (ค่าคอมยอดขาย)
+                                                </label>
+                                                <select
+                                                    value={historyEditForm.sellerId || historyEditForm.staffId || ''}
+                                                    onChange={e => {
+                                                        const sellerId = e.target.value;
+                                                        const seller = (staffData || []).find(s => s.id === sellerId);
+                                                        setHistoryEditForm({
+                                                            ...historyEditForm,
+                                                            sellerId: sellerId,
+                                                            seller_id: sellerId,
+                                                            sellerName: seller ? seller.name : '',
+                                                            seller_name: seller ? seller.name : '',
+                                                            staffId: sellerId,
+                                                            staff_id: sellerId,
+                                                            staffName: seller ? seller.name : '',
+                                                            staff_name: seller ? seller.name : ''
+                                                        });
+                                                    }}
+                                                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-amber-500 kanit-text cursor-pointer"
+                                                >
+                                                    <option value="">- ไม่ระบุผู้ขาย / แคชเชียร์ -</option>
+                                                    {staffData.map(s => (
+                                                        <option key={s.id} value={s.id}>{s.name} ({s.position || s.role})</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Items List */}
@@ -1725,12 +2173,259 @@ const POSSystem = ({
                 </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal และ Alert จัดการสินค้าถูกย้ายไปยัง CatalogManager แล้ว */}
-      
-      
+
+      {/* --- Modal เลือกคอร์สแชร์ข้ามคนไข้ (Cross-Patient Course Sharing) --- */}
+      {isShareCourseModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users size={20} className="text-indigo-200" />
+                <div>
+                  <h3 className="text-base font-bold kanit-text">ใช้คอร์สแชร์ (จากคนไข้ท่านอื่น)</h3>
+                  <p className="text-xs text-indigo-100 font-data">ผู้รับบริการ: {patientSearchTerm || selectedPatientId}</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsShareCourseModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 kanit-text">
+                  ค้นหาเจ้าของคอร์ส (ชื่อ, ชื่อเล่น, HN หรือเบอร์โทรศัพท์)
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm font-data text-slate-700"
+                    placeholder="พิมพ์ชื่อ, ชื่อเล่น, HN หรือเบอร์โทร..."
+                    value={shareOwnerSearch}
+                    onChange={(e) => {
+                      setShareOwnerSearch(e.target.value);
+                      setSelectedOwnerPatient(null);
+                    }}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* ผลการค้นหาคนไข้เจ้าของคอร์ส */}
+              {!selectedOwnerPatient && shareOwnerSearch && (
+                <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar border border-slate-100 rounded-xl p-1 bg-slate-50/50">
+                  {(() => {
+                    const q = shareOwnerSearch.trim().toLowerCase();
+                    const matched = (patientsData || []).filter(p => {
+                      const pId = String(p.id || p.hn || '').toLowerCase();
+                      const pName = String(p.name || `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`).toLowerCase();
+                      const pNickname = String(p.nickname || '').toLowerCase();
+                      const pPhone = String(p.phone || (p.phones && p.phones[0]) || '').toLowerCase();
+                      return (pId.includes(q) || pName.includes(q) || pNickname.includes(q) || pPhone.includes(q)) && pId !== String(selectedPatientId).toLowerCase();
+                    }).slice(0, 10);
+
+                    if (matched.length === 0) {
+                      return <div className="text-center py-4 text-xs text-slate-400 kanit-text">ไม่พบข้อมูลคนไข้ที่ค้นหา</div>;
+                    }
+
+                    return matched.map(p => {
+                      const pName = p.name || `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`.trim();
+                      const nickDisplay = p.nickname ? ` (${p.nickname})` : '';
+                      const pCourses = (patientCoursesData || []).filter(c => {
+                        if (!c) return false;
+                        const cPid = String(c.patientId || c.patient_id || '').toLowerCase();
+                        const cRem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
+                        return cPid === String(p.id || p.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                      });
+
+                      return (
+                        <button
+                          key={p.id || p.hn}
+                          type="button"
+                          onClick={() => setSelectedOwnerPatient(p)}
+                          className="flex items-center justify-between p-2.5 rounded-lg bg-white hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all text-left group"
+                        >
+                          <div>
+                            <div className="text-xs font-bold text-slate-700 group-hover:text-indigo-600 kanit-text">
+                              {pName}{nickDisplay}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-data">{p.hn || p.id} {p.phone ? `• โทร ${p.phone}` : ''}</div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">
+                            {pCourses.length} คอร์สที่ใช้ได้
+                          </span>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
+
+              {/* แสดงคอร์สของเจ้าของที่เลือก */}
+              {selectedOwnerPatient && (
+                <div className="flex flex-col gap-3">
+                  <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">เจ้าของคอร์ส</span>
+                      <div className="text-xs font-bold text-slate-800 kanit-text">
+                        {selectedOwnerPatient.hn || selectedOwnerPatient.id} {selectedOwnerPatient.name || `${selectedOwnerPatient.prefix || ''}${selectedOwnerPatient.firstName || ''} ${selectedOwnerPatient.lastName || ''}`.trim()}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOwnerPatient(null)}
+                      className="text-[11px] text-indigo-600 hover:underline font-bold"
+                    >
+                      เปลี่ยน
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-bold text-slate-700 kanit-text">เลือกคอร์สที่ต้องการตัดรอบ:</span>
+                    {(() => {
+                      const ownerCourses = (patientCoursesData || []).filter(c => {
+                        if (!c) return false;
+                        const cPid = String(c.patientId || c.patient_id || '').toLowerCase();
+                        const cRem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
+                        return cPid === String(selectedOwnerPatient.id || selectedOwnerPatient.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                      });
+
+                      if (ownerCourses.length === 0) {
+                        return (
+                          <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 kanit-text">
+                            คนไข้ท่านนี้ไม่มีคอร์สคงเหลือในระบบ
+                          </div>
+                        );
+                      }
+
+                      return ownerCourses.map(course => {
+                        const courseName = course.courseName || course.course_name || course.name;
+                        const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 1;
+                        const total = Number(course.totalSessions ?? course.total_sessions) || 1;
+                        const isAlreadyInCart = cart.some(item => item?.product?.courseId === course?.id);
+
+                        return (
+                          <button
+                            key={course.id}
+                            type="button"
+                            disabled={isAlreadyInCart}
+                            onMouseEnter={(e) => handleCourseMouseEnter(e, { name: courseName, rem, total, owner: selectedOwnerPatient?.name || `${selectedOwnerPatient?.firstName || ''} ${selectedOwnerPatient?.lastName || ''}`.trim() })}
+                            onMouseLeave={handleCourseMouseLeave}
+                            onTouchStart={(e) => handleCourseTouchStart(e, { name: courseName, rem, total, owner: selectedOwnerPatient?.name || `${selectedOwnerPatient?.firstName || ''} ${selectedOwnerPatient?.lastName || ''}`.trim() })}
+                            onTouchEnd={handleCourseTouchEnd}
+                            onClick={() => {
+                              const courseProduct = products.find(p => p.id === course.productId) || {
+                                id: course.productId,
+                                name: courseName,
+                                price: 0,
+                                type: 'คอร์สเดิม',
+                                icon: 'Package'
+                              };
+                              const ownerName = selectedOwnerPatient.name || `${selectedOwnerPatient.firstName || ''} ${selectedOwnerPatient.lastName || ''}`.trim();
+                              const redeemItem = {
+                                product: {
+                                  ...courseProduct,
+                                  id: `REDEEM_${course.id}`,
+                                  price: 0,
+                                  isRedeem: true,
+                                  courseId: course.id,
+                                  courseName: courseName,
+                                  ownerPatientId: selectedOwnerPatient.id || selectedOwnerPatient.hn,
+                                  ownerPatientName: ownerName,
+                                  name: `${courseName} (${rem}/${total})`
+                                },
+                                quantity: 1
+                              };
+                              setCart(prev => [...prev, redeemItem]);
+                              setIsShareCourseModalOpen(false);
+                              showToast(`เพิ่มการตัดคอร์สแชร์ของ ${ownerName} เข้าตะกร้า`, 'success');
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+                              isAlreadyInCart 
+                                ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
+                                : 'bg-white hover:bg-purple-50 border-slate-200 hover:border-purple-300 shadow-sm active:scale-98'
+                            }`}
+                          >
+                            <div>
+                              <div className="text-xs font-bold text-slate-800 kanit-text">{courseName}</div>
+                              <div className="text-[10px] text-slate-400 font-data">ซื้อเมื่อ: {formatDate(course.purchasedAt || course.purchased_at)}</div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">
+                                คงเหลือ {rem}/{total} ครั้ง
+                              </span>
+                              {isAlreadyInCart && <div className="text-[10px] text-amber-500 font-bold mt-1">อยู่ในตะกร้าแล้ว</div>}
+                            </div>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsShareCourseModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all kanit-text"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Light Glassmorphism Compact Course Tooltip Portal */}
+      {typeof document !== 'undefined' && activeCourseTooltip && createPortal(
+        <div 
+          className={`fixed pointer-events-none transform -translate-x-1/2 select-none transition-all duration-150 ${
+            activeCourseTooltip.placement === 'bottom' ? 'translate-y-0 mt-1.5' : '-translate-y-full -mt-1.5'
+          }`}
+          style={{ 
+            left: `${activeCourseTooltip.x}px`, 
+            top: `${activeCourseTooltip.y}px`,
+            zIndex: 999999 
+          }}
+        >
+          {activeCourseTooltip.placement === 'bottom' && (
+            <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-md rotate-45 mx-auto -mb-1.5 border-l border-t border-indigo-100/80 shadow-2xs"></div>
+          )}
+          <div className="bg-white/95 backdrop-blur-md text-slate-700 px-3 py-2 rounded-xl shadow-xl border border-indigo-100/90 w-max max-w-[200px] sm:max-w-[240px] text-center kanit-text ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="text-xs font-normal text-slate-700 leading-snug break-words whitespace-normal">
+              {activeCourseTooltip.name}{' '}
+              <span className="text-indigo-600 font-data font-semibold text-[11px] whitespace-nowrap">
+                ({activeCourseTooltip.rem}/{activeCourseTooltip.total})
+              </span>
+            </div>
+            {activeCourseTooltip.owner && (
+              <div className="text-[10px] text-purple-600 font-normal mt-0.5 break-words whitespace-normal">
+                (ของ: {activeCourseTooltip.owner})
+              </div>
+            )}
+          </div>
+          {activeCourseTooltip.placement !== 'bottom' && (
+            <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-md rotate-45 mx-auto -mt-1.5 border-r border-b border-indigo-100/80 shadow-2xs"></div>
+          )}
+        </div>,
+        document.body
+      )}
     </>
   );
 };

@@ -37,6 +37,12 @@ const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, ha
                 <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note || '-'}>
                     {tx.note || '-'}
                 </span>
+                {(tx.doctorName || tx.doctor_name || tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && (
+                    <div className="flex flex-wrap items-center gap-x-2 text-[11px] font-data mt-0.5">
+                        {(tx.doctorName || tx.doctor_name) && <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">🩺 {tx.doctorName || tx.doctor_name}</span>}
+                        {(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">💼 {tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name}</span>}
+                    </div>
+                )}
             </div>
         </td>
         <td className="p-4">

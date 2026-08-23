@@ -22,7 +22,8 @@ BEGIN
   IF p_table_name NOT IN (
     'patients', 'treatments', 'branches', 'queue', 'pos_transactions', 
     'inventory', 'inventory_logs', 'setting_pos', 'finance_revenue', 
-    'finance_expenses', 'staff', 'staff_schedules', 'settings', 'logs'
+    'finance_expenses', 'staff', 'staff_schedules', 'settings', 'logs',
+    'patient_courses'
   ) THEN
     RAISE EXCEPTION 'Invalid table name for reconcile: %', p_table_name;
   END IF;
@@ -71,7 +72,7 @@ BEGIN
       FROM active_server_data s
       LEFT JOIN client_data c ON s.id::text = c.id
       WHERE c.id IS NULL 
-         OR s.%I > (c.client_updated_at + interval ''500 milliseconds'')
+         OR abs(extract(epoch from (COALESCE(s.%I, s.created_at, ''1970-01-01''::timestamptz) - c.client_updated_at))) > 0.5
     )
     SELECT 
       CASE 
@@ -79,7 +80,7 @@ BEGIN
         THEN NULL
         ELSE jsonb_build_object(
           ''deleted_ids'', COALESCE((SELECT jsonb_agg(id) FROM deleted_items), ''[]''::jsonb),
-          ''updated_rows'', COALESCE((SELECT jsonb_agg(row_to_json(changed_items.*)) FROM changed_items), ''[]''::jsonb)
+          ''updated_rows'', COALESCE((SELECT jsonb_agg(to_jsonb(t)) FROM changed_items t), ''[]''::jsonb)
         )
       END;
   ', 

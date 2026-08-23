@@ -321,21 +321,30 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   const rankings = useMemo(() => {
       const itemCounts = {}; 
 
-      const productTypeMap = {};
-      products.forEach(p => {
+      // 1. นำสินค้าและบริการทั้งหมดในระบบมาตั้งต้นไว้ก่อน (เพื่อให้แสดงผลรายการแม้จะยังไม่มียอดขาย)
+      (products || []).forEach(p => {
           if (p && p.name) {
-              productTypeMap[p.name] = checkIsStock(p);
+              const isProd = checkIsStock(p);
+              itemCounts[p.name] = {
+                  name: p.name,
+                  qty: 0,
+                  revenue: 0,
+                  isProduct: isProd
+              };
           }
       });
 
+      // 2. สะสมยอดขายจริงจากประวัติการขาย POS
       (posHistoryData || []).forEach(tx => {
-          if (tx.status !== 'cancelled' && tx.items) {
+          if (tx.status !== 'cancelled' && Array.isArray(tx.items)) {
               tx.items.forEach(item => {
+                  if (!item || !item.name) return;
                   // ข้ามรายการที่เป็นการตัดคอร์ส (ฟรี) หรือหมายเหตุแพทย์
                   if (item.price === 0 && (item.name.includes('ตัดรอบ') || item.name.includes('หมายเหตุ'))) return;
 
                   if (!itemCounts[item.name]) {
-                      const isProd = productTypeMap[item.name] === true;
+                      const matchedProd = (products || []).find(p => p && p.name === item.name);
+                      const isProd = matchedProd ? checkIsStock(matchedProd) : false;
                       itemCounts[item.name] = { name: item.name, qty: 0, revenue: 0, isProduct: isProd };
                   }
                   itemCounts[item.name].qty += Number(item.quantity) || 0;
@@ -345,9 +354,16 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       });
 
       const allRanked = Object.values(itemCounts);
-      // จัดเรียงและตัดมาเฉพาะ 5 อันดับแรก
-      const topProducts = allRanked.filter(i => i.isProduct).sort((a, b) => b.qty - a.qty).slice(0, 5);
-      const topServices = allRanked.filter(i => !i.isProduct).sort((a, b) => b.qty - a.qty).slice(0, 5);
+      // จัดเรียงตามยอดขาย (qty) จากมากไปน้อย ถ้าเท่ากันเรียงตามรายได้ หรือชื่อรายการ
+      const topProducts = allRanked
+          .filter(i => i.isProduct)
+          .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+          .slice(0, 5);
+
+      const topServices = allRanked
+          .filter(i => !i.isProduct)
+          .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+          .slice(0, 5);
 
       // หาค่า Max เพื่อเอาไปทำเป้ากราฟแท่ง (Progress Bar)
       const maxProdQty = Math.max(...topProducts.map(p => p.qty), 1);
@@ -534,11 +550,11 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                     </div>
                   </div>
                   <div className="min-w-0 relative z-10">
-                    <div className="flex flex-wrap gap-1.5 mb-2.5">
-                        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold kanit-text truncate uppercase border border-slate-200">{prod.category || prod.type || 'ทั่วไป'}</span>
-                        {checkIsStock(prod) && <span className="px-2 py-0.5 bg-indigo-50 text-indigo-500 rounded-lg text-[10px] font-black kanit-text uppercase border border-indigo-100">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)})</span>}
-                        {checkIsCourse(prod) && <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-amber-100">คอร์ส ({prod.courseSessions || prod.course_sessions || 1})</span>}
-                        {prod.isVatable && <span className="px-2 py-0.5 bg-sky-50 text-sky-600 rounded-lg text-[10px] font-black kanit-text uppercase border border-sky-100">+VAT</span>}
+                    <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold kanit-text truncate uppercase border border-slate-200 leading-none">{prod.category || prod.type || 'ทั่วไป'}</span>
+                        {checkIsStock(prod) && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-bold kanit-text uppercase border border-indigo-100 leading-none">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)})</span>}
+                        {checkIsCourse(prod) && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold kanit-text uppercase border border-amber-100 leading-none">คอร์ส ({prod.courseSessions || prod.course_sessions || 1})</span>}
+                        {prod.isVatable && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-sky-50 text-sky-600 rounded-lg text-[11px] font-bold kanit-text uppercase border border-sky-100 leading-none">+VAT</span>}
                     </div>
                     <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">

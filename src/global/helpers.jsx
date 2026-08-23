@@ -175,6 +175,41 @@ export const generateNextHN = (patients) => {
   return `HN${yearSuffix}-${String(maxNum + 1).padStart(4, '0')}`;
 };
 
+export const generateNextReceiptId = async (existingTransactions = [], supabaseClient = null) => {
+  const now = new Date();
+  const thaiYear2D = String((now.getFullYear() + 543) % 100).padStart(2, '0');
+  const month2D = String(now.getMonth() + 1).padStart(2, '0');
+  const prefix = `REC${thaiYear2D}${month2D}`;
+
+  // 1. Try Supabase Atomic RPC first
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient.rpc('get_next_receipt_id');
+      if (!error && data && typeof data === 'string' && data.startsWith('REC')) {
+        return data;
+      }
+    } catch (err) {
+      console.warn('Fallback to local receipt ID generation:', err);
+    }
+  }
+
+  // 2. Client-side fallback if RPC is not available or offline
+  let maxSeq = 0;
+  if (Array.isArray(existingTransactions)) {
+    for (const tx of existingTransactions) {
+      const id = String(tx.id || tx.receiptNo || tx.receipt_no || '');
+      if (id.startsWith(prefix) && id.length === 11) {
+        const seqNum = parseInt(id.slice(7), 10);
+        if (!isNaN(seqNum) && seqNum > maxSeq) {
+          maxSeq = seqNum;
+        }
+      }
+    }
+  }
+  const nextSeqStr = String(maxSeq + 1).padStart(4, '0');
+  return `${prefix}${nextSeqStr}`;
+};
+
 export const getAgeString = (dobStr) => {
   if (!dobStr || dobStr.length < 10) return '-';
   const parts = dobStr.split('/');

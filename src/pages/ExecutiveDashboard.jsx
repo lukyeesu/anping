@@ -26,6 +26,7 @@ const ExecutiveDashboard = ({
   staffData = [], 
   branchesData = [], 
   currentBranch = 'all', 
+  posProducts = [],
   isGlobalLoading = false,
   showToast = () => {},
   callAppScript
@@ -48,60 +49,109 @@ const ExecutiveDashboard = ({
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   });
+  const [staffRankingTab, setStaffRankingTab] = useState('all'); // 'all' | 'df' | 'sales'
+
+  const buildDateRange = useCallback(() => {
+    const now = new Date();
+    const formatDate = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    let startDate = '1970-01-01';
+    let endDate = '2099-12-31';
+
+    if (timeRange === 'today') {
+      startDate = formatDate(now);
+      endDate = formatDate(now);
+    } else if (timeRange === 'week') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+      startDate = formatDate(start);
+      endDate = formatDate(now);
+    } else if (timeRange === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      startDate = formatDate(start);
+      endDate = formatDate(end);
+    } else if (timeRange === 'year') {
+      startDate = `${now.getFullYear()}-01-01`;
+      endDate = `${now.getFullYear()}-12-31`;
+    } else if (timeRange === 'custom' && customStartDate && customEndDate) {
+      startDate = customStartDate;
+      endDate = customEndDate;
+    }
+    return { startDate, endDate };
+  }, [timeRange, customStartDate, customEndDate]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsDashboardLoading(true);
       try {
-        let startDateStr = '';
-        let endDateStr = '';
-        const now = new Date();
-        const formatDate = (d) => {
-          const y = d.getFullYear();
-          const m = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          return `${y}-${m}-${day}`;
-        };
+        const { startDate, endDate } = buildDateRange();
+        const branchFilter = selectedBranch || 'all';
 
-        if (timeRange === 'today') {
-          startDateStr = formatDate(now);
-          endDateStr = formatDate(now);
-        } else if (timeRange === 'week') {
-          const start = new Date();
-          start.setDate(now.getDate() - 7);
-          startDateStr = formatDate(start);
-          endDateStr = formatDate(now);
-        } else if (timeRange === 'month') {
-          const start = new Date(now.getFullYear(), now.getMonth(), 1);
-          const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-          startDateStr = formatDate(start);
-          endDateStr = formatDate(end);
-        } else if (timeRange === 'year') {
-          startDateStr = `${now.getFullYear()}-01-01`;
-          endDateStr = `${now.getFullYear()}-12-31`;
-        } else if (timeRange === 'custom' && customStartDate && customEndDate) {
-          startDateStr = customStartDate;
-          endDateStr = customEndDate;
+        // 1. เรียก get_executive_dashboard_data จาก Supabase โดยตรง (คำนวณทุกการ์ดบนเซิร์ฟเวอร์ Supabase)
+        let dataFetched = false;
+        try {
+          const { data: dbData, error: dbErr } = await supabase.rpc('get_executive_dashboard_data', {
+            start_date: startDate,
+            end_date: endDate,
+            branch_filter: branchFilter
+          });
+
+          if (!dbErr && dbData && dbData.summary) {
+            const s = dbData.summary;
+            setExecSummary({
+              totalIncome: Number(s.total_income) || 0,
+              posTotalIncome: Number(s.pos_total_income) || 0,
+              manualRevenueIncome: Number(s.manual_revenue_income) || 0,
+              totalExpense: Number(s.total_expense) || 0,
+              netProfit: Number(s.net_profit) || 0,
+              profitMargin: Number(s.profit_margin) || 0,
+              posCount: Number(s.pos_count) || 0,
+              averageTicket: Number(s.average_ticket) || 0,
+              paymentMethods: {
+                cash: Number(s.payment_methods?.cash) || 0,
+                transfer: Number(s.payment_methods?.transfer) || 0,
+                card: Number(s.payment_methods?.card) || 0,
+                qr: Number(s.payment_methods?.qr) || 0,
+                other: Number(s.payment_methods?.other) || 0
+              },
+              topProducts: dbData.top_products || [],
+              staffStats: dbData.staff_stats || [],
+              topDoctors: dbData.top_doctors || [],
+              branchSummary: dbData.branch_summary || [],
+              dailyTrend: dbData.daily_trend || [],
+              queueStats: dbData.queue_stats || {}
+            });
+            dataFetched = true;
+          }
+        } catch (rpcErr) {
+          console.warn('RPC get_executive_dashboard_data error, trying fallback:', rpcErr);
         }
 
-        if (callAppScript) {
+        // 2. Fallback: ถ้ายังไม่ได้รัน SQL หรือออฟไลน์ ให้เรียก GET_EXECUTIVE_SUMMARY
+        if (!dataFetched && callAppScript) {
           const res = await callAppScript('GET_EXECUTIVE_SUMMARY', 'System', {
-            startDate: startDateStr,
-            endDate: endDateStr,
-            branchId: selectedBranch
+            startDate: startDate.split('T')[0],
+            endDate: endDate.split('T')[0],
+            branchId: branchFilter
           });
           if (res?.status === 'success' && res.summary) {
             setExecSummary(res.summary);
           }
         }
       } catch (e) {
-        console.error("Executive Dashboard backend fetch error", e);
+        console.error("Executive Dashboard fetch error", e);
+      } finally {
+        setIsDashboardLoading(false);
       }
-      setIsDashboardLoading(false);
     };
 
     fetchDashboardData();
-  }, [timeRange, customStartDate, customEndDate, selectedBranch, callAppScript]);
+  }, [timeRange, customStartDate, customEndDate, selectedBranch, callAppScript, buildDateRange]);
 
   // --- States และฟังก์ชันสไตล์ปฏิทินของธีมหลักสำหรับปฏิทินเลือกช่วงเวลา ---
   const [showExecRangeCalendar, setShowExecRangeCalendar] = useState(false);
@@ -289,248 +339,464 @@ const ExecutiveDashboard = ({
 
   // Consolidate POS history as income and finance as income/expenses
   const allTransactions = useMemo(() => {
-    const posTx = localPosHistory.map(tx => {
-      const txDate = tx.datetime || tx.timestamp || tx.createdAt || tx.date || new Date().toISOString();
+    // 1. รวม POS transactions จากทั้ง localPosHistory และ posHistoryData
+    const posMap = new Map();
+    (posHistoryData || []).forEach(tx => { if (tx && tx.id) posMap.set(String(tx.id), tx); });
+    (localPosHistory || []).forEach(tx => { 
+      if (tx && tx.id) {
+        const existing = posMap.get(String(tx.id));
+        posMap.set(String(tx.id), { ...tx, ...(existing || {}) });
+      }
+    });
+    const activePos = posMap.size > 0 ? Array.from(posMap.values()) : (localPosHistory || posHistoryData || []);
+
+    const posTx = activePos.map(tx => {
+      const txDate = tx.datetime || tx.timestamp || tx.createdAt || tx.date || tx.created_at || new Date().toISOString();
       return {
-        id: tx.id || tx.receiptNo || Math.random().toString(),
+        id: tx.id || tx.receiptNo || tx.receipt_no || Math.random().toString(),
         date: txDate,
         type: 'income',
-        amount: parseFloat(tx.total || tx.netTotal || tx.grandTotal || tx.amount || 0),
-        method: tx.paymentMethod || 'cash',
+        amount: Number(tx.net_amount ?? tx.netAmount ?? tx.grand_total ?? tx.grandTotal ?? tx.amount ?? (Number(tx.total_amount || tx.totalAmount || tx.total || 0) - Number(tx.discount || tx.discount_amount || 0))),
+        method: tx.payment_method || tx.paymentMethod || tx.method || 'cash',
         category: 'รายได้จาก POS',
-        note: tx.patientName ? `ชำระโดย ${tx.patientName}` : 'ทั่วไป (ไม่ระบุคนไข้)',
+        note: tx.patient_name || tx.patientName ? `ชำระโดย ${tx.patient_name || tx.patientName}` : 'ทั่วไป (ไม่ระบุคนไข้)',
         status: tx.status || 'completed',
         isAuto: true,
-        branchId: tx.branchId || 'all'
+        branchId: tx.branch_id || tx.branchId || 'all'
       };
     });
 
-    const finTx = localFinanceData.map(tx => ({
+    // 2. รวม Finance transactions
+    const finMap = new Map();
+    (financeData || []).forEach(tx => { if (tx && tx.id) finMap.set(String(tx.id), tx); });
+    (localFinanceData || []).forEach(tx => { 
+      if (tx && tx.id) {
+        const existing = finMap.get(String(tx.id));
+        finMap.set(String(tx.id), { ...tx, ...(existing || {}) });
+      }
+    });
+    const activeFin = finMap.size > 0 ? Array.from(finMap.values()) : (localFinanceData || financeData || []);
+
+    const finTx = activeFin
+      .filter(tx => !tx.is_auto && !tx.isAuto) // ไม่ซ้ำกับ POS
+      .map(tx => ({
         ...tx,
-        date: tx.date || tx.created_at || new Date().toISOString(),
+        date: tx.date || tx.timestamp_date || tx.created_at || new Date().toISOString(),
         amount: parseFloat(tx.amount || 0),
-        method: tx.method || 'cash',
+        method: tx.method || tx.payment_method || 'cash',
+        type: tx.type || (tx.category === 'expense' ? 'expense' : 'income'),
         branchId: tx.branchId || tx.branch_id || 'all'
-    }));
+      }));
 
     return [...posTx, ...finTx];
-  }, [localPosHistory, localFinanceData]);
+  }, [localPosHistory, posHistoryData, localFinanceData, financeData]);
 
   // Filter transactions by branch and time range
   const filteredTx = useMemo(() => {
+    const now = new Date();
+    let startDate = null;
+    let endDate = null;
+
+    if (timeRange === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (timeRange === 'week') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (timeRange === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (timeRange === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (timeRange === 'custom') {
+      if (customStartDate) {
+        startDate = new Date(customStartDate);
+        startDate.setHours(0, 0, 0, 0);
+      }
+      if (customEndDate) {
+        endDate = new Date(customEndDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
     return allTransactions.filter(tx => {
       // 1. Branch filter
-      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch) return false;
+      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch && tx.branch_id !== selectedBranch) return false;
       
       // 2. Cancelled transaction filter
-      if (tx.status === 'cancelled') return false;
+      if (tx.status === 'cancelled' || tx.is_deleted) return false;
 
       // 3. Time range filter
-      const txDate = parseDate(tx.date);
-      const now = new Date();
-      if (timeRange === 'today') {
-        return txDate.getDate() === now.getDate() &&
-               txDate.getMonth() === now.getMonth() &&
-               txDate.getFullYear() === now.getFullYear();
-      } else if (timeRange === 'week') {
-        const limit = new Date();
-        limit.setDate(now.getDate() - 7);
-        return txDate >= limit && txDate <= now;
-      } else if (timeRange === 'month') {
-        const limit = new Date();
-        limit.setMonth(now.getMonth() - 1);
-        return txDate >= limit && txDate <= now;
-      } else if (timeRange === 'year') {
-        const limit = new Date();
-        limit.setFullYear(now.getFullYear() - 1);
-        return txDate >= limit && txDate <= now;
-      } else if (timeRange === 'custom') {
-        if (customStartDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          if (txDate < start) return false;
-        }
-        if (customEndDate) {
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          if (txDate > end) return false;
-        }
-        return true;
-      }
-      return true; // 'all'
+      const txDate = parseDate(tx.date || tx.datetime || tx.timestamp || tx.createdAt || tx.created_at);
+      if (!txDate) return false;
+
+      if (startDate && txDate < startDate) return false;
+      if (endDate && txDate > endDate) return false;
+
+      return true;
     });
   }, [allTransactions, selectedBranch, timeRange, customStartDate, customEndDate]);
 
-  // Calculate Financial Summary (จากระบบสรุปผลหลังบ้าน พร้อม Fallback จากข้อมูล POS ในเครื่อง)
+  // Calculate Financial Summary (จาก filteredTx ที่ซิงค์บิล POS และการเงินแบบ Realtime)
   const summary = useMemo(() => {
-    // คำนวณจำนวนบิล POS ตามช่วงเวลาและสาขาจาก posHistoryData (Fallback)
-    const localPosCount = (posHistoryData || []).filter(tx => {
-      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch && tx.branch_id !== selectedBranch) return false;
-      if (tx.status === 'cancelled') return false;
-      const txDate = parseDate(tx.datetime || tx.timestamp || tx.createdAt || tx.date || tx.created_at);
-      if (!txDate) return false;
-      const now = new Date();
-      if (timeRange === 'today') {
-        return txDate.getDate() === now.getDate() &&
-               txDate.getMonth() === now.getMonth() &&
-               txDate.getFullYear() === now.getFullYear();
-      } else if (timeRange === 'week') {
-        const limit = new Date(); limit.setDate(now.getDate() - 7); limit.setHours(0, 0, 0, 0);
-        return txDate >= limit && txDate <= now;
-      } else if (timeRange === 'month') {
-        const limit = new Date(now.getFullYear(), now.getMonth(), 1);
-        return txDate >= limit && txDate <= now;
-      } else if (timeRange === 'year') {
-        const limit = new Date(now.getFullYear(), 0, 1);
-        return txDate >= limit && txDate <= now;
-      } else if (timeRange === 'custom') {
-        if (customStartDate) {
-          const s = new Date(customStartDate); s.setHours(0, 0, 0, 0);
-          if (txDate < s) return false;
+    let income = 0;
+    let expense = 0;
+    let cash = 0;
+    let transfer = 0;
+    let card = 0;
+    let qr = 0;
+    let posCount = 0;
+
+    (filteredTx || []).forEach(tx => {
+      const amt = Number(tx.amount || 0);
+      const m = String(tx.method || tx.payment_method || tx.paymentMethod || '').toLowerCase();
+
+      if (tx.type === 'income') {
+        income += amt;
+        if (tx.isAuto || tx.is_auto) posCount++;
+
+        if (m.includes('cash') || m.includes('เงินสด')) {
+          cash += amt;
+        } else if (m.includes('transfer') || m.includes('โอน') || m.includes('bank')) {
+          transfer += amt;
+        } else if (m.includes('card') || m.includes('credit') || m.includes('บัตร')) {
+          card += amt;
+        } else if (m.includes('qr') || m.includes('พร้อมเพย์') || m.includes('promptpay')) {
+          qr += amt;
+        } else {
+          // Default to cash if unknown
+          cash += amt;
         }
-        if (customEndDate) {
-          const e = new Date(customEndDate); e.setHours(23, 59, 59, 999);
-          if (txDate > e) return false;
-        }
-        return true;
+      } else if (tx.type === 'expense') {
+        expense += amt;
       }
-      return true;
-    }).length;
-
-    if (execSummary) {
-      return {
-        income: execSummary.totalIncome || 0,
-        expense: execSummary.totalExpense || 0,
-        netProfit: execSummary.netProfit || 0,
-        profitMargin: execSummary.profitMargin || 0,
-        cash: execSummary.paymentMethods?.cash || 0,
-        transfer: execSummary.paymentMethods?.transfer || 0,
-        card: execSummary.paymentMethods?.card || 0,
-        qr: execSummary.paymentMethods?.qr || 0,
-        checkoutsCount: (execSummary.posCount !== undefined && execSummary.posCount !== null)
-          ? execSummary.posCount 
-          : (execSummary.checkoutsCount !== undefined && execSummary.checkoutsCount !== null ? execSummary.checkoutsCount : localPosCount)
-      };
-    }
-    return {
-      income: 0,
-      expense: 0,
-      netProfit: 0,
-      profitMargin: 0,
-      cash: 0,
-      transfer: 0,
-      card: 0,
-      qr: 0,
-      checkoutsCount: localPosCount
-    };
-  }, [execSummary, posHistoryData, selectedBranch, timeRange, customStartDate, customEndDate]);
-
-  // Calculate Staff Performance Rank (sales & commissions)
-  const staffStats = useMemo(() => {
-    const stats = {};
-    staffData.forEach(s => {
-      const shortName = s.name.replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
-      stats[s.id] = { id: s.id, name: shortName, photo: s.photo, role: s.role, position: s.position, commission: 0, checkouts: 0 };
     });
 
-    posHistoryData.forEach(tx => {
-      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch) return;
+    const netProfit = income - expense;
+    const profitMargin = income > 0 ? (netProfit / income) * 100 : 0;
+
+    return {
+      income,
+      expense,
+      netProfit,
+      profitMargin,
+      cash,
+      transfer,
+      card,
+      qr,
+      checkoutsCount: posCount
+    };
+  }, [filteredTx]);
+
+  // Calculate Staff Performance Rank (sales & commissions) - คำนวณตามประวัติบิล POS และอัตราค่าคอมมิชชั่น/DF ของพนักงาน
+  const staffStats = useMemo(() => {
+    const stats = {};
+    (staffData || []).forEach(s => {
+      const shortName = (s.name || '').replace(/^(นพ\.|พญ\.|ทพ\.|ทพญ\.|ดร\.|นาย|นางสาว|นาง)/, '').trim().split(' ')[0];
+      const rate = Number(s.commissionRate || s.commission_rate || 0);
+      const type = s.commissionType || s.commission_type || 'percent';
+      const dfRate = Number(s.dfRate || s.df_rate || 0);
+      const dfType = s.dfType || s.df_type || 'percent';
+      const dfCondition = s.dfCondition || s.df_condition || 'all';
+      const dfThreshold = Number(s.dfThreshold || s.df_threshold || 1);
+      const commissionCondition = s.commissionCondition || s.commission_condition || 'all';
+      const commissionThreshold = Number(s.commissionThreshold || s.commission_threshold || 1);
+
+      stats[s.id] = { 
+        id: s.id, 
+        name: shortName, 
+        fullName: s.name,
+        photo: s.photo, 
+        role: s.role, 
+        position: s.position, 
+        rate,
+        type,
+        dfRate,
+        dfType,
+        dfCondition,
+        dfThreshold,
+        commissionCondition,
+        commissionThreshold,
+        commission: 0, 
+        dfCommission: 0,
+        salesCommission: 0,
+        dfCases: 0,
+        salesCases: 0,
+        checkouts: 0 
+      };
+    });
+
+    const now = new Date();
+    let startDate = null;
+    let endDate = null;
+
+    if (timeRange === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (timeRange === 'week') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (timeRange === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (timeRange === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (timeRange === 'custom') {
+      if (customStartDate) {
+        startDate = new Date(customStartDate);
+        startDate.setHours(0, 0, 0, 0);
+      }
+      if (customEndDate) {
+        endDate = new Date(customEndDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    const doctorsList = (staffData || []).filter(s => s.role === 'doctor' || s.position?.includes('แพทย์'));
+    const dailyDocCounts = {};
+    const dailySellerCounts = {};
+
+    // รวมข้อมูล POS จากทั้ง Local Fetch และ Props
+    const posMap = new Map();
+    (posHistoryData || []).forEach(tx => { if (tx && tx.id) posMap.set(String(tx.id), tx); });
+    (localPosHistory || []).forEach(tx => { 
+      if (tx && tx.id) {
+        const existing = posMap.get(String(tx.id));
+        posMap.set(String(tx.id), { ...tx, ...(existing || {}) });
+      }
+    });
+    const combinedPosList = posMap.size > 0 ? Array.from(posMap.values()) : (localPosHistory || posHistoryData || []);
+
+    combinedPosList.forEach(tx => {
+      if (!tx) return;
+      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch && tx.branch_id !== selectedBranch) return;
       if (tx.status === 'cancelled') return;
       
-      const txDate = parseDate(tx.datetime || tx.timestamp || tx.createdAt);
-      const now = new Date();
-      let matchTime = true;
-      if (timeRange === 'today') {
-        matchTime = txDate.getDate() === now.getDate() && txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-      } else if (timeRange === 'week') {
-        const limit = new Date(); limit.setDate(now.getDate() - 7);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'month') {
-        const limit = new Date(); limit.setMonth(now.getMonth() - 1);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'year') {
-        const limit = new Date(); limit.setFullYear(now.getFullYear() - 1);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'custom') {
-        if (customStartDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          if (txDate < start) matchTime = false;
-        }
-        if (customEndDate) {
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          if (txDate > end) matchTime = false;
-        }
+      const txDate = parseDate(tx.datetime || tx.timestamp || tx.createdAt || tx.date || tx.created_at);
+      if (!txDate) return;
+
+      if (startDate && txDate < startDate) return;
+      if (endDate && txDate > endDate) return;
+
+      const net = Number(tx.net_amount ?? tx.netAmount ?? tx.grand_total ?? tx.grandTotal ?? tx.amount ?? (Number(tx.total_amount || tx.totalAmount || tx.total || 0) - Number(tx.discount || tx.discount_amount || 0)));
+      const dayKey = `${txDate.getFullYear()}-${txDate.getMonth()}-${txDate.getDate()}`;
+
+      // จับคู่แพทย์ผู้ตรวจ/ทำหัตถการ (เฉพาะบิลที่มีการระบุแพทย์เท่านั้น ไม่ Auto-Match สุ่มแพทย์)
+      let matchedDoctorId = tx.doctorId || tx.doctor_id;
+      if (!matchedDoctorId && (tx.doctorName || tx.doctor_name || tx.doctor)) {
+        const docName = String(tx.doctorName || tx.doctor_name || tx.doctor).trim();
+        const found = (staffData || []).find(s => s.name === docName || s.name.trim().toLowerCase() === docName.toLowerCase());
+        if (found) matchedDoctorId = found.id;
       }
 
-      if (matchTime) {
-        if (tx.doctorId && stats[tx.doctorId]) {
-          stats[tx.doctorId].checkouts++;
-          stats[tx.doctorId].commission += parseFloat(tx.doctorCommission || 0);
+      // จับคู่ผู้ขาย/ผู้แนะนำ (เฉพาะบิลที่มีการระบุผู้ขายเท่านั้น)
+      let matchedSellerId = tx.sellerId || tx.seller_id || tx.staffId || tx.staff_id;
+      if (!matchedSellerId && (tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name)) {
+        const sName = String(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name).trim();
+        const found = (staffData || []).find(s => s.name === sName || s.name.trim().toLowerCase() === sName.toLowerCase());
+        if (found) matchedSellerId = found.id;
+      }
+
+      // 1. คำนวณค่า DF หัตถการให้แพทย์ (พร้อมเช็คเงื่อนไข Threshold รายวัน)
+      if (matchedDoctorId && stats[matchedDoctorId]) {
+        const docStat = stats[matchedDoctorId];
+        docStat.dfCases++;
+        docStat.checkouts++;
+        const docDayKey = `${matchedDoctorId}_${dayKey}`;
+        dailyDocCounts[docDayKey] = (dailyDocCounts[docDayKey] || 0) + 1;
+        const isEligibleDf = docStat.dfCondition !== 'threshold' || dailyDocCounts[docDayKey] >= (docStat.dfThreshold || 1);
+
+        let docFee = 0;
+        if (tx.doctorCommission || tx.doctor_commission) {
+          docFee = parseFloat(tx.doctorCommission || tx.doctor_commission || 0);
+        } else if (isEligibleDf) {
+          if (docStat.dfRate > 0) {
+            docFee = docStat.dfType === 'percent' ? (net * (docStat.dfRate / 100)) : docStat.dfRate;
+          } else if (docStat.rate > 0) {
+            docFee = docStat.type === 'percent' ? (net * (docStat.rate / 100)) : docStat.rate;
+          }
         }
-        if (tx.staffId && stats[tx.staffId]) {
-          stats[tx.staffId].checkouts++;
-          stats[tx.staffId].commission += parseFloat(tx.staffCommission || 0);
+        docStat.dfCommission += docFee;
+        docStat.commission += docFee;
+      }
+
+      // 2. คำนวณค่าคอมมิชชั่นยอดขายให้ผู้ขาย
+      if (matchedSellerId && stats[matchedSellerId]) {
+        const sellerStat = stats[matchedSellerId];
+        sellerStat.salesCases++;
+        if (matchedSellerId !== matchedDoctorId) {
+          sellerStat.checkouts++;
+        }
+        const sellerDayKey = `${matchedSellerId}_${dayKey}`;
+        dailySellerCounts[sellerDayKey] = (dailySellerCounts[sellerDayKey] || 0) + 1;
+        const isEligibleSales = sellerStat.commissionCondition !== 'threshold' || dailySellerCounts[sellerDayKey] >= (sellerStat.commissionThreshold || 1);
+
+        let sellerFee = 0;
+        if (tx.staffCommission || tx.staff_commission || tx.sellerCommission || tx.seller_commission) {
+          sellerFee = parseFloat(tx.staffCommission || tx.staff_commission || tx.sellerCommission || tx.seller_commission || 0);
+        } else if (isEligibleSales && sellerStat.rate > 0) {
+          sellerFee = sellerStat.type === 'percent' ? (net * (sellerStat.rate / 100)) : sellerStat.rate;
+        }
+
+        if (matchedSellerId !== matchedDoctorId) {
+          sellerStat.salesCommission += sellerFee;
+          sellerStat.commission += sellerFee;
+        } else if (matchedSellerId === matchedDoctorId) {
+          stats[matchedDoctorId].salesCommission += sellerFee;
+          stats[matchedDoctorId].commission += sellerFee;
         }
       }
     });
 
     return Object.values(stats)
-      .filter(s => s.checkouts > 0 || s.commission > 0)
-      .sort((a, b) => b.commission - a.commission);
-  }, [staffData, posHistoryData, selectedBranch, timeRange, customStartDate, customEndDate]);
+      .filter(s => s.checkouts > 0 || s.commission > 0);
+  }, [staffData, posHistoryData, localPosHistory, selectedBranch, timeRange, customStartDate, customEndDate]);
 
-  // Calculate Top Selling Products/Services
-  const topProducts = useMemo(() => {
+  // กรองและเรียงลำดับตาม Tab ที่เลือก (ทั้งหมด / ค่า DF หัตถการ / ค่าคอมมิชชั่นยอดขาย)
+  const displayedStaffStats = useMemo(() => {
+    if (staffRankingTab === 'df') {
+      return (staffStats || [])
+        .filter(s => s.dfCases > 0 || s.dfCommission > 0 || s.role === 'doctor' || s.position?.includes('แพทย์'))
+        .sort((a, b) => b.dfCommission - a.dfCommission || b.dfCases - a.dfCases);
+    }
+    if (staffRankingTab === 'sales') {
+      return (staffStats || [])
+        .filter(s => s.salesCases > 0 || s.salesCommission > 0)
+        .sort((a, b) => b.salesCommission - a.salesCommission || b.salesCases - a.salesCases);
+    }
+    return (staffStats || []).sort((a, b) => b.commission - a.commission || b.checkouts - a.checkouts);
+  }, [staffStats, staffRankingTab]);
+
+  // Pagination state for top selling products/services
+  const [topProductsPage, setTopProductsPage] = useState(0);
+  const TOP_PRODUCTS_PER_PAGE = 5;
+
+  // Reset topProductsPage whenever filters change
+  useEffect(() => {
+    setTopProductsPage(0);
+  }, [timeRange, selectedBranch, customStartDate, customEndDate]);
+
+  // Calculate All Selling Products/Services - คำนวณยอดขายสุทธิของสินค้า/บริการแต่ละตัวหลังหักส่วนลดท้ายบิล
+  const allTopProducts = useMemo(() => {
     const productsMap = {};
-    posHistoryData.forEach(tx => {
-      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch) return;
+
+    const now = new Date();
+    let startDate = null;
+    let endDate = null;
+
+    if (timeRange === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (timeRange === 'week') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    } else if (timeRange === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (timeRange === 'year') {
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (timeRange === 'custom') {
+      if (customStartDate) {
+        startDate = new Date(customStartDate);
+        startDate.setHours(0, 0, 0, 0);
+      }
+      if (customEndDate) {
+        endDate = new Date(customEndDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    // รวมข้อมูล POS จากทั้ง Local Fetch และ Props
+    const posMap = new Map();
+    (posHistoryData || []).forEach(tx => { if (tx && tx.id) posMap.set(String(tx.id), tx); });
+    (localPosHistory || []).forEach(tx => { 
+      if (tx && tx.id) {
+        const existing = posMap.get(String(tx.id));
+        posMap.set(String(tx.id), { ...tx, ...(existing || {}) });
+      }
+    });
+    const combinedPosList = posMap.size > 0 ? Array.from(posMap.values()) : (localPosHistory || posHistoryData || []);
+
+    combinedPosList.forEach(tx => {
+      if (!tx) return;
+      if (selectedBranch !== 'all' && tx.branchId !== selectedBranch && tx.branch_id !== selectedBranch) return;
       if (tx.status === 'cancelled') return;
       
-      const txDate = parseDate(tx.datetime || tx.timestamp || tx.createdAt);
-      const now = new Date();
-      let matchTime = true;
-      if (timeRange === 'today') {
-        matchTime = txDate.getDate() === now.getDate() && txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
-      } else if (timeRange === 'week') {
-        const limit = new Date(); limit.setDate(now.getDate() - 7);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'month') {
-        const limit = new Date(); limit.setMonth(now.getMonth() - 1);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'year') {
-        const limit = new Date(); limit.setFullYear(now.getFullYear() - 1);
-        matchTime = txDate >= limit;
-      } else if (timeRange === 'custom') {
-        if (customStartDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          if (txDate < start) matchTime = false;
-        }
-        if (customEndDate) {
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          if (txDate > end) matchTime = false;
-        }
+      const txDate = parseDate(tx.datetime || tx.timestamp || tx.createdAt || tx.date || tx.created_at);
+      if (!txDate) return;
+
+      // กรองตามช่วงวันที่เลือกอย่างแม่นยำ
+      if (startDate && txDate < startDate) return;
+      if (endDate && txDate > endDate) return;
+
+      let items = tx.items;
+      if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch(e) { items = []; }
       }
 
-      if (matchTime && Array.isArray(tx.items)) {
-        tx.items.forEach(item => {
-          const key = item.id || item.name;
+      if (Array.isArray(items) && items.length > 0) {
+        const validItems = items.filter(item => {
+          if (!item || !item.name) return false;
+          const name = item.name;
+          const itId = String(item.id || item.productId || '');
+          if (name.includes('ตัดรอบ') || name.includes('ตัดคอร์ส') || name.includes('หมายเหตุ') || itId.startsWith('REDEEM_')) return false;
+          return true;
+        });
+
+        if (validItems.length === 0) return;
+
+        const net = Number(tx.net_amount ?? tx.netAmount ?? tx.grand_total ?? tx.grandTotal ?? tx.amount ?? (Number(tx.total_amount || tx.totalAmount || tx.total || 0) - Number(tx.discount || tx.discount_amount || 0)));
+
+        const billGross = validItems.reduce((sum, item) => {
+          const qty = parseFloat(item.quantity ?? item.qty ?? 1);
+          const itemTotal = parseFloat(item.total !== undefined ? item.total : (Number(item.price || 0) * qty));
+          return sum + itemTotal;
+        }, 0);
+
+        // อัตราส่วนลดเฉลี่ยตามสัดส่วนของแต่ละรายการในบิล
+        const discountRatio = (billGross > 0 && net > 0) ? (net / billGross) : (net === 0 ? 0 : 1);
+
+        validItems.forEach(item => {
+          const key = String(item.id || item.productId || item.name).trim();
           if (!productsMap[key]) {
-            productsMap[key] = { name: item.name, quantity: 0, revenue: 0 };
+            productsMap[key] = {
+              id: key,
+              name: item.name,
+              quantity: 0,
+              revenue: 0,
+              category: item.category || item.type || ''
+            };
           }
-          productsMap[key].quantity += parseFloat(item.quantity || 0);
-          productsMap[key].revenue += parseFloat(item.total || 0);
+
+          const itemQty = parseFloat(item.quantity ?? item.qty ?? 1);
+          let itemGross = parseFloat(item.total !== undefined ? item.total : (Number(item.price || 0) * itemQty));
+          let itemNet = 0;
+          if (billGross > 0) {
+            itemNet = itemGross * discountRatio;
+          } else if (net > 0) {
+            itemNet = net / validItems.length;
+          }
+          if (net === 0) itemNet = 0;
+
+          productsMap[key].quantity += itemQty;
+          productsMap[key].revenue += itemNet;
         });
       }
     });
 
     return Object.values(productsMap)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-  }, [posHistoryData, selectedBranch, timeRange, customStartDate, customEndDate]);
+      .filter(p => p.quantity > 0 || p.revenue > 0)
+      .sort((a, b) => b.revenue - a.revenue || b.quantity - a.quantity);
+  }, [posHistoryData, localPosHistory, selectedBranch, timeRange, customStartDate, customEndDate]);
+
+  const topProductsTotalPages = Math.max(1, Math.ceil(allTopProducts.length / TOP_PRODUCTS_PER_PAGE));
+  const paginatedTopProducts = useMemo(() => {
+    const start = topProductsPage * TOP_PRODUCTS_PER_PAGE;
+    return allTopProducts.slice(start, start + TOP_PRODUCTS_PER_PAGE);
+  }, [allTopProducts, topProductsPage]);
 
   // Calculate Financial Trends based on timeRange & execSummary.dailyTrend
   const monthlyTrends = useMemo(() => {
@@ -721,26 +987,30 @@ const ExecutiveDashboard = ({
   // Calculate branch revenue breakdown from execSummary
   const branchRevenue = useMemo(() => {
     if (execSummary?.branchSummary) {
-      const map = {};
-      branchesData.forEach(b => {
+      const isArray = Array.isArray(execSummary.branchSummary);
+      return branchesData.map(b => {
         const bId = b.id;
-        const info = execSummary.branchSummary[bId] || { income: 0, expense: 0, profit: 0 };
-        map[bId] = {
+        let info = { income: 0, expense: 0, profit: 0 };
+        if (isArray) {
+          info = execSummary.branchSummary.find(item => item.branch_id === bId || item.branchId === bId) || info;
+        } else {
+          info = execSummary.branchSummary[bId] || info;
+        }
+        return {
           id: bId,
           name: b.name,
-          income: info.income || 0,
-          expense: info.expense || 0,
-          profit: info.profit || 0
+          income: Number(info.income) || 0,
+          expense: Number(info.expense) || 0,
+          profit: Number(info.profit) || 0
         };
       });
-      return Object.values(map);
     }
     return branchesData.map(b => ({ id: b.id, name: b.name, income: 0, expense: 0, profit: 0 }));
   }, [branchesData, execSummary]);
 
-  // Format currency helper
+  // Format currency helper (clean number with commas, no ฿ symbol for readability)
   const formatMoney = (amount) => {
-    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 0 }).format(amount || 0);
+    return Number(amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   };
 
   const maxTrendValue = Math.max(
@@ -1010,7 +1280,7 @@ const ExecutiveDashboard = ({
               <div className="space-y-4">
                 {[
                   { label: 'เงินสด', amount: summary.cash, color: 'bg-emerald-500', pct: summary.income > 0 ? (summary.cash / summary.income) * 100 : 0 },
-                  { label: 'โอนเงิน', amount: summary.transfer, color: 'bg-sky-500', pct: summary.income > 0 ? (summary.transfer / summary.income) * 100 : 0 },
+                  { label: 'โอนเงิน / สแกนจ่าย', amount: summary.transfer + (summary.qr || 0), color: 'bg-sky-500', pct: summary.income > 0 ? ((summary.transfer + (summary.qr || 0)) / summary.income) * 100 : 0 },
                   { label: 'บัตรเครดิต', amount: summary.card, color: 'bg-indigo-500', pct: summary.income > 0 ? (summary.card / summary.income) * 100 : 0 }
                 ].map((item, idx) => (
                   <div key={idx} className="space-y-1.5">
@@ -1047,22 +1317,78 @@ const ExecutiveDashboard = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Top Staff / Doctors Performance */}
           <div className={`${theme.card} flex flex-col`}>
-            <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-4 kanit-text flex items-center gap-2">
-              <Award className="text-amber-500 w-5 h-5" /> อันดับผลงานและค่าคอมมิชชั่นพนักงาน
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                <Award className="text-amber-500 w-5 h-5 shrink-0" />
+                <span>อันดับผลงานและค่าคอมมิชชั่น</span>
+              </h3>
+
+              {/* Segmented Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1 text-xs font-bold kanit-text border border-slate-200/60 shrink-0 shadow-xs self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setStaffRankingTab('all')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${staffRankingTab === 'all' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  ทั้งหมด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStaffRankingTab('df')}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${staffRankingTab === 'df' ? 'bg-white text-emerald-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Stethoscope size={12} /> ค่า DF (เคสรักษา)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStaffRankingTab('sales')}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${staffRankingTab === 'sales' ? 'bg-white text-amber-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Award size={12} /> ค่าคอม (ยอดขาย)
+                </button>
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="table-auto w-full text-left text-xs sm:text-sm border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100 text-slate-500 font-bold"><th className="w-[31%] py-3 px-2 kanit-text">พนักงาน</th><th className="w-[31%] py-3 px-2 kanit-text text-center">เคสรักษา</th><th className="w-[38%] py-3 px-2 kanit-text text-right">ค่าคอมมิชชั่น</th></tr>
+                  <tr className="border-b border-slate-100 text-slate-500 font-bold">
+                    <th className={`${staffRankingTab === 'all' ? 'w-[34%]' : 'w-[38%]'} py-3 px-2 kanit-text`}>
+                      {staffRankingTab === 'df' ? 'แพทย์ผู้รักษา' : staffRankingTab === 'sales' ? 'ผู้แนะนำ / ผู้ขาย' : 'พนักงาน'}
+                    </th>
+                    {staffRankingTab === 'all' ? (
+                      <>
+                        <th className="w-[18%] py-3 px-2 kanit-text text-center text-emerald-700 whitespace-nowrap">
+                          🩺 เคสรักษา
+                        </th>
+                        <th className="w-[18%] py-3 px-2 kanit-text text-center text-amber-700 whitespace-nowrap">
+                          💼 บิลขาย
+                        </th>
+                      </>
+                    ) : (
+                      <th className="w-[28%] py-3 px-2 kanit-text text-center whitespace-nowrap">
+                        {staffRankingTab === 'df' ? '🩺 จำนวนเคสรักษา' : '💼 จำนวนบิลขาย'}
+                      </th>
+                    )}
+                    <th className={`${staffRankingTab === 'all' ? 'w-[30%]' : 'w-[34%]'} py-3 px-2 kanit-text text-right whitespace-nowrap`}>
+                      {staffRankingTab === 'df' ? 'ค่า DF หัตถการ' : staffRankingTab === 'sales' ? 'ค่าคอมมิชชั่น' : 'ค่าตอบแทนรวม'}
+                    </th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {staffStats.length === 0 ? (
+                  {displayedStaffStats.length === 0 ? (
                     <tr>
-                      <td colSpan="3" className="py-8 text-center text-slate-400 kanit-text">ไม่มีประวัติยอดขาย/ค่าคอมมิชชั่นในช่วงเวลานี้</td>
+                      <td colSpan={staffRankingTab === 'all' ? 4 : 3} className="py-8 text-center text-slate-400 kanit-text">
+                        {staffRankingTab === 'df' 
+                          ? 'ไม่มีประวัติเคสรักษา/ค่า DF ในช่วงเวลานี้' 
+                          : staffRankingTab === 'sales' 
+                          ? 'ไม่มีประวัติยอดขาย/ค่าคอมมิชชั่นในช่วงเวลานี้' 
+                          : 'ไม่มีประวัติผลงานในช่วงเวลานี้'}
+                      </td>
                     </tr>
                   ) : (
-                    staffStats.map((st, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                    displayedStaffStats.map((st, idx) => (
+                      <tr key={st.id || idx} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 px-2 flex items-center gap-2.5">
                           <span className="font-bold text-slate-400 font-data w-4 shrink-0">{idx + 1}</span>
                           {st.photo ? (
@@ -1075,8 +1401,58 @@ const ExecutiveDashboard = ({
                             <div className="text-[9px] text-slate-400 font-medium kanit-text truncate mt-0.5">{st.position || st.role}</div>
                           </div>
                         </td>
-                        <td className="py-3 px-2 text-center font-data text-slate-600 font-bold">{st.checkouts}</td>
-                        <td className="py-3 px-2 text-right font-bold text-emerald-600 font-data">{formatMoney(st.commission)}</td>
+
+                        {staffRankingTab === 'all' ? (
+                          <>
+                            <td className="py-3 px-2 text-center font-data text-emerald-700 font-bold">
+                              {st.dfCases > 0 ? (
+                                <span className="bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/80 text-xs">
+                                  {st.dfCases} เคส
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-2 text-center font-data text-amber-700 font-bold">
+                              {st.salesCases > 0 ? (
+                                <span className="bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/80 text-xs">
+                                  {st.salesCases} บิล
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">-</span>
+                              )}
+                            </td>
+                          </>
+                        ) : (
+                          <td className="py-3 px-2 text-center font-data text-slate-600 font-bold">
+                            {staffRankingTab === 'df' ? (
+                              <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100/80 text-xs">
+                                {st.dfCases} เคส
+                              </span>
+                            ) : (
+                              <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100/80 text-xs">
+                                {st.salesCases} บิล
+                              </span>
+                            )}
+                          </td>
+                        )}
+
+                        <td className="py-3 px-2 text-right font-bold text-emerald-600 font-data">
+                          {staffRankingTab === 'df' ? (
+                            <div>{formatMoney(st.dfCommission)}</div>
+                          ) : staffRankingTab === 'sales' ? (
+                            <div>{formatMoney(st.salesCommission)}</div>
+                          ) : (
+                            <div>
+                              <div>{formatMoney(st.commission)}</div>
+                              {(st.dfCommission > 0 || st.salesCommission > 0) && (
+                                <div className="text-[10px] text-slate-400 font-data font-normal mt-0.5 whitespace-nowrap">
+                                  DF: {formatMoney(st.dfCommission)} | ขาย: {formatMoney(st.salesCommission)}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1086,30 +1462,71 @@ const ExecutiveDashboard = ({
           </div>
 
           {/* Top Selling Products */}
-          <div className={`${theme.card} flex flex-col`}>
-            <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-4 kanit-text flex items-center gap-2">
-              <ShoppingBag className="text-emerald-500 w-5 h-5" /> สินค้าและบริการขายดี (Top 5 Best Sellers)
-            </h3>
-            <div className="space-y-4 flex-1 flex flex-col justify-center">
-              {topProducts.length === 0 ? (
-                <div className="text-center py-10 text-slate-400 kanit-text">ไม่มีประวัติการจำหน่ายสินค้า/บริการในช่วงเวลานี้</div>
+          <div className={`${theme.card} flex flex-col min-h-[380px] sm:min-h-[410px]`}>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2 truncate">
+                <ShoppingBag className="text-emerald-500 w-5 h-5 shrink-0" />
+                <span>สินค้าและบริการขายดี</span>
+                <span className="text-xs font-normal text-slate-400 kanit-text">
+                  ({allTopProducts.length > 0 ? `อันดับ ${topProductsPage * TOP_PRODUCTS_PER_PAGE + 1}-${Math.min((topProductsPage + 1) * TOP_PRODUCTS_PER_PAGE, allTopProducts.length)} จาก ${allTopProducts.length}` : '0 รายการ'})
+                </span>
+              </h3>
+
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setTopProductsPage(prev => Math.max(0, prev - 1))}
+                  disabled={topProductsPage === 0}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                  title="อันดับก่อนหน้า"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-xs font-bold text-slate-600 font-data px-1.5 min-w-[36px] text-center">
+                  {topProductsTotalPages > 0 ? `${topProductsPage + 1}/${topProductsTotalPages}` : '1/1'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTopProductsPage(prev => Math.min(topProductsTotalPages - 1, prev + 1))}
+                  disabled={topProductsPage >= topProductsTotalPages - 1}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                  title="อันดับถัดไป"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 flex-1 flex flex-col justify-start min-h-[290px]">
+              {paginatedTopProducts.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-slate-400 kanit-text text-sm italic py-10">
+                  ไม่มีประวัติการจำหน่ายสินค้า/บริการในช่วงเวลานี้
+                </div>
               ) : (
-                topProducts.map((p, idx) => (
-                  <div key={idx} className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 font-bold text-xs flex items-center justify-center shrink-0 shadow-inner">
-                        {idx + 1}
+                paginatedTopProducts.map((p, idx) => {
+                  const rankNumber = topProductsPage * TOP_PRODUCTS_PER_PAGE + idx + 1;
+                  return (
+                    <div key={idx} className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 shadow-inner ${
+                          rankNumber === 1 ? 'bg-amber-100 text-amber-700 font-black' :
+                          rankNumber === 2 ? 'bg-slate-200 text-slate-700 font-bold' :
+                          rankNumber === 3 ? 'bg-amber-50 text-amber-800 font-bold' :
+                          'bg-emerald-50 text-emerald-600'
+                        }`}>
+                          {rankNumber}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-700 text-xs sm:text-sm kanit-text truncate" title={p.name}>{p.name}</p>
+                          <p className="text-[10px] text-slate-400 font-data mt-0.5">จำนวนที่ขาย: {p.quantity} ชิ้น/ครั้ง</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-700 text-xs sm:text-sm kanit-text truncate" title={p.name}>{p.name}</p>
-                        <p className="text-[10px] text-slate-400 font-data mt-0.5">จำนวนที่ขาย: {p.quantity} ชิ้น/ครั้ง</p>
+                      <div className="text-right font-bold text-slate-700 font-data text-xs sm:text-sm pl-2 shrink-0">
+                        {formatMoney(p.revenue)}
                       </div>
                     </div>
-                    <div className="text-right font-bold text-slate-700 font-data text-xs sm:text-sm pl-2 shrink-0">
-                      {formatMoney(p.revenue)}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

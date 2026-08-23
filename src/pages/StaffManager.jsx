@@ -545,7 +545,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     address: '', moo: '', road: '', subDistrict: '', district: '', province: '', zipcode: '',
     curAddress: '', curMoo: '', curRoad: '', curSubDistrict: '', curDistrict: '', curProvince: '', curZipcode: '',
     emName: '', emRelation: '', emPhone: '', emAddress: '',
-    baseSalary: 0, commissionRate: 0, commissionType: 'percent', commissionCondition: 'all', commissionThreshold: 0, otRate: 0, branchId: 'b1', schedule: {}, photo: '' 
+    baseSalary: 0, dfRate: 0, dfType: 'percent', dfCondition: 'all', dfThreshold: 0, commissionRate: 0, commissionType: 'percent', commissionCondition: 'all', commissionThreshold: 0, otRate: 0, branchId: 'b1', schedule: {}, photo: '' 
   };
   const [formData, setFormData] = useState(initialForm);
 
@@ -1181,9 +1181,16 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
        emPhone: staff.emPhone || staff.em_phone || '',
        emAddress: staff.emAddress || staff.em_address || '',
        employmentType: staff.employmentType || 'monthly',
-       baseSalary: staff.baseSalary || 0, 
-       commissionRate: staff.commissionRate || 0,
-       otRate: staff.otRate || 0
+       baseSalary: staff.baseSalary !== undefined ? Number(staff.baseSalary) : (staff.base_salary !== undefined ? Number(staff.base_salary) : 0), 
+       dfRate: staff.dfRate !== undefined ? Number(staff.dfRate) : (staff.df_rate !== undefined ? Number(staff.df_rate) : 0),
+       dfType: staff.dfType || staff.df_type || 'percent',
+       dfCondition: staff.dfCondition || staff.df_condition || 'all',
+       dfThreshold: staff.dfThreshold !== undefined ? Number(staff.dfThreshold) : (staff.df_threshold !== undefined ? Number(staff.df_threshold) : 0),
+       commissionRate: staff.commissionRate !== undefined ? Number(staff.commissionRate) : (staff.commission_rate !== undefined ? Number(staff.commission_rate) : 0),
+       commissionType: staff.commissionType || staff.commission_type || 'percent',
+       commissionCondition: staff.commissionCondition || staff.commission_condition || 'all',
+       commissionThreshold: staff.commissionThreshold !== undefined ? Number(staff.commissionThreshold) : (staff.commission_threshold !== undefined ? Number(staff.commission_threshold) : 0),
+       otRate: staff.otRate !== undefined ? Number(staff.otRate) : (staff.ot_rate !== undefined ? Number(staff.ot_rate) : 0)
     });
     staffModal.open();
   };
@@ -1243,9 +1250,26 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
        email: computedEmail,
        name: fullName || formData.name,
        employmentType: formData.employmentType,
-       baseSalary: Number(formData.baseSalary),
-       commissionRate: Number(formData.commissionRate),
-       otRate: Number(formData.otRate),
+       baseSalary: Number(formData.baseSalary || 0),
+       base_salary: Number(formData.baseSalary || 0),
+       dfRate: Number(formData.dfRate || 0),
+       df_rate: Number(formData.dfRate || 0),
+       dfType: formData.dfType || 'percent',
+       df_type: formData.dfType || 'percent',
+       dfCondition: formData.dfCondition || 'all',
+       df_condition: formData.dfCondition || 'all',
+       dfThreshold: Number(formData.dfThreshold || 0),
+       df_threshold: Number(formData.dfThreshold || 0),
+       commissionRate: Number(formData.commissionRate || 0),
+       commission_rate: Number(formData.commissionRate || 0),
+       commissionType: formData.commissionType || 'percent',
+       commission_type: formData.commissionType || 'percent',
+       commissionCondition: formData.commissionCondition || 'all',
+       commission_condition: formData.commissionCondition || 'all',
+       commissionThreshold: Number(formData.commissionThreshold || 0),
+       commission_threshold: Number(formData.commissionThreshold || 0),
+       otRate: Number(formData.otRate || 0),
+       ot_rate: Number(formData.otRate || 0),
        createdAt: editingId ? formData.createdAt : new Date().toISOString()
     };
 
@@ -2517,8 +2541,59 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                  </div>
                  
                  <div className="space-y-4">
+                    {/* 1. ค่า DF / ค่าตรวจรักษาหัตถการ */}
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-2.5">
+                      <label className="block text-xs font-bold text-emerald-800 kanit-text flex items-center gap-1.5">
+                        <Stethoscope size={14} className="text-emerald-600"/> 1. อัตราค่า DF / ค่าตรวจหัตถการ (สำหรับแพทย์)
+                      </label>
+                      
+                      <div className="relative" style={{ zIndex: 20 }}>
+                        <label className="block text-[11px] font-bold text-emerald-700 mb-1 kanit-text">เงื่อนไขการให้ค่า DF</label>
+                        <CustomSelect
+                          value={formData.dfCondition || 'all'}
+                          onChange={(val) => setFormData({...formData, dfCondition: val})}
+                          options={[
+                            {value: 'all', label: 'ให้ทุกเคสการรักษา'},
+                            {value: 'threshold', label: 'ให้ตั้งแต่เคสที่กำหนด (ต่อวัน)'}
+                          ]}
+                        />
+                      </div>
+
+                      {formData.dfCondition === 'threshold' && (
+                        <div className="animate-in fade-in slide-in-from-top-2">
+                          <label className="block text-[11px] font-bold text-emerald-700 mb-1 kanit-text">เริ่มให้ค่า DF ตั้งแต่คนที่ (เคสที่) ต่อวัน</label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            className={`${theme.input} !py-2 font-data bg-white border-emerald-200 text-emerald-800 focus:border-emerald-500`} 
+                            value={formData.dfThreshold || 1} 
+                            onChange={e=>setFormData({...formData, dfThreshold: e.target.value})} 
+                            placeholder="เช่น ใส่ 4 คือคนที่ 4 ขึ้นไปต่อวัน" 
+                          />
+                          <p className="text-[10px] text-emerald-600/80 mt-1 kanit-text">* เช่น ใส่เลข 4 แปลว่า ต้องตรวจคนไข้ครบ 3 คนก่อน คนที่ 4 ขึ้นไปถึงจะเริ่มได้รับค่า DF ในวันนั้น</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-emerald-700 mb-1 kanit-text">อัตราค่า DF</label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input type="number" min="0" step="0.01" className={`${theme.input} !py-2.5 pr-8 text-sm font-data font-bold text-emerald-700 bg-white border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/20`} value={formData.dfRate || 0} onChange={e=>setFormData({...formData, dfRate: e.target.value})} placeholder="0.00" />
+                          </div>
+                          <div className="w-[100px] shrink-0">
+                            <CustomSelect
+                              value={formData.dfType || 'percent'}
+                              onChange={(val) => setFormData({...formData, dfType: val})}
+                              options={[{value: 'percent', label: '%'}, {value: 'amount', label: 'บาท'}]}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-emerald-600/80 kanit-text">* คำนวณอัตโนมัติเมื่อเลือกเป็นแพทย์ผู้ตรวจรักษาในบิล POS</p>
+                    </div>
+
                     <div className="relative" style={{ zIndex: 15 }}>
-                        <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">เงื่อนไขค่าคอมมิชชั่น</label>
+                        <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">2. เงื่อนไขค่าคอมมิชชั่นยอดขาย</label>
                         <CustomSelect
                             value={formData.commissionCondition}
                             onChange={(val) => setFormData({...formData, commissionCondition: val})}
@@ -2538,7 +2613,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                     )}
 
                     <div className="relative" style={{ zIndex: 10 }}>
-                        <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">อัตราค่าคอมมิชชั่น</label>
+                        <label className="block text-sm font-bold text-slate-600 mb-1 kanit-text">อัตราค่าคอมมิชชั่นยอดขาย (คอร์ส/ยา/สินค้า)</label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <input type="number" min="0" step="0.01" className={`${theme.input} !py-3 pr-8 text-base font-data font-bold text-sky-600 bg-sky-50/30 border-sky-100 focus:border-sky-500 focus:ring-sky-500/20`} value={formData.commissionRate} onChange={e=>setFormData({...formData, commissionRate: e.target.value})} placeholder="0.00" />
@@ -2551,7 +2626,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                 />
                             </div>
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-1 kanit-text">* คำนวณอัตโนมัติเมื่อเลือกพนักงานคนนี้เป็นผู้ขายในหน้า POS</p>
+                        <p className="text-[10px] text-slate-400 mt-1 kanit-text">* คำนวณอัตโนมัติเมื่อเลือกพนักงานคนนี้เป็นผู้แนะนำหรือปิดการขายในหน้า POS</p>
                     </div>
                  </div>
               </div>

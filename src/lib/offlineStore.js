@@ -2,10 +2,11 @@
 // Includes 5 Critical Safeguards: Multi-Tab Sync, Reconnect Catch-up, Incognito Fallback, Soft Delete Filtering & Privacy Wipeout
 
 const DB_NAME = 'ClinicHub_OfflineStore';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = [
   'patients',
+  'patient_courses',
   'treatments',
   'branches',
   'queue',
@@ -351,7 +352,7 @@ export async function diffLocalStore(storeName, serverManifest = [], scopeFilter
         ? new Date(localItem.updated_at || localItem.updatedAt || localItem.created_at || localItem.createdAt).getTime()
         : 0;
 
-      if (serverTime && localTime && serverTime > (localTime + 500)) {
+      if (serverTime && localTime && (serverTime > (localTime + 500) || Math.abs(serverTime - localTime) > 500)) {
         idsToFetch.push(serverId);
       } else if (serverTime && !localTime) {
         idsToFetch.push(serverId);

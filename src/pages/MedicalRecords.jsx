@@ -19,7 +19,7 @@ import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 import { subscribeStoreUpdates } from '../lib/offlineStore';
 
-const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -362,6 +362,238 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const [editingOpdIndex, setEditingOpdIndex] = useState(null);
   const [openTxDropdownIndex, setOpenTxDropdownIndex] = useState(null); 
 
+  // --- States และ Functions สำหรับจัดการคอร์สย้อนหลัง / แก้ไขจำนวนครั้ง ---
+  const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(null);
+  
+  const getTodayThaiDateStr = () => {
+    const now = new Date();
+    return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear() + 543}`;
+  };
+
+  const parseToThaiDateStr = (dateInput) => {
+    if (!dateInput) return getTodayThaiDateStr();
+    if (typeof dateInput === 'string' && dateInput.includes('/')) return dateInput;
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return getTodayThaiDateStr();
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear() + 543}`;
+  };
+
+  const parseThaiDateToIso = (thaiDateStr) => {
+    if (!thaiDateStr) return new Date().toISOString();
+    if (thaiDateStr.includes('/')) {
+      const parts = thaiDateStr.split('/');
+      if (parts.length === 3) {
+        let d = parseInt(parts[0], 10) || 1;
+        let m = (parseInt(parts[1], 10) || 1) - 1;
+        let y = parseInt(parts[2], 10) || (new Date().getFullYear() + 543);
+        if (y > 2500) y -= 543;
+        return new Date(y, m, d, 12, 0, 0).toISOString();
+      }
+    }
+    const d = new Date(thaiDateStr);
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  };
+
+  const [courseFormData, setCourseFormData] = useState({
+    courseName: '',
+    productId: '',
+    totalSessions: 10,
+    usedSessions: 0,
+    remainingSessions: 10,
+    price: 0,
+    notes: '',
+    isShareable: true,
+    purchasedAt: getTodayThaiDateStr()
+  });
+
+  // States สำหรับปฏิทินของคอร์ส (Thai Buddhist Date Picker)
+  const [showCourseCalendar, setShowCourseCalendar] = useState(false);
+  const [courseCalDate, setCourseCalDate] = useState(new Date());
+  const [courseCalView, setCourseCalView] = useState('days'); // 'days', 'months', 'years'
+  const [courseYearPageStart, setCourseYearPageStart] = useState(() => Math.floor((new Date().getFullYear() + 543) / 12) * 12);
+  const [isCourseCalendarClosing, setIsCourseCalendarClosing] = useState(false);
+  const courseWrapperRef = React.useRef(null);
+
+  const openCourseCalendar = () => {
+    if (courseFormData.purchasedAt?.length === 10) {
+      const parts = courseFormData.purchasedAt.split('/');
+      const y = parseInt(parts[2], 10) - 543;
+      if (!isNaN(y)) setCourseCalDate(new Date(y, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)));
+      else setCourseCalDate(new Date());
+    } else {
+      setCourseCalDate(new Date());
+    }
+    setCourseCalView('days');
+    setShowCourseCalendar(true);
+  };
+
+  const closeCourseCalendar = () => {
+    setIsCourseCalendarClosing(true);
+    setTimeout(() => {
+      setShowCourseCalendar(false);
+      setIsCourseCalendarClosing(false);
+    }, 200);
+  };
+
+  const handleSelectCourseDate = (day) => {
+    setCourseFormData(prev => ({
+      ...prev,
+      purchasedAt: `${String(day).padStart(2, '0')}/${String(courseCalDate.getMonth() + 1).padStart(2, '0')}/${courseCalDate.getFullYear() + 543}`
+    }));
+    closeCourseCalendar();
+  };
+
+  const handlePurchasedAtInputChange = (e) => {
+    if (e.nativeEvent && e.nativeEvent.inputType && e.nativeEvent.inputType.includes('delete')) {
+      setCourseFormData({ ...courseFormData, purchasedAt: e.target.value });
+      return;
+    }
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 8) value = value.slice(0, 8);
+    if (value.length > 4) value = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(4)}`;
+    else if (value.length > 2) value = `${value.slice(0, 2)}/${value.slice(2)}`;
+    setCourseFormData({ ...courseFormData, purchasedAt: value });
+  };
+
+  const handleOpenAddCourse = () => {
+    setEditingCourse(null);
+    setCourseFormData({
+      courseName: '',
+      productId: '',
+      totalSessions: 10,
+      usedSessions: 0,
+      remainingSessions: 10,
+      price: 0,
+      notes: '',
+      isShareable: true,
+      purchasedAt: getTodayThaiDateStr()
+    });
+    setIsCourseModalOpen(true);
+  };
+
+  const handleOpenEditCourse = (course) => {
+    setEditingCourse(course);
+    const total = Number(course.totalSessions ?? course.total_sessions) || 1;
+    const used = Number(course.usedSessions ?? course.used_sessions) || 0;
+    const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 0;
+    const rawDate = course.purchasedAt || course.purchased_at;
+    setCourseFormData({
+      courseName: course.courseName || course.course_name || course.name || '',
+      productId: course.productId || course.product_id || '',
+      totalSessions: total,
+      usedSessions: used,
+      remainingSessions: rem,
+      price: Number(course.price) || 0,
+      notes: course.notes || '',
+      isShareable: course.isShareable !== false && course.is_shareable !== false,
+      purchasedAt: parseToThaiDateStr(rawDate)
+    });
+    setIsCourseModalOpen(true);
+  };
+
+  const handleSaveCourse = async (e) => {
+    if (e) e.preventDefault();
+    if (!courseFormData.productId || !courseFormData.courseName.trim()) {
+      showToast('กรุณาเลือกคอร์สจากแคตตาล็อก', 'warning');
+      return;
+    }
+    const patientId = formData.id || formData.hn;
+    if (!patientId) {
+      showToast('ไม่พบรหัสคนไข้', 'error');
+      return;
+    }
+
+    const total = Math.max(1, Number(courseFormData.totalSessions) || 1);
+    const used = Math.max(0, Number(courseFormData.usedSessions) || 0);
+    const rem = Math.max(0, Number(courseFormData.remainingSessions) ?? (total - used));
+    const courseId = editingCourse?.id || `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const patientName = `${formData.prefix || ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name || '';
+    const isoPurchasedAt = parseThaiDateToIso(courseFormData.purchasedAt);
+
+    const payload = {
+      ...(editingCourse || {}),
+      id: courseId,
+      patientId: patientId,
+      patient_id: patientId,
+      patientName: patientName,
+      patient_name: patientName,
+      productId: courseFormData.productId || '',
+      product_id: courseFormData.productId || '',
+      courseName: courseFormData.courseName.trim(),
+      course_name: courseFormData.courseName.trim(),
+      totalSessions: total,
+      total_sessions: total,
+      usedSessions: used,
+      used_sessions: used,
+      remainingSessions: rem,
+      remaining_sessions: rem,
+      price: Number(courseFormData.price) || 0,
+      notes: courseFormData.notes || '',
+      branchId: formData.branchId || (currentBranch === 'all' ? 'b1' : currentBranch),
+      branch_id: formData.branchId || (currentBranch === 'all' ? 'b1' : currentBranch),
+      status: rem === 0 ? 'completed' : 'active',
+      isShareable: Boolean(courseFormData.isShareable),
+      is_shareable: Boolean(courseFormData.isShareable),
+      purchasedAt: isoPurchasedAt,
+      purchased_at: isoPurchasedAt,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      await callAppScript('SAVE_DATA', 'PatientCourses', payload);
+      
+      // อัปเดต React State ให้แสดงผลทันที
+      if (setPatientCoursesData) {
+        setPatientCoursesData(prev => {
+          const idx = prev.findIndex(c => c.id === courseId);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = payload;
+            return next;
+          }
+          return [payload, ...prev];
+        });
+      }
+
+      setFormData(prev => {
+        const existingCourses = prev.courses || [];
+        const idx = existingCourses.findIndex(c => c.id === courseId);
+        let nextCourses = [...existingCourses];
+        if (idx >= 0) {
+          nextCourses[idx] = payload;
+        } else {
+          nextCourses = [payload, ...nextCourses];
+        }
+        return { ...prev, courses: nextCourses };
+      });
+
+      setIsCourseModalOpen(false);
+      showToast(editingCourse ? 'แก้ไขข้อมูลคอร์สสำเร็จ' : 'เพิ่มคอร์สใหม่สำเร็จ', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('เกิดข้อผิดพลาดในการบันทึกคอร์ส', 'error');
+    }
+  };
+
+  const handleDeleteCourse = async (courseId) => {
+    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบคอร์สนี้?')) return;
+    try {
+      await callAppScript('DELETE_DATA', 'PatientCourses', { id: courseId });
+      if (setPatientCoursesData) {
+        setPatientCoursesData(prev => prev.filter(c => c.id !== courseId));
+      }
+      setFormData(prev => ({
+        ...prev,
+        courses: (prev.courses || []).filter(c => c.id !== courseId)
+      }));
+      showToast('ลบคอร์สเรียบร้อยแล้ว', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('เกิดข้อผิดพลาดในการลบคอร์ส', 'error');
+    }
+  }; 
+
   const [showCalendar, setShowCalendar] = useState(false);
   const [calDate, setCalDate] = useState(new Date());
   const [calView, setCalView] = useState('days'); 
@@ -403,6 +635,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
   const closeMedOpdCalendar = () => { setIsOpdCalendarClosing(true); setTimeout(() => { setShowOpdCalendar(false); setIsOpdCalendarClosing(false); }, 300); };
     const medCalSwipeProps = useSwipeDown(closeMedCalendar);
   const medOpdCalSwipeProps = useSwipeDown(closeMedOpdCalendar);
+  const medCourseCalSwipeProps = useSwipeDown(closeCourseCalendar);
 
   // --- ฟังก์ชันจัดการเบอร์โทรศัพท์แบบไดนามิก ---
   const handlePatientPhoneChange = (index, value) => {
@@ -947,6 +1180,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
 
     const sortedOpd = getSortedOpdRecords(parsedOpd);
 
+    const normPid = String(patient.id || patient.hn || '').trim().toLowerCase();
+    const patientCourses = (patientCoursesData || []).filter(c => {
+      const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+      return cPid === normPid && !c.isDeleted;
+    });
+
     const savedBranch = patient.branchId || patient.branch_id || '';
     setFormData({ 
       ...initialFormState, ...patient, hn: patient.hn || patient.id,
@@ -957,6 +1196,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
       lastName: patient.lastName || parsed.lastName, 
       gender: patient.gender || parsed.gender,
       phones: loadedPhones,
+      courses: patientCourses.length > 0 ? patientCourses : (patient.courses || []),
       createdAt: patient.createdAt || new Date().toISOString(), opdRecords: sortedOpd
     });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(isView); medModal.open();
@@ -2254,30 +2494,108 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                   </div>
                 </div>
 
-                {/* --- ส่วนที่แสดงเฉพาะในโหมดดูข้อมูล (View Mode): คอร์สคงเหลือ --- */}
-                {isViewMode && (
+                {/* --- ส่วนที่แสดงคอร์สคงเหลือ พร้อมปุ่มเพิ่ม/แก้ไข/ลบ --- */}
+                {(isViewMode || editingId) && (
                   <div className="bg-white p-4 sm:p-6 rounded-2xl border border-indigo-100 shadow-sm relative z-10">
-                    <h4 className="text-lg font-bold text-indigo-600 border-b border-indigo-100 pb-3 mb-5 flex items-center gap-2 kanit-text">
-                      <Package size={20} /> คอร์ส/แพ็กเกจ คงเหลือ
-                    </h4>
+                    <div className="flex items-center justify-between border-b border-indigo-100 pb-3 mb-5">
+                      <h4 className="text-lg font-bold text-indigo-600 flex items-center gap-2 kanit-text">
+                        <Package size={20} /> คอร์ส/แพ็กเกจ คงเหลือ
+                      </h4>
+                      {!isViewMode && (
+                        <button
+                          type="button"
+                          onClick={handleOpenAddCourse}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                        >
+                          <Plus size={14} /> เพิ่มคอร์สย้อนหลัง
+                        </button>
+                      )}
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {formData.courses && formData.courses.filter(c => c.remainingSessions > 0).length > 0 ? (
-                        formData.courses.filter(c => c.remainingSessions > 0).map(course => (
-                          <div key={course.id} className="bg-indigo-50/30 p-4 rounded-2xl border border-indigo-100 flex flex-col gap-2 shadow-sm">
-                            <div className="flex justify-between items-start">
-                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-100/50 px-2 py-0.5 rounded-md">คงเหลือ {course.remainingSessions}/{course.totalSessions}</div>
-                              <div className="text-[10px] text-slate-400 font-data">{formatDate(course.purchasedAt)}</div>
+                      {formData.courses && formData.courses.filter(c => !c.isDeleted).length > 0 ? (
+                        formData.courses.filter(c => !c.isDeleted).map(course => {
+                          const cName = course.courseName || course.course_name || course.name;
+                          const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 0;
+                          const total = Number(course.totalSessions ?? course.total_sessions) || 1;
+                          const pDate = course.purchasedAt || course.purchased_at;
+                          const isFinished = rem === 0;
+
+                          return (
+                            <div key={course.id} className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 group ${
+                              isFinished 
+                                ? 'bg-slate-50/60 border-slate-200/80 shadow-2xs opacity-75' 
+                                : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md'
+                            }`}>
+                              {/* ส่วนหัว: ชื่อคอร์ส และ ปุ่มแก้ไข/ลบ */}
+                              <div>
+                                <div className="flex justify-between items-start gap-2 mb-1">
+                                  <h5  className={`font-bold kanit-text text-sm sm:text-base leading-snug line-clamp-2 ${isFinished ? 'text-slate-600' : 'text-slate-800'}`}>
+                                    {cName}
+                                  </h5>
+                                  {!isViewMode && (
+                                    <div className="flex items-center gap-1 shrink-0 -mr-1 -mt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditCourse(course)}
+                                        title="แก้ไข / ปรับจำนวนรอบ"
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                      >
+                                        <Pencil size={13} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteCourse(course.id)}
+                                        title="ลบคอร์ส"
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* ส่วนหลอดพลัง + ตัวเลขคงเหลือ (วางติดกันให้อ่านง่าย) */}
+                              <div className={`p-2.5 rounded-xl border ${isFinished ? 'bg-slate-100/70 border-slate-200/60' : 'bg-slate-50 border-slate-100'}`}>
+                                <div className="flex justify-between items-baseline mb-1.5">
+                                  <span className={`text-[11px] font-semibold kanit-text ${isFinished ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    {isFinished ? 'สถานะ: ใช้ครบแล้ว' : 'คงเหลือ'}
+                                  </span>
+                                  <div className="text-right font-data">
+                                    <span className={`text-sm font-black ${isFinished ? 'text-slate-500' : 'text-indigo-600'}`}>{rem}</span>
+                                    <span className="text-xs font-bold text-slate-400">/{total} ครั้ง</span>
+                                  </div>
+                                </div>
+                                <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-500 ${isFinished ? 'bg-slate-300' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`} 
+                                    style={{ width: `${Math.min(100, Math.max(0, (rem / total) * 100))}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+
+                              {/* ส่วนล่าง: วันที่ซื้อ และ สถานะแชร์ */}
+                              <div className="flex items-center justify-between text-[11px] text-slate-400 font-data pt-1 border-t border-slate-100">
+                                <span className="flex items-center gap-1">
+                                  <CalendarIcon size={12} className="text-slate-400" />
+                                  ซื้อ: {formatDate(pDate)}
+                                </span>
+                                {isFinished ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-slate-200/70 text-slate-500 font-bold text-[10px] kanit-text">
+                                    จบคอร์สแล้ว
+                                  </span>
+                                ) : (course.isShareable !== false && course.is_shareable !== false ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-bold text-[10px] border border-emerald-100 kanit-text">
+                                    <Users size={10} /> แชร์ได้
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 kanit-text">ใช้เฉพาะบุคคล</span>
+                                ))}
+                              </div>
                             </div>
-                            <h5 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight line-clamp-2 min-h-[2.5rem]">{course.name}</h5>
-                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
-                              <div 
-                                className="bg-indigo-500 h-full transition-all duration-500" 
-                                style={{ width: `${(course.remainingSessions / course.totalSessions) * 100}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="md:col-span-3 py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                            <p className="text-slate-400 kanit-text text-sm italic">ยังไม่มีคอร์สคงเหลือในขณะนี้</p>
@@ -3097,6 +3415,341 @@ const MedicalRecords = ({ patientsData, setPatientsData, currentBranch, branches
                   {isScanning ? 'กำลังสแกน...' : 'ถ่ายภาพและดึงข้อมูล'}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* --- Modal เพิ่ม / แก้ไขคอร์สของคนไข้ (Manual Course Management) --- */}
+      {isCourseModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Package size={22} className="text-indigo-200" />
+                <div>
+                  <h3 className="text-base font-bold kanit-text">
+                    {editingCourse ? 'แก้ไข / ปรับปรุงจำนวนครั้งคอร์ส' : 'เพิ่มคอร์สย้อนหลังให้คนไข้'}
+                  </h3>
+                  <p className="text-xs text-indigo-100 font-data">
+                    {formData.hn || formData.id} • {formData.prefix || ''}{formData.firstName || ''} {formData.lastName || ''}
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsCourseModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <form onSubmit={handleSaveCourse} className="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              {/* เลือกคอร์สจากแคตตาล็อกเท่านั้น */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
+                  เลือกคอร์ส / แพ็กเกจจากแคตตาล็อก <span className="text-rose-500">*</span>
+                </label>
+                {posProducts && posProducts.filter(p => p.isCourse).length > 0 ? (
+                  <CustomSelect
+                    value={courseFormData.productId || ''}
+                    onChange={(selectedId) => {
+                      const prod = posProducts.find(p => p.id === selectedId);
+                      if (prod) {
+                        const sessions = Number(prod.courseSessions || prod.course_sessions) || 10;
+                        setCourseFormData(prev => ({
+                          ...prev,
+                          productId: prod.id,
+                          courseName: prod.name,
+                          totalSessions: sessions,
+                          remainingSessions: sessions,
+                          usedSessions: 0,
+                          price: Number(prod.price) || 0
+                        }));
+                      } else {
+                        setCourseFormData(prev => ({ ...prev, productId: '', courseName: '' }));
+                      }
+                    }}
+                    options={[
+                      { value: '', label: '-- กรุณาเลือกคอร์สจากแคตตาล็อก --' },
+                      ...posProducts.filter(p => p.isCourse).map(p => ({
+                        value: p.id,
+                        label: `${p.name} (${Number(p.courseSessions || p.course_sessions) || 10} ครั้ง • ${Number(p.price || 0).toLocaleString()} ฿)`
+                      }))
+                    ]}
+                    placeholder="-- กรุณาเลือกคอร์สจากแคตตาล็อก --"
+                  />
+                ) : (
+                  <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800 kanit-text flex items-center gap-2">
+                    <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                    <span>ยังไม่มีรายการสินค้าประเภทคอร์สในระบบ กรุณาไปที่เมนู <strong>"แคตตาล็อกสินค้า"</strong> แล้วสร้างสินค้าประเภทคอร์สก่อนครับ</span>
+                  </div>
+                )}
+              </div>
+
+              {/* จำนวนครั้งทั้งหมด, ใช้ไป, คงเหลือ */}
+              <div className="grid grid-cols-3 gap-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5 kanit-text text-center">จำนวนครั้งทั้งหมด</label>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      className="w-full px-2 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-center font-bold font-data text-base shadow-sm"
+                      value={courseFormData.totalSessions}
+                      onChange={(e) => {
+                        const total = Number(e.target.value) || 1;
+                        const used = Number(courseFormData.usedSessions) || 0;
+                        setCourseFormData({
+                          ...courseFormData,
+                          totalSessions: total,
+                          remainingSessions: Math.max(0, total - used)
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5 kanit-text text-center">ใช้ไปแล้ว (ครั้ง)</label>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full px-2 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-center font-bold font-data text-base shadow-sm text-slate-700"
+                      value={courseFormData.usedSessions}
+                      onChange={(e) => {
+                        const used = Number(e.target.value) || 0;
+                        const total = Number(courseFormData.totalSessions) || 1;
+                        setCourseFormData({
+                          ...courseFormData,
+                          usedSessions: used,
+                          remainingSessions: Math.max(0, total - used)
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-indigo-600 mb-1.5 kanit-text text-center">คงเหลือ (ครั้ง)</label>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full px-2 py-2 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl outline-none focus:border-indigo-500 text-center font-black font-data text-base shadow-sm"
+                      value={courseFormData.remainingSessions}
+                      onChange={(e) => {
+                        const rem = Number(e.target.value) || 0;
+                        const total = Number(courseFormData.totalSessions) || 1;
+                        setCourseFormData({
+                          ...courseFormData,
+                          remainingSessions: rem,
+                          usedSessions: Math.max(0, total - rem)
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* วันที่ซื้อ & ราคา (ใช้ปฏิทินของเว็บ) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
+                    วันที่ซื้อ (พ.ศ.) <span className="text-rose-500">*</span>
+                  </label>
+                  <div ref={courseWrapperRef} className="relative group">
+                    <input
+                      type="text"
+                      required
+                      className={`${theme.input} pr-10 font-data`}
+                      value={courseFormData.purchasedAt}
+                      onChange={handlePurchasedAtInputChange}
+                      placeholder="วว/ดด/ปปปป"
+                      maxLength="10"
+                    />
+                    <button
+                      type="button"
+                      onClick={openCourseCalendar}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="เลือกวันที่จากปฏิทิน"
+                    >
+                      <CalendarIcon size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
+                    ราคา / มูลค่าคอร์ส (บาท)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">฿</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className={`${theme.input} pl-8 font-data`}
+                      placeholder="0"
+                      value={courseFormData.price}
+                      onChange={(e) => setCourseFormData({ ...courseFormData, price: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* หมายเหตุ */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">หมายเหตุ / ข้อมูลเพิ่มเติม</label>
+                <textarea
+                  rows="2"
+                  className={`${theme.input} resize-none font-data text-xs`}
+                  placeholder="เช่น ซื้อจากโปรโมชันเปิดคลินิก, บิลเก่าก่อนเข้าระบบ..."
+                  value={courseFormData.notes}
+                  onChange={(e) => setCourseFormData({ ...courseFormData, notes: e.target.value })}
+                ></textarea>
+              </div>
+
+              {/* สิทธิ์การแชร์คอร์ส */}
+              <label className="flex items-center gap-3 p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-100 hover:bg-indigo-50/80 transition-colors cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={courseFormData.isShareable}
+                  onChange={(e) => setCourseFormData({ ...courseFormData, isShareable: e.target.checked })}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-800 kanit-text">อนุญาตให้แชร์คอร์สนี้กับคนไข้ท่านอื่นได้</div>
+                  <div className="text-[10px] text-slate-500">ญาติหรือเพื่อนสามารถค้นหาและตัดรอบจากคอร์สนี้ได้ที่หน้า POS</div>
+                </div>
+              </label>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCourseModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all kanit-text"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95 kanit-text flex items-center gap-1.5"
+                >
+                  <Save size={14} /> บันทึกข้อมูลคอร์ส
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* --- ปฏิทินเลือกวันที่ซื้อคอร์ส (Thai Buddhist Date Picker) --- */}
+      {showCourseCalendar && createPortal(
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/20 backdrop-blur-sm ${isCourseCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className="absolute inset-0" onClick={closeCourseCalendar}></div>
+          <div 
+            ref={medCourseCalSwipeProps.ref} 
+            style={medCourseCalSwipeProps.style}
+            className={`relative z-[10005] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCourseCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
+            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
+            {courseCalView === 'days' && (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <button type="button" onClick={() => setCourseCalDate(new Date(courseCalDate.getFullYear(), courseCalDate.getMonth() - 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button type="button" onClick={() => setCourseCalView('months')} className="font-bold text-slate-800 hover:text-indigo-600 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">
+                    {thaiMonths[courseCalDate.getMonth()]} {courseCalDate.getFullYear() + 543}
+                  </button>
+                  <button type="button" onClick={() => setCourseCalDate(new Date(courseCalDate.getFullYear(), courseCalDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-3">
+                  {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map((d, i) => (
+                    <div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
+                  {Array.from({ length: new Date(courseCalDate.getFullYear(), courseCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => (
+                    <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>
+                  ))}
+                  {Array.from({ length: new Date(courseCalDate.getFullYear(), courseCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                    const isSelected = courseFormData.purchasedAt === `${String(day).padStart(2, '0')}/${String(courseCalDate.getMonth() + 1).padStart(2, '0')}/${courseCalDate.getFullYear() + 543}`;
+                    const isToday = new Date().getDate() === day && new Date().getMonth() === courseCalDate.getMonth() && new Date().getFullYear() === courseCalDate.getFullYear();
+                    return (
+                      <button 
+                        key={day} 
+                        type="button" 
+                        onClick={() => handleSelectCourseDate(day)} 
+                        className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data ${isSelected ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/40 transform scale-110' : isToday ? 'bg-indigo-50 text-indigo-600 font-bold border border-indigo-200' : 'text-slate-700 hover:bg-slate-100'}`}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {courseCalView === 'months' && (
+              <>
+                <div className="flex justify-between items-center mb-6">
+                  <button type="button" onClick={() => setCourseCalDate(new Date(courseCalDate.getFullYear() - 1, courseCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button type="button" onClick={() => setCourseCalView('years')} className="font-bold text-slate-800 hover:text-indigo-600 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm font-data">
+                    {courseCalDate.getFullYear() + 543}
+                  </button>
+                  <button type="button" onClick={() => setCourseCalDate(new Date(courseCalDate.getFullYear() + 1, courseCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {thaiMonthsShort.map((m, i) => (
+                    <button 
+                      key={m} 
+                      type="button" 
+                      onClick={() => { setCourseCalDate(new Date(courseCalDate.getFullYear(), i, 1)); setCourseCalView('days'); }} 
+                      className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all kanit-text ${courseCalDate.getMonth() === i ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {courseCalView === 'years' && (
+              <>
+                <div className="flex justify-between items-center mb-6">
+                  <button type="button" onClick={() => setCourseYearPageStart(y => y - 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <span className="font-bold text-slate-800 px-3 py-1.5 text-base sm:text-sm font-data">{courseYearPageStart} - {courseYearPageStart + 11}</span>
+                  <button type="button" onClick={() => setCourseYearPageStart(y => y + 12)} className="p-2 sm:p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-full transition-colors">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({length: 12}, (_, i) => courseYearPageStart + i).map(y => (
+                    <button 
+                      key={y} 
+                      type="button" 
+                      onClick={() => { setCourseCalDate(new Date(y - 543, courseCalDate.getMonth(), 1)); setCourseCalView('months'); }} 
+                      className={`py-4 sm:py-3 rounded-2xl text-sm font-medium transition-all font-data ${(courseCalDate.getFullYear() + 543) === y ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30' : 'text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body

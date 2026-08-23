@@ -16,7 +16,13 @@ SELECT
     subtotal,
     discount_amount,
     vat_amount,
-    is_deleted
+    is_deleted,
+    null::text as doctor_name,
+    null::text as doctor_id,
+    null::text as seller_name,
+    null::text as seller_id,
+    null::text as staff_name,
+    null::text as staff_id
 FROM public.finance_revenue
 WHERE is_deleted IS NULL OR is_deleted = false
 
@@ -38,7 +44,13 @@ SELECT
     subtotal,
     discount_amount,
     vat_amount,
-    is_deleted
+    is_deleted,
+    null::text as doctor_name,
+    null::text as doctor_id,
+    null::text as seller_name,
+    null::text as seller_id,
+    null::text as staff_name,
+    null::text as staff_id
 FROM public.finance_expenses
 WHERE is_deleted IS NULL OR is_deleted = false
 
@@ -60,7 +72,13 @@ SELECT
     total_amount as subtotal,
     discount as discount_amount,
     0::numeric as vat_amount,
-    is_deleted
+    is_deleted,
+    doctor_name,
+    doctor_id,
+    seller_name,
+    seller_id,
+    staff_name,
+    staff_id
 FROM public.pos_transactions
 WHERE is_deleted IS NULL OR is_deleted = false;
 
