@@ -2656,6 +2656,8 @@ export default function App() {
                      posProducts={posProducts}
                      staffData={staffData}
                      setStaffData={setStaffData}
+                     patientCoursesData={patientCoursesData}
+                     setPatientCoursesData={setPatientCoursesData}
                      handlePrintReceipt={handlePrintReceipt}
                      showGlobalAlert={showGlobalAlert} globalAlert={globalAlert}
                      fetchFinanceStats={fetchFinanceStats}

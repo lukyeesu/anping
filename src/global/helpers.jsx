@@ -1918,3 +1918,112 @@ export const getStaffScheduleInfo = (schedule, dateObj) => {
     }
     return { isWorking: false, isExplicitlyOff: false, data: null, isSpecificDate: false };
 };
+
+export const syncCourseSessionsOnStatusChange = async ({
+  prevStatus,
+  newStatus,
+  transaction,
+  patientCoursesData = [],
+  setPatientCoursesData,
+  callAppScript
+}) => {
+  if (!transaction || prevStatus === newStatus || !callAppScript) return;
+  const items = Array.isArray(transaction.items) ? transaction.items : [];
+  const receiptId = String(transaction.id || transaction.receiptNo || transaction.receipt_no || '').trim();
+
+  const isCancelling = (prevStatus !== 'cancelled' && newStatus === 'cancelled');
+  const isRecompleting = (prevStatus === 'cancelled' && newStatus === 'completed');
+
+  if (!isCancelling && !isRecompleting) return;
+
+  const coursesToUpdate = [];
+
+  // 1. จัดการคอร์สที่ถูกตัดรอบใช้งานในบิลนี้ (Redeemed Courses)
+  for (const item of items) {
+    const isRedeem = item.isRedeem || item.is_redeem || (item.product && item.product.isRedeem);
+    const courseId = item.courseId || item.course_id || (item.product && item.product.courseId);
+    const qty = Math.max(1, Number(item.quantity) || 1);
+
+    if (isRedeem && courseId) {
+      const course = (patientCoursesData || []).find(c => String(c.id).trim() === String(courseId).trim());
+      if (course) {
+        const curUsed = Number(course.usedSessions ?? course.used_sessions) || 0;
+        const curTotal = Number(course.totalSessions ?? course.total_sessions) || 1;
+        
+        let newUsed = curUsed;
+        if (isCancelling) {
+          // คืนจำนวนครั้งที่ใช้ไป (ลด usedSessions)
+          newUsed = Math.max(0, curUsed - qty);
+        } else if (isRecompleting) {
+          // ตัดจำนวนครั้งใหม่อีกรอบ (เพิ่ม usedSessions)
+          newUsed = Math.min(curTotal, curUsed + qty);
+        }
+        
+        const newRem = Math.max(0, curTotal - newUsed);
+        const updatedCourse = {
+          ...course,
+          totalSessions: curTotal,
+          total_sessions: curTotal,
+          usedSessions: newUsed,
+          used_sessions: newUsed,
+          remainingSessions: newRem,
+          remaining_sessions: newRem,
+          status: newRem === 0 ? 'completed' : 'active',
+          updated_at: new Date().toISOString()
+        };
+        coursesToUpdate.push(updatedCourse);
+      }
+    }
+  }
+
+  // 2. จัดการคอร์สที่ถูกซื้อใหม่ในบิลนี้ (Purchased Courses)
+  if (receiptId) {
+    const matchingBoughtCourses = (patientCoursesData || []).filter(c => {
+      const cPosId = String(c.posTransactionId || c.pos_transaction_id || '').trim();
+      const cRcNo = String(c.receiptNo || c.receipt_no || '').trim();
+      return (cPosId && cPosId === receiptId) || (cRcNo && cRcNo === receiptId);
+    });
+
+    for (const bCourse of matchingBoughtCourses) {
+      if (isCancelling) {
+        coursesToUpdate.push({
+          ...bCourse,
+          status: 'cancelled',
+          isDeleted: true,
+          is_deleted: true,
+          updated_at: new Date().toISOString()
+        });
+      } else if (isRecompleting) {
+        const rem = Number(bCourse.remainingSessions ?? bCourse.remaining_sessions) || 0;
+        coursesToUpdate.push({
+          ...bCourse,
+          status: rem === 0 ? 'completed' : 'active',
+          isDeleted: false,
+          is_deleted: false,
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  // บันทึกคอร์สทั้งหมดขึ้น Supabase
+  if (coursesToUpdate.length > 0) {
+    const savePromises = coursesToUpdate.map(c => callAppScript('SAVE_DATA', 'PatientCourses', c));
+    await Promise.all(savePromises);
+
+    if (setPatientCoursesData) {
+      setPatientCoursesData(prev => {
+        let next = [...prev];
+        coursesToUpdate.forEach(u => {
+          const idx = next.findIndex(c => String(c.id).trim() === String(u.id).trim());
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], ...u };
+          } else {
+            next.push(u);
+          }
+        });
+        return next;
+      });
+    }
+  }
+};

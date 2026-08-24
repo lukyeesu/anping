@@ -4,7 +4,7 @@ import Skeleton from './Skeleton';
 import MedicalRecords from './MedicalRecords';
 import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, syncCourseSessionsOnStatusChange } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -87,7 +87,9 @@ const FinancePage = ({
   posProducts = [],
   staffData = [],
   setStaffData,
-  handlePrintReceipt, // <-- เพิ่มบรรทัดนี้เพื่อรับค่าฟังก์ชันพิมพ์ใบเสร็จ
+  patientCoursesData = [],
+  setPatientCoursesData,
+  handlePrintReceipt,
   showGlobalAlert,
   globalAlert
 }) => {
@@ -422,6 +424,28 @@ const FinancePage = ({
     vatRate: 7
   });
 
+  const [activeItemDropdown, setActiveItemDropdown] = useState(null);
+
+  const handleSelectProduct = (index, product) => {
+    setFormData(prev => {
+      const newItems = [...(prev.items || [])];
+      if (!newItems[index]) return prev;
+      const qty = Number(newItems[index].quantity) || 1;
+      newItems[index] = {
+        ...newItems[index],
+        id: product.id || '',
+        name: product.name,
+        price: product.price,
+        quantity: qty,
+        total: qty * product.price,
+        isVatable: !!product.isVatable
+      };
+      const newAmount = newItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+      return { ...prev, items: newItems, amount: newAmount };
+    });
+    setActiveItemDropdown(null);
+  };
+
   const handleAddItem = () => {
       setFormData(prev => ({
           ...prev,
@@ -617,14 +641,35 @@ const FinancePage = ({
         netAmount: financeGrandTotal,
         discount: financeDiscountAmount,
         items: posEditForm.items,
-        patientName: patientSearchQuery || posEditForm.patientName || '',
-        hn: posEditForm.patientId || posEditForm.hn || null
+        patientName: (posEditForm.patientId && posEditForm.patientName && !posEditForm.patientName.startsWith(posEditForm.patientId)) 
+          ? `${posEditForm.patientId} - ${posEditForm.patientName}` 
+          : (posEditForm.patientName || patientSearchQuery || ''),
+        patient_name: (posEditForm.patientId && posEditForm.patientName && !posEditForm.patientName.startsWith(posEditForm.patientId)) 
+          ? `${posEditForm.patientId} - ${posEditForm.patientName}` 
+          : (posEditForm.patientName || patientSearchQuery || ''),
+        hn: posEditForm.patientId || posEditForm.hn || null,
+        patientId: posEditForm.patientId || posEditForm.hn || null
       };
       delete updatedTx.displayDate;
       // ----------------------------------------------------------------------
       
+      const origTx = (posHistoryData || []).find(p => p.id === updatedTx.id || p.receiptNo === updatedTx.id || p.receipt_no === updatedTx.id) || (financeTransactions || []).find(t => t.id === updatedTx.id) || {};
+      const prevStatus = origTx.status || 'completed';
+      const newStatus = updatedTx.status || 'completed';
+
       const res = await callAppScript('SAVE_DATA', 'POS_Transactions', updatedTx);
       if (res.status === 'success') {
+        if (prevStatus !== newStatus) {
+          await syncCourseSessionsOnStatusChange({
+            prevStatus,
+            newStatus,
+            transaction: updatedTx,
+            patientCoursesData,
+            setPatientCoursesData,
+            callAppScript
+          });
+        }
+
         const matchesTx = (p) => {
           if (!p) return false;
           const uId = String(updatedTx.id || '').trim();
@@ -698,61 +743,102 @@ const FinancePage = ({
     });
   };
 
-  const [serverPatientResults, setServerPatientResults] = useState([]);
-  const [isServerSearching, setIsServerSearching] = useState(false);
+  const [patientSearchResults, setPatientSearchResults] = useState([]);
+  const [isSearchingPatient, setIsSearchingPatient] = useState(false);
 
   useEffect(() => {
-    if (!patientSearchQuery || patientSearchQuery.trim().length < 2) {
-      setServerPatientResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setIsServerSearching(true);
+    let isCancelled = false;
+    const query = (patientSearchQuery || '').trim().toLowerCase();
+
+    const doSearch = async () => {
+      setIsSearchingPatient(true);
       try {
-        const s = patientSearchQuery.trim();
-        const { data, error } = await supabase.from('patients')
-            .select('id, prefix, first_name, last_name, phone, created_at, updated_at')
-            .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,id.ilike.%${s}%,phone.ilike.%${s}%`)
-            .order('updated_at', { ascending: false })
-            .limit(10);
-        if (!error && data) {
-           setServerPatientResults(data);
+        // 1. ค้นหาจาก patientsData ใน State และ IndexedDB ก่อน (รวดเร็วทันที 0ms)
+        const localPatients = (Array.isArray(patientsData) && patientsData.length > 0)
+          ? patientsData
+          : (await getLocalStore('patients').catch(() => [])) || [];
+
+        const activePatients = localPatients.filter(p => !p.is_deleted && !p.isDeleted);
+
+        let filtered = [];
+        if (!query) {
+          filtered = activePatients.slice(0, 15);
         } else {
-           setServerPatientResults([]);
+          filtered = activePatients.filter(p => {
+            const hn = String(p.hn || p.id || '').toLowerCase();
+            const fn = String(p.firstName || p.first_name || '').toLowerCase();
+            const ln = String(p.lastName || p.last_name || '').toLowerCase();
+            const prefix = String(p.prefix || '').toLowerCase();
+            const fullName = `${prefix}${fn} ${ln}`.trim().toLowerCase();
+            const rawName = String(p.name || '').toLowerCase();
+            const phone = String(p.phone || p.phone1 || p.tel || '').toLowerCase();
+            const idCard = String(p.id_card || p.idCard || '').toLowerCase();
+            const nick = String(p.nickname || '').toLowerCase();
+
+            return hn.includes(query) ||
+                   fullName.includes(query) ||
+                   rawName.includes(query) ||
+                   fn.includes(query) ||
+                   ln.includes(query) ||
+                   phone.includes(query) ||
+                   idCard.includes(query) ||
+                   nick.includes(query);
+          }).slice(0, 20);
+        }
+
+        // 2. ถ้ามีผลลัพธ์น้อยกว่า 5 และค้นหา 2 ตัวอักษรขึ้นไป ให้ลองค้นจาก API เพิ่มเติม
+        if (query.length >= 2 && filtered.length < 5 && callAppScript) {
+          try {
+            const res = await callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { search: query, limit: 15 });
+            if (res?.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
+              const seen = new Set(filtered.map(p => String(p.id || p.hn)));
+              res.data.forEach(p => {
+                const pKey = String(p.id || p.hn);
+                if (!seen.has(pKey) && !p.is_deleted && !p.isDeleted) {
+                  seen.add(pKey);
+                  filtered.push(p);
+                }
+              });
+            }
+          } catch (e) {}
+        }
+
+        if (!isCancelled) {
+          setPatientSearchResults(filtered);
         }
       } catch (err) {
-        console.error("Patient search error", err);
+        console.error("Patient search error:", err);
+      } finally {
+        if (!isCancelled) setIsSearchingPatient(false);
       }
-      setIsServerSearching(false);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [patientSearchQuery]);
+    };
+
+    doSearch();
+    return () => { isCancelled = true; };
+  }, [patientSearchQuery, patientsData, callAppScript]);
 
   const searchPatients = (query) => {
     setPatientSearchQuery(query);
-    if (query.length >= 2) {
-      setShowPatientResults(true);
-    } else {
-      setShowPatientResults(false);
-    }
+    setShowPatientResults(true);
   };
 
   const selectPatient = (patient, isPosEdit = false) => {
-    const hnStr = patient.hn || patient.id;
-    const nameStr = `${patient.first_name || patient.firstName || ''} ${patient.last_name || patient.lastName || ''}`.trim();
-    const combinedName = `${hnStr} - ${nameStr}`;
+    const hnStr = patient.hn || patient.id || '';
+    const rawName = `${patient.prefix || ''}${patient.first_name || patient.firstName || ''} ${patient.last_name || patient.lastName || ''}`.trim() || patient.name || '';
+    const cleanName = hnStr ? rawName.replace(new RegExp(`^${hnStr}\\s*[-•]?\\s*`, 'i'), '').trim() : rawName;
+    const combinedName = hnStr ? `${hnStr} - ${cleanName}` : cleanName;
     
     if (isPosEdit) {
        setPosEditForm(prev => ({
          ...prev,
          patientId: hnStr,
-         patientName: combinedName
+         patientName: cleanName
        }));
     } else {
        setFormData(prev => ({
          ...prev,
          patientId: hnStr,
-         patientName: combinedName
+         patientName: cleanName
        }));
     }
     setPatientSearchQuery(combinedName);
@@ -987,6 +1073,11 @@ const FinancePage = ({
                   );
                   const effectiveStatus = matchedPos ? (matchedPos.status || tx.status) : (tx.status || 'completed');
 
+                  const rawPName = tx.patient_name || tx.patientName || matchedPos?.patientName || matchedPos?.patient_name || '';
+                  const rawHn = tx.hn || tx.patient_id || tx.patientId || matchedPos?.hn || matchedPos?.patientId || matchedPos?.patient_id || '';
+                  const cleanPName = rawHn ? rawPName.replace(new RegExp(`^${rawHn}\\s*[-•]?\\s*`, 'i'), '').trim() : rawPName;
+                  const finalPatientName = (rawHn && cleanPName && cleanPName !== 'ลูกค้าทั่วไป (ไม่ระบุ)') ? `${rawHn} - ${cleanPName}` : (rawPName || '');
+
                   return {
                       ...tx,
                       status: effectiveStatus,
@@ -995,7 +1086,10 @@ const FinancePage = ({
                       branchId: tx.branch_id,
                       note: displayNote,
                       items: parsedItems,
-                      patientName: tx.patient_name,
+                      patientName: finalPatientName,
+                      patient_name: finalPatientName,
+                      hn: rawHn || null,
+                      patientId: rawHn || null,
                       isAuto: tx.is_auto,
                       amount: Number(tx.amount) || 0,
                       doctorName: tx.doctor_name || tx.doctorName || matchedPos?.doctorName || matchedPos?.doctor_name || matchedPos?.doctor || '',
@@ -1209,8 +1303,26 @@ const FinancePage = ({
             timestamp_date: posTx.createdAt || posTx.created_at || posTx.date || new Date().toISOString(),
             amount: Number(posTx.net_amount ?? posTx.netAmount ?? posTx.total_amount ?? posTx.totalAmount ?? posTx.amount ?? 0),
             category: 'รายได้จาก POS',
-            note: posTx.patient_name || posTx.patientName || '',
-            patientName: posTx.patient_name || posTx.patientName || '',
+            note: (() => {
+              const pRaw = posTx.patient_name || posTx.patientName || '';
+              const pHn = posTx.hn || posTx.patient_id || posTx.patientId || '';
+              const pClean = pHn ? pRaw.replace(new RegExp(`^${pHn}\\s*[-•]?\\s*`, 'i'), '').trim() : pRaw;
+              return (pHn && pClean && pClean !== 'ลูกค้าทั่วไป (ไม่ระบุ)') ? `${pHn} - ${pClean}` : (pRaw || '');
+            })(),
+            patientName: (() => {
+              const pRaw = posTx.patient_name || posTx.patientName || '';
+              const pHn = posTx.hn || posTx.patient_id || posTx.patientId || '';
+              const pClean = pHn ? pRaw.replace(new RegExp(`^${pHn}\\s*[-•]?\\s*`, 'i'), '').trim() : pRaw;
+              return (pHn && pClean && pClean !== 'ลูกค้าทั่วไป (ไม่ระบุ)') ? `${pHn} - ${pClean}` : (pRaw || '');
+            })(),
+            patient_name: (() => {
+              const pRaw = posTx.patient_name || posTx.patientName || '';
+              const pHn = posTx.hn || posTx.patient_id || posTx.patientId || '';
+              const pClean = pHn ? pRaw.replace(new RegExp(`^${pHn}\\s*[-•]?\\s*`, 'i'), '').trim() : pRaw;
+              return (pHn && pClean && pClean !== 'ลูกค้าทั่วไป (ไม่ระบุ)') ? `${pHn} - ${pClean}` : (pRaw || '');
+            })(),
+            hn: posTx.hn || posTx.patient_id || posTx.patientId || null,
+            patientId: posTx.hn || posTx.patient_id || posTx.patientId || null,
             branch_id: posTx.branch_id || posTx.branchId || 'main',
             items: posTx.items || [],
             method: posTx.payment_method || posTx.paymentMethod || 'cash',
@@ -1540,6 +1652,16 @@ const FinancePage = ({
             };
             await callAppScript('SAVE_DATA', 'POS_Transactions', updatedPosTx);
 
+            // คืนจำนวนครั้งของคอร์สที่ถูกตัดรอบในบิลนี้ หรือยกเลิกคอร์สที่ซื้อใหม่
+            await syncCourseSessionsOnStatusChange({
+              prevStatus: originalTx.status || tx.status || 'completed',
+              newStatus: 'cancelled',
+              transaction: originalTx || tx,
+              patientCoursesData,
+              setPatientCoursesData,
+              callAppScript
+            });
+
             setFinanceTransactions(prev => prev.map(t => String(t.id).trim() === String(tx.id).trim() ? { ...t, status: 'cancelled', rawTx: updatedPosTx } : t));
             if (setPosHistoryData) {
               setPosHistoryData(prev => prev.map(t => String(t.id).trim() === String(tx.id).trim() ? { ...t, status: 'cancelled' } : t));
@@ -1552,7 +1674,7 @@ const FinancePage = ({
             }
 
             fetchStatsAndData(0, true);
-            showToast('ยกเลิกใบเสร็จ POS เรียบร้อยแล้ว (ยอดเงินปรับเป็น 0 บาท)', 'success');
+            showToast('ยกเลิกใบเสร็จ POS เรียบร้อยแล้ว (คืนจำนวนครั้งคอร์สและปรับยอดเงินเป็น 0 บาท)', 'success');
           } catch (err) {
             console.error('Cancel POS transaction error:', err);
             showToast(err?.message || 'เกิดข้อผิดพลาดในการยกเลิกบิล', 'danger');
@@ -2579,7 +2701,7 @@ const FinancePage = ({
                     </div>
 
                     <div className="space-y-4">
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                              <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">สาขา <span className="text-rose-500">*</span></label>
                              <CustomSelect
@@ -2645,108 +2767,124 @@ const FinancePage = ({
                              {showPatientResults && (
                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
                                    <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
-                                      {isServerSearching ? (
-                                         <div className="p-4 text-center text-slate-400 kanit-text text-sm">
-                                            กำลังค้นหาข้อมูล...
-                                         </div>
-                                      ) : serverPatientResults.length === 0 && patientSearchQuery.length >= 2 ? (
-                                         <div className="p-4 text-center text-slate-400 kanit-text text-sm italic">
-                                            ไม่พบข้อมูลผู้ป่วย: "{patientSearchQuery}"
-                                         </div>
-                                      ) : (
-                                         serverPatientResults.map((p, pidx) => (
-                                            <button
-                                               key={p.id || `p-${pidx}`}
-                                               type="button"
-                                               onMouseDown={(e) => {
-                                                  e.preventDefault(); // Prevent onBlur from firing before click
-                                                  selectPatient(p, false);
-                                               }}
-                                               className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
-                                            >
-                                            <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
-                                               {p.hn || 'NEW'}
-                                            </div>
-                                            <div className="flex-1 overflow-hidden">
-                                               <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.first_name || p.firstName} {p.last_name || p.lastName}</p>
-                                               <p className="text-[11px] text-slate-500 font-data">{p.phone1 || p.phone || 'ไม่มีเบอร์โทร'}</p>
-                                            </div>
-                                            <ChevronRight className="text-slate-300" size={16} />
-                                         </button>
-                                         ))
-                                      )}
-                                   </div>
-                                </div>
-                             )}
-                          </div>
-                          {formData.patientId && (
-                             <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-[11px] font-bold w-fit shadow-sm animate-in fade-in zoom-in-95">
-                                <div className="w-full max-w-[8px] h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                <span className="font-data">HN: {formData.patientId} | {formData.patientName}</span>
-                                <button type="button" onClick={() => { setFormData({...formData, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} className="ml-2 text-emerald-400 hover:text-rose-500 transition-colors"><X size={14} /></button>
-                             </div>
-                          )}
-                       </div>
-                    </div>                    {/* รายการสินค้า/บริการ */}
-                    <div className="bg-slate-50/50 p-4 sm:p-5 rounded-3xl border border-slate-100 flex flex-col mt-4">
-                       <div className="flex items-center justify-between mb-3">
-                          <label className="block text-[11px] font-black text-slate-400 kanit-text uppercase tracking-widest">รายการสินค้าและบริการ <span className="text-rose-500">*</span></label>
-                          <button
-                             type="button"
-                             onClick={handleAddItem}
-                             className="text-xs font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 kanit-text shadow-sm hover:shadow active:scale-95"
-                          >
-                             <Plus size={14} /> เพิ่มรายการ
-                          </button>
-                       </div>
-
-                       <div className="space-y-3">
-                          {(formData.items || []).map((item, idx) => {
-                             const isVat = item.isVatable !== undefined ? item.isVatable : posProducts?.find(p => p.name === item.name)?.isVatable;
-                             return (
-                             <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group">
-                                <div className="flex-1 w-full relative">
-                                   <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1.5">
-                                      รายละเอียด
-                                      {isVat && <span className="text-[9px] px-1 py-0.5 bg-sky-50 text-sky-600 rounded font-bold border border-sky-200 tracking-tight leading-none">(V) คิดภาษี</span>}
-                                   </label>
-                                   <input
-                                      type="text"
-                                      required
-                                      value={item.name}
-                                      onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                                      placeholder="ค้นหา หรือพิมพ์เอง"
-                                      className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data peer"
-                                   />
-                                   {/* Custom Dropdown */}
-                                   <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden hidden peer-focus:block hover:block modal-animate-in">
-                                      <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
-                                         {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).map(p => (
-                                            <button
-                                               key={p.id}
-                                               type="button"
-                                               onMouseDown={(e) => {
-                                                  e.preventDefault();
-                                                  handleItemChange(idx, 'name', p.name);
-                                                  handleItemChange(idx, 'price', p.price);
-                                               }}
-                                               className="w-full p-3 flex items-center justify-between hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
-                                            >
-                                               <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2 flex items-center gap-1.5">
-                                                  {p.name}
-                                                  {p.isVatable && <span className="px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[9px] rounded border border-sky-100 font-bold uppercase tracking-tighter shrink-0 leading-none">+VAT</span>}
-                                               </div>
-                                               <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
-                                            </button>
-                                         ))}
-                                         {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).length === 0 && (
-                                             <div className="p-4 text-center text-sm text-slate-400 kanit-text">
-                                                 สามารถพิมพ์ชื่อรายการเองได้เลย
+                                       {isSearchingPatient && patientSearchResults.length === 0 ? (
+                                          <div className="p-4 text-center text-slate-400 kanit-text text-sm flex items-center justify-center gap-2">
+                                             <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
+                                          </div>
+                                       ) : patientSearchResults.length === 0 ? (
+                                          <div className="p-4 text-center text-slate-400 kanit-text text-sm italic">
+                                             {patientSearchQuery ? `ไม่พบข้อมูลผู้ป่วย: "${patientSearchQuery}"` : 'ไม่มีข้อมูลคนไข้'}
+                                          </div>
+                                       ) : (
+                                          patientSearchResults.map((p, pidx) => (
+                                             <button
+                                                key={p.id || p.hn || `p-${pidx}`}
+                                                type="button"
+                                                onMouseDown={(e) => {
+                                                   e.preventDefault();
+                                                   selectPatient(p, false);
+                                                }}
+                                                className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left cursor-pointer"
+                                             >
+                                             <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
+                                                {p.hn || p.id || 'NEW'}
                                              </div>
-                                         )}
-                                      </div>
-                                   </div>
+                                             <div className="flex-1 overflow-hidden">
+                                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.prefix || ''}{p.firstName || p.first_name || ''} {p.lastName || p.last_name || ''}</p>
+                                                <p className="text-[11px] text-slate-500 font-data">{p.phone || p.phone1 || p.tel || 'ไม่มีเบอร์โทร'}</p>
+                                             </div>
+                                             <ChevronRight className="text-slate-300" size={16} />
+                                          </button>
+                                          ))
+                                       )}
+                                    </div>
+                                 </div>
+                              )}
+                           </div>
+                           {formData.patientId && (
+                                <div className="mt-2.5 inline-flex items-center gap-2.5 px-3.5 py-2 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl text-emerald-800 text-xs font-bold w-fit max-w-full shadow-sm animate-in fade-in zoom-in-95">
+                                   <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
+                                   <span className="font-data truncate">
+                                      {formData.patientName?.startsWith(formData.patientId)
+                                         ? formData.patientName
+                                         : `${formData.patientId} - ${formData.patientName}`}
+                                   </span>
+                                   <button 
+                                      type="button" 
+                                      onClick={() => { setFormData({...formData, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} 
+                                      className="p-1 -mr-1 text-emerald-500 hover:text-rose-500 hover:bg-emerald-100/50 rounded-lg transition-colors shrink-0 cursor-pointer ml-1"
+                                      title="ลบคนไข้ที่เลือก"
+                                   >
+                                      <X size={14} />
+                                   </button>
                                 </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* รายการสินค้า/บริการ */}
+                     <div className="bg-slate-50/50 p-4 sm:p-5 rounded-3xl border border-slate-100 flex flex-col mt-4">
+                        <div className="flex items-center justify-between mb-3">
+                           <label className="block text-[11px] font-black text-slate-400 kanit-text uppercase tracking-widest">รายการสินค้าและบริการ <span className="text-rose-500">*</span></label>
+                           <button
+                              type="button"
+                              onClick={handleAddItem}
+                              className="text-xs font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 kanit-text shadow-sm hover:shadow active:scale-95"
+                           >
+                              <Plus size={14} /> เพิ่มรายการ
+                           </button>
+                        </div>
+
+                        <div className="space-y-3">
+                           {(formData.items || []).map((item, idx) => {
+                              const isVat = item.isVatable !== undefined ? item.isVatable : posProducts?.find(p => p.name === item.name)?.isVatable;
+                              return (
+                              <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group">
+                                 <div className="flex-1 w-full relative">
+                                    <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1.5">
+                                       รายละเอียด
+                                       {isVat && <span className="text-[9px] px-1 py-0.5 bg-sky-50 text-sky-600 rounded font-bold border border-sky-200 tracking-tight leading-none">(V) คิดภาษี</span>}
+                                    </label>
+                                    <input
+                                       type="text"
+                                       required
+                                       placeholder="ค้นหาหรือพิมพ์ชื่อรายการ..."
+                                       value={item.name}
+                                       onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                                       onFocus={() => setActiveItemDropdown(idx)}
+                                       onBlur={() => setTimeout(() => setActiveItemDropdown(null), 200)}
+                                       className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data font-bold text-slate-800"
+                                    />
+                                    {activeItemDropdown === idx && (
+                                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden max-h-[220px] overflow-y-auto custom-scrollbar modal-animate-in">
+                                          <div className="p-1">
+                                             {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).map((prod, pidx) => (
+                                                <div
+                                                   key={prod.id || pidx}
+                                                   onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      handleSelectProduct(idx, prod);
+                                                   }}
+                                                   className="p-3 hover:bg-sky-50 rounded-xl cursor-pointer transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
+                                                >
+                                                   <div>
+                                                      <div className="font-bold text-slate-800 text-xs font-data">{prod.name}</div>
+                                                      <div className="text-[10px] text-slate-400 font-data">{prod.category || 'ทั่วไป'}</div>
+                                                   </div>
+                                                   <div className="text-right">
+                                                      <div className="font-bold text-sky-600 text-xs font-data">{formatCurrency(prod.price)} บ.</div>
+                                                   </div>
+                                                </div>
+                                             ))}
+                                             {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).length === 0 && (
+                                                <div className="p-4 text-center text-sm text-slate-400 kanit-text">
+                                                   สามารถพิมพ์ชื่อรายการเองได้เลย
+                                                </div>
+                                             )}
+                                          </div>
+                                       </div>
+                                    )}
+                                 </div>
                                 <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">
                                    <div className="w-20">
                                       <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
@@ -3022,31 +3160,31 @@ const FinancePage = ({
                     {showPatientResults && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
                         <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
-                          {isServerSearching ? (
-                             <div className="p-4 text-center text-slate-400 kanit-text text-sm">
-                                กำลังค้นหาข้อมูล...
+                          {isSearchingPatient && patientSearchResults.length === 0 ? (
+                             <div className="p-4 text-center text-slate-400 kanit-text text-sm flex items-center justify-center gap-2">
+                                <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
                              </div>
-                          ) : serverPatientResults.length === 0 && patientSearchQuery.length >= 2 ? (
+                          ) : patientSearchResults.length === 0 ? (
                             <div className="p-4 text-center text-slate-400 kanit-text text-sm italic">
-                              ไม่พบข้อมูลผู้ป่วย: "{patientSearchQuery}"
+                              {patientSearchQuery ? `ไม่พบข้อมูลผู้ป่วย: "${patientSearchQuery}"` : 'ไม่มีข้อมูลคนไข้'}
                             </div>
                           ) : (
-                            serverPatientResults.map(p => (
+                            patientSearchResults.map((p, pidx) => (
                             <button 
-                              key={p.id}
+                              key={p.id || p.hn || `p-edit-${pidx}`}
                               type="button"
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 selectPatient(p, true);
                               }}
-                              className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                              className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left cursor-pointer"
                             >
-                              <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
-                                {p.hn || 'NEW'}
+                              <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
+                                {p.hn || p.id || 'NEW'}
                               </div>
                               <div className="flex-1 overflow-hidden">
-                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.first_name || p.firstName} {p.last_name || p.lastName}</p>
-                                <p className="text-[11px] text-slate-500 font-data">{p.phone1 || p.phone || 'ไม่มีเบอร์โทร'}</p>
+                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.prefix || ''}{p.firstName || p.first_name || ''} {p.lastName || p.last_name || ''}</p>
+                                <p className="text-[11px] text-slate-500 font-data">{p.phone || p.phone1 || p.tel || 'ไม่มีเบอร์โทร'}</p>
                               </div>
                               <ChevronRight className="text-slate-300" size={16} />
                             </button>
@@ -3057,12 +3195,23 @@ const FinancePage = ({
                     )}
                   </div>
                   {posEditForm.patientId && (
-                    <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 text-[11px] font-bold w-fit shadow-sm animate-in fade-in zoom-in-95">
-                      <div className="w-full max-w-[8px] h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                      <span className="font-data">HN: {posEditForm.patientId} | {posEditForm.patientName}</span>
-                      <button type="button" onClick={() => { setPosEditForm({...posEditForm, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} className="ml-2 text-emerald-400 hover:text-rose-500 transition-colors"><X size={14} /></button>
-                    </div>
-                  )}
+                     <div className="mt-2.5 inline-flex items-center gap-2.5 px-3.5 py-2 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl text-emerald-800 text-xs font-bold w-fit max-w-full shadow-sm animate-in fade-in zoom-in-95">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
+                        <span className="font-data truncate">
+                           {posEditForm.patientName?.startsWith(posEditForm.patientId)
+                              ? posEditForm.patientName
+                              : `${posEditForm.patientId} - ${posEditForm.patientName}`}
+                        </span>
+                        <button 
+                           type="button" 
+                           onClick={() => { setPosEditForm({...posEditForm, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} 
+                           className="p-1 -mr-1 text-emerald-500 hover:text-rose-500 hover:bg-emerald-100/50 rounded-lg transition-colors shrink-0 cursor-pointer ml-1"
+                           title="ลบคนไข้ที่เลือก"
+                        >
+                           <X size={14} />
+                        </button>
+                     </div>
+                   )}
                 </div>
 
                 <div className="p-4 rounded-2xl border bg-amber-50/40 border-amber-200/80 space-y-3 mt-4">

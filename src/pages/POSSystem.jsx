@@ -6,7 +6,7 @@ import CatalogManager from './CatalogManager';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
 import { supabase } from '../lib/supabase';
-import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, generateNextReceiptId, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, generateNextReceiptId, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, syncCourseSessionsOnStatusChange } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -498,6 +498,14 @@ const POSSystem = ({
         }
     }
 
+    const purePatientName = selectedPatientId 
+        ? cleanPatientName.replace(new RegExp(`^${selectedPatientId}\\s*[-•]?\\s*`, 'i'), '').trim()
+        : cleanPatientName;
+
+    const patientNameWithHN = (selectedPatientId && purePatientName && purePatientName !== 'ลูกค้าทั่วไป (ไม่ระบุ)')
+        ? `${selectedPatientId} - ${purePatientName}`
+        : purePatientName;
+
     // คำนวณค่า DF หัตถการ และค่าคอมมิชชั่นยอดขาย
     const doctorObj = (staffData || []).find(s => s.id === selectedDoctorId);
     const sellerObj = (staffData || []).find(s => s.id === (doctorIsSeller ? selectedDoctorId : selectedSellerId));
@@ -578,8 +586,9 @@ const POSSystem = ({
         receipt_no: receiptId,
         patientId: selectedPatientId || '',
         hn: selectedPatientId || '',
-        patientName: cleanPatientName,
-        patient_name: cleanPatientName,
+        patientName: patientNameWithHN,
+        patient_name: patientNameWithHN,
+        note: patientNameWithHN,
         branchId: currentBranch === 'all' ? 'b1' : currentBranch, // บันทึกว่าขายที่สาขาไหน
         doctorId: selectedDoctorId || '',
         doctor_id: selectedDoctorId || '',
@@ -913,7 +922,23 @@ const POSSystem = ({
             staff_name: sellerObj ? sellerObj.name : ''
         };
 
+        const prevStatus = selectedHistoryTxn?.status || 'completed';
+        const newStatus = payloadToSave.status || 'completed';
+
         await callAppScript('SAVE_DATA', 'POS_Transactions', payloadToSave);
+
+        // หากมีการเปลี่ยนสถานะระหว่าง completed <-> cancelled ให้จัดการคืนหรือตัดรอบคอร์ส
+        if (prevStatus !== newStatus) {
+          await syncCourseSessionsOnStatusChange({
+            prevStatus,
+            newStatus,
+            transaction: payloadToSave,
+            patientCoursesData,
+            setPatientCoursesData,
+            callAppScript
+          });
+        }
+
         // อัปเดตข้อมูลในตารางหลัก
         if (setPosHistoryData) {
             setPosHistoryData(prev => prev.map(t => (t.id === payloadToSave.id || t.receiptNo === payloadToSave.id || t.receipt_no === payloadToSave.receiptNo) ? { ...t, ...payloadToSave } : t));
