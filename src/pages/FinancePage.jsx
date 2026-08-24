@@ -1332,7 +1332,25 @@ const FinancePage = ({
   }, [uniqueCategories, formData.category]);
 
   const visibleTransactions = useMemo(() => {
-    return (financeTransactions || []).filter(isTxMatchingFilters);
+    const list = (financeTransactions || []).filter(isTxMatchingFilters);
+    return [...list].sort((a, b) => {
+      const getTxTimestamp = (tx) => {
+        if (!tx) return 0;
+        const dVal = tx.timestamp_date || tx.date || tx.createdAt || tx.created_at || tx.rawTx?.created_at || tx.rawTx?.timestamp_date || tx.rawTx?.date;
+        const p = parseAnyDate(dVal);
+        if (p && !isNaN(p.getTime())) return p.getTime();
+        if (typeof tx.timestamp === 'number' && tx.timestamp > 0) return tx.timestamp;
+        const d = new Date(dVal);
+        return !isNaN(d.getTime()) ? d.getTime() : 0;
+      };
+
+      const timeA = getTxTimestamp(a);
+      const timeB = getTxTimestamp(b);
+      if (timeB !== timeA) {
+        return timeB - timeA; // เรียงวันและเวลาจากล่าสุดไปเก่าสุด
+      }
+      return String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true });
+    });
   }, [financeTransactions, isTxMatchingFilters]);
 
   const stats = useMemo(() => {
@@ -1496,54 +1514,113 @@ const FinancePage = ({
   };
 
   const handleDeleteTransaction = async (tx) => {
-      if (tx.isAuto) {
-        showToast('รายการจากระบบ POS ไม่สามารถลบได้ กรุณากด "แก้ไข" และเปลี่ยนสถานะบิลเป็น "ยกเลิก" แทน', 'warning');
+    if (!tx) return;
+    const isPos = tx.isAuto || tx.is_auto || tx.category === 'รายได้จาก POS' || String(tx.id || '').startsWith('REC') || tx.receiptNo || tx.receipt_no;
+    
+    if (isPos) {
+      if (tx.status === 'cancelled') {
+        showToast('ใบเสร็จนี้อยู่ในสถานะ "ยกเลิก" เรียบร้อยแล้ว (ยอดเงิน 0 บาท และคงเลขที่บิลไว้สำหรับส่งตรวจบัญชี)', 'info');
         return;
       }
+
       showGlobalAlert({
         type: 'warning',
-        title: 'ยืนยันการลบรายการ?',
-        text: `คุณต้องการลบรายการ "${tx.category}" จำนวน ${formatCurrency(tx.amount)} ใช่หรือไม่?`,
+        title: 'ยืนยันการยกเลิกใบเสร็จ POS (Void)?',
+        text: `คุณต้องการ "ยกเลิกใบเสร็จ" เลขที่ "${tx.id || tx.receiptNo || tx.receipt_no || ''}" (${tx.patientName || 'ลูกค้าทั่วไป'}) ยอด ${formatCurrency(tx.amount)} ใช่หรือไม่?\n\n(สถานะจะเปลี่ยนเป็น "ยกเลิก", ยอดเงินจะถูกตัดออกเป็น 0 บาท โดยคงเลขที่ใบเสร็จไว้เพื่อส่งบัญชีถูกต้องตามกฎหมาย)`,
         onConfirm: async () => {
-            globalAlert.setIsOpen(false);
-            setIsProcessing(true);
-            try {
-                const sheetName = tx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
-                await callAppScript('DELETE_DATA', sheetName, { id: tx.id });
-                fetchStatsAndData(0, true);
+          globalAlert.setIsOpen(false);
+          setIsProcessing(true);
+          try {
+            const originalTx = (posHistoryData || []).find(p => p.id === tx.id || p.receiptNo === tx.id || p.receipt_no === tx.id) || tx.rawTx || tx;
+            const updatedPosTx = {
+              ...originalTx,
+              id: tx.id,
+              status: 'cancelled',
+              updated_at: new Date().toISOString()
+            };
+            await callAppScript('SAVE_DATA', 'POS_Transactions', updatedPosTx);
 
-                if (tx.id.startsWith('EXP-PR-') && tx.patientId) {
-                    const staffToUpdate = staffData.find(s => s.id === tx.patientId);
-                    if (staffToUpdate) {
-                        let paidDatesToRevert = [];
-                        try {
-                            if (tx.reference) paidDatesToRevert = JSON.parse(tx.reference);
-                        } catch (e) {}
-
-                        if (paidDatesToRevert.length > 0) {
-                            const newSchedule = { ...(staffToUpdate.schedule || {}) };
-                            paidDatesToRevert.forEach(dateStr => {
-                                if (newSchedule[dateStr]) {
-                                    newSchedule[dateStr] = { ...newSchedule[dateStr], isPaid: false };
-                                }
-                            });
-                            const updatedStaff = { ...staffToUpdate, schedule: newSchedule };
-                            await callAppScript('SAVE_DATA', 'Staff', updatedStaff);
-                            if (setStaffData) {
-                                setStaffData(prev => prev.map(s => s.id === updatedStaff.id ? updatedStaff : s));
-                            }
-                        }
-                    }
-                }
-                showToast('ลบรายการสำเร็จ', 'danger');
-            } catch (err) {
-                showToast('เกิดข้อผิดพลาดในการลบรายการ', 'danger');
-            } finally {
-                setIsProcessing(false);
+            setFinanceTransactions(prev => prev.map(t => String(t.id).trim() === String(tx.id).trim() ? { ...t, status: 'cancelled', rawTx: updatedPosTx } : t));
+            if (setPosHistoryData) {
+              setPosHistoryData(prev => prev.map(t => String(t.id).trim() === String(tx.id).trim() ? { ...t, status: 'cancelled' } : t));
             }
+            if (setFinanceData) {
+              setFinanceData(prev => prev.map(f => String(f.id).trim() === String(tx.id).trim() ? { ...f, status: 'cancelled' } : f));
+            }
+            if (selectedTxn && selectedTxn.id === tx.id) {
+              setSelectedTxn(prev => ({ ...prev, status: 'cancelled', rawTx: updatedPosTx }));
+            }
+
+            fetchStatsAndData(0, true);
+            showToast('ยกเลิกใบเสร็จ POS เรียบร้อยแล้ว (ยอดเงินปรับเป็น 0 บาท)', 'success');
+          } catch (err) {
+            console.error('Cancel POS transaction error:', err);
+            showToast(err?.message || 'เกิดข้อผิดพลาดในการยกเลิกบิล', 'danger');
+          } finally {
+            setIsProcessing(false);
+          }
         }
       });
-        };
+      return;
+    }
+
+    // สำหรับรายการรายรับ-รายจ่ายทั่วไป (Manual)
+    showGlobalAlert({
+      type: 'warning',
+      title: 'ยืนยันการลบรายการ?',
+      text: `คุณต้องการลบรายการ "${tx.category || tx.note || tx.id}" จำนวน ${formatCurrency(tx.amount)} ใช่หรือไม่?`,
+      onConfirm: async () => {
+        globalAlert.setIsOpen(false);
+        setIsProcessing(true);
+        try {
+          const sheetName = tx.type === 'income' ? 'Finance_Revenue' : 'Finance_Expenses';
+          await callAppScript('DELETE_DATA', sheetName, { id: tx.id });
+
+          if (tx.id.startsWith('EXP-PR-') && tx.patientId) {
+            const staffToUpdate = staffData.find(s => s.id === tx.patientId);
+            if (staffToUpdate) {
+              let paidDatesToRevert = [];
+              try {
+                if (tx.reference) paidDatesToRevert = JSON.parse(tx.reference);
+              } catch (e) {}
+
+              if (paidDatesToRevert.length > 0) {
+                const newSchedule = { ...(staffToUpdate.schedule || {}) };
+                paidDatesToRevert.forEach(dateStr => {
+                  if (newSchedule[dateStr]) {
+                    newSchedule[dateStr] = { ...newSchedule[dateStr], isPaid: false };
+                  }
+                });
+                const updatedStaff = { ...staffToUpdate, schedule: newSchedule };
+                await callAppScript('SAVE_DATA', 'Staff', updatedStaff);
+                if (setStaffData) {
+                  setStaffData(prev => prev.map(s => s.id === updatedStaff.id ? updatedStaff : s));
+                }
+              }
+            }
+          }
+
+          // อัปเดตตารางหน้ารายการการเงินทันที
+          setFinanceTransactions(prev => prev.filter(t => String(t.id || '').trim() !== String(tx.id).trim()));
+          if (setFinanceData) {
+            setFinanceData(prev => prev.filter(f => String(f.id || f.receiptNo || f.receipt_no || '').trim() !== String(tx.id).trim()));
+          }
+
+          if (selectedTxn && selectedTxn.id === tx.id) {
+            closeDetailModal();
+          }
+
+          fetchStatsAndData(0, true);
+          showToast('ลบรายการสำเร็จ', 'danger');
+        } catch (err) {
+          console.error('Delete transaction error:', err);
+          showToast(err?.message || 'เกิดข้อผิดพลาดในการลบรายการ', 'danger');
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    });
+  };
 
   const handleSaveTransaction = async (e) => {
     e.preventDefault();
@@ -2426,6 +2503,15 @@ const FinancePage = ({
                      </button>
                  </div>
                  <div className="flex gap-2 w-full sm:w-auto">
+                     <button type="button" onClick={(e) => {
+                         e.preventDefault();
+                         e.stopPropagation();
+                         const txToDelete = selectedTxn;
+                         closeDetailModal();
+                         setTimeout(() => handleDeleteTransaction(txToDelete), 350);
+                     }} className={`px-4 py-2.5 rounded-xl font-bold transition-colors shadow-sm kanit-text flex items-center justify-center gap-1.5 ${selectedTxn.status === 'cancelled' ? 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed' : 'text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
+                        <Trash2 size={16} /> <span className="hidden sm:inline">{(selectedTxn.isAuto || selectedTxn.category === 'รายได้จาก POS' || String(selectedTxn.id || '').startsWith('REC')) ? (selectedTxn.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกใบเสร็จ') : 'ลบรายการ'}</span>
+                     </button>
                      <button type="button" onClick={closeDetailModal} className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ปิดหน้าต่าง</button>
                      <button type="button" onClick={(e) => { 
                          e.preventDefault();

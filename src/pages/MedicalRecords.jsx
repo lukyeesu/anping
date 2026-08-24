@@ -494,11 +494,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
   const handleSaveCourse = async (e) => {
     if (e) e.preventDefault();
-    if (!courseFormData.productId || !courseFormData.courseName.trim()) {
-      showToast('กรุณาเลือกคอร์สจากแคตตาล็อก', 'warning');
+    if (!courseFormData.courseName || !courseFormData.courseName.trim()) {
+      showToast('กรุณาระบุชื่อคอร์ส', 'warning');
       return;
     }
-    const patientId = formData.id || formData.hn;
+    const patientId = formData.id || formData.hn || editingId;
     if (!patientId) {
       showToast('ไม่พบรหัสคนไข้', 'error');
       return;
@@ -508,8 +508,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     const used = Math.max(0, Number(courseFormData.usedSessions) || 0);
     const rem = Math.max(0, Number(courseFormData.remainingSessions) ?? (total - used));
     const courseId = editingCourse?.id || `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    const patientName = `${formData.prefix || ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name || '';
+    const patientName = `${formData.prefix || ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name || editingCourse?.patientName || editingCourse?.patient_name || 'คนไข้';
     const isoPurchasedAt = parseThaiDateToIso(courseFormData.purchasedAt);
+    const finalProductId = courseFormData.productId || editingCourse?.productId || editingCourse?.product_id || (posProducts.find(p => p.name === courseFormData.courseName)?.id) || 'cour_manual';
 
     const payload = {
       ...(editingCourse || {}),
@@ -518,8 +519,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       patient_id: patientId,
       patientName: patientName,
       patient_name: patientName,
-      productId: courseFormData.productId || '',
-      product_id: courseFormData.productId || '',
+      productId: finalProductId,
+      product_id: finalProductId,
       courseName: courseFormData.courseName.trim(),
       course_name: courseFormData.courseName.trim(),
       totalSessions: total,
@@ -535,10 +536,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       status: rem === 0 ? 'completed' : 'active',
       isShareable: Boolean(courseFormData.isShareable),
       is_shareable: Boolean(courseFormData.isShareable),
-      purchasedAt: isoPurchasedAt,
-      purchased_at: isoPurchasedAt,
+      purchasedAt: isoPurchasedAt || null,
+      purchased_at: isoPurchasedAt || null,
+      expireDate: editingCourse?.expireDate || editingCourse?.expire_date || null,
+      expire_date: editingCourse?.expire_date || editingCourse?.expireDate || null,
+      posTransactionId: editingCourse?.posTransactionId || editingCourse?.pos_transaction_id || null,
+      pos_transaction_id: editingCourse?.pos_transaction_id || editingCourse?.posTransactionId || null,
+      receiptNo: editingCourse?.receiptNo || editingCourse?.receipt_no || null,
+      receipt_no: editingCourse?.receipt_no || editingCourse?.receiptNo || null,
       updated_at: new Date().toISOString()
     };
+    if (payload.expireDate === '') payload.expireDate = null;
+    if (payload.expire_date === '') payload.expire_date = null;
+    if (payload.posTransactionId === '') payload.posTransactionId = null;
+    if (payload.pos_transaction_id === '') payload.pos_transaction_id = null;
+    if (payload.receiptNo === '') payload.receiptNo = null;
+    if (payload.receipt_no === '') payload.receipt_no = null;
 
     try {
       await callAppScript('SAVE_DATA', 'PatientCourses', payload);
@@ -549,7 +562,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
           const idx = prev.findIndex(c => c.id === courseId);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = payload;
+            next[idx] = { ...next[idx], ...payload };
             return next;
           }
           return [payload, ...prev];
@@ -561,7 +574,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         const idx = existingCourses.findIndex(c => c.id === courseId);
         let nextCourses = [...existingCourses];
         if (idx >= 0) {
-          nextCourses[idx] = payload;
+          nextCourses[idx] = { ...nextCourses[idx], ...payload };
         } else {
           nextCourses = [payload, ...nextCourses];
         }
@@ -571,8 +584,69 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       setIsCourseModalOpen(false);
       showToast(editingCourse ? 'แก้ไขข้อมูลคอร์สสำเร็จ' : 'เพิ่มคอร์สใหม่สำเร็จ', 'success');
     } catch (err) {
-      console.error(err);
-      showToast('เกิดข้อผิดพลาดในการบันทึกคอร์ส', 'error');
+      console.error('Save course error:', err);
+      showToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึกคอร์ส', 'error');
+    }
+  };
+
+  const handleQuickUseSession = async (course) => {
+    if (!course) return;
+    const currentUsed = Number(course.usedSessions ?? course.used_sessions) || 0;
+    const currentTotal = Number(course.totalSessions ?? course.total_sessions) || 1;
+    const currentRem = Number(course.remainingSessions ?? course.remaining_sessions) ?? Math.max(0, currentTotal - currentUsed);
+    
+    if (currentRem <= 0) {
+      showToast('คอร์สนี้ใช้ครบจำนวนครั้งแล้ว', 'warning');
+      return;
+    }
+
+    const newUsed = currentUsed + 1;
+    const newRem = Math.max(0, currentTotal - newUsed);
+    const courseId = course.id;
+
+    const payload = {
+      ...course,
+      totalSessions: currentTotal,
+      total_sessions: currentTotal,
+      usedSessions: newUsed,
+      used_sessions: newUsed,
+      remainingSessions: newRem,
+      remaining_sessions: newRem,
+      status: newRem === 0 ? 'completed' : 'active',
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      await callAppScript('SAVE_DATA', 'PatientCourses', payload);
+
+      if (setPatientCoursesData) {
+        setPatientCoursesData(prev => {
+          const idx = prev.findIndex(c => c.id === courseId);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...payload };
+            return next;
+          }
+          return [payload, ...prev];
+        });
+      }
+
+      setFormData(prev => {
+        const existing = prev.courses || [];
+        const idx = existing.findIndex(c => c.id === courseId);
+        let nextCourses = [...existing];
+        if (idx >= 0) {
+          nextCourses[idx] = { ...nextCourses[idx], ...payload };
+        } else {
+          nextCourses = [payload, ...nextCourses];
+        }
+        return { ...prev, courses: nextCourses };
+      });
+
+      showToast(`บันทึกการใช้คอร์สสำเร็จ (คงเหลือ ${newRem} ครั้ง)`, 'success');
+    } catch (err) {
+      console.error('Quick use course error:', err);
+      showToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึกคอร์ส', 'error');
     }
   };
 
@@ -2593,6 +2667,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                   <span className="text-[10px] text-slate-400 kanit-text">ใช้เฉพาะบุคคล</span>
                                 ))}
                               </div>
+
+                              {!isViewMode && !isFinished && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickUseSession(course)}
+                                  className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white rounded-xl font-bold text-xs kanit-text transition-all duration-200 flex items-center justify-center gap-1.5 shadow-2xs hover:shadow-md active:scale-98"
+                                >
+                                  <CheckCircle2 size={14} /> + บันทึกใช้คอร์ส 1 ครั้ง
+                                </button>
+                              )}
                             </div>
                           );
                         })
@@ -3448,46 +3532,54 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
             {/* Form Body */}
             <form onSubmit={handleSaveCourse} className="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4">
-              {/* เลือกคอร์สจากแคตตาล็อกเท่านั้น */}
+              {/* เลือกคอร์สจากแคตตาล็อก หรือ กำหนดชื่อคอร์ส */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
-                  เลือกคอร์ส / แพ็กเกจจากแคตตาล็อก <span className="text-rose-500">*</span>
+                  ชื่อคอร์ส / แพ็กเกจ <span className="text-rose-500">*</span>
                 </label>
-                {posProducts && posProducts.filter(p => p.isCourse).length > 0 ? (
-                  <CustomSelect
-                    value={courseFormData.productId || ''}
-                    onChange={(selectedId) => {
-                      const prod = posProducts.find(p => p.id === selectedId);
-                      if (prod) {
-                        const sessions = Number(prod.courseSessions || prod.course_sessions) || 10;
-                        setCourseFormData(prev => ({
-                          ...prev,
-                          productId: prod.id,
-                          courseName: prod.name,
-                          totalSessions: sessions,
-                          remainingSessions: sessions,
-                          usedSessions: 0,
-                          price: Number(prod.price) || 0
-                        }));
-                      } else {
-                        setCourseFormData(prev => ({ ...prev, productId: '', courseName: '' }));
-                      }
-                    }}
-                    options={[
-                      { value: '', label: '-- กรุณาเลือกคอร์สจากแคตตาล็อก --' },
-                      ...posProducts.filter(p => p.isCourse).map(p => ({
-                        value: p.id,
-                        label: `${p.name} (${Number(p.courseSessions || p.course_sessions) || 10} ครั้ง • ${Number(p.price || 0).toLocaleString()} ฿)`
-                      }))
-                    ]}
-                    placeholder="-- กรุณาเลือกคอร์สจากแคตตาล็อก --"
-                  />
-                ) : (
-                  <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800 kanit-text flex items-center gap-2">
-                    <AlertCircle size={16} className="text-amber-600 shrink-0" />
-                    <span>ยังไม่มีรายการสินค้าประเภทคอร์สในระบบ กรุณาไปที่เมนู <strong>"แคตตาล็อกสินค้า"</strong> แล้วสร้างสินค้าประเภทคอร์สก่อนครับ</span>
+                {posProducts && posProducts.filter(p => p.isCourse).length > 0 && (
+                  <div className="mb-2">
+                    <CustomSelect
+                      value={courseFormData.productId || ''}
+                      onChange={(selectedId) => {
+                        const prod = posProducts.find(p => p.id === selectedId);
+                        if (prod) {
+                          const sessions = Number(prod.courseSessions || prod.course_sessions) || 10;
+                          setCourseFormData(prev => {
+                            const curUsed = editingCourse ? Number(prev.usedSessions || 0) : 0;
+                            return {
+                              ...prev,
+                              productId: prod.id,
+                              courseName: prod.name,
+                              totalSessions: sessions,
+                              remainingSessions: Math.max(0, sessions - curUsed),
+                              usedSessions: curUsed,
+                              price: Number(prod.price) || 0
+                            };
+                          });
+                        } else {
+                          setCourseFormData(prev => ({ ...prev, productId: '' }));
+                        }
+                      }}
+                      options={[
+                        { value: '', label: '-- เลือกจากแคตตาล็อก (หรือพิมพ์ชื่อเองด้านล่าง) --' },
+                        ...posProducts.filter(p => p.isCourse).map(p => ({
+                          value: p.id,
+                          label: `${p.name} (${Number(p.courseSessions || p.course_sessions) || 10} ครั้ง • ${Number(p.price || 0).toLocaleString()} ฿)`
+                        }))
+                      ]}
+                      placeholder="-- เลือกจากแคตตาล็อก (หรือพิมพ์ชื่อเองด้านล่าง) --"
+                    />
                   </div>
                 )}
+                <input
+                  type="text"
+                  required
+                  placeholder="ระบุชื่อคอร์สการรักษา เช่น คอร์สฝังเข็มและครอบแก้ว 10 ครั้ง"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-sm font-data shadow-sm"
+                  value={courseFormData.courseName}
+                  onChange={(e) => setCourseFormData(prev => ({ ...prev, courseName: e.target.value }))}
+                />
               </div>
 
               {/* จำนวนครั้งทั้งหมด, ใช้ไป, คงเหลือ */}

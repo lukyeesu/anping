@@ -21,7 +21,7 @@ const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, ha
         <td className="p-4 pl-6 text-left">
             <div className="flex flex-col items-start">
                 <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
-                <span className="text-xs font-data text-slate-500 mt-0.5">{formatFinTime(tx.date)} �.</span>
+                <span className="text-xs font-data text-slate-500 mt-0.5">{formatFinTime(tx.date) ? `${formatFinTime(tx.date)} น.` : '-'}</span>
             </div>
         </td>
         <td className="p-4">
@@ -74,7 +74,7 @@ const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, ha
                 <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
                     <Pencil size={16}/>
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
+                <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className={`p-2 rounded-lg transition-colors ${tx.status === 'cancelled' ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50'}`} title={tx.isAuto || tx.category === 'รายได้จาก POS' ? (tx.status === 'cancelled' ? 'บิลนี้ถูกยกเลิกแล้ว' : 'ยกเลิกใบเสร็จ (Void)') : 'ลบ'}>
                     <Trash2 size={16}/>
                 </button>
             </div>

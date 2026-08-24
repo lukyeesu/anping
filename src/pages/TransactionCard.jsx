@@ -21,7 +21,7 @@ const TransactionCard = React.memo(({ tx, openDetailModal, handlePrintReceipt, h
         <div className="flex justify-between items-start mb-2.5">
             <div className="flex flex-col gap-1">
                 <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
-                <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatFinTime(tx.date)} น.</div>
+                <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatFinTime(tx.date) ? `${formatFinTime(tx.date)} น.` : ''}</div>
             </div>
             <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                 {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
@@ -70,8 +70,8 @@ const TransactionCard = React.memo(({ tx, openDetailModal, handlePrintReceipt, h
             <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
                 <Pencil size={14} /> แก้ไข
             </button>
-            <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                <Trash2 size={14} /> ลบ
+            <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border ${tx.status === 'cancelled' ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-100'}`}>
+                <Trash2 size={14} /> {tx.isAuto || tx.category === 'รายได้จาก POS' ? (tx.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกบิล') : 'ลบ'}
             </button>
         </div>
     </div>

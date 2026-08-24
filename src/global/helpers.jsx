@@ -25,19 +25,53 @@ export const rAFThrottle = (callback) => {
 
 export const formatDate = (dateString) => {
   if (!dateString) return '-';
-  if (typeof dateString === 'object') return '-';
-  if (typeof dateString === 'string' && dateString.includes('/')) return dateString;
+  if (typeof dateString === 'object' && dateString instanceof Date) {
+    if (isNaN(dateString.getTime())) return '-';
+    const d = String(dateString.getDate()).padStart(2, '0');
+    const m = String(dateString.getMonth() + 1).padStart(2, '0');
+    const y = dateString.getFullYear() + 543;
+    return `${d}/${m}/${y}`;
+  }
+  const p = parseAnyDate(dateString);
+  if (p && !isNaN(p.getTime())) {
+    const d = String(p.getDate()).padStart(2, '0');
+    const m = String(p.getMonth() + 1).padStart(2, '0');
+    const y = p.getFullYear() + 543;
+    return `${d}/${m}/${y}`;
+  }
   const date = new Date(dateString);
-  if (isNaN(date.getTime())) return String(dateString);
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear() + 543;
-  return `${d}/${m}/${y}`;
+  if (!isNaN(date.getTime())) {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear() + 543;
+    return `${d}/${m}/${y}`;
+  }
+  if (typeof dateString === 'string') {
+    return dateString.split(' ')[0];
+  }
+  return String(dateString);
 };
 
 export const formatDateTime = (dateString) => {
   if (!dateString) return '-';
-  if (typeof dateString === 'object') return '-';
+  if (typeof dateString === 'object' && dateString instanceof Date) {
+    if (isNaN(dateString.getTime())) return '-';
+    const d = String(dateString.getDate()).padStart(2, '0');
+    const m = String(dateString.getMonth() + 1).padStart(2, '0');
+    const y = dateString.getFullYear() + 543;
+    const h = String(dateString.getHours()).padStart(2, '0');
+    const min = String(dateString.getMinutes()).padStart(2, '0');
+    return `${d}/${m}/${y} ${h}:${min} น.`;
+  }
+  const p = parseAnyDate(dateString);
+  if (p && !isNaN(p.getTime())) {
+    const d = String(p.getDate()).padStart(2, '0');
+    const m = String(p.getMonth() + 1).padStart(2, '0');
+    const y = p.getFullYear() + 543;
+    const h = String(p.getHours()).padStart(2, '0');
+    const min = String(p.getMinutes()).padStart(2, '0');
+    return `${d}/${m}/${y} ${h}:${min} น.`;
+  }
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return String(dateString);
   const d = String(date.getDate()).padStart(2, '0');
@@ -1637,7 +1671,7 @@ export const parseThaiDateToISO = (thaiDateTimeStr) => {
 
 export const parseAnyDate = (dateVal) => {
     if (!dateVal) return null;
-    if (dateVal instanceof Date) return dateVal;
+    if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal;
     const str = String(dateVal).trim();
     
     // Check if it's ISO format first
@@ -1665,15 +1699,14 @@ export const parseAnyDate = (dateVal) => {
                     y = parseInt(dateParts[2], 10);
                 }
                 if (y > 2400) y -= 543; // BE to CE
-                let h = 0, min = 0;
+                let h = 0, min = 0, s = 0;
                 if (parts[1]) {
                     const timeParts = parts[1].replace('น.', '').trim().split(':');
-                    if (timeParts.length >= 2) {
-                        h = parseInt(timeParts[0], 10);
-                        min = parseInt(timeParts[1], 10);
-                    }
+                    if (timeParts.length >= 1) h = parseInt(timeParts[0], 10) || 0;
+                    if (timeParts.length >= 2) min = parseInt(timeParts[1], 10) || 0;
+                    if (timeParts.length >= 3) s = parseInt(timeParts[2], 10) || 0;
                 }
-                const parsed = new Date(y, m, d, h, min);
+                const parsed = new Date(y, m, d, h, min, s);
                 if (!isNaN(parsed.getTime())) return parsed;
             }
         } catch (e) {
@@ -1696,9 +1729,29 @@ export const isSameDay = (d1, d2) => {
 
 export const formatFinTime = (dateStr) => {
     try {
+      if (!dateStr) return '';
+      const p = parseAnyDate(dateStr);
+      if (p && !isNaN(p.getTime())) {
+        const hh = String(p.getHours()).padStart(2, '0');
+        const mm = String(p.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
       const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return '';
-      return d.toLocaleTimeString('th-TH');
+      if (!isNaN(d.getTime())) {
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+      if (typeof dateStr === 'string' && dateStr.includes(' ')) {
+        const parts = dateStr.split(' ');
+        if (parts[1]) {
+          const tParts = parts[1].replace('น.', '').trim().split(':');
+          if (tParts.length >= 2) {
+            return `${tParts[0].padStart(2, '0')}:${tParts[1].padStart(2, '0')}`;
+          }
+        }
+      }
+      return '';
     } catch { return ''; }
 };
 

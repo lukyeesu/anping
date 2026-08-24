@@ -526,10 +526,12 @@ export function jsToRow(payload, tableName = '') {
     rawRow.lot_no = String(payload.lotNo ?? payload.lot_no ?? '');
   }
   if (payload.expireDate !== undefined || payload.expire_date !== undefined) {
-    rawRow.expire_date = String(payload.expireDate ?? payload.expire_date ?? '');
+    const rawExp = (payload.expireDate !== undefined ? payload.expireDate : payload.expire_date);
+    rawRow.expire_date = (rawExp && String(rawExp).trim()) ? String(rawExp).trim() : null;
   }
   if (payload.receiveDate !== undefined || payload.receive_date !== undefined) {
-    rawRow.receive_date = String(payload.receiveDate ?? payload.receive_date ?? '');
+    const rawRec = (payload.receiveDate !== undefined ? payload.receiveDate : payload.receive_date);
+    rawRow.receive_date = (rawRec && String(rawRec).trim()) ? String(rawRec).trim() : null;
   }
   if (payload.isVatable !== undefined || payload.is_vatable !== undefined) {
     rawRow.is_vatable = Boolean(payload.isVatable ?? payload.is_vatable);
@@ -548,9 +550,18 @@ export function jsToRow(payload, tableName = '') {
   if (payload.courseName || payload.course_name) rawRow.course_name = String(payload.courseName || payload.course_name);
   if (payload.patientId || payload.patient_id) rawRow.patient_id = String(payload.patientId || payload.patient_id);
   if (payload.patientName || payload.patient_name) rawRow.patient_name = String(payload.patientName || payload.patient_name);
-  if (payload.purchasedAt || payload.purchased_at) rawRow.purchased_at = payload.purchasedAt || payload.purchased_at;
-  if (payload.posTransactionId || payload.pos_transaction_id) rawRow.pos_transaction_id = payload.posTransactionId || payload.pos_transaction_id;
-  if (payload.receiptNo || payload.receipt_no) rawRow.receipt_no = payload.receiptNo || payload.receipt_no;
+  if (payload.purchasedAt !== undefined || payload.purchased_at !== undefined) {
+    const rawPur = (payload.purchasedAt !== undefined ? payload.purchasedAt : payload.purchased_at);
+    rawRow.purchased_at = (rawPur && String(rawPur).trim()) ? String(rawPur).trim() : null;
+  }
+  if (payload.posTransactionId !== undefined || payload.pos_transaction_id !== undefined) {
+    const rawPosId = (payload.posTransactionId !== undefined ? payload.posTransactionId : payload.pos_transaction_id);
+    rawRow.pos_transaction_id = (rawPosId && String(rawPosId).trim()) ? String(rawPosId).trim() : null;
+  }
+  if (payload.receiptNo !== undefined || payload.receipt_no !== undefined) {
+    const rawRc = (payload.receiptNo !== undefined ? payload.receiptNo : payload.receipt_no);
+    rawRow.receipt_no = (rawRc && String(rawRc).trim()) ? String(rawRc).trim() : null;
+  }
   if (payload.transactionType !== undefined || payload.transaction_type !== undefined) rawRow.transaction_type = String(payload.transactionType ?? payload.transaction_type);
 
   // Explicit Staff DF & Commission Mappings (camelCase ได้สิทธิ์ก่อนเสมอเพื่อป้องกันค่าเก่าใน snake_case มาทับ)
@@ -619,10 +630,16 @@ export function jsToRow(payload, tableName = '') {
     return rawRow;
   }
 
+  const dateCols = ['expire_date', 'receive_date', 'purchased_at', 'created_at', 'updated_at', 'dob', 'datetime', 'timestamp_date', 'pos_transaction_id', 'receipt_no', 'doctor_id', 'seller_id', 'staff_id'];
+
   const cleanRow = {};
   for (const key of Object.keys(rawRow)) {
     if (allowed.includes(key)) {
-      cleanRow[key] = rawRow[key];
+      let val = rawRow[key];
+      if (dateCols.includes(key) && typeof val === 'string' && val.trim() === '') {
+        val = null;
+      }
+      cleanRow[key] = val;
     }
   }
   return cleanRow;
