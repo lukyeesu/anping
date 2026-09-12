@@ -14,7 +14,7 @@ import {
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
   Lock, Home, Save, UserCheck, Key, RotateCcw, Cloud, Database,
-  Bell, Bot, RefreshCw, Send, Eye, EyeOff, Hash, MessageSquare, Check
+  Bell, Bot, RefreshCw, Send, Eye, EyeOff, Hash, MessageSquare, Check, Copy
 } from 'lucide-react';
 import { clearAllLocalStores } from '../lib/offlineStore';
 import { theme } from '../global/theme';
@@ -110,6 +110,9 @@ const SettingsManager = ({
           discordEnabled: norm.discord?.enabled ?? true,
           discordBotAvatarUrl: String(norm.discord?.botAvatarUrl || '').trim(),
           discordBotName: String(norm.discord?.botName || '').trim(),
+          discordApplicationId: String(norm.discord?.applicationId || '').trim(),
+          discordPublicKey: String(norm.discord?.publicKey || '').trim(),
+          discordBotToken: String(norm.discord?.botToken || '').trim(),
           discordChannels: (norm.discord?.channels || []).map(c => ({
             name: String(c.name || '').trim(),
             event: String(c.event || '').trim(),
@@ -673,6 +676,42 @@ const SettingsManager = ({
       showToast(`เกิดข้อผิดพลาด: ${err.message}`, 'danger');
     } finally {
       setTestingDiscordId(null);
+    }
+  };
+
+  const [isRegisteringDiscordCommands, setIsRegisteringDiscordCommands] = useState(false);
+  const [showDiscordBotToken, setShowDiscordBotToken] = useState(false);
+
+  const handleRegisterDiscordCommands = async () => {
+    const appId = localIntegrationTokens.discord?.applicationId?.trim();
+    const botToken = localIntegrationTokens.discord?.botToken?.trim();
+
+    if (!appId || !botToken) {
+      showToast('กรุณากรอก Discord Application ID และ Bot Token ให้ครบถ้วนก่อนกดลงทะเบียนคำสั่ง', 'warning');
+      return;
+    }
+
+    setIsRegisteringDiscordCommands(true);
+    showToast('กำลังลงทะเบียนคำสั่ง Slash Commands ไปยัง Discord...', 'info');
+
+    try {
+      const res = await fetch(`/api/discord?action=register_commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appId, token: botToken })
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        showToast('🎉 ลงทะเบียนคำสั่ง Slash Commands สำเร็จ! สามารถพิมพ์ / ใน Discord เพื่อค้นหาข้อมูลได้ทันที', 'success');
+      } else {
+        throw new Error(json.details?.message || json.error || 'ลงทะเบียนคำสั่งไม่สำเร็จ');
+      }
+    } catch (err) {
+      console.error('Register Discord commands error:', err);
+      showToast(`ลงทะเบียนคำสั่งไม่สำเร็จ: ${err.message}`, 'danger');
+    } finally {
+      setIsRegisteringDiscordCommands(false);
     }
   };
 
@@ -1836,7 +1875,149 @@ const SettingsManager = ({
                     </div>
                   </div>
 
-                  {/* 3. รายชื่อห้องแชทใน Discord (เพิ่มห้องได้ไม่จำกัด ตามที่ผู้ใช้สั่ง) */}
+                  {/* 3. ตั้งค่า Discord Bot & คำสั่งค้นหาข้อมูล (Slash Commands) */}
+                  <div className="bg-white border border-indigo-100/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-50">
+                      <div className="flex items-start sm:items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0 text-base">
+                          🤖
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text">
+                              ตั้งค่าคำสั่งค้นหาข้อมูลใน Discord (Slash Commands)
+                            </h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700">
+                              Vercel Serverless
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 kanit-text mt-0.5 leading-relaxed">
+                            ช่วยให้พิมพ์ค้นหาข้อมูลใน Discord ได้ทันที เช่น <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[11px]">/search</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[11px]">/patient</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[11px]">/queue</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[11px]">/bill</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[11px]">/sales</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[11px]">/stock</code>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRegisterDiscordCommands}
+                        disabled={isRegisteringDiscordCommands || !localIntegrationTokens.discord?.applicationId || !localIntegrationTokens.discord?.botToken}
+                        className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm kanit-text transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:pointer-events-none shrink-0"
+                      >
+                        {isRegisteringDiscordCommands ? (
+                          <>
+                            <Loader2 size={15} className="animate-spin" />
+                            <span>กำลังลงทะเบียน...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw size={15} />
+                            <span>ลงทะเบียนคำสั่งไป Discord</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Interactions Endpoint URL hint with copy button */}
+                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[11px] font-bold text-indigo-900 kanit-text block mb-0.5">
+                          🌐 Interactions Endpoint URL (นำไปใส่ใน Discord Developer Portal &gt; General Information):
+                        </span>
+                        <code className="text-xs font-mono text-indigo-700 select-all break-all">
+                          https://anpingclinic.vercel.app/api/discord
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText('https://anpingclinic.vercel.app/api/discord');
+                          showToast('คัดลอก Interactions Endpoint URL แล้ว!', 'success');
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold text-xs kanit-text shadow-2xs self-start sm:self-auto"
+                      >
+                        <Copy size={13} /> <span>คัดลอกลิงก์</span>
+                      </button>
+                    </div>
+
+                    {/* Grid for Application ID, Public Key, Bot Token */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                          Discord Application ID (Client ID):
+                        </label>
+                        <input
+                          type="text"
+                          value={localIntegrationTokens.discord?.applicationId || ''}
+                          onChange={(e) => {
+                            const val = e.target.value.trim();
+                            setLocalIntegrationTokens(prev => ({
+                              ...prev,
+                              discord: { ...(prev.discord || {}), applicationId: val }
+                            }));
+                          }}
+                          placeholder="เช่น 123456789012345678"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                          Discord Public Key:
+                        </label>
+                        <input
+                          type="text"
+                          value={localIntegrationTokens.discord?.publicKey || ''}
+                          onChange={(e) => {
+                            const val = e.target.value.trim();
+                            setLocalIntegrationTokens(prev => ({
+                              ...prev,
+                              discord: { ...(prev.discord || {}), publicKey: val }
+                            }));
+                          }}
+                          placeholder="64 ตัวอักษร Hex (ใช้ตรวจสอบลายเซ็น)"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                          Discord Bot Token:
+                        </label>
+                        <div className="relative flex items-center">
+                          <input
+                            type={showDiscordBotToken ? "text" : "password"}
+                            value={localIntegrationTokens.discord?.botToken || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.trim();
+                              setLocalIntegrationTokens(prev => ({
+                                ...prev,
+                                discord: { ...(prev.discord || {}), botToken: val }
+                              }));
+                            }}
+                            placeholder="Bot Token (สำหรับลงทะเบียนคำสั่ง)"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 pr-9 text-xs font-mono text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowDiscordBotToken(!showDiscordBotToken)}
+                            className="absolute right-2 text-slate-400 hover:text-slate-600 p-1"
+                            title={showDiscordBotToken ? "ซ่อน Token" : "แสดง Token"}
+                          >
+                            {showDiscordBotToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 kanit-text bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-1">
+                      <span className="font-bold text-slate-700">💡 ขั้นตอนการเชื่อมต่อบอทค้นหาข้อมูล Discord:</span>
+                      <span>1. เข้าไปที่ <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold">Discord Developer Portal</a> แล้วเลือกหรือกด New Application</span>
+                      <span>2. คัดลอก <b>Application ID</b> และ <b>Public Key</b> ในหน้า General Information มาใส่ในช่องด้านบน</span>
+                      <span>3. คัดลอก <b>Interactions Endpoint URL</b> ด้านบน ไปวางในช่อง Interactions Endpoint URL แล้วกด Save Changes</span>
+                      <span>4. ไปที่เมนู <b>Bot</b> ด้านซ้าย คัดลอก <b>Token</b> มาใส่ในช่อง Bot Token แล้วกดปุ่ม <b>"ลงทะเบียนคำสั่งไป Discord"</b> และกดปุ่ม <b>"บันทึกการเชื่อมต่อ"</b> ด้านล่าง</span>
+                    </div>
+                  </div>
+
+                  {/* 4. รายชื่อห้องแชทใน Discord (เพิ่มห้องได้ไม่จำกัด ตามที่ผู้ใช้สั่ง) */}
                   <div className="space-y-4 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                       <div>

@@ -69,6 +69,9 @@ export const DEFAULT_INTEGRATION_SETTINGS = {
     enabled: true,
     botName: 'Anping Clinic Notifier',
     botAvatarUrl: '',
+    applicationId: '',
+    publicKey: '',
+    botToken: '',
     channels: [
       { id: 'dc_queue', name: 'นัดหมาย 🗓️', event: 'queue', webhookUrl: '', botAvatarUrl: '' },
       { id: 'dc_pos', name: 'pos 💵', event: 'pos', webhookUrl: '', botAvatarUrl: '' },
@@ -105,6 +108,9 @@ export function normalizeIntegrationTokens(raw) {
         enabled: raw.discord.enabled !== false,
         botName: raw.discord.botName || 'Anping Clinic Notifier',
         botAvatarUrl: raw.discord.botAvatarUrl || '',
+        applicationId: raw.discord.applicationId || '',
+        publicKey: raw.discord.publicKey || '',
+        botToken: raw.discord.botToken || '',
         channels: Array.isArray(raw.discord.channels) && raw.discord.channels.length > 0
           ? raw.discord.channels.map(ch => ({
               ...ch,
@@ -137,6 +143,9 @@ export function normalizeIntegrationTokens(raw) {
       enabled: Boolean(raw.discord),
       botName: 'Anping Clinic Notifier',
       botAvatarUrl: '',
+      applicationId: '',
+      publicKey: '',
+      botToken: '',
       channels: DEFAULT_INTEGRATION_SETTINGS.discord.channels.map((ch, idx) => ({
         ...ch,
         webhookUrl: idx === 0 ? (raw.discord || '') : '',
