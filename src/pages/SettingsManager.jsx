@@ -822,81 +822,81 @@ const SettingsManager = ({
   ];
 
   return (
-    <div className="w-full bg-slate-50 min-h-screen p-4 md:p-8 animate-in fade-in duration-300">
+    <div className="w-full bg-slate-50 min-h-screen p-3 sm:p-5 md:p-8 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-800 kanit-text tracking-tight flex items-center gap-3">
-            <span className="p-2.5 bg-sky-500 text-white rounded-2xl shadow-lg shadow-sky-500/25">
-              <Settings size={28} />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-800 kanit-text tracking-tight flex items-center gap-2.5 sm:gap-3">
+            <span className="p-2 sm:p-2.5 bg-sky-500 text-white rounded-2xl shadow-lg shadow-sky-500/25">
+              <Settings size={24} className="sm:w-7 sm:h-7" />
             </span>
             ตั้งค่าระบบคลินิก
           </h1>
-          <p className="text-slate-500 mt-1.5 text-sm font-medium kanit-text">จัดการคำนำหน้าพนักงาน, สิทธิ์เข้าระบบ และบทบาทต่าง ๆ</p>
+          <p className="text-slate-500 mt-1 sm:mt-1.5 text-xs sm:text-sm font-medium kanit-text">จัดการคำนำหน้าพนักงาน, สิทธิ์เข้าระบบ และบทบาทต่าง ๆ</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Navigation Sidebar inside Settings */}
-        <div className="lg:col-span-1 flex flex-col gap-2.5">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+        {/* Navigation Sidebar inside Settings (สไลด์แนวนอนบนมือถือ เป็นแถบข้างบนจอใหญ่) */}
+        <div className="lg:col-span-1 flex flex-row lg:flex-col gap-2 overflow-x-auto custom-scrollbar pb-2 lg:pb-0 shrink-0">
           <button
             onClick={() => handleSubTabClick('prefixes')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'prefixes'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <User size={18} />
-            คำนำหน้าชื่อพนักงาน
+            <User size={18} className="shrink-0" />
+            <span>คำนำหน้าชื่อพนักงาน</span>
           </button>
           <button
             onClick={() => handleSubTabClick('permissions')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'permissions'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <ShieldCheck size={18} />
-            จัดการสิทธิ์เข้าระบบ
+            <ShieldCheck size={18} className="shrink-0" />
+            <span>จัดการสิทธิ์เข้าระบบ</span>
           </button>
           <button
             onClick={() => handleSubTabClick('categories')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'categories'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <Tag size={18} />
-            ตัวเลือกหมวดหมู่
+            <Tag size={18} className="shrink-0" />
+            <span>ตัวเลือกหมวดหมู่</span>
           </button>
           <button
             onClick={() => handleSubTabClick('statuses')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'statuses'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <Clock size={18} />
-            สถานะนัดหมาย
+            <Clock size={18} className="shrink-0" />
+            <span>สถานะนัดหมาย</span>
           </button>
           <button
             onClick={() => handleSubTabClick('integrations')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center justify-between shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center justify-between gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'integrations'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <Link size={18} />
-              การเชื่อมต่อแจ้งเตือน
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <Link size={18} className="shrink-0" />
+              <span>การเชื่อมต่อแจ้งเตือน</span>
             </div>
             {isIntegrationsDirty && (
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse border ${
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse border shrink-0 ${
                 activeSubTab === 'integrations'
                   ? 'bg-amber-300 text-slate-900 border-amber-400'
                   : 'bg-amber-100 text-amber-800 border-amber-300'
@@ -907,42 +907,42 @@ const SettingsManager = ({
           </button>
           <button
             onClick={() => handleSubTabClick('gdrive')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'gdrive'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <Cloud size={18} />
-            เชื่อมต่อ GDrive
+            <Cloud size={18} className="shrink-0" />
+            <span>เชื่อมต่อ GDrive</span>
           </button>
           <button
             onClick={() => handleSubTabClick('logs')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'logs'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <History size={18} />
-            ประวัติการใช้งาน (Logs)
+            <History size={18} className="shrink-0" />
+            <span>ประวัติการใช้งาน (Logs)</span>
           </button>
           <button
             onClick={() => handleSubTabClick('cache')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'cache'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <Database size={18} />
-            จัดการแคช & ฐานข้อมูล
+            <Database size={18} className="shrink-0" />
+            <span>จัดการแคช & ฐานข้อมูล</span>
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="lg:col-span-3">
-          <div className={`${theme.card} border-slate-100/80`}>
+        <div className="lg:col-span-3 min-w-0">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/80 p-3.5 sm:p-6 md:p-8 min-w-0">
             {/* SUBTAB 1: PREFIXES */}
             {activeSubTab === 'prefixes' && (
               <div className="space-y-6">
@@ -1329,19 +1329,19 @@ const SettingsManager = ({
 
             {/* SUBTAB 5: INTEGRATIONS (การเชื่อมต่อแจ้งเตือน LINE & DISCORD) */}
             {activeSubTab === 'integrations' && (
-              <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 text-left">
+              <div className="space-y-6 sm:space-y-8 animate-in slide-in-from-right-4 duration-300 text-left min-w-0">
                 {/* 🟢 CARD 1: LINE MESSAGING API (MULTI-BOT FAILOVER POOL) */}
-                <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm">
+                <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-100 shadow-sm min-w-0">
                   {/* Header */}
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs">
-                      <Bell size={24} />
+                  <div className="flex items-start gap-3 sm:gap-4 mb-5 sm:mb-6">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs">
+                      <Bell size={22} className="sm:w-6 sm:h-6" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
                         แจ้งเตือน (LINE Notify / Bot)
                       </h3>
-                      <p className="text-sm text-slate-500 kanit-text mt-0.5">
+                      <p className="text-xs sm:text-sm text-slate-500 kanit-text mt-0.5 leading-relaxed">
                         ตั้งค่าการส่งข้อความแจ้งเตือนเข้าแชทและสรุปยอด (รองรับระบบบอทสำรองเมื่อโควต้าเต็ม)
                       </p>
                     </div>
@@ -1352,12 +1352,12 @@ const SettingsManager = ({
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 kanit-text">
                       สถานะการส่งแจ้งเตือน
                     </label>
-                    <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+                    <div className="p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => handleToggleLine(!localIntegrationTokens.line?.enabled)}
-                          className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 focus:outline-hidden ${
+                          className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 focus:outline-hidden shrink-0 ${
                             localIntegrationTokens.line?.enabled ? 'bg-emerald-500' : 'bg-slate-300'
                           }`}
                         >
@@ -1371,7 +1371,7 @@ const SettingsManager = ({
                           {localIntegrationTokens.line?.enabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
                         </span>
                       </div>
-                      <span className="text-xs text-slate-400 kanit-text hidden sm:inline">
+                      <span className="text-xs text-slate-400 kanit-text">
                         {localIntegrationTokens.line?.enabled ? 'ระบบจะส่งการแจ้งเตือนตามรายการที่เลือกด้านล่าง' : 'ปิดการส่งข้อความเข้า LINE ชั่วคราว'}
                       </span>
                     </div>
@@ -1396,7 +1396,7 @@ const SettingsManager = ({
                             type="button"
                             key={item.key}
                             onClick={() => handleToggleLineEvent(item.key)}
-                            className={`flex items-start gap-3 p-3 rounded-2xl border text-left transition-all ${
+                            className={`flex items-start gap-2.5 sm:gap-3 p-3 rounded-2xl border text-left transition-all ${
                               isChecked
                                 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950 shadow-2xs'
                                 : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
@@ -1418,13 +1418,13 @@ const SettingsManager = ({
                   </div>
 
                   {/* 3. กล่อง "ID กลุ่ม หรือ ID ลูกค้าที่จะแจ้งเตือน" */}
-                  <div className="mb-6 p-5 rounded-2xl border border-slate-200/90 bg-emerald-50/20">
+                  <div className="mb-6 p-3.5 sm:p-5 rounded-2xl border border-slate-200/90 bg-emerald-50/20 min-w-0">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-800 kanit-text">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span className="font-bold text-xs sm:text-sm text-slate-800 kanit-text">
                           ID กลุ่ม หรือ ID ลูกค้าที่จะแจ้งเตือน
                         </span>
-                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium kanit-text">
+                        <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 font-medium kanit-text">
                           ส่งให้หลายคนพร้อมกันได้
                         </span>
                       </div>
@@ -1439,42 +1439,44 @@ const SettingsManager = ({
 
                     <div className="space-y-2.5">
                       {(localIntegrationTokens.line?.recipients || []).map((rec, idx) => (
-                        <div key={rec.id || idx} className="flex items-center gap-2">
+                        <div key={rec.id || idx} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-white/80 sm:bg-transparent p-2.5 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-200/70">
                           <input
                             type="text"
                             value={rec.name || ''}
                             onChange={(e) => handleUpdateLineRecipient(rec.id, 'name', e.target.value)}
                             placeholder="ป้ายชื่อ (เช่น กลุ่ม)"
-                            className="w-28 sm:w-36 bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 kanit-text outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all shrink-0"
+                            className="w-full sm:w-36 bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-3 py-2 sm:py-2.5 kanit-text outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all shrink-0"
                           />
-                          <input
-                            type="text"
-                            value={rec.chatId || ''}
-                            onChange={(e) => handleUpdateLineRecipient(rec.id, 'chatId', e.target.value)}
-                            placeholder="ระบุ Line Group ID (เช่น C...) หรือ User ID (เช่น U...)"
-                            className="flex-1 bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 font-mono outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all min-w-0"
-                          />
-                          {(localIntegrationTokens.line?.recipients || []).length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveLineRecipient(rec.id)}
-                              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                              title="ลบผู้รับนี้"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <input
+                              type="text"
+                              value={rec.chatId || ''}
+                              onChange={(e) => handleUpdateLineRecipient(rec.id, 'chatId', e.target.value)}
+                              placeholder="Line Group ID (เช่น C...) หรือ User ID (เช่น U...)"
+                              className="flex-1 bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-3 py-2 sm:py-2.5 font-mono outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all min-w-0"
+                            />
+                            {(localIntegrationTokens.line?.recipients || []).length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveLineRecipient(rec.id)}
+                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
+                                title="ลบผู้รับนี้"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-slate-400 kanit-text mt-2.5">
+                    <p className="text-[11px] sm:text-xs text-slate-400 kanit-text mt-2.5 leading-relaxed">
                       💡 บอททุกตัวในรายการด้านล่างจะยิงข้อความไปที่แชทเหล่านี้ทั้งหมด
                     </p>
                   </div>
 
                   {/* 4. รายชื่อบอท (สำรองเมื่อโควต้าเต็ม) */}
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="space-y-4 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                       <h4 className="font-bold text-sm text-slate-700 kanit-text">
                         รายชื่อบอท (สำรองเมื่อโควต้าเต็ม)
                       </h4>
@@ -1483,7 +1485,7 @@ const SettingsManager = ({
                           type="button"
                           onClick={handleSendMenuFlex}
                           disabled={isSendingMenu}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-xs kanit-text transition-all disabled:opacity-50 shadow-2xs"
+                          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-xs kanit-text transition-all disabled:opacity-50 shadow-2xs"
                           title="ส่ง Flex Menu คำสั่งลัดเข้า LINE กลุ่มทันที"
                         >
                           {isSendingMenu ? <Loader2 size={13} className="animate-spin" /> : <Bot size={13} />}
@@ -1493,17 +1495,17 @@ const SettingsManager = ({
                           type="button"
                           onClick={handleSyncLineQuotas}
                           disabled={isSyncingQuota}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold text-xs kanit-text transition-all disabled:opacity-50"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold text-xs kanit-text transition-all disabled:opacity-50"
                         >
                           <RefreshCw size={13} className={isSyncingQuota ? 'animate-spin' : ''} />
-                          {isSyncingQuota ? 'กำลังซิงก์...' : 'ซิงก์โควต้าจริง'}
+                          <span>{isSyncingQuota ? 'กำลังซิงก์...' : 'ซิงก์โควต้าจริง'}</span>
                         </button>
                         <button
                           type="button"
                           onClick={handleAddLineBot}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-800 text-white hover:bg-slate-900 font-bold text-xs kanit-text transition-all shadow-2xs"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-2 sm:py-1.5 rounded-xl bg-slate-800 text-white hover:bg-slate-900 font-bold text-xs kanit-text transition-all shadow-2xs"
                         >
-                          <Plus size={13} /> เพิ่มบอท
+                          <Plus size={13} /> <span>เพิ่มบอท</span>
                         </button>
                       </div>
                     </div>
@@ -1520,15 +1522,15 @@ const SettingsManager = ({
                         return (
                           <div
                             key={bot.id || index}
-                            className={`p-5 rounded-2xl border transition-all ${
+                            className={`p-3.5 sm:p-5 rounded-2xl border transition-all min-w-0 ${
                               isQuotaFull
                                 ? 'bg-rose-50/30 border-rose-200 shadow-2xs'
                                 : 'bg-white border-slate-200 shadow-2xs'
                             }`}
                           >
                             {/* บรรทัดหัวเรื่องบอท */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
-                              <div className="flex items-center gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-bold text-slate-500 kanit-text shrink-0">
                                   บอทตัวที่ {index + 1}
                                 </span>
@@ -1537,7 +1539,7 @@ const SettingsManager = ({
                                   value={bot.name || ''}
                                   onChange={(e) => handleUpdateLineBot(bot.id, 'name', e.target.value)}
                                   placeholder={`ชื่อบอท (เช่น บอทตัวที่ ${index + 1})`}
-                                  className="font-bold text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 kanit-text outline-none focus:ring-1 focus:ring-sky-500 w-36 sm:w-44"
+                                  className="font-bold text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 kanit-text outline-none focus:ring-1 focus:ring-sky-500 flex-1 sm:flex-none sm:w-44 min-w-[120px]"
                                 />
                                 <span
                                   className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full font-mono shrink-0 ${
@@ -1552,7 +1554,7 @@ const SettingsManager = ({
                                 </span>
                               </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center justify-end gap-2 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() => handleTestLineBot(bot)}
@@ -1633,17 +1635,17 @@ const SettingsManager = ({
                 </div>
 
                 {/* 🟣 CARD 2: DISCORD MULTI-CHANNEL WEBHOOKS (แยกห้องแชทอัตโนมัติ - ฟรี ไม่จำกัด) */}
-                <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm">
+                <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-100 shadow-sm min-w-0">
                   {/* Header */}
-                  <div className="flex items-start gap-4 mb-6">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100 shadow-2xs">
-                      <Hash size={24} />
+                  <div className="flex items-start gap-3 sm:gap-4 mb-5 sm:mb-6">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100 shadow-2xs">
+                      <Hash size={22} className="sm:w-6 sm:h-6" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
                         แจ้งเตือน Discord (แยกห้องแชทอัตโนมัติ - ฟรี 100% ไม่จำกัด)
                       </h3>
-                      <p className="text-sm text-slate-500 kanit-text mt-0.5">
+                      <p className="text-xs sm:text-sm text-slate-500 kanit-text mt-0.5 leading-relaxed">
                         ส่งข้อความแยกห้องแชทอัตโนมัติ สวยงาม พร้อมบันทึกประวัติย้อนหลัง 0 บาท ไม่มีโควต้าจำกัด
                       </p>
                     </div>
@@ -1654,12 +1656,12 @@ const SettingsManager = ({
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 kanit-text">
                       สถานะการส่งแจ้งเตือน Discord
                     </label>
-                    <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+                    <div className="p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => handleToggleDiscord(!localIntegrationTokens.discord?.enabled)}
-                          className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 focus:outline-hidden ${
+                          className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 focus:outline-hidden shrink-0 ${
                             localIntegrationTokens.discord?.enabled ? 'bg-indigo-600' : 'bg-slate-300'
                           }`}
                         >
@@ -1673,17 +1675,17 @@ const SettingsManager = ({
                           {localIntegrationTokens.discord?.enabled ? 'เปิดใช้งาน Discord' : 'ปิดใช้งาน'}
                         </span>
                       </div>
-                      <span className="text-xs text-slate-400 kanit-text hidden sm:inline">
+                      <span className="text-xs text-slate-400 kanit-text">
                         {localIntegrationTokens.discord?.enabled ? 'พร้อมส่งข้อมูลแยกเข้าตามห้องแชทใน Discord' : 'ปิดการส่งเข้า Discord ชั่วคราว'}
                       </span>
                     </div>
                   </div>
 
                   {/* 2. ตั้งค่ารูปโปรไฟล์และชื่อ Bot Discord (Global) */}
-                  <div className="mb-6 p-5 rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                  <div className="mb-6 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30 min-w-0">
+                    <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-5">
                       {/* Left: Avatar Preview + Upload Controls */}
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 min-w-0">
                         <div className="relative shrink-0">
                           <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-100 border-2 border-indigo-200 shadow-sm flex items-center justify-center relative">
                             {localIntegrationTokens.discord?.botAvatarUrl ? (
@@ -1733,16 +1735,16 @@ const SettingsManager = ({
                           />
                         </div>
 
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                             <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text">
                               รูปโปรไฟล์และชื่อบอท Discord
                             </h4>
-                            <span className="text-[11px] px-2 py-0.5 rounded-md font-bold bg-indigo-100 text-indigo-700 kanit-text">
+                            <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md font-bold bg-indigo-100 text-indigo-700 kanit-text">
                               ส่วนกลาง (Global)
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 kanit-text mt-0.5">
+                          <p className="text-xs text-slate-500 kanit-text mt-0.5 leading-relaxed">
                             {localIntegrationTokens.discord?.botAvatarUrl 
                               ? 'ใช้รูปที่กำหนดเอง (แสดงข้างข้อความแจ้งเตือนใน Discord)' 
                               : 'กำลังใช้รูปเริ่มต้นของระบบ (สามารถเปลี่ยนรูปหรือวาง URL ได้)'}
@@ -1752,7 +1754,7 @@ const SettingsManager = ({
                               type="button"
                               onClick={() => discordAvatarInputRef.current?.click()}
                               disabled={isUploadingDiscordAvatar}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs kanit-text transition-all shadow-2xs disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs kanit-text transition-all shadow-2xs disabled:opacity-50"
                             >
                               <Upload size={13} /> {isUploadingDiscordAvatar ? 'กำลังอัปโหลด...' : 'อัปโหลดรูป'}
                             </button>
@@ -1775,7 +1777,7 @@ const SettingsManager = ({
                       </div>
 
                       {/* Right: Bot Name + URL input */}
-                      <div className="w-full md:flex-1 md:max-w-md space-y-2.5">
+                      <div className="w-full lg:flex-1 lg:max-w-md space-y-2.5 pt-3 lg:pt-0 border-t lg:border-t-0 border-indigo-100/70">
                         <div>
                           <label className="block text-xs font-bold text-slate-600 kanit-text mb-1">
                             ชื่อแสดงของบอท (Bot Display Name):
@@ -1835,8 +1837,8 @@ const SettingsManager = ({
                   </div>
 
                   {/* 3. รายชื่อห้องแชทใน Discord (เพิ่มห้องได้ไม่จำกัด ตามที่ผู้ใช้สั่ง) */}
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="space-y-4 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                       <div>
                         <h4 className="font-bold text-sm text-slate-700 kanit-text">
                           รายชื่อห้องแชทใน Discord (แยกตามหมวดหมู่)
@@ -1848,9 +1850,9 @@ const SettingsManager = ({
                       <button
                         type="button"
                         onClick={handleAddDiscordChannel}
-                        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs kanit-text transition-all shadow-2xs"
+                        className="inline-flex items-center justify-center gap-1 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs kanit-text transition-all shadow-2xs shrink-0 self-start sm:self-auto"
                       >
-                        <Plus size={13} /> เพิ่มห้อง Discord
+                        <Plus size={13} /> <span>เพิ่มห้อง Discord</span>
                       </button>
                     </div>
 
@@ -1861,9 +1863,9 @@ const SettingsManager = ({
                         return (
                           <div
                             key={channel.id}
-                            className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all space-y-3"
+                            className="p-3.5 sm:p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all space-y-3 min-w-0"
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                               <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                 <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-sm">
                                   #
@@ -1873,12 +1875,12 @@ const SettingsManager = ({
                                   value={channel.name || ''}
                                   onChange={(e) => handleUpdateDiscordChannel(channel.id, 'name', e.target.value)}
                                   placeholder="ชื่อห้อง (เช่น นัดหมาย 🗓️)"
-                                  className="w-36 sm:w-48 bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-sm text-slate-800 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                  className="flex-1 sm:w-44 sm:flex-none min-w-[110px] bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-xs sm:text-sm text-slate-800 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                 />
                                 <select
                                   value={channel.event || 'all'}
                                   onChange={(e) => handleUpdateDiscordChannel(channel.id, 'event', e.target.value)}
-                                  className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                  className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                 >
                                   <option value="queue">🗓️ นัดหมายคนไข้ (Queue)</option>
                                   <option value="pos">💵 ปิดบิล / การเงิน (POS)</option>
@@ -1889,7 +1891,7 @@ const SettingsManager = ({
                                 </select>
                               </div>
 
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-end gap-2 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() => handleTestDiscordChannel(channel)}
@@ -1898,7 +1900,7 @@ const SettingsManager = ({
                                   title="ส่งข้อความทดสอบเข้าห้อง Discord นี้"
                                 >
                                   <Send size={12} className={isTesting ? 'animate-pulse text-indigo-500' : ''} />
-                                  {isTesting ? 'กำลังส่ง...' : 'ทดสอบส่ง'}
+                                  <span>{isTesting ? 'กำลังส่ง...' : 'ทดสอบส่ง'}</span>
                                 </button>
                                 {(localIntegrationTokens.discord?.channels || []).length > 1 && (
                                   <button
@@ -1924,40 +1926,43 @@ const SettingsManager = ({
                             </div>
 
                             {/* Option: รูปบอทเฉพาะห้องนี้ (ถ้าต้องการกำหนดแยก) */}
-                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
-                              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white border border-slate-200 shrink-0 flex items-center justify-center relative shadow-2xs">
-                                {channel.botAvatarUrl ? (
-                                  <img 
-                                    src={formatDirectImageUrl(channel.botAvatarUrl)} 
-                                    alt="Channel Bot Avatar" 
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      e.target.onerror = null;
-                                      e.target.src = formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl) || 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150';
-                                    }}
-                                  />
-                                ) : (
-                                  <img 
-                                    src={formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl) || 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150'} 
-                                    alt="Inherited Bot Avatar" 
-                                    className="w-full h-full object-cover opacity-60"
-                                    title="ใช้รูปหลักส่วนกลางของบอท"
-                                  />
-                                )}
-                                {uploadingChannelAvatarId === channel.id && (
-                                  <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white">
-                                    <Loader2 size={12} className="animate-spin text-white" />
-                                  </div>
-                                )}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-slate-200/60">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg overflow-hidden bg-white border border-slate-200 shrink-0 flex items-center justify-center relative shadow-2xs">
+                                  {channel.botAvatarUrl ? (
+                                    <img 
+                                      src={formatDirectImageUrl(channel.botAvatarUrl)} 
+                                      alt="Channel Bot Avatar" 
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl) || 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150';
+                                      }}
+                                    />
+                                  ) : (
+                                    <img 
+                                      src={formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl) || 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150'} 
+                                      alt="Inherited Bot Avatar" 
+                                      className="w-full h-full object-cover opacity-60"
+                                      title="ใช้รูปหลักส่วนกลางของบอท"
+                                    />
+                                  )}
+                                  {uploadingChannelAvatarId === channel.id && (
+                                    <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white">
+                                      <Loader2 size={12} className="animate-spin text-white" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-slate-500 kanit-text sm:hidden font-medium">รูปเฉพาะห้อง:</span>
                               </div>
 
-                              <div className="flex-1 min-w-[200px] flex items-center gap-2">
-                                <div className="relative flex-1">
+                              <div className="flex-1 min-w-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <div className="relative flex-1 min-w-0">
                                   <input
                                     type="text"
                                     value={channel.botAvatarUrl || ''}
                                     onChange={(e) => handleUpdateDiscordChannel(channel.id, 'botAvatarUrl', e.target.value)}
-                                    placeholder="รูปบอทเฉพาะห้องนี้ (เว้นว่างไว้หากต้องการใช้รูปหลักส่วนกลาง)"
+                                    placeholder="รูปบอทเฉพาะห้อง (เว้นว่างเพื่อใช้รูปหลัก)"
                                     className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 pr-7 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono transition-all"
                                   />
                                   {channel.botAvatarUrl && (
@@ -1989,7 +1994,7 @@ const SettingsManager = ({
                                   type="button"
                                   onClick={() => channelAvatarInputRefs.current[channel.id]?.click()}
                                   disabled={uploadingChannelAvatarId === channel.id}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs kanit-text transition-all shrink-0 disabled:opacity-50"
+                                  className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs kanit-text transition-all shrink-0 disabled:opacity-50"
                                   title="อัปโหลดรูปเฉพาะห้อง"
                                 >
                                   <Upload size={12} /> {uploadingChannelAvatarId === channel.id ? 'อัปโหลด...' : 'อัปโหลดรูป'}
@@ -2002,11 +2007,11 @@ const SettingsManager = ({
                     </div>
 
                     {/* คำแนะนำวิธีสร้าง Webhook */}
-                    <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 text-xs text-indigo-900 kanit-text space-y-1">
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 text-xs text-indigo-900 kanit-text space-y-1.5">
                       <div className="font-bold flex items-center gap-1.5 text-indigo-700">
                         💡 วิธีสร้าง Discord Webhook URL (ใช้เวลาไม่ถึง 10 วินาที):
                       </div>
-                      <ol className="list-decimal list-inside space-y-0.5 text-slate-600 pl-1">
+                      <ol className="list-decimal list-inside space-y-1 text-slate-600 pl-1 leading-relaxed">
                         <li>ในโปรแกรม Discord ให้ <b>คลิกขวาที่ชื่อห้องแชท</b> ที่ต้องการ (เช่น #pos)</li>
                         <li>เลือก <b>แก้ไขช่อง (Edit Channel)</b> &gt; เมนู <b>การผสานการทำงาน (Integrations)</b></li>
                         <li>กด <b>สร้าง Webhook (Create Webhook)</b> แล้วกด <b>คัดลอก URL ของ Webhook</b> นำมาวางในช่องด้านบน</li>
@@ -2016,12 +2021,12 @@ const SettingsManager = ({
                 </div>
 
                 {/* 💾 ปุ่มบันทึกการตั้งค่าทั้งหมด */}
-                <div className="flex justify-end pt-2">
+                <div className="flex flex-col sm:flex-row justify-end pt-2">
                   <button
                     data-save-btn="true"
                     onClick={saveIntegrations}
                     disabled={isSaving}
-                    className="px-8 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white hover:opacity-95 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                    className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white hover:opacity-95 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     <Save size={16} /> บันทึกการตั้งค่าการแจ้งเตือนทั้งหมด
