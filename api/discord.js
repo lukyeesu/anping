@@ -353,26 +353,60 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
     });
   }
 
-  // ประวัติการตรวจล่าสุด
+  // ประวัติการตรวจรักษา
   const validTrts = treatmentList.filter(t => !t.is_deleted);
   if (validTrts.length > 0) {
-    const trtLines = validTrts.slice(0, 3).map(t => {
+    const maxShow = 10;
+    const lines = validTrts.slice(0, maxShow).map((t, idx) => {
       const vDate = formatThaiDateTime(t.datetime || t.created_at || t.visit_date || t.date);
       const doc = t.doctor || t.doctor_name || t.data?.doctor || '-';
-      const diag = t.diagnosis || t.data?.diagnosis || t.treatment || '-';
-      const cc = t.chief_complaint || t.data?.chief_complaint || t.symptoms || t.data?.symptoms;
+      const diag = t.diagnosis || t.data?.diagnosis || '';
+      const cc = t.chief_complaint || t.data?.chief_complaint || t.symptoms || t.data?.symptoms || '';
+      const mainNote = diag || cc || t.treatment || '-';
+      const subNote = (diag && cc && cc !== diag) ? `\n  ├ *อาการสำคัญ:* ${cc.length > 60 ? cc.slice(0, 60) + '...' : cc}` : '';
       const cost = t.cost || t.total_cost || t.data?.cost || t.data?.total_cost;
       const costStr = cost ? ` • ยอด: \`฿${Number(cost).toLocaleString()}\`` : '';
       const rx = Array.isArray(t.prescription) ? t.prescription.join(', ') : (t.prescription || '');
-      const rxStr = rx ? `\n  └ *การรักษา/ยา:* ${rx}` : '';
-      const ccStr = (cc && cc !== diag) ? `\n  ├ *อาการสำคัญ:* ${cc.length > 50 ? cc.slice(0, 50) + '...' : cc}` : '';
-      return `• **📅 วันที่ ${vDate}** (แพทย์: **${doc}**)${costStr}${ccStr}\n  ├ *การวินิจฉัย:* **${diag}**${rxStr}`;
+      const rxStr = rx ? `\n  └ *หัตถการ/ยา:* ${rx}` : '';
+      const visitNum = validTrts.length - idx;
+      return `• **ครั้งที่ ${visitNum} • 📅 ${vDate}** (แพทย์: **${doc}**)${costStr}\n  ├ *การวินิจฉัย/อาการ:* **${mainNote.length > 70 ? mainNote.slice(0, 70) + '...' : mainNote}**${subNote}${rxStr}`;
     });
-    fields.push({
-      name: `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้งล่าสุด)`,
-      value: trtLines.join('\n\n'),
-      inline: false
-    });
+
+    let currentLines = [];
+    let currentLen = 0;
+    let chunkIndex = 1;
+
+    for (const line of lines) {
+      if (currentLen + line.length + 2 > 950 && currentLines.length > 0) {
+        fields.push({
+          name: chunkIndex === 1 ? `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้ง)` : `🩺 ประวัติการตรวจรักษา (ต่อ)`,
+          value: currentLines.join('\n\n'),
+          inline: false
+        });
+        currentLines = [line];
+        currentLen = line.length;
+        chunkIndex++;
+      } else {
+        currentLines.push(line);
+        currentLen += line.length + 2;
+      }
+    }
+
+    if (currentLines.length > 0) {
+      fields.push({
+        name: chunkIndex === 1 ? `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้ง)` : `🩺 ประวัติการตรวจรักษา (ต่อ)`,
+        value: currentLines.join('\n\n'),
+        inline: false
+      });
+    }
+
+    if (validTrts.length > maxShow) {
+      fields.push({
+        name: '📋 ประวัติการรักษาเพิ่มเติม',
+        value: `*(คนไข้มีประวัติการรักษาทั้งหมด ${validTrts.length} ครั้ง สามารถเปิดดูประวัติย้อนหลังทั้งหมดได้ในระบบ)*`,
+        inline: false
+      });
+    }
   }
 
   // นัดหมายที่กำลังจะมาถึง
@@ -1106,8 +1140,8 @@ export default async function handler(req, res) {
 
         const [queueRes, trtRes, courseRes] = await Promise.all([
           supabase.from('queue').select('*').eq('is_deleted', false),
-          supabase.from('treatments').select('*').eq('is_deleted', false).or(patientFilter).order('created_at', { ascending: false }).limit(10),
-          supabase.from('patient_courses').select('*').eq('is_deleted', false).or(patientFilter).limit(10)
+          supabase.from('treatments').select('*').eq('is_deleted', false).or(patientFilter).order('created_at', { ascending: false }).limit(25),
+          supabase.from('patient_courses').select('*').eq('is_deleted', false).or(patientFilter).limit(20)
         ]);
 
         const patientQueues = (queueRes.data || [])
