@@ -413,7 +413,7 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
     for (const line of lines) {
       if (currentLen + line.length + 2 > 950 && currentLines.length > 0) {
         fields.push({
-          name: chunkIndex === 1 ? `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้ง)` : `🩺 ประวัติการตรวจรักษา (ต่อ)`,
+          name: chunkIndex === 1 ? `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้ง)` : '\u200b',
           value: currentLines.join('\n\n'),
           inline: false
         });
@@ -428,7 +428,7 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
 
     if (currentLines.length > 0) {
       fields.push({
-        name: chunkIndex === 1 ? `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้ง)` : `🩺 ประวัติการตรวจรักษา (ต่อ)`,
+        name: chunkIndex === 1 ? `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้ง)` : '\u200b',
         value: currentLines.join('\n\n'),
         inline: false
       });
@@ -482,39 +482,78 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
   const fields = [];
   if (queueList.length === 0) {
     fields.push({
-      name: 'สถานะ',
-      value: 'ไม่พบคิวนัดหมายในช่วงเวลาดังกล่าว'
+      name: 'ℹ️ สถานะคิวนัดหมาย',
+      value: '>>> ไม่พบคิวนัดหมายตรวจหรือรับบริการในช่วงเวลาดังกล่าว\nสามารถทำการนัดหมายหรือจองคิวใหม่ได้ผ่านทางระบบคลินิก',
+      inline: false
     });
   } else {
-    queueList.slice(0, 10).forEach((q, idx) => {
+    const doctors = [...new Set(queueList.map(q => q.doctor).filter(d => d && d !== '-'))];
+    const docStr = doctors.length > 0 ? doctors.join(', ') : 'แพทย์ประจำคลินิก';
+
+    const queueLines = queueList.slice(0, 10).map((q, idx) => {
       const dt = formatThaiDateTime(q.rawDateTime || q.date);
-      const phone = formatThaiPhone(q.phone);
+      const timeOnly = dt.includes('(') ? dt.split('(')[1].replace(')', '').trim() : dt;
+      const cleanPhone = String(q.phone || '').replace(/\D/g, '');
+      const callUrl = cleanPhone && cleanPhone.length >= 9 ? `${WEBAPP_URL}/api/call?tel=${cleanPhone}` : null;
+      const phoneStr = q.phone ? (callUrl ? ` • 📞 [${formatThaiPhone(q.phone)}](${callUrl})` : ` • 📞 \`${formatThaiPhone(q.phone)}\``) : '';
+
+      let statusBadge = '🟡 รอดำเนินการ';
+      const st = String(q.status || '').toLowerCase();
+      if (st.includes('confirm') || st.includes('ยืนยัน')) statusBadge = '🟢 ยืนยันแล้ว';
+      else if (st.includes('in_progress') || st.includes('ตรวจ')) statusBadge = '🔵 กำลังตรวจ';
+      else if (st.includes('complete') || st.includes('เสร็จ')) statusBadge = '⚪ เสร็จสิ้น';
+      else if (st.includes('cancel') || st.includes('ยกเลิก')) statusBadge = '🔴 ยกเลิก';
+
+      const pName = q.patientName.replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '');
+      return `• **${idx + 1}. ⏰ ${timeOnly}** — **คุณ${pName}** (\`${q.hn}\`)\n  ├ 🩺 **บริการ:** ${q.service} (แพทย์: **${q.doctor}**)\n  └ 🏷️ สถานะ: \`${statusBadge}\`${phoneStr}`;
+    });
+
+    let curLines = [];
+    let curLen = 0;
+    let cIdx = 1;
+    for (const line of queueLines) {
+      if (curLen + line.length + 2 > 950 && curLines.length > 0) {
+        fields.push({
+          name: cIdx === 1 ? `📋 รายการคิวนัดหมาย (${queueList.length} คิว)` : '\u200b',
+          value: curLines.join('\n\n'),
+          inline: false
+        });
+        curLines = [line];
+        curLen = line.length;
+        cIdx++;
+      } else {
+        curLines.push(line);
+        curLen += line.length + 2;
+      }
+    }
+    if (curLines.length > 0) {
       fields.push({
-        name: `${idx + 1}. ⏰ ${dt} - ${q.patientName} (${q.hn})`,
-        value: `• **แพทย์:** ${q.doctor}\n• **หัตถการ/บริการ:** ${q.service}\n• **เบอร์โทร:** ${phone}\n• **สถานะ:** \`${q.status}\``,
+        name: cIdx === 1 ? `📋 รายการคิวนัดหมาย (${queueList.length} คิว)` : '\u200b',
+        value: curLines.join('\n\n'),
         inline: false
       });
-    });
+    }
 
     if (queueList.length > 10) {
       fields.push({
-        name: 'และคิวอื่นๆ',
-        value: `ยังมีอีก ${queueList.length - 10} รายการ (เปิดดูทั้งหมดในระบบเว็บคลินิก)`
+        name: '📋 คิวนัดหมายเพิ่มเติม',
+        value: `*(ยังมีคิวนัดหมายอีก ${queueList.length - 10} รายการ สามารถเปิดดูตารางนัดทั้งหมดได้ในระบบ)*`,
+        inline: false
       });
     }
   }
 
   return {
     author: {
-      name: '🏥 ANPING CLINIC • APPOINTMENTS',
-      icon_url: botAvatarUrl || undefined
+      name: '🏥 คลินิกอันผิง • ตารางคิวนัดหมายแพทย์ (APPOINTMENTS)',
+      icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
-    title: `🗓️ ${titleText} (${queueList.length} คิว)`,
-    description: `>>> รายการคิวนัดหมายตรวจและรับบริการทางการแพทย์`,
-    color: 0x0ea5e9,
+    title: `🗓️ ${titleText}`,
+    description: `>>> **จำนวนคิวนัดทั้งหมด:** \`${queueList.length} คิว\`  •  **แพทย์ตรวจ:** \`${docStr}\``,
+    color: 0x0284c7, // Medical Sky Blue
     fields,
     footer: {
-      text: `Anping Clinic • ข้อมูล ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
+      text: `Anping Clinic Queue System • ตรวจสอบคิว ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
 }
@@ -522,40 +561,74 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
 function buildPosEmbed(tx, botAvatarUrl = '') {
   const rNo = tx.receipt_no || tx.id || '-';
   const pName = tx.patient_name || tx.patientName || tx.data?.patient_name || '-';
-  const hn = tx.hn || tx.data?.hn || '-';
+  const cleanPName = pName.replace(/^HN\d{2}-\d{4}\s*-\s*/, '').replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '');
+  const hn = tx.hn || tx.data?.hn || (pName.match(/HN\d{2}-\d{4}/)?.[0]) || '-';
   const netAmount = Number(tx.net_amount ?? tx.total_amount ?? tx.data?.net_amount ?? 0);
-  const paymentMethod = tx.payment_method || tx.data?.payment_method || 'เงินสด';
-  const dt = formatThaiDateTime(tx.created_at || tx.date || tx.data?.created_at);
+  const discount = Number(tx.discount ?? tx.data?.discount ?? 0);
+  const rawMethod = String(tx.payment_method || tx.data?.payment_method || 'cash').toLowerCase();
 
+  let methodDisplay = '💵 เงินสด';
+  if (rawMethod.includes('transfer') || rawMethod.includes('โอน')) methodDisplay = '📱 เงินโอน (QR)';
+  else if (rawMethod.includes('credit') || rawMethod.includes('บัตร')) methodDisplay = '💳 บัตรเครดิต';
+
+  const dt = formatThaiDateTime(tx.created_at || tx.date || tx.data?.created_at);
   const items = Array.isArray(tx.items) ? tx.items : (Array.isArray(tx.data?.items) ? tx.data.items : []);
-  let itemsText = '-';
+
+  const fields = [
+    {
+      name: '💰 ยอดชำระสุทธิ',
+      value: `\`฿${netAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\``,
+      inline: true
+    },
+    {
+      name: '💳 ช่องทางชำระ',
+      value: `\`${methodDisplay}\``,
+      inline: true
+    },
+    {
+      name: '🏷️ สถานะบิล',
+      value: '`🟢 ชำระเรียบร้อย`',
+      inline: true
+    }
+  ];
+
   if (items.length > 0) {
-    itemsText = items.slice(0, 8).map((it, i) => {
+    const itemLines = items.slice(0, 8).map((it, i) => {
       const name = it.name || it.item_name || 'สินค้า/บริการ';
       const qty = it.quantity || it.qty || 1;
       const price = Number(it.price || it.unit_price || 0);
-      return `${i + 1}. **${name}** x${qty} (฿${price.toLocaleString()})`;
-    }).join('\n');
-    if (items.length > 8) itemsText += `\n*...และอีก ${items.length - 8} รายการ*`;
+      const total = Number(it.total || price * qty);
+      return `• **${i + 1}. ${name}**  (x${qty})\n  └ ยอด: \`฿${total.toLocaleString()}\` *(ราคา/หน่วย: ฿${price.toLocaleString()})*`;
+    });
+    if (items.length > 8) {
+      itemLines.push(`*...และรายการอื่นๆ อีก ${items.length - 8} รายการ*`);
+    }
+    fields.push({
+      name: `📦 รายการสินค้าและบริการ (${items.length} รายการ)`,
+      value: itemLines.join('\n\n'),
+      inline: false
+    });
+  }
+
+  if (discount > 0) {
+    fields.push({
+      name: '🏷️ ส่วนลดพิเศษ',
+      value: `\`-฿${discount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\``,
+      inline: false
+    });
   }
 
   return {
     author: {
-      name: '🏥 ANPING CLINIC • POS INVOICE',
-      icon_url: botAvatarUrl || undefined
+      name: '🏥 คลินิกอันผิง • ใบเสร็จรับเงิน POS (OFFICIAL RECEIPT)',
+      icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
-    title: `💵 ใบเสร็จรับเงิน POS: ${rNo}`,
-    description: `>>> **ผู้รับบริการ:** ${pName} (${hn})\n**วัน-เวลา:** ${dt}\n**ยอดชำระสุทธิ:** **฿${netAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}** (${paymentMethod})`,
+    title: `🧾 ใบเสร็จรับเงินเลขที่: ${rNo}`,
+    description: `>>> **ผู้รับบริการ:** คุณ${cleanPName}  •  **รหัส HN:** \`${hn}\`\n**📅 วันที่ออกบิล:** \`${dt}\``,
     color: 0x10b981, // Emerald Green
-    fields: [
-      {
-        name: `📦 รายการสินค้า/บริการ (${items.length} รายการ)`,
-        value: itemsText,
-        inline: false
-      }
-    ],
+    fields,
     footer: {
-      text: `Anping Clinic • ออกใบเสร็จเมื่อ ${dt}`
+      text: `Anping Clinic POS System • ตรวจสอบใบเสร็จ ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
 }
@@ -563,72 +636,86 @@ function buildPosEmbed(tx, botAvatarUrl = '') {
 function buildSalesSummaryEmbed(summary, botAvatarUrl = '') {
   return {
     author: {
-      name: '🏥 ANPING CLINIC • SALES REPORT',
-      icon_url: botAvatarUrl || undefined
+      name: '🏥 คลินิกอันผิง • สรุปยอดขายและการเงิน (SALES & FINANCE)',
+      icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
-    title: `📊 สรุปยอดขายประจำวัน: ${summary.date}`,
-    description: `>>> ภาพรวมรายรับและการชำระเงินของคลินิกประจำวัน`,
-    color: 0xf59e0b, // Amber
+    title: `📊 รายงานสรุปยอดขายประจำวัน: ${summary.date}`,
+    description: `>>> **ยอดขายรวมทั้งสิ้น:** **\`฿${summary.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\`**\n**จำนวนบิลทั้งหมด:** \`${summary.billsCount} บิล\`  •  **จำนวนผู้รับบริการ:** \`${summary.patientsCount} ท่าน\``,
+    color: 0xf59e0b, // Golden Amber
     fields: [
       {
-        name: '💰 ยอดขายรวมทั้งสิ้น',
-        value: `**฿${summary.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}** บาท`,
+        name: '💵 เงินสด (Cash)',
+        value: `\`฿${summary.cashAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}\`\n└ **${summary.cashCount}** บิล`,
         inline: true
       },
       {
-        name: '🧾 จำนวนบิลทั้งหมด',
-        value: `**${summary.billsCount}** บิล (${summary.patientsCount} คนไข้)`,
+        name: '📱 เงินโอน (QR Transfer)',
+        value: `\`฿${summary.transferAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}\`\n└ **${summary.transferCount}** บิล`,
         inline: true
       },
       {
-        name: '💵 ยอดเงินสด',
-        value: `฿${summary.cashAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${summary.cashCount} บิล)`,
-        inline: true
-      },
-      {
-        name: '📱 ยอดเงินโอน',
-        value: `฿${summary.transferAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${summary.transferCount} บิล)`,
-        inline: true
-      },
-      {
-        name: '💳 ยอดบัตรเครดิต',
-        value: `฿${summary.creditAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} (${summary.creditCount} บิล)`,
+        name: '💳 บัตรเครดิต (Credit Card)',
+        value: `\`฿${summary.creditAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}\`\n└ **${summary.creditCount}** บิล`,
         inline: true
       }
     ],
     footer: {
-      text: `Anping Clinic • สรุปยอด ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
+      text: `Anping Clinic Financial System • สรุปยอด ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
 }
 
 function buildInventoryEmbed(items, title = '📦 คลังยา & เวชภัณฑ์', botAvatarUrl = '') {
-  const fields = items.slice(0, 10).map((it, i) => {
-    const name = it.name || it.product_name || '-';
-    const code = it.code || it.id || '-';
-    const qty = Number(it.stock_quantity ?? it.quantity ?? 0);
-    const unit = it.unit || 'หน่วย';
-    const price = Number(it.price || it.sale_price || 0);
-    const badge = qty <= 5 ? '🔴 ใกล้หมด' : (qty <= 15 ? '🟡 ปานกลาง' : '🟢 ปกติ');
+  const fields = [];
 
-    return {
-      name: `${i + 1}. ${name} (${code})`,
-      value: `• คงเหลือ: **${qty} ${unit}** [${badge}]\n• ราคาขาย: ฿${price.toLocaleString()}`,
+  if (items.length === 0) {
+    fields.push({
+      name: 'สถานะ',
+      value: 'ไม่พบรายการยาหรือเวชภัณฑ์ในระบบคลัง',
       inline: false
-    };
-  });
+    });
+  } else {
+    const itemLines = items.slice(0, 10).map((it, i) => {
+      const name = it.name || it.product_name || '-';
+      const code = it.code || it.id || '-';
+      const qty = Number(it.stock_quantity ?? it.quantity ?? 0);
+      const unit = it.unit || 'หน่วย';
+      const price = Number(it.selling_price || it.price || it.sale_price || 0);
+      const minStock = Number(it.min_stock || 5);
+
+      let badge = '🟢 ปกติ';
+      if (qty <= 0) badge = '🔴 สินค้าหมด';
+      else if (qty <= minStock) badge = '🟡 ใกล้หมดสต็อก';
+
+      return `• **${i + 1}. ${name}** (\`${code}\`)\n  ├ 📦 คงเหลือ: \`${qty} ${unit}\` [${badge}]\n  └ 🏷️ ราคาจำหน่าย: \`฿${price.toLocaleString()} บาท\``;
+    });
+
+    fields.push({
+      name: `📋 รายการยาและเวชภัณฑ์ (${items.length} รายการ)`,
+      value: itemLines.join('\n\n'),
+      inline: false
+    });
+
+    if (items.length > 10) {
+      fields.push({
+        name: '📦 รายการเพิ่มเติม',
+        value: `*(ยังมีรายการยาอีก ${items.length - 10} รายการ สามารถเปิดดูทั้งหมดในระบบคลังยา)*`,
+        inline: false
+      });
+    }
+  }
 
   return {
     author: {
-      name: '🏥 ANPING CLINIC • INVENTORY',
-      icon_url: botAvatarUrl || undefined
+      name: '🏥 คลินิกอันผิง • คลังยาและเวชภัณฑ์ (PHARMACY & INVENTORY)',
+      icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
     title,
-    description: `>>> ข้อมูลรายการยาและเวชภัณฑ์ในคลังคลินิก (${items.length} รายการ)`,
-    color: 0x8b5cf6, // Violet
+    description: `>>> **จำนวนรายการยาที่ค้นพบ:** \`${items.length} รายการ\``,
+    color: 0x8b5cf6, // Violet / Purple
     fields,
     footer: {
-      text: `Anping Clinic • สต็อก ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
+      text: `Anping Clinic Pharmacy System • ตรวจสอบสต็อก ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
 }
@@ -636,46 +723,46 @@ function buildInventoryEmbed(items, title = '📦 คลังยา & เวช
 function buildHelpEmbed(botAvatarUrl = '') {
   return {
     author: {
-      name: '🏥 ANPING CLINIC • DISCORD BOT GUIDE',
-      icon_url: botAvatarUrl || undefined
+      name: '🏥 คลินิกอันผิง • ผู้ช่วยคลินิกอัจฉริยะ (ANPING ASSISTANT)',
+      icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
     title: '📖 คู่มือคำสั่งค้นหาข้อมูลคลินิก (Slash Commands)',
-    description: `>>> ท่านสามารถพิมพ์เครื่องหมาย \`/\` ในช่องแชทเพื่อเรียกใช้คำสั่งได้ทันที:`,
+    description: `>>> ท่านสามารถพิมพ์เครื่องหมาย \`/\` ในช่องแชทเพื่อเรียกใช้คำสั่งงานคลินิกได้ทันที:`,
     color: 0x6366f1, // Indigo
     fields: [
       {
         name: '🔍 /search [keyword]',
-        value: 'ค้นหาอัจฉริยะครอบคลุมทุกส่วน (เวชระเบียน, คอร์สคงเหลือ, บิล POS, คิวนัดหมาย, สต็อกยา)',
+        value: '• ค้นหาอัจฉริยะครอบคลุมทุกระบบ (พิมพ์ชื่อคนไข้, เบอร์โทร, รหัส HN, ยอดขายเมื่อวาน, คิววันนี้, ยาในคลัง)',
         inline: false
       },
       {
         name: '📁 /patient [keyword]',
-        value: 'ค้นหาเวชระเบียนคนไข้โดยเฉพาะ (ชื่อ, HN, เบอร์โทร) พร้อมประวัติการรักษาและคอร์สคงเหลือ',
+        value: '• ค้นหาเวชระเบียนคนไข้โดยเฉพาะ (ประวัติการตรวจ OPD, คอร์สคงเหลือ, ประวัติแพ้ยา, โรคประจำตัว, ปุ่มโทรออก)',
         inline: false
       },
       {
         name: '🗓️ /queue [date]',
-        value: 'ดูตารางคิวนัดหมาย (พิมพ์ "วันนี้", "พรุ่งนี้", ระบุวันที่ เช่น 13/09/2569 หรือเว้นว่างเพื่อดูวันนี้)',
+        value: '• ดูตารางคิวนัดหมาย (ระบุ `วันนี้`, `พรุ่งนี้`, `เมื่อวาน` หรือระบุวันที่ เช่น `15/09/2569`)',
         inline: false
       },
       {
-        name: '💵 /bill [keyword]',
-        value: 'ค้นหาบิลชำระเงิน POS (ระบุเลขที่ใบเสร็จ เช่น REC69090022, 22 หรือเว้นว่างเพื่อดูบิลล่าสุด)',
+        name: '🧾 /bill [keyword]',
+        value: '• ค้นหาใบเสร็จรับเงิน POS (ค้นหาด้วยเลขที่ใบเสร็จ หรือชื่อคนไข้)',
         inline: false
       },
       {
         name: '📊 /sales [date]',
-        value: 'สรุปยอดขายประจำวัน แยกยอดเงินสด เงินโอน บัตรเครดิต (พิมพ์ "วันนี้", "เมื่อวาน" หรือระบุวันที่)',
+        value: '• สรุปยอดขายประจำวัน (ระบุ `วันนี้`, `เมื่อวาน` หรือระบุวันที่ เช่น `12/09/2569`)',
         inline: false
       },
       {
         name: '💊 /stock [keyword]',
-        value: 'เช็คสต็อกยาและสินค้าในคลัง (ระบุชื่อยา หรือเว้นว่างเพื่อดู 10 รายการที่เหลือน้อยที่สุด)',
+        value: '• ค้นหาสต็อกยาและเวชภัณฑ์ในคลังคลินิก (ค้นหาด้วยชื่อยา หรือรหัสยา)',
         inline: false
       }
     ],
     footer: {
-      text: 'Anping Clinic Medical System • ระบบค้นหาอัจฉริยะผ่าน Discord'
+      text: 'Anping Clinic Bot • พิมพ์ /help เพื่อเปิดดูคู่มือนี้ได้ตลอดเวลา'
     }
   };
 }
