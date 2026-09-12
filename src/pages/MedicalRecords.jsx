@@ -18,8 +18,9 @@ import {
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 import { subscribeStoreUpdates } from '../lib/offlineStore';
+import { dispatchClinicNotification } from '../lib/notificationHub';
 
-const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats, integrationTokens = {} }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -715,6 +716,39 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     try {
       await callAppScript('SAVE_DATA', 'PatientCourses', payload);
       showToast(`บันทึกการใช้คอร์สสำเร็จ (คงเหลือ ${newRem} ครั้ง)`, 'success');
+
+      // 📢 ยิงแจ้งเตือน LINE & Discord (Dual Broadcast)
+      const pName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name || 'คนไข้';
+      const pHn = formData.hn || formData.id || '-';
+      const cName = course.courseName || course.course_name || 'คอร์สการรักษา';
+      dispatchClinicNotification({
+        eventType: 'mr',
+        settings: integrationTokens,
+        title: '📁 มีการตัดรอบคอร์สคนไข้',
+        message: `คนไข้ "${pName}" เข้าใช้บริการคอร์สเรียบร้อยแล้ว`,
+        fields: [
+          { name: '👤 คนไข้', value: `${pName} (HN: ${pHn})`, inline: true },
+          { name: '🏷️ ชื่อคอร์ส', value: cName, inline: true },
+          { name: '⚡ การใช้งาน', value: `ครั้งที่ ${newUsed}/${currentTotal} ครั้ง`, inline: true },
+          { name: '🎯 จำนวนคงเหลือ', value: `${newRem} ครั้ง`, inline: true },
+          { name: '📌 สถานะ', value: newRem === 0 ? 'จบคอร์สแล้ว' : 'ยังเหลือรอบ', inline: true },
+          { name: '👩‍💼 ผู้ทำรายการ', value: currentUser?.name || 'เจ้าหน้าที่คลินิก', inline: true }
+        ],
+        rawPayload: {
+          patientName: pName,
+          hn: pHn,
+          phone: formData.phone || formData.tel || '',
+          courseName: cName,
+          newUsed,
+          currentTotal,
+          newRem,
+          status: newRem === 0 ? 'จบคอร์สแล้ว 🎉' : `คงเหลือ ${newRem} ครั้ง ⏳`,
+          staff: currentUser?.name || 'เจ้าหน้าที่คลินิก',
+          branch: currentBranch?.name || 'สาขาหลัก'
+        },
+        discordColor: 0xd97706,
+        callAppScript
+      }).catch((err) => console.error('[MR Notification Error]:', err));
     } catch (err) {
       console.error('Quick use course error:', err);
       // Rollback ข้อมูลเดิมกรณี error
@@ -1758,6 +1792,44 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
           branch_id: String(recordToSave.branchId || currentBranch?.id || '')
         };
         await callAppScript('SAVE_DATA', 'Treatments', treatmentRow).catch(console.error);
+
+        // 📢 ส่งการแจ้งเตือนบันทึกการรักษา (OPD) - Dual Broadcast
+        const opdPatientName = `${combinedData.firstName || ''} ${combinedData.lastName || ''}`.trim() || combinedData.name || 'คนไข้';
+        const opdHn = combinedData.hn || combinedData.id || '-';
+        const opdPhone = combinedData.phone || updatedFormData.phone || (updatedFormData.phones && updatedFormData.phones[0]) || '';
+        const opdDiagnosis = recordToSave.diagnosis || recordToSave.dx || '-';
+        const opdTreatment = (Array.isArray(validTx) && validTx.length > 0)
+          ? validTx.join(', ')
+          : (recordToSave.treatmentDetail || recordToSave.note || recordToSave.treatment || '-');
+        const opdDoctor = recordToSave.doctor || '-';
+
+        dispatchClinicNotification({
+          eventType: 'opd',
+          settings: integrationTokens,
+          title: '🩺 บันทึกประวัติการรักษาใหม่ (OPD)',
+          message: `บันทึกการรักษาคนไข้: ${opdPatientName} (${opdHn})`,
+          fields: [
+            { name: '👤 คนไข้', value: `${opdPatientName} (${opdHn})`, inline: true },
+            { name: '👨‍⚕️ แพทย์ผู้ตรวจ', value: opdDoctor, inline: true },
+            { name: '🩺 ผลการวินิจฉัย', value: opdDiagnosis, inline: true },
+            { name: '💊 แผนการรักษา', value: opdTreatment, inline: true },
+            { name: '💰 ค่ารักษา', value: recordToSave.cost ? `${Number(recordToSave.cost).toLocaleString()} บาท` : '-', inline: true },
+            { name: '🌡️ ความดัน (BP)', value: recordToSave.bp || recordToSave.vitalSigns?.bp || '-', inline: true },
+            ...(opdPhone ? [{ name: '📞 เบอร์ติดต่อ', value: opdPhone, inline: true }] : [])
+          ],
+          rawPayload: {
+            patientName: opdPatientName,
+            hn: opdHn,
+            phone: opdPhone,
+            doctor: opdDoctor,
+            diagnosis: opdDiagnosis,
+            treatment: opdTreatment,
+            cost: recordToSave.cost,
+            branch: currentBranch?.name || 'สาขาหลัก'
+          },
+          discordColor: 0x7c3aed,
+          callAppScript
+        }).catch((err) => console.error('[OPD Notification Error]:', err));
       }
 
       setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));

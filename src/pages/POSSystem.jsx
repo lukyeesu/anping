@@ -20,6 +20,7 @@ import {
   Lock, Home, Save, UserCheck, Key, RotateCcw
 } from 'lucide-react';
 import { theme } from '../global/theme';
+import { dispatchClinicNotification, calculateDailySalesSummary } from '../lib/notificationHub';
 
 const POSSystem = ({ 
     products = [], setProducts, 
@@ -33,7 +34,9 @@ const POSSystem = ({
     branchesData = [],
     showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert,
     showMobileBars,
-    handlePrintReceipt
+    handlePrintReceipt,
+    currentUser,
+    integrationTokens = {}
 }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,7 +117,11 @@ const POSSystem = ({
   const checkoutModal = useModal();
   const historyModal = useModal();
   const manageModal = useModal();
-    const [paymentMethod, setPaymentMethod] = useState('cash');
+  const dailySummaryModal = useModal();
+  const [dailySummaryData, setDailySummaryData] = useState(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [isSendingSummary, setIsSendingSummary] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
 
@@ -830,6 +837,40 @@ const POSSystem = ({
         if (setPosHistoryData) {
             setPosHistoryData(prev => [transactionData, ...prev]);
         }
+
+        // ส่งการแจ้งเตือน Dual Broadcast (LINE + Discord)
+        const patientPhone = selectedPatientId 
+          ? ((patientsData || []).find(p => (p.id || p.hn) === selectedPatientId)?.phone || '')
+          : '';
+        const payMethodStr = paymentMethod === 'cash' ? 'เงินสด' : paymentMethod === 'transfer' ? 'เงินโอน' : paymentMethod === 'credit' ? 'บัตรเครดิต' : paymentMethod;
+        dispatchClinicNotification({
+            eventType: 'pos',
+            settings: integrationTokens,
+            title: '💵 ปิดบิล POS / ได้รับชำระเงินสำเร็จ',
+            message: `บิลเลขที่ ${receiptId} ยอดชำระ ${Number(grandTotal).toLocaleString()} บาท (${payMethodStr})`,
+            fields: [
+                { name: '🧾 เลขที่บิล', value: receiptId, inline: true },
+                { name: '💰 ยอดชำระสุทธิ', value: `${Number(grandTotal).toLocaleString()} บาท`, inline: true },
+                { name: '👤 คนไข้', value: cleanPatientName || 'ลูกค้าทั่วไป', inline: true },
+                { name: '💳 ช่องทางชำระ', value: payMethodStr, inline: true },
+                { name: '👩‍💼 ผู้ทำรายการ', value: currentUser?.name || currentUser?.username || 'เจ้าหน้าที่', inline: true },
+                { name: '📦 รายการสินค้า', value: `${cart.length} รายการ`, inline: true },
+                ...(patientPhone ? [{ name: '📞 เบอร์ติดต่อ', value: patientPhone, inline: true }] : [])
+            ],
+            rawPayload: {
+                receiptId,
+                grandTotal,
+                patientName: cleanPatientName || 'ลูกค้าทั่วไป',
+                hn: selectedPatientId || '',
+                phone: patientPhone,
+                paymentMethod: payMethodStr,
+                staff: currentUser?.name || currentUser?.username || 'เจ้าหน้าที่',
+                itemsCount: `${cart.length} รายการ`,
+                branch: currentBranch?.name || 'สาขาหลัก'
+            },
+            discordColor: 0x059669,
+            callAppScript
+        }).catch(err => console.error('[POS Notification Error]:', err));
         
         setIsProcessingPayment(false);
         setCheckoutSuccess(true);
@@ -859,6 +900,77 @@ const POSSystem = ({
       setSelectedHistoryTxn(null); // รีเซ็ตบิลที่เลือกดูอยู่
       setIsEditingHistory(false);
     }, 300);
+  };
+
+  // --- ฟังก์ชันเปิดหน้าต่างและคำนวณสรุปยอดขายประจำวัน ---
+  const handleOpenDailySummaryModal = async () => {
+    dailySummaryModal.open();
+    setIsSummaryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('pos_transactions')
+        .select('*')
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      const txnsToUse = (data && !error && data.length > 0) ? data : (posHistoryData || []);
+      const summary = calculateDailySalesSummary(txnsToUse, new Date());
+      setDailySummaryData(summary);
+    } catch (err) {
+      console.error('[POS Daily Summary Error]:', err);
+      const summary = calculateDailySalesSummary(posHistoryData || [], new Date());
+      setDailySummaryData(summary);
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  };
+
+  // --- ฟังก์ชันบรอดแคสต์ส่งสรุปยอดขายเข้า LINE และ Discord ---
+  const handleBroadcastDailySummary = async () => {
+    if (!dailySummaryData) return;
+    setIsSendingSummary(true);
+    try {
+      const res = await dispatchClinicNotification({
+        eventType: 'dashboard',
+        settings: integrationTokens,
+        title: '📊 สรุปยอดขายประจำวัน',
+        message: `ยอดขายรวมสุทธิ ฿${Number(dailySummaryData.totalAmount).toLocaleString()} (${dailySummaryData.billsCount} บิล)`,
+        fields: [
+          { name: '📅 ประจำวันที่', value: dailySummaryData.date, inline: true },
+          { name: '💰 ยอดขายรวมสุทธิ', value: `฿${Number(dailySummaryData.totalAmount).toLocaleString()}`, inline: true },
+          { name: '🧾 จำนวนบิลทั้งหมด', value: `${dailySummaryData.billsCount} บิล`, inline: true },
+          { name: '👥 คนไข้ที่รับบริการ', value: `${dailySummaryData.patientsCount} ท่าน`, inline: true },
+          { name: '💵 เงินสด', value: `฿${Number(dailySummaryData.cashAmount).toLocaleString()} (${dailySummaryData.cashCount} บิล)`, inline: true },
+          { name: '📲 เงินโอน', value: `฿${Number(dailySummaryData.transferAmount).toLocaleString()} (${dailySummaryData.transferCount} บิล)`, inline: true },
+          { name: '💳 บัตรเครดิต', value: `฿${Number(dailySummaryData.creditAmount).toLocaleString()} (${dailySummaryData.creditCount} บิล)`, inline: true },
+          { name: '🏥 สาขา', value: currentBranch?.name || 'สาขาหลัก', inline: true }
+        ],
+        rawPayload: {
+          totalAmount: dailySummaryData.totalAmount,
+          billsCount: dailySummaryData.billsCount,
+          patientsCount: dailySummaryData.patientsCount,
+          cashAmount: dailySummaryData.cashAmount,
+          transferAmount: dailySummaryData.transferAmount,
+          creditAmount: dailySummaryData.creditAmount,
+          branch: currentBranch?.name || 'สาขาหลัก',
+          date: dailySummaryData.date
+        },
+        discordColor: 0x1e40af,
+        callAppScript
+      });
+
+      if (res?.success || res?.line?.success || res?.discord?.success) {
+        showToast('📢 ส่งสรุปยอดขายเข้า LINE และ Discord สำเร็จเรียบร้อย', 'success');
+        dailySummaryModal.close();
+      } else {
+        showToast(res?.error || 'ส่งแจ้งเตือนไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อ', 'warning');
+      }
+    } catch (err) {
+      console.error('[Send Daily Summary Error]:', err);
+      showToast('เกิดข้อผิดพลาดในการส่งสรุปยอดขาย', 'danger');
+    } finally {
+      setIsSendingSummary(false);
+    }
   };
 
   // --- ฟังก์ชันจัดการดูและแก้ไขบิลย้อนหลัง ---
@@ -1139,6 +1251,13 @@ const POSSystem = ({
           </div>
           
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleOpenDailySummaryModal}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 hover:text-blue-800 hover:bg-blue-100 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
+              title="สรุปยอดขายประจำวัน & ส่งแจ้งเตือนเข้า LINE / Discord"
+            >
+              <BarChart3 size={16} className="sm:w-[18px] sm:h-[18px] text-blue-600" /> <span className="hidden sm:inline">สรุปยอดวันนี้</span><span className="sm:hidden">สรุปยอด</span>
+            </button>
             <button
               onClick={() => historyModal.open()}
               className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
@@ -2211,7 +2330,176 @@ const POSSystem = ({
         document.body
       )}
 
-      {/* Modal และ Alert จัดการสินค้าถูกย้ายไปยัง CatalogManager แล้ว */}
+      {/* --- Modal สรุปยอดขายประจำวัน (Daily Sales Summary Modal) --- */}
+      {dailySummaryModal.isOpen && createPortal(
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm ${dailySummaryModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${dailySummaryModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex items-center justify-between shrink-0 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center backdrop-blur-sm">
+                  <BarChart3 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold kanit-text flex items-center gap-2">
+                    สรุปยอดขายประจำวัน
+                  </h2>
+                  <p className="text-xs text-blue-100 kanit-text">
+                    ประจำวันที่ {dailySummaryData?.date || new Date().toLocaleDateString('th-TH')} • {currentBranch?.name || 'สาขาหลัก'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => dailySummaryModal.close()}
+                className="text-white/80 hover:text-white hover:bg-white/10 p-2 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
+              {isSummaryLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                  <p className="text-sm kanit-text font-medium">กำลังคำนวณยอดขายประจำวัน...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Hero Total Amount */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 rounded-2xl p-4 sm:p-5 text-center">
+                    <span className="text-xs sm:text-sm font-semibold text-blue-700 kanit-text uppercase tracking-wide">
+                      ยอดขายรวมสุทธิวันนี้
+                    </span>
+                    <div className="text-3xl sm:text-4xl font-extrabold text-blue-900 font-data my-1">
+                      ฿{Number(dailySummaryData?.totalAmount || 0).toLocaleString()}
+                    </div>
+                    <div className="flex items-center justify-center gap-3 mt-2 text-xs sm:text-sm text-slate-500 font-medium kanit-text">
+                      <span className="bg-white/80 border border-blue-100 px-3 py-1 rounded-full shadow-2xs">
+                        🧾 ทั้งหมด <strong>{dailySummaryData?.billsCount || 0}</strong> บิล
+                      </span>
+                      <span className="bg-white/80 border border-blue-100 px-3 py-1 rounded-full shadow-2xs">
+                        👥 คนไข้ <strong>{dailySummaryData?.patientsCount || 0}</strong> ท่าน
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Payment Breakdown Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-emerald-50/60 border border-emerald-100/80 rounded-xl p-3.5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 kanit-text mb-1">
+                        <span className="flex items-center gap-1.5"><Banknote size={15} /> เงินสด</span>
+                        <span className="text-[11px] text-emerald-600 bg-white/70 px-1.5 py-0.5 rounded">{dailySummaryData?.cashCount || 0} บิล</span>
+                      </div>
+                      <div className="text-lg sm:text-xl font-bold text-emerald-950 font-data">
+                        ฿{Number(dailySummaryData?.cashAmount || 0).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="bg-sky-50/60 border border-sky-100/80 rounded-xl p-3.5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-xs font-semibold text-sky-800 kanit-text mb-1">
+                        <span className="flex items-center gap-1.5"><QrCode size={15} /> เงินโอน</span>
+                        <span className="text-[11px] text-sky-600 bg-white/70 px-1.5 py-0.5 rounded">{dailySummaryData?.transferCount || 0} บิล</span>
+                      </div>
+                      <div className="text-lg sm:text-xl font-bold text-sky-950 font-data">
+                        ฿{Number(dailySummaryData?.transferAmount || 0).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="bg-purple-50/60 border border-purple-100/80 rounded-xl p-3.5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-xs font-semibold text-purple-800 kanit-text mb-1">
+                        <span className="flex items-center gap-1.5"><CreditCard size={15} /> บัตรเครดิต</span>
+                        <span className="text-[11px] text-purple-600 bg-white/70 px-1.5 py-0.5 rounded">{dailySummaryData?.creditCount || 0} บิล</span>
+                      </div>
+                      <div className="text-lg sm:text-xl font-bold text-purple-950 font-data">
+                        ฿{Number(dailySummaryData?.creditAmount || 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transactions List */}
+                  <div className="mt-4">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider kanit-text mb-2 flex items-center justify-between">
+                      <span>รายการบิลวันนี้ ({dailySummaryData?.billsCount || 0})</span>
+                      <span className="text-[11px] font-normal text-slate-400">เรียงตามเวลาล่าสุด</span>
+                    </h3>
+                    
+                    {(!dailySummaryData?.transactions || dailySummaryData.transactions.length === 0) ? (
+                      <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                        <p className="text-xs text-slate-400 kanit-text">ยังไม่มียอดขายในวันนี้</p>
+                      </div>
+                    ) : (
+                      <div className="border border-slate-100 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-56 overflow-y-auto custom-scrollbar">
+                        {dailySummaryData.transactions.map((tx, idx) => {
+                          const amt = Number(tx.net_amount ?? tx.netAmount ?? tx.grandTotal ?? tx.total_amount ?? 0);
+                          const pMethod = tx.payment_method || tx.paymentMethod || 'cash';
+                          const pMethodThai = pMethod === 'cash' ? 'เงินสด' : (pMethod === 'transfer' ? 'เงินโอน' : (pMethod === 'credit' ? 'บัตรเครดิต' : pMethod));
+                          const pName = tx.patient_name || tx.patientName || 'ลูกค้าทั่วไป';
+                          const recNo = tx.receipt_no || tx.receiptNo || tx.id || '-';
+                          const timeStr = tx.created_at ? new Date(tx.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-';
+
+                          return (
+                            <div key={tx.id || idx} className="p-2.5 sm:p-3 hover:bg-slate-50/70 transition-colors flex items-center justify-between text-xs sm:text-sm">
+                              <div className="min-w-0 pr-2">
+                                <div className="font-semibold text-slate-800 truncate kanit-text flex items-center gap-1.5">
+                                  <span className="text-blue-600 font-mono text-[11px] sm:text-xs">[{recNo}]</span>
+                                  <span>{pName}</span>
+                                </div>
+                                <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                                  <span>🕒 {timeStr} น.</span>
+                                  <span>•</span>
+                                  <span className="text-slate-500 font-medium">{pMethodThai}</span>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="font-bold text-slate-900 font-data text-sm sm:text-base">
+                                  ฿{amt.toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
+              <button 
+                onClick={() => dailySummaryModal.close()} 
+                className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-medium kanit-text hover:bg-slate-100 transition-colors text-xs sm:text-sm"
+              >
+                ปิดหน้าต่าง
+              </button>
+
+              <button
+                onClick={handleBroadcastDailySummary}
+                disabled={isSendingSummary || isSummaryLoading}
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold kanit-text shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-xs sm:text-sm disabled:opacity-50"
+              >
+                {isSendingSummary ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>กำลังส่งแจ้งเตือน...</span>
+                  </>
+                ) : (
+                  <>
+                    <Megaphone size={16} />
+                    <span>📢 ส่งสรุปยอดเข้า LINE & Discord</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* --- Modal เลือกคอร์สแชร์ข้ามคนไข้ (Cross-Patient Course Sharing) --- */}
       {isShareCourseModalOpen && createPortal(

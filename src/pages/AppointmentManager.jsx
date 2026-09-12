@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
+import { dispatchClinicNotification } from '../lib/notificationHub';
 
 const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', suffix = '', formatter, className = '', title }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -58,13 +59,13 @@ const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', 
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [value, duration]);
-
-  const valToFormat = decimals > 0 ? displayValue : Math.round(displayValue);
+  }, [value, duration, decimals]);
 
   const formattedStr = formatter 
-    ? formatter(valToFormat) 
-    : (decimals > 0 ? displayValue.toFixed(decimals) : Math.round(displayValue).toLocaleString('th-TH'));
+    ? formatter(displayValue) 
+    : decimals > 0 
+      ? displayValue.toLocaleString('th-TH', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+      : Math.round(displayValue).toLocaleString('th-TH');
 
   return (
     <span className={className} title={title || formattedStr}>
@@ -73,7 +74,7 @@ const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', 
   );
 };
 
-const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats }) => {
+const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats, integrationTokens = {} }) => {
   const [viewMode, setViewMode] = useState('table'); 
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -365,6 +366,32 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
       setQueueData(prev => prev.map(a => a.id === eventId ? updatedAppt : a));
       showToast(`เลื่อนนัดหมายไปวันที่ ${d}/${m}/${y} แล้ว`, 'success');
 
+      // ส่งแจ้งเตือนเลื่อนนัด (Dual Broadcast)
+      dispatchClinicNotification({
+          eventType: 'queue',
+          settings: integrationTokens,
+          title: '🔄 เลื่อนนัดหมายคนไข้ (Calendar)',
+          message: `คนไข้: ${appt.patientName || appt.name || '-'} เลื่อนเป็นวันที่ ${d}/${m}/${y} ${oldTime}`,
+          fields: [
+              { name: '👤 คนไข้', value: `${appt.patientName || appt.name || '-'} (${appt.hn || '-'})`, inline: true },
+              { name: '📅 วันเวลานัดใหม่', value: newDatetimeStr, inline: true },
+              { name: '👨‍⚕️ แพทย์', value: appt.doctor || appt.artist || '-', inline: true },
+              { name: '🔄 จำนวนครั้งที่เลื่อน', value: `${updatedAppt.postponedCount || 1} ครั้ง`, inline: true }
+          ],
+          rawPayload: {
+              patientName: appt.patientName || appt.name,
+              hn: appt.hn,
+              phone: appt.phone,
+              datetime: newDatetimeStr,
+              doctor: appt.doctor || appt.artist,
+              status: 'เลื่อนนัด 🔄',
+              postponedCount: updatedAppt.postponedCount || 1,
+              isPostpone: true
+          },
+          discordColor: 0xf59e0b,
+          callAppScript
+      }).catch(err => console.warn('Queue notification error:', err));
+
       try {
           await callAppScript('SAVE_DATA', 'Queue', updatedAppt);
       } catch(e) {
@@ -467,6 +494,43 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
             });
         }
         
+        // ส่งแจ้งเตือน Dual Broadcast (LINE + Discord)
+        const apptStatusThai = {
+            'pending': 'รอยืนยัน ⏳',
+            'confirmed': 'ยืนยันแล้ว ✅',
+            'completed': 'เสร็จสิ้น ✨',
+            'cancelled': 'ยกเลิก ❌',
+            'postponed': 'เลื่อนนัด 🔄',
+            'no-show': 'ไม่มาตามนัด ⚠️'
+        }[payload.status] || payload.status || 'รอยืนยัน';
+
+        dispatchClinicNotification({
+            eventType: 'queue',
+            settings: integrationTokens,
+            title: editingId ? '🗓️ อัปเดตข้อมูลการนัดหมาย' : '🗓️ มีการสร้างนัดหมายใหม่',
+            message: `คนไข้: ${payload.patientName || payload.hn || 'ไม่ระบุชื่อ'} วันเวลา: ${payload.datetime || '-'} แพทย์: ${payload.doctor || '-'}`,
+            fields: [
+                { name: '👤 คนไข้', value: `${payload.patientName || '-'} (${payload.hn || '-'})`, inline: true },
+                { name: '📅 วันเวลานัด', value: payload.datetime || '-', inline: true },
+                { name: '👨‍⚕️ แพทย์', value: payload.doctor || '-', inline: true },
+                { name: '🏷️ สถานะ', value: apptStatusThai, inline: true },
+                { name: '📋 บริการ / สาเหตุ', value: payload.reason || payload.serviceType || '-', inline: true },
+                { name: '📞 เบอร์ติดต่อ', value: Array.isArray(cleanPhones) ? cleanPhones.join(', ') : (phonePayload || '-'), inline: true }
+            ],
+            rawPayload: {
+                patientName: payload.patientName,
+                hn: payload.hn,
+                phone: Array.isArray(cleanPhones) && cleanPhones.length > 0 ? cleanPhones[0] : phonePayload,
+                datetime: payload.datetime,
+                doctor: payload.doctor,
+                status: apptStatusThai,
+                reason: payload.reason || payload.serviceType,
+                branch: currentBranch?.name || 'สาขาหลัก'
+            },
+            discordColor: 0x0ea5e9,
+            callAppScript
+        }).catch(err => console.warn('Queue notification error:', err));
+
         apptModal.close(); 
         showToast(editingId ? 'แก้ไขนัดหมายสำเร็จ' : 'เพิ่มนัดหมายสำเร็จ', 'success');
     } catch(e) { showToast('บันทึกไม่สำเร็จ กรุณาลองใหม่', 'warning'); }

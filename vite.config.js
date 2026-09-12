@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import apiDbHandler from './api/db.js'
 import apiTtsHandler from './api/tts.js'
+import apiLineHandler from './api/line.js'
 
 function apiDevMiddlewarePlugin() {
   return {
@@ -64,6 +65,40 @@ function apiDevMiddlewarePlugin() {
                 };
                 await apiDbHandler(req, resMock);
               } catch (err) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ status: 'error', message: err?.message || String(err) }));
+              }
+            });
+            return;
+          }
+
+          if (pathname === '/api/line' || pathname.startsWith('/api/line?')) {
+            const query = Object.fromEntries(urlObj.searchParams.entries());
+            req.query = query;
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', async () => {
+              try {
+                req.body = body ? JSON.parse(body) : {};
+                const resMock = {
+                  statusCode: 200,
+                  setHeader: (k, v) => res.setHeader(k, v),
+                  status: function(code) {
+                    res.statusCode = code;
+                    return this;
+                  },
+                  json: function(data) {
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify(data));
+                  },
+                  send: function(msg) {
+                    res.end(msg);
+                  }
+                };
+                await apiLineHandler(req, resMock);
+              } catch (err) {
+                console.error("Vite Line Handler Error:", err);
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ status: 'error', message: err?.message || String(err) }));

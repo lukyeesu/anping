@@ -13,10 +13,12 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, Cloud, Database
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Cloud, Database,
+  Bell, Bot, RefreshCw, Send, Eye, EyeOff, Hash, MessageSquare, Check
 } from 'lucide-react';
 import { clearAllLocalStores } from '../lib/offlineStore';
 import { theme } from '../global/theme';
+import { normalizeIntegrationTokens, syncLineBotQuotas, sendDiscordEmbed, sendTestLinePush, sendMenuLinePush } from '../lib/notificationHub';
 
 const SettingsManager = ({
   staffPrefixes = [],
@@ -77,7 +79,10 @@ const SettingsManager = ({
   const [newApptStatus, setNewApptStatus] = useState('');
   const [selectedColor, setSelectedColor] = useState('sky');
   const [localApptStatuses, setLocalApptStatuses] = useState([]);
-  const [localIntegrationTokens, setLocalIntegrationTokens] = useState({ line: '', lineGroupId: '', telegram: '', discord: '' });
+  const [localIntegrationTokens, setLocalIntegrationTokens] = useState(() => normalizeIntegrationTokens(integrationTokens));
+  const [isSyncingQuota, setIsSyncingQuota] = useState(false);
+  const [testingDiscordId, setTestingDiscordId] = useState(null);
+  const [showBotTokens, setShowBotTokens] = useState({});
   const [localGdriveTokens, setLocalGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
   // Sync with props
@@ -102,7 +107,7 @@ const SettingsManager = ({
   }, [appointmentStatuses]);
 
   useEffect(() => {
-    if (integrationTokens) setLocalIntegrationTokens({ ...integrationTokens });
+    if (integrationTokens) setLocalIntegrationTokens(normalizeIntegrationTokens(integrationTokens));
   }, [integrationTokens]);
 
   useEffect(() => {
@@ -300,11 +305,312 @@ const SettingsManager = ({
     }
   };
 
+  // --- LINE Handlers ---
+  const handleToggleLine = (enabled) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: { ...(prev.line || {}), enabled }
+    }));
+  };
+
+  const handleToggleLineEvent = (eventKey) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        events: {
+          ...(prev.line?.events || {}),
+          [eventKey]: !prev.line?.events?.[eventKey]
+        }
+      }
+    }));
+  };
+
+  const handleAddLineRecipient = () => {
+    const newRec = {
+      id: `rec_${Date.now()}`,
+      name: `กลุ่มที่ ${(localIntegrationTokens.line?.recipients || []).length + 1}`,
+      chatId: ''
+    };
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        recipients: [...(prev.line?.recipients || []), newRec]
+      }
+    }));
+  };
+
+  const handleUpdateLineRecipient = (id, field, val) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        recipients: (prev.line?.recipients || []).map(r => r.id === id ? { ...r, [field]: val } : r)
+      }
+    }));
+  };
+
+  const handleRemoveLineRecipient = (id) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        recipients: (prev.line?.recipients || []).filter(r => r.id !== id)
+      }
+    }));
+  };
+
+  const handleAddLineBot = () => {
+    const nextNum = (localIntegrationTokens.line?.bots || []).length + 1;
+    const newBot = {
+      id: `bot_${Date.now()}`,
+      name: `SHK Metal${nextNum}`,
+      token: '',
+      customChatId: '',
+      usedQuota: 0,
+      totalQuota: 300
+    };
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        bots: [...(prev.line?.bots || []), newBot]
+      }
+    }));
+  };
+
+  const handleUpdateLineBot = (id, field, val) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        bots: (prev.line?.bots || []).map(b => b.id === id ? { ...b, [field]: val } : b)
+      }
+    }));
+  };
+
+  const handleRemoveLineBot = (id) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      line: {
+        ...(prev.line || {}),
+        bots: (prev.line?.bots || []).filter(b => b.id !== id)
+      }
+    }));
+  };
+
+  const handleSyncLineQuotas = async (silent = false) => {
+    const bots = localIntegrationTokens?.line?.bots || [];
+    if (bots.length === 0 || !bots.some(b => b.token)) {
+      if (!silent) showToast('กรุณากรอก Channel Access Token ของบอทก่อนซิงก์โควต้า', 'warning');
+      return;
+    }
+    if (!silent) setIsSyncingQuota(true);
+    try {
+      const updated = await syncLineBotQuotas(bots);
+      setLocalIntegrationTokens(prev => ({
+        ...prev,
+        line: {
+          ...(prev.line || {}),
+          bots: updated
+        }
+      }));
+      // ซิงก์ค่ากลับไปบันทึกลงตาราง settings อัตโนมัติ
+      if (typeof callAppScript === 'function') {
+        callAppScript('SAVE_DATA', 'Settings', {
+          id: 'integration_tokens',
+          values: {
+            ...localIntegrationTokens,
+            line: { ...(localIntegrationTokens.line || {}), bots: updated }
+          }
+        }).catch(() => {});
+      }
+      if (!silent) showToast('ซิงก์ข้อมูลโควต้าจริงจาก LINE สำเร็จเรียบร้อย', 'success');
+    } catch (err) {
+      if (!silent) showToast('ไม่สามารถซิงก์โควต้าได้ โปรดตรวจสอบ Token', 'danger');
+    } finally {
+      if (!silent) setIsSyncingQuota(false);
+    }
+  };
+
+  // Auto-sync real-time LINE quota on subtab open
+  useEffect(() => {
+    if (activeSubTab === 'integrations') {
+      const bots = localIntegrationTokens?.line?.bots || [];
+      if (bots.length > 0 && bots.some(b => b.token)) {
+        handleSyncLineQuotas(true);
+      }
+    }
+  }, [activeSubTab]);
+
+  // Periodic real-time quota polling every 20s while viewing Integrations subtab
+  useEffect(() => {
+    if (activeSubTab !== 'integrations') return;
+    const interval = setInterval(() => {
+      const bots = localIntegrationTokens?.line?.bots || [];
+      if (bots.length > 0 && bots.some(b => b.token)) {
+        handleSyncLineQuotas(true);
+      }
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [activeSubTab, localIntegrationTokens?.line?.bots]);
+
+  // --- Discord Handlers ---
+  const handleToggleDiscord = (enabled) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      discord: { ...(prev.discord || {}), enabled }
+    }));
+  };
+
+  const handleAddDiscordChannel = () => {
+    const nextNum = (localIntegrationTokens.discord?.channels || []).length + 1;
+    const newChannel = {
+      id: `dc_${Date.now()}`,
+      name: `ห้องที่ ${nextNum} 💬`,
+      event: 'all',
+      webhookUrl: ''
+    };
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      discord: {
+        ...(prev.discord || {}),
+        channels: [...(prev.discord?.channels || []), newChannel]
+      }
+    }));
+  };
+
+  const handleUpdateDiscordChannel = (id, field, val) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      discord: {
+        ...(prev.discord || {}),
+        channels: (prev.discord?.channels || []).map(ch => ch.id === id ? { ...ch, [field]: val } : ch)
+      }
+    }));
+  };
+
+  const handleRemoveDiscordChannel = (id) => {
+    setLocalIntegrationTokens(prev => ({
+      ...prev,
+      discord: {
+        ...(prev.discord || {}),
+        channels: (prev.discord?.channels || []).filter(ch => ch.id !== id)
+      }
+    }));
+  };
+
+  const handleTestDiscordChannel = async (channel) => {
+    if (!channel?.webhookUrl?.trim()) {
+      showToast('กรุณากรอก Webhook URL ของห้องนี้ก่อนกดทดสอบ', 'warning');
+      return;
+    }
+    setTestingDiscordId(channel.id);
+    try {
+      const res = await sendDiscordEmbed(channel.webhookUrl.trim(), {
+        title: `🔔 ทดสอบการแจ้งเตือนห้อง #${channel.name}`,
+        description: `ระบบเชื่อมต่อ Webhook ของห้องนี้สำเร็จเรียบร้อยแล้ว!\nข้อความนี้ส่งมาจากระบบบริหารคลินิก Anping Clinic`,
+        color: 0x10b981,
+        fields: [
+          { name: '📌 ชื่อห้องใน Discord', value: channel.name, inline: true },
+          { name: '🎯 หมวดหมู่การแจ้งเตือน', value: channel.event === 'all' ? 'ทุกเหตุการณ์' : channel.event, inline: true },
+          { name: '⚡ สถานะการเชื่อมต่อ', value: 'ออนไลน์และพร้อมใช้งาน 100%', inline: false }
+        ],
+        footerText: 'Anping Clinic Notification System'
+      });
+
+      if (res.success) {
+        showToast(`ส่งข้อความทดสอบเข้าห้อง ${channel.name} สำเร็จ! กรุณาเช็กใน Discord`, 'success');
+      } else {
+        showToast(`ส่งไม่สำเร็จ: ${res.error || 'โปรดตรวจสอบความถูกต้องของ URL'}`, 'danger');
+      }
+    } catch (err) {
+      showToast(`เกิดข้อผิดพลาด: ${err.message}`, 'danger');
+    } finally {
+      setTestingDiscordId(null);
+    }
+  };
+
+  const [testingLineBotId, setTestingLineBotId] = useState(null);
+
+  const handleTestLineBot = async (bot) => {
+    if (!bot?.token?.trim()) {
+      showToast('กรุณากรอก Channel Access Token ของบอทก่อนกดทดสอบ', 'warning');
+      return;
+    }
+    const recipients = localIntegrationTokens.line?.recipients || [];
+    const chatTarget = bot.customChatId?.trim() || recipients.find(r => r.chatId?.trim())?.chatId?.trim();
+    if (!chatTarget) {
+      showToast('กรุณาระบุ ID กลุ่ม หรือ ID ผู้รับ ในช่องเป้าหมายผู้รับด้านล่างก่อนทดสอบส่ง LINE', 'warning');
+      return;
+    }
+
+    setTestingLineBotId(bot.id);
+    try {
+      const res = await sendTestLinePush({ token: bot.token.trim(), targetId: chatTarget });
+      if (res.success) {
+        showToast('ส่งข้อความทดสอบเข้า LINE สำเร็จแล้ว! กรุณาเช็กในแชท LINE', 'success');
+        setTimeout(() => {
+          handleSyncLineQuotas(true);
+        }, 1200);
+      } else {
+        showToast(`ส่งไม่สำเร็จ: ${res.error || 'โปรดตรวจสอบ Token และ ID ผู้รับ'}`, 'danger');
+      }
+    } catch (err) {
+      showToast(`เกิดข้อผิดพลาด: ${err.message}`, 'danger');
+    } finally {
+      setTestingLineBotId(null);
+    }
+  };
+
+  const [isSendingMenu, setIsSendingMenu] = useState(false);
+
+  const handleSendMenuFlex = async () => {
+    const bots = localIntegrationTokens.line?.bots || [];
+    const activeBot = bots.find(b => b.token?.trim());
+    if (!activeBot) {
+      showToast('กรุณากรอก Channel Access Token ของบอทก่อนส่งเมนูลัด', 'warning');
+      return;
+    }
+    const recipients = localIntegrationTokens.line?.recipients || [];
+    const chatTarget = activeBot.customChatId?.trim() || recipients.find(r => r.chatId?.trim())?.chatId?.trim();
+    if (!chatTarget) {
+      showToast('กรุณาระบุ ID กลุ่ม หรือ ID ผู้รับ ในช่องเป้าหมายผู้รับด้านล่างก่อนส่งเมนูเข้า LINE', 'warning');
+      return;
+    }
+
+    setIsSendingMenu(true);
+    try {
+      const res = await sendMenuLinePush({
+        token: activeBot.token.trim(),
+        targetId: chatTarget
+      });
+      if (res.success) {
+        showToast('ส่ง Flex เมนูคำสั่งลัดเข้า LINE สำเร็จเรียบร้อยแล้ว!', 'success');
+        setTimeout(() => {
+          handleSyncLineQuotas(true);
+        }, 1200);
+      } else {
+        showToast(`ส่งไม่สำเร็จ: ${res.error || 'โปรดตรวจสอบ Token และ ID ผู้รับ'}`, 'danger');
+      }
+    } catch (err) {
+      showToast(`เกิดข้อผิดพลาด: ${err.message}`, 'danger');
+    } finally {
+      setIsSendingMenu(false);
+    }
+  };
+
   const saveIntegrations = async () => {
     setIsSaving(true);
     try {
       await callAppScript('SAVE_DATA', 'Settings', { id: 'integration_tokens', values: localIntegrationTokens });
       setIntegrationTokens(localIntegrationTokens);
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('clinic_integration_tokens', JSON.stringify(localIntegrationTokens));
+        }
+      } catch (err) {}
       showToast('บันทึกการเชื่อมต่อสำเร็จ', 'success');
     } catch (e) {
       showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
@@ -832,65 +1138,474 @@ const SettingsManager = ({
               </div>
             )}
 
-            {/* SUBTAB 5: INTEGRATIONS (การเชื่อมต่อแจ้งเตือน) */}
+            {/* SUBTAB 5: INTEGRATIONS (การเชื่อมต่อแจ้งเตือน LINE & DISCORD) */}
             {activeSubTab === 'integrations' && (
-              <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm animate-in slide-in-from-right-4 duration-300 text-left">
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold text-slate-800 kanit-text">ตั้งค่าการเชื่อมต่อ และ การแจ้งเตือน (Integrations)</h3>
-                  <p className="text-sm text-slate-500 kanit-text mt-1">ใส่ Token เพื่อเชื่อมต่อระบบกับแอปพลิเคชันต่างๆ</p>
+              <div className="space-y-8 animate-in slide-in-from-right-4 duration-300 text-left">
+                {/* 🟢 CARD 1: LINE MESSAGING API (MULTI-BOT FAILOVER POOL) */}
+                <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm">
+                  {/* Header */}
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs">
+                      <Bell size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
+                        แจ้งเตือน (LINE Notify / Bot)
+                      </h3>
+                      <p className="text-sm text-slate-500 kanit-text mt-0.5">
+                        ตั้งค่าการส่งข้อความแจ้งเตือนเข้าแชทและสรุปยอด (รองรับระบบบอทสำรองเมื่อโควต้าเต็ม)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 1. สวิตช์เปิด/ปิดการแจ้งเตือน LINE */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 kanit-text">
+                      สถานะการส่งแจ้งเตือน
+                    </label>
+                    <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleLine(!localIntegrationTokens.line?.enabled)}
+                          className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 focus:outline-hidden ${
+                            localIntegrationTokens.line?.enabled ? 'bg-emerald-500' : 'bg-slate-300'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${
+                              localIntegrationTokens.line?.enabled ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className="font-bold text-sm text-slate-700 kanit-text">
+                          {localIntegrationTokens.line?.enabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 kanit-text hidden sm:inline">
+                        {localIntegrationTokens.line?.enabled ? 'ระบบจะส่งการแจ้งเตือนตามรายการที่เลือกด้านล่าง' : 'ปิดการส่งข้อความเข้า LINE ชั่วคราว'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. ตัวเลือกประเภทการแจ้งเตือนเข้า LINE (ตามที่ผู้ใช้สั่ง) */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 kanit-text">
+                      เลือกรายการที่ต้องการส่งเข้า LINE:
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {[
+                        { key: 'queue', label: 'นัดหมายคนไข้ (Queue)', desc: 'จองคิว, ยืนยัน, เลื่อนนัด' },
+                        { key: 'pos', label: 'ปิดบิล / การเงิน (POS)', desc: 'ชำระเงิน, ออกใบเสร็จ' },
+                        { key: 'opd', label: 'ประวัติการรักษา (OPD)', desc: 'บันทึกการตรวจรักษา' },
+                        { key: 'mr', label: 'เวชระเบียน / ตัดคอร์ส', desc: 'ลงทะเบียน, ตัดรอบคอร์ส' },
+                        { key: 'dashboard', label: 'สรุปยอดประจำวัน', desc: 'ยอดขายและสถิติสิ้นวัน' }
+                      ].map((item) => {
+                        const isChecked = localIntegrationTokens.line?.events?.[item.key] !== false;
+                        return (
+                          <button
+                            type="button"
+                            key={item.key}
+                            onClick={() => handleToggleLineEvent(item.key)}
+                            className={`flex items-start gap-3 p-3 rounded-2xl border text-left transition-all ${
+                              isChecked
+                                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950 shadow-2xs'
+                                : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div className={`mt-0.5 w-5 h-5 rounded-lg flex items-center justify-center shrink-0 border transition-all ${
+                              isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 bg-white'
+                            }`}>
+                              {isChecked && <Check size={14} strokeWidth={3} />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs sm:text-sm kanit-text leading-tight">{item.label}</div>
+                              <div className="text-[11px] text-slate-400 kanit-text mt-0.5">{item.desc}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 3. กล่อง "ID กลุ่ม หรือ ID ลูกค้าที่จะแจ้งเตือน" */}
+                  <div className="mb-6 p-5 rounded-2xl border border-slate-200/90 bg-emerald-50/20">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-800 kanit-text">
+                          ID กลุ่ม หรือ ID ลูกค้าที่จะแจ้งเตือน
+                        </span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium kanit-text">
+                          ส่งให้หลายคนพร้อมกันได้
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddLineRecipient}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-sky-600 hover:text-sky-700 transition-colors kanit-text"
+                      >
+                        <Plus size={14} /> เพิ่มผู้รับ
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {(localIntegrationTokens.line?.recipients || []).map((rec, idx) => (
+                        <div key={rec.id || idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={rec.name || ''}
+                            onChange={(e) => handleUpdateLineRecipient(rec.id, 'name', e.target.value)}
+                            placeholder="ป้ายชื่อ (เช่น กลุ่ม)"
+                            className="w-28 sm:w-36 bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 kanit-text outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all shrink-0"
+                          />
+                          <input
+                            type="text"
+                            value={rec.chatId || ''}
+                            onChange={(e) => handleUpdateLineRecipient(rec.id, 'chatId', e.target.value)}
+                            placeholder="ระบุ Line Group ID (เช่น C...) หรือ User ID (เช่น U...)"
+                            className="flex-1 bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 font-mono outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all min-w-0"
+                          />
+                          {(localIntegrationTokens.line?.recipients || []).length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLineRecipient(rec.id)}
+                              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
+                              title="ลบผู้รับนี้"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400 kanit-text mt-2.5">
+                      💡 บอททุกตัวในรายการด้านล่างจะยิงข้อความไปที่แชทเหล่านี้ทั้งหมด
+                    </p>
+                  </div>
+
+                  {/* 4. รายชื่อบอท (สำรองเมื่อโควต้าเต็ม) */}
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                      <h4 className="font-bold text-sm text-slate-700 kanit-text">
+                        รายชื่อบอท (สำรองเมื่อโควต้าเต็ม)
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSendMenuFlex}
+                          disabled={isSendingMenu}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold text-xs kanit-text transition-all disabled:opacity-50 shadow-2xs"
+                          title="ส่ง Flex Menu คำสั่งลัดเข้า LINE กลุ่มทันที"
+                        >
+                          {isSendingMenu ? <Loader2 size={13} className="animate-spin" /> : <Bot size={13} />}
+                          <span>📲 ส่งเมนูลัดเข้า LINE</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSyncLineQuotas}
+                          disabled={isSyncingQuota}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold text-xs kanit-text transition-all disabled:opacity-50"
+                        >
+                          <RefreshCw size={13} className={isSyncingQuota ? 'animate-spin' : ''} />
+                          {isSyncingQuota ? 'กำลังซิงก์...' : 'ซิงก์โควต้าจริง'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddLineBot}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-800 text-white hover:bg-slate-900 font-bold text-xs kanit-text transition-all shadow-2xs"
+                        >
+                          <Plus size={13} /> เพิ่มบอท
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* การ์ดบอทแต่ละตัว */}
+                    <div className="space-y-4">
+                      {(localIntegrationTokens.line?.bots || []).map((bot, index) => {
+                        const used = Number(bot.usedQuota) || 0;
+                        const total = Number(bot.totalQuota) || 300;
+                        const isQuotaFull = used >= total;
+                        const isHigh = used >= 250;
+                        const isShowToken = showBotTokens[bot.id];
+
+                        return (
+                          <div
+                            key={bot.id || index}
+                            className={`p-5 rounded-2xl border transition-all ${
+                              isQuotaFull
+                                ? 'bg-rose-50/30 border-rose-200 shadow-2xs'
+                                : 'bg-white border-slate-200 shadow-2xs'
+                            }`}
+                          >
+                            {/* บรรทัดหัวเรื่องบอท */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-500 kanit-text shrink-0">
+                                  บอทตัวที่ {index + 1}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={bot.name || ''}
+                                  onChange={(e) => handleUpdateLineBot(bot.id, 'name', e.target.value)}
+                                  placeholder={`ชื่อบอท (เช่น SHK Metal${index + 1})`}
+                                  className="font-bold text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 kanit-text outline-none focus:ring-1 focus:ring-sky-500 w-36 sm:w-44"
+                                />
+                                <span
+                                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full font-mono shrink-0 ${
+                                    isQuotaFull
+                                      ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                      : isHigh
+                                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                      : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                  }`}
+                                >
+                                  โควต้า: {used}/{total}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTestLineBot(bot)}
+                                  disabled={testingLineBotId === bot.id}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200 transition-colors disabled:opacity-50 kanit-text"
+                                  title="ทดสอบส่งข้อความเข้า LINE ทันที"
+                                >
+                                  {testingLineBotId === bot.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                  <span>ทดสอบส่ง</span>
+                                </button>
+
+                                {(localIntegrationTokens.line?.bots || []).length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveLineBot(bot.id)}
+                                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                                    title="ลบบอทตัวนี้"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* ฟิลด์ Channel Access Token */}
+                            <div className="space-y-3">
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <label className="text-xs font-bold text-slate-700 kanit-text">
+                                    Channel Access Token
+                                  </label>
+                                  <a
+                                    href="https://developers.line.biz/console/"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs font-bold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 kanit-text"
+                                  >
+                                    รับ Token <ExternalLink size={11} />
+                                  </a>
+                                </div>
+                                <div className="relative">
+                                  <input
+                                    type={isShowToken ? 'text' : 'password'}
+                                    value={bot.token || ''}
+                                    onChange={(e) => handleUpdateLineBot(bot.id, 'token', e.target.value)}
+                                    placeholder="วาง Channel Access Token ของ LINE Messaging API ที่นี่"
+                                    className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-3 py-2.5 pr-10 font-mono outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowBotTokens(prev => ({ ...prev, [bot.id]: !prev[bot.id] }))}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                                  >
+                                    {isShowToken ? <EyeOff size={15} /> : <Eye size={15} />}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* ฟิลด์ Chat ID (เฉพาะบอทตัวนี้) */}
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1.5 kanit-text">
+                                  Chat ID (เฉพาะบอทตัวนี้)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={bot.customChatId || ''}
+                                  onChange={(e) => handleUpdateLineBot(bot.id, 'customChatId', e.target.value)}
+                                  placeholder="ปล่อยว่างไว้เพื่อใช้ Chat ID กลาง"
+                                  className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-3 py-2.5 font-mono outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Line Token (Messaging API)</label>
-                    <input
-                      type="text"
-                      value={localIntegrationTokens.line || ''}
-                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, line: e.target.value })}
-                      placeholder="กรอก Line Token"
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
-                    />
+                {/* 🟣 CARD 2: DISCORD MULTI-CHANNEL WEBHOOKS (แยกห้องแชทอัตโนมัติ - ฟรี ไม่จำกัด) */}
+                <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm">
+                  {/* Header */}
+                  <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100 shadow-2xs">
+                      <Hash size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
+                        แจ้งเตือน Discord (แยกห้องแชทอัตโนมัติ - ฟรี 100% ไม่จำกัด)
+                      </h3>
+                      <p className="text-sm text-slate-500 kanit-text mt-0.5">
+                        ส่งข้อความแยกห้องแชทอัตโนมัติ สวยงาม พร้อมบันทึกประวัติย้อนหลัง 0 บาท ไม่มีโควต้าจำกัด
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Line Group ID (สำหรับดึงบอทเข้ากลุ่มแจ้งเตือน)</label>
-                    <input
-                      type="text"
-                      value={localIntegrationTokens.lineGroupId || ''}
-                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, lineGroupId: e.target.value })}
-                      placeholder="กรอก Line Group ID (พิมพ์ /ไอดีกลุ่ม ในกลุ่ม LINE เพื่อดูรหัส)"
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
-                    />
+
+                  {/* 1. สวิตช์เปิด/ปิดการแจ้งเตือน Discord */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 kanit-text">
+                      สถานะการส่งแจ้งเตือน Discord
+                    </label>
+                    <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDiscord(!localIntegrationTokens.discord?.enabled)}
+                          className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors duration-300 focus:outline-hidden ${
+                            localIntegrationTokens.discord?.enabled ? 'bg-indigo-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <div
+                            className={`bg-white w-6 h-6 rounded-full shadow-md transform transition-transform duration-300 ${
+                              localIntegrationTokens.discord?.enabled ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className="font-bold text-sm text-slate-700 kanit-text">
+                          {localIntegrationTokens.discord?.enabled ? 'เปิดใช้งาน Discord' : 'ปิดใช้งาน'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 kanit-text hidden sm:inline">
+                        {localIntegrationTokens.discord?.enabled ? 'พร้อมส่งข้อมูลแยกเข้าตามห้องแชทใน Discord' : 'ปิดการส่งเข้า Discord ชั่วคราว'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Telegram Bot Token</label>
-                    <input
-                      type="text"
-                      value={localIntegrationTokens.telegram || ''}
-                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, telegram: e.target.value })}
-                      placeholder="กรอก Telegram Token"
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Discord Webhook URL</label>
-                    <input
-                      type="text"
-                      value={localIntegrationTokens.discord || ''}
-                      onChange={(e) => setLocalIntegrationTokens({ ...localIntegrationTokens, discord: e.target.value })}
-                      placeholder="กรอก Discord Webhook URL"
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all"
-                    />
+
+                  {/* 2. รายชื่อห้องแชทใน Discord (เพิ่มห้องได้ไม่จำกัด ตามที่ผู้ใช้สั่ง) */}
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-700 kanit-text">
+                          รายชื่อห้องแชทใน Discord (แยกตามหมวดหมู่)
+                        </h4>
+                        <p className="text-xs text-slate-400 kanit-text mt-0.5">
+                          ใส่ Webhook URL ของห้องใน Discord ที่ต้องการให้ยิงข้อความเข้าไป
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddDiscordChannel}
+                        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs kanit-text transition-all shadow-2xs"
+                      >
+                        <Plus size={13} /> เพิ่มห้อง Discord
+                      </button>
+                    </div>
+
+                    {/* รายการห้อง Discord */}
+                    <div className="space-y-3.5">
+                      {(localIntegrationTokens.discord?.channels || []).map((channel) => {
+                        const isTesting = testingDiscordId === channel.id;
+                        return (
+                          <div
+                            key={channel.id}
+                            className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all space-y-3"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                                <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0 font-bold text-sm">
+                                  #
+                                </span>
+                                <input
+                                  type="text"
+                                  value={channel.name || ''}
+                                  onChange={(e) => handleUpdateDiscordChannel(channel.id, 'name', e.target.value)}
+                                  placeholder="ชื่อห้อง (เช่น นัดหมาย 🗓️)"
+                                  className="w-36 sm:w-48 bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-sm text-slate-800 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                />
+                                <select
+                                  value={channel.event || 'all'}
+                                  onChange={(e) => handleUpdateDiscordChannel(channel.id, 'event', e.target.value)}
+                                  className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                >
+                                  <option value="queue">🗓️ นัดหมายคนไข้ (Queue)</option>
+                                  <option value="pos">💵 ปิดบิล / การเงิน (POS)</option>
+                                  <option value="opd">🩺 ประวัติการรักษา (OPD)</option>
+                                  <option value="mr">📁 เวชระเบียน & ตัดคอร์ส (MR)</option>
+                                  <option value="dashboard">🌻 แดชบอร์ด & สรุปยอด (Dashboard)</option>
+                                  <option value="all">💬 ทุกเหตุการณ์ (All Events)</option>
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTestDiscordChannel(channel)}
+                                  disabled={isTesting || !channel.webhookUrl}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 font-bold text-xs kanit-text transition-all disabled:opacity-40"
+                                  title="ส่งข้อความทดสอบเข้าห้อง Discord นี้"
+                                >
+                                  <Send size={12} className={isTesting ? 'animate-pulse text-indigo-500' : ''} />
+                                  {isTesting ? 'กำลังส่ง...' : 'ทดสอบส่ง'}
+                                </button>
+                                {(localIntegrationTokens.discord?.channels || []).length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveDiscordChannel(channel.id)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    title="ลบห้องนี้"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <input
+                                type="text"
+                                value={channel.webhookUrl || ''}
+                                onChange={(e) => handleUpdateDiscordChannel(channel.id, 'webhookUrl', e.target.value)}
+                                placeholder="วาง Discord Webhook URL (เช่น https://discord.com/api/webhooks/...)"
+                                className="w-full bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-3 py-2 font-mono outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* คำแนะนำวิธีสร้าง Webhook */}
+                    <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 text-xs text-indigo-900 kanit-text space-y-1">
+                      <div className="font-bold flex items-center gap-1.5 text-indigo-700">
+                        💡 วิธีสร้าง Discord Webhook URL (ใช้เวลาไม่ถึง 10 วินาที):
+                      </div>
+                      <ol className="list-decimal list-inside space-y-0.5 text-slate-600 pl-1">
+                        <li>ในโปรแกรม Discord ให้ <b>คลิกขวาที่ชื่อห้องแชท</b> ที่ต้องการ (เช่น #pos)</li>
+                        <li>เลือก <b>แก้ไขช่อง (Edit Channel)</b> &gt; เมนู <b>การผสานการทำงาน (Integrations)</b></li>
+                        <li>กด <b>สร้าง Webhook (Create Webhook)</b> แล้วกด <b>คัดลอก URL ของ Webhook</b> นำมาวางในช่องด้านบน</li>
+                      </ol>
+                    </div>
                   </div>
                 </div>
 
-                <div className="border-t border-slate-100 pt-6 mt-8 flex justify-end">
+                {/* 💾 ปุ่มบันทึกการตั้งค่าทั้งหมด */}
+                <div className="flex justify-end pt-2">
                   <button
                     onClick={saveIntegrations}
                     disabled={isSaving}
-                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white hover:opacity-95 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
-                    บันทึกการเชื่อมต่อ
+                    <Save size={16} /> บันทึกการตั้งค่าการแจ้งเตือนทั้งหมด
                   </button>
                 </div>
               </div>

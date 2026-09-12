@@ -24,12 +24,13 @@ if (!clientInstance && supabaseUrl && supabaseAnonKey) {
 export const supabase = clientInstance;
 
 // Auto Cache Schema Version Check (ช่วยให้เครื่องที่เคยบันทึกค่าเก่า ดึงข้อมูลล่าสุดจาก Supabase ทันทีเมื่อเปิด/รีเฟรช โดยไม่ต้องสั่งล้างแคชด้วยตนเอง)
-const CACHE_SCHEMA_VERSION = 'v4_pure_realtime_courses_2026';
+const CACHE_SCHEMA_VERSION = 'v5_sync_settings_tokens_2026';
 if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
   const currentVer = localStorage.getItem('clinic_cache_schema_version');
   if (currentVer !== CACHE_SCHEMA_VERSION) {
     replaceLocalStore('staff', []).catch(() => {});
     replaceLocalStore('patient_courses', []).catch(() => {});
+    replaceLocalStore('settings', []).catch(() => {});
     localStorage.setItem('clinic_cache_schema_version', CACHE_SCHEMA_VERSION);
   }
 }

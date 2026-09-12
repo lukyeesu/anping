@@ -281,6 +281,16 @@ export default function App() {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
   useEffect(() => {
+    const callParam = urlParams.get('call') || urlParams.get('tel');
+    if (callParam) {
+      const clean = String(callParam).replace(/\D/g, '');
+      if (clean) {
+        window.location.href = `tel:${clean}`;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!isProfileDropdownOpen) return;
     const handleOutsideClick = (e) => {
       const profileContainer = document.getElementById('profile-container-pc');
@@ -1118,7 +1128,18 @@ export default function App() {
     { label: 'เลื่อนนัด', color: 'violet' },
     { label: 'ยกเลิก', color: 'rose' }
   ]);
-  const [integrationTokens, setIntegrationTokens] = useState({ line: '', telegram: '', discord: '', lineGroupId: '' });
+  const [integrationTokens, setIntegrationTokens] = useState(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cached = localStorage.getItem('clinic_integration_tokens');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.line || parsed.discord)) return parsed;
+        }
+      }
+    } catch(e) {}
+    return { line: '', telegram: '', discord: '', lineGroupId: '' };
+  });
   const [gdriveTokens, setGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) รองรับทั้ง Localhost และ Production (Vite/Vercel Proxy + Native Fallback) ---
@@ -1916,6 +1937,11 @@ export default function App() {
       const intTokens = resSettings.data.find(s => s.id === 'integration_tokens');
       if (intTokens && intTokens.values) {
         setIntegrationTokens(intTokens.values);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('clinic_integration_tokens', JSON.stringify(intTokens.values));
+          }
+        } catch (e) {}
       }
       const gdTokens = resSettings.data.find(s => s.id === 'gdrive_tokens');
       if (gdTokens && gdTokens.values) {
@@ -2684,13 +2710,13 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} integrationTokens={integrationTokens} />
                 </div>
             )}
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} staffData={staffData} posProducts={posProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} />
+                    <AppointmentManager currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} staffData={staffData} posProducts={posProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} integrationTokens={integrationTokens} />
                 </div>
             )}
 
@@ -2716,11 +2742,13 @@ export default function App() {
                         staffData={staffData}
                         currentBranch={currentBranch}
                         branchesData={branchesData}
+                        currentUser={currentUser}
                         showToast={showToast}
                         callAppScript={callAppScript}
                         isGlobalLoading={isGlobalLoading}
                         showMobileBars={showMobileBars}
                         handlePrintReceipt={handlePrintReceipt}
+                        integrationTokens={integrationTokens}
                     showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
