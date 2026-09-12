@@ -2099,9 +2099,10 @@ export default function App() {
       lastFetchTime = now;
 
       try {
+        const explicitCols = 'id,patient_id,patient_name,product_id,course_name,total_sessions,used_sessions,remaining_sessions,price,pos_transaction_id,receipt_no,branch_id,status,is_shareable,shared_patient_ids,expire_date,notes,purchased_at,created_at,updated_at,is_deleted';
         const { data, error } = await supabase
           .from('patient_courses')
-          .select('*')
+          .select(explicitCols)
           .or('is_deleted.is.null,is_deleted.eq.false')
           .order('purchased_at', { ascending: false });
         if (!error && Array.isArray(data)) {

@@ -692,9 +692,10 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
   if (tableName === 'patient_courses') {
     if (!supabase) return { status: 'success', data: [] };
     try {
+      const explicitCols = (TABLE_COLUMNS.patient_courses || []).join(',') || '*';
       const { data, error } = await supabase
         .from('patient_courses')
-        .select('*')
+        .select(explicitCols)
         .or('is_deleted.is.null,is_deleted.eq.false')
         .order('purchased_at', { ascending: false });
       if (error) {
