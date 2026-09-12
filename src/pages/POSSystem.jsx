@@ -736,6 +736,11 @@ const POSSystem = ({
                 for (let i = 0; i < item.quantity; i++) {
                     const sessionCount = Number(item.product.courseSessions || item.product.course_sessions) || 1;
                     const courseId = `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                    const purchaseDate = new Date();
+                    const expDateObj = new Date(purchaseDate);
+                    expDateObj.setFullYear(expDateObj.getFullYear() + 1); // ค่าเริ่มต้น 1 ปี
+                    const defaultExpireIso = expDateObj.toISOString().split('T')[0];
+
                     const newCourse = {
                         id: courseId,
                         patientId: selectedPatientId || '',
@@ -764,8 +769,10 @@ const POSSystem = ({
                         is_shareable: true,
                         sharedPatientIds: [],
                         shared_patient_ids: [],
-                        purchasedAt: new Date().toISOString(),
-                        purchased_at: new Date().toISOString()
+                        expireDate: defaultExpireIso,
+                        expire_date: defaultExpireIso,
+                        purchasedAt: purchaseDate.toISOString(),
+                        purchased_at: purchaseDate.toISOString()
                     };
                     backgroundTasks.push(callAppScript('SAVE_DATA', 'PatientCourses', newCourse));
                     newCoursesToSave.push(newCourse);
@@ -1354,7 +1361,9 @@ const POSSystem = ({
                     if (!c) return false;
                     const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
                     const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
-                    return cPid === normPid && rem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                    const expDate = c.expireDate || c.expire_date;
+                    const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
+                    return cPid === normPid && rem > 0 && (c.status || 'active') === 'active' && !c.isDeleted && !isExpired;
                   });
 
                   if (activeCourses.length === 0) {
@@ -2272,7 +2281,9 @@ const POSSystem = ({
                         if (!c) return false;
                         const cPid = String(c.patientId || c.patient_id || '').toLowerCase();
                         const cRem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
-                        return cPid === String(p.id || p.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                        const expDate = c.expireDate || c.expire_date;
+                        const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
+                        return cPid === String(p.id || p.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted && !isExpired;
                       });
 
                       return (
@@ -2324,7 +2335,9 @@ const POSSystem = ({
                         if (!c) return false;
                         const cPid = String(c.patientId || c.patient_id || '').toLowerCase();
                         const cRem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
-                        return cPid === String(selectedOwnerPatient.id || selectedOwnerPatient.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                        const expDate = c.expireDate || c.expire_date;
+                        const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
+                        return cPid === String(selectedOwnerPatient.id || selectedOwnerPatient.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted && !isExpired;
                       });
 
                       if (ownerCourses.length === 0) {

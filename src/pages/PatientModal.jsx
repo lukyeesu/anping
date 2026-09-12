@@ -301,15 +301,20 @@ const PatientModal = React.memo(({
                               <span className={`text-[11px] font-semibold kanit-text ${isFinished ? 'text-slate-400' : 'text-slate-500'}`}>
                                 {isFinished ? 'สถานะ: ใช้ครบแล้ว' : 'คงเหลือ'}
                               </span>
-                              <div className="text-right font-data">
-                                <span className={`text-sm font-black ${isFinished ? 'text-slate-500' : 'text-indigo-600'}`}>{rem}</span>
+                              <div className="text-right font-data flex items-baseline justify-end gap-0.5">
+                                <span 
+                                  key={rem}
+                                  className={`text-sm font-black course-num-pop ${isFinished ? 'text-slate-500' : 'text-indigo-600'}`}
+                                >
+                                  {rem}
+                                </span>
                                 <span className="text-xs font-bold text-slate-400">/{total} ครั้ง</span>
                               </div>
                             </div>
-                            <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                            <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden relative isolate">
                               <div 
-                                className={`h-full rounded-full transition-all duration-500 ${isFinished ? 'bg-slate-300' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`} 
-                                style={{ width: `${Math.min(100, Math.max(0, (rem / total) * 100))}%` }}
+                                className={`h-full w-full rounded-full course-progress-bar ${isFinished ? 'bg-slate-300' : 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-500'}`} 
+                                style={{ transform: `scaleX(${Math.min(1, Math.max(0, rem / total))}) translateZ(0)` }}
                               ></div>
                             </div>
                           </div>

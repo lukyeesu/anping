@@ -93,3 +93,34 @@
         backdrop-filter: blur(8px);
     }
 }
+
+/* Smooth 60fps+ Hardware-Accelerated Progress Bar & Session Counter Animations */
+@keyframes courseNumPop {
+  0% {
+    transform: scale(1.32) translateY(-1px);
+    opacity: 0.6;
+  }
+  60% {
+    transform: scale(0.96) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.course-progress-bar {
+  transform-origin: left center;
+  will-change: transform;
+  transition: transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.course-num-pop {
+  display: inline-block;
+  animation: courseNumPop 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}

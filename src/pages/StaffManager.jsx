@@ -4,6 +4,7 @@ import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
 import AnimatedModal from './AnimatedModal';
 import { daysTH } from '../global/constants';
+import QRCode from 'qrcode';
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, getStaffScheduleInfo, getStaffScheduleActiveStatus } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -15,7 +16,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Copy, Check
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
@@ -27,37 +28,97 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   const staffModal = useModal();
   const scheduleModal = useModal();
   const payrollModal = useModal();
-      const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [resetLinkModal, setResetLinkModal] = useState({
+    isOpen: false,
+    link: '',
+    staffName: '',
+    username: '',
+    expiresAt: null
+  });
+  const [resetQrDataUrl, setResetQrDataUrl] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
 
-      const handleSendResetLink = async () => {
-          if (!formData.email) {
-              showToast('กรุณาระบุอีเมลพนักงานในช่องอีเมลก่อนทำการส่งลิงก์', 'error');
-              return;
-          }
-          
-          showGlobalAlert({
-              type: 'warning',
-              title: 'ยืนยันการส่งลิงก์รีเซ็ตรหัสผ่าน',
-              message: `คุณต้องการส่งลิงก์ตั้งรหัสผ่านใหม่ไปยังอีเมล ${formData.email} ใช่หรือไม่? (ลิงก์เก่าจะถูกยกเลิกทันที)`,
-              onConfirm: async () => {
-                  setIsProcessing(true);
-                  try {
-                      const resetUrl = window.location.origin;
-                      const res = await callAppScript('FORGOT_PASSWORD', 'Staff', { username: formData.username || formData.email, resetUrl });
-                      if (res.status === 'success') {
-                          showToast('ระบบได้ส่งลิงก์รีเซ็ตรหัสผ่าน (อายุ 15 นาที) ไปยังอีเมลพนักงานแล้ว', 'success');
-                      } else {
-                          showToast(res.message || 'ไม่สามารถส่งลิงก์ได้', 'error');
-                      }
-                  } catch(err) {
-                      console.error('Forgot password error', err);
-                      showToast(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อระบบ', 'error');
-                  } finally {
-                      setIsProcessing(false);
-                  }
-              }
-          });
-      };
+  useEffect(() => {
+    if (resetLinkModal.isOpen && resetLinkModal.link) {
+      QRCode.toDataURL(resetLinkModal.link, { width: 240, margin: 1 })
+        .then(url => setResetQrDataUrl(url))
+        .catch(err => console.error('QR Generation error:', err));
+    } else {
+      setResetQrDataUrl('');
+      setCopiedLink(false);
+    }
+  }, [resetLinkModal.isOpen, resetLinkModal.link]);
+
+  const handleGenerateResetPasswordLink = async () => {
+    const targetStaffId = formData.id || editingId;
+    const targetUsername = formData.username;
+    const targetEmail = formData.email;
+
+    if (!targetStaffId && !targetUsername && !targetEmail) {
+      showToast('ไม่พบข้อมูลระบุตัวตนพนักงาน กรุณาลองใหม่อีกครั้ง', 'warning');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await callAppScript('GENERATE_RESET_TOKEN', 'Staff', {
+        staffId: targetStaffId,
+        username: targetUsername,
+        email: targetEmail
+      });
+
+      if (res && res.status === 'success' && res.token) {
+        const resetUrl = `${window.location.origin}/?reset_token=${res.token}`;
+        setResetLinkModal({
+          isOpen: true,
+          link: resetUrl,
+          staffName: res.staffName || `${formData.prefix || ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name || targetUsername,
+          username: res.username || targetUsername,
+          expiresAt: res.expiresAt || (Date.now() + 15 * 60 * 1000)
+        });
+
+        // Auto copy to clipboard
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(resetUrl).catch(() => {});
+          setCopiedLink(true);
+          setTimeout(() => setCopiedLink(false), 3000);
+        }
+        showToast('สร้างลิงก์เปลี่ยนรหัสผ่านและคัดลอกลงคลิปบอร์ดแล้ว (หมดอายุใน 15 นาที)', 'success');
+      } else {
+        showToast(res?.message || 'ไม่สามารถสร้างลิงก์เปลี่ยนรหัสผ่านได้', 'warning');
+      }
+    } catch (err) {
+      console.error('Generate reset token error', err);
+      showToast(err.message || 'เกิดข้อผิดพลาดในการสร้างลิงก์เปลี่ยนรหัสผ่าน', 'danger');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCopyResetLink = async () => {
+    if (!resetLinkModal.link) return;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(resetLinkModal.link);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = resetLinkModal.link;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setCopiedLink(true);
+      showToast('คัดลอกลิงก์เปลี่ยนรหัสผ่านลงคลิปบอร์ดแล้ว', 'success');
+      setTimeout(() => setCopiedLink(false), 3000);
+    } catch (e) {
+      showToast('ไม่สามารถคัดลอกได้อัตโนมัติ กรุณาคัดลอกจากกล่องข้อความ', 'warning');
+    }
+  };
 
   
   const [showStaffModal, setShowStaffModal] = useState(false);
@@ -2360,24 +2421,57 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                               />
                               
                           </div>
-                          <div>
-                              <label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">
-                                  รหัสผ่าน (Password) <span className="text-rose-500">*</span>
-                              </label>
-                              <input 
-                                  required 
-                                  type="text" 
-                                  className={`${theme.input} !py-2.5 font-data`} 
-                                  value={formData.password || ''} 
-                                  onChange={(e) => setFormData({...formData, password: e.target.value})} 
-                                  placeholder="กำหนดรหัสผ่าน" 
-                              />
-                              {editingId && (
+                          {editingId ? (
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">
+                                      รหัสผ่าน (Password)
+                                  </label>
+                                  <button
+                                      type="button"
+                                      onClick={handleGenerateResetPasswordLink}
+                                      disabled={isProcessing}
+                                      className="w-full h-[42px] px-2.5 bg-white hover:bg-sky-50/60 border border-slate-200 hover:border-sky-300 rounded-2xl flex items-center justify-center group transition-all shadow-xs cursor-pointer active:scale-[0.99] disabled:opacity-60"
+                                      title="สร้างลิงก์สำหรับให้พนักงานตั้งรหัสผ่านใหม่ด้วยตนเอง (อายุ 15 นาที)"
+                                  >
+                                      {isProcessing ? (
+                                          <div className="flex items-center justify-center gap-2 text-sky-600 font-bold kanit-text text-xs">
+                                              <Loader2 size={15} className="animate-spin shrink-0" />
+                                              <span>กำลังสร้างลิงก์...</span>
+                                          </div>
+                                      ) : (
+                                          <div className="flex items-center justify-center gap-1.5 w-full">
+                                              <div className="w-5 h-5 rounded-md bg-sky-100 text-sky-600 flex items-center justify-center shrink-0 group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                                                  <Key size={12} />
+                                              </div>
+                                              <span className="text-xs font-bold text-slate-700 group-hover:text-sky-700 kanit-text whitespace-nowrap flex items-center leading-none">
+                                                  เปลี่ยนรหัสผ่าน
+                                              </span>
+                                              <span className="inline-flex items-center justify-center h-5 px-1.5 text-[10px] font-bold text-sky-600 bg-sky-50 rounded-md border border-sky-200/80 kanit-text leading-none shrink-0 group-hover:bg-sky-100 transition-colors whitespace-nowrap">
+                                                  สร้างลิงก์
+                                              </span>
+                                              <ExternalLink size={12} className="text-slate-400 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                                          </div>
+                                      )}
+                                  </button>
+                              </div>
+                          ) : (
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 kanit-text uppercase mb-1.5 ml-1">
+                                      รหัสผ่านเริ่มต้น (Initial Password) <span className="text-rose-500">*</span>
+                                  </label>
+                                  <input 
+                                      required 
+                                      type="text" 
+                                      className={`${theme.input} !py-2.5 font-data`} 
+                                      value={formData.password || ''} 
+                                      onChange={(e) => setFormData({...formData, password: e.target.value})} 
+                                      placeholder="กำหนดรหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" 
+                                  />
                                   <div className="mt-1 text-[11px] text-slate-400 font-medium kanit-text">
-                                      พิมพ์เพื่อเปลี่ยนรหัสผ่านใหม่ หรือใช้อันเดิม
+                                      กำหนดรหัสผ่านเริ่มต้นสำหรับเข้าสู่ระบบครั้งแรก (หรือ 123456)
                                   </div>
-                              )}
-                          </div>
+                              </div>
+                          )}
                       </div>
 
                       <div className="relative" style={{ zIndex: 50 }}>
@@ -3540,6 +3634,105 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                 </button>
                 <img src={viewImageSrc} alt="Full screen preview" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl ring-2 ring-white/20" />
             </div>
+        </div>,
+        document.body
+      )}
+
+      {/* --- Reset Password Link & QR Modal --- */}
+      {resetLinkModal.isOpen && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
+          <div 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-200" 
+            onClick={() => setResetLinkModal(prev => ({ ...prev, isOpen: false }))} 
+          />
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 sm:p-7 z-10 animate-in zoom-in-95 fade-in duration-200 text-center">
+            {/* Close button */}
+            <button 
+              onClick={() => setResetLinkModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Icon */}
+            <div className="w-16 h-16 bg-gradient-to-tr from-sky-500 to-sky-400 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-sky-500/20">
+              <Key size={28} />
+            </div>
+
+            <h3 className="text-xl font-black text-slate-800 kanit-text mb-1">
+              สร้างลิงก์เปลี่ยนรหัสผ่านสำเร็จ
+            </h3>
+            
+            <p className="text-xs text-slate-500 kanit-text mb-3">
+              สำหรับพนักงาน: <span className="font-bold text-slate-700">{resetLinkModal.staffName}</span>
+              {resetLinkModal.username && <span className="text-sky-600 font-data ml-1">(@{resetLinkModal.username})</span>}
+            </p>
+
+            {/* Expiration badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-50 border border-sky-200/80 rounded-full text-[11px] text-sky-700 font-bold kanit-text mb-4">
+              <Clock size={13} className="text-sky-500" />
+              <span>ลิงก์มีอายุ 15 นาที (หลังจากนั้นต้องสร้างใหม่)</span>
+            </div>
+
+            {/* QR Code */}
+            {resetQrDataUrl && (
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 inline-block mb-4 shadow-inner">
+                <img src={resetQrDataUrl} alt="QR Code เปลี่ยนรหัสผ่าน" className="w-40 h-40 mx-auto rounded-xl" />
+                <p className="text-[10px] text-slate-400 font-medium kanit-text mt-1.5">
+                  สแกนด้วยมือถือเพื่อเปลี่ยนรหัสผ่านทันที
+                </p>
+              </div>
+            )}
+
+            {/* Link Copy Box */}
+            <div className="space-y-1.5 mb-5 text-left">
+              <label className="block text-[11px] font-bold text-slate-500 kanit-text ml-1">
+                ลิงก์ส่งให้พนักงาน (พนักงานตั้งรหัสผ่านเอง - HR ไม่ทราบรหัสผ่าน)
+              </label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={resetLinkModal.link}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-data text-slate-600 outline-none select-all"
+                  onClick={(e) => e.target.select()}
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyResetLink}
+                  className={`px-3.5 py-2.5 rounded-xl font-bold kanit-text text-xs flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                    copiedLink 
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' 
+                      : 'bg-sky-50 text-sky-600 hover:bg-sky-100 border border-sky-200/60'
+                  }`}
+                >
+                  {copiedLink ? <Check size={15} /> : <Copy size={15} />}
+                  <span>{copiedLink ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-3.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  window.open(resetLinkModal.link, '_blank');
+                }}
+                className="w-full h-12 px-4 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white rounded-2xl font-bold kanit-text text-sm sm:text-base shadow-lg shadow-sky-500/25 hover:shadow-sky-500/35 flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap active:scale-[0.98]"
+              >
+                <ExternalLink size={18} className="shrink-0" />
+                <span>เปิดในแท็บใหม่</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetLinkModal(prev => ({ ...prev, isOpen: false }))}
+                className="w-full h-12 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold kanit-text text-sm sm:text-base border border-slate-200/80 hover:border-slate-300 transition-all cursor-pointer whitespace-nowrap active:scale-[0.98] flex items-center justify-center shadow-xs"
+              >
+                <span>ปิดหน้าต่าง</span>
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

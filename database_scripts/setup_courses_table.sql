@@ -54,3 +54,16 @@ CREATE POLICY "Allow authenticated full access" ON public.patient_courses
 FOR ALL TO authenticated 
 USING (true) 
 WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow anon all" ON public.patient_courses;
+CREATE POLICY "Allow anon all" ON public.patient_courses 
+FOR ALL TO anon 
+USING (true) 
+WITH CHECK (true);
+
+-- ============================================================
+-- 5. เปิดใช้งาน Supabase Realtime และ REPLICA IDENTITY FULL
+-- (สำคัญมาก: เพื่อให้อุปกรณ์/เครื่องอื่นอัปเดตแท่งพลังและจำนวนครั้งทันทีแบบ Realtime)
+-- ============================================================
+ALTER PUBLICATION supabase_realtime ADD TABLE public.patient_courses;
+ALTER TABLE public.patient_courses REPLICA IDENTITY FULL;

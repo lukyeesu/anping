@@ -33,13 +33,14 @@ const TABLE_COLUMNS = {
   finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   staff: [
-    'id', 'emp_code', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 
+    'id', 'emp_code', 'username', 'prefix', 'first_name', 'last_name', 'name', 
     'role', 'category', 'position', 'phone', 'email', 'id_card', 'license_number', 'dob', 'gender', 
     'nationality', 'ethnicity', 'religion', 
     'address', 'moo', 'road', 'sub_district', 'district', 'province', 'zipcode', 
     'cur_address', 'cur_moo', 'cur_road', 'cur_sub_district', 'cur_district', 'cur_province', 'cur_zipcode', 
     'em_name', 'em_relation', 'em_phone', 'em_address', 
     'salary', 'base_salary', 'employment_type', 
+    'df_rate', 'df_type', 'df_condition', 'df_threshold',
     'commission_rate', 'commission_type', 'commission_condition', 'commission_threshold', 
     'ot_rate', 'branch_id', 'photo', 'schedule', 'is_active', 'created_at', 'updated_at'
   ],
@@ -259,7 +260,8 @@ export default async function handler(req, res) {
 
     switch (action) {
       case 'GET_DATA': {
-        const { data, error } = await supabaseAdmin.from(tableName).select('*');
+        const selectCols = (TABLE_COLUMNS[tableName] || []).join(',') || '*';
+        const { data, error } = await supabaseAdmin.from(tableName).select(selectCols);
         if (error) throw error;
         const formattedData = (data || []).map(rowToJS);
         return res.status(200).json({ status: 'success', data: formattedData });
@@ -550,6 +552,228 @@ export default async function handler(req, res) {
         return res.status(200).json({
           status: 'success',
           data: { total, records, opds, receipts, medcerts, consents }
+        });
+      }
+
+      case 'FORGOT_PASSWORD':
+      case 'GENERATE_RESET_TOKEN': {
+        const { staffId, username, email } = payload || {};
+        if (!staffId && !username && !email) {
+          return res.status(400).json({ status: 'error', message: 'Staff identifier is required' });
+        }
+
+        let staff = null;
+        if (staffId) {
+          const { data } = await supabaseAdmin.from('staff').select('id, name, first_name, last_name, username, email, role').eq('id', staffId);
+          if (data && data[0]) staff = data[0];
+        }
+        if (!staff && username) {
+          const { data } = await supabaseAdmin.from('staff').select('id, name, first_name, last_name, username, email, role').eq('username', username);
+          if (data && data[0]) staff = data[0];
+        }
+        if (!staff && email) {
+          const { data } = await supabaseAdmin.from('staff').select('id, name, first_name, last_name, username, email, role').eq('email', email);
+          if (data && data[0]) staff = data[0];
+        }
+        if (!staff) {
+          return res.status(404).json({ status: 'error', message: 'ไม่พบข้อมูลพนักงานในระบบ' });
+        }
+
+        const randomPart = Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
+        const token = `rst_${Date.now().toString(36)}_${randomPart}`;
+        const expiresAt = Date.now() + (15 * 60 * 1000); // 15 นาที
+        const staffName = staff.name || `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || staff.username;
+
+        // บันทึก reset_token และ reset_token_expires_at ลงตาราง staff โดยตรง
+        // การ update ค่าใหม่จะทับ token เก่าของพนักงานคนนี้ทันที (ทำให้ token เก่าหมดอายุโดยอัตโนมัติ และใช้ token ล่าสุดเสมอ)
+        const { error: updateStaffErr } = await supabaseAdmin
+          .from('staff')
+          .update({
+            reset_token: token,
+            reset_token_expires_at: expiresAt
+          })
+          .eq('id', staff.id);
+
+        if (updateStaffErr) {
+          console.error('Update staff reset_token error:', updateStaffErr);
+          if (String(updateStaffErr.message || '').includes('column') && String(updateStaffErr.message || '').includes('reset_token')) {
+            return res.status(500).json({
+              status: 'error',
+              code: 'COLUMN_MISSING',
+              message: 'ยังไม่ได้เพิ่มคอลัมน์ reset_token ในตาราง staff กรุณารันคำสั่ง SQL: ALTER TABLE staff ADD COLUMN IF NOT EXISTS reset_token TEXT, ADD COLUMN IF NOT EXISTS reset_token_expires_at BIGINT;'
+            });
+          }
+          throw updateStaffErr;
+        }
+
+        return res.status(200).json({
+          status: 'success',
+          token,
+          expiresAt,
+          staffName,
+          username: staff.username,
+          message: 'สร้างโทเค็นเปลี่ยนรหัสผ่านสำเร็จ (อายุ 15 นาที)'
+        });
+      }
+
+      case 'VERIFY_RESET_TOKEN': {
+        const { token } = payload || {};
+        if (!token) {
+          return res.status(400).json({ status: 'error', message: 'ไม่พบรหัสโทเค็น' });
+        }
+
+        // ค้นหาพนักงานจาก reset_token ในตาราง staff โดยตรง
+        const { data: staffRows, error: staffErr } = await supabaseAdmin
+          .from('staff')
+          .select('id, name, first_name, last_name, username, email, reset_token_expires_at')
+          .eq('reset_token', token);
+
+        if (staffErr || !staffRows || staffRows.length === 0) {
+          return res.status(404).json({ 
+            status: 'error', 
+            message: 'ลิงก์รีเซ็ตรหัสผ่านนี้ไม่ถูกต้อง ถูกยกเลิกแล้ว (เนื่องจากมีการสร้างลิงก์ใหม่ล่าสุด) หรือถูกใช้งานไปแล้ว' 
+          });
+        }
+
+        const staffData = staffRows[0];
+        const now = Date.now();
+        if (!staffData.reset_token_expires_at || now > Number(staffData.reset_token_expires_at)) {
+          return res.status(400).json({ 
+            status: 'error', 
+            code: 'EXPIRED',
+            message: 'ลิงก์รีเซ็ตรหัสผ่านนี้หมดอายุแล้ว (มีอายุ 15 นาที) กรุณาติดต่อฝ่ายบุคคล (HR) เพื่อขอรับลิงก์ใหม่' 
+          });
+        }
+
+        const staffName = staffData.name || `${staffData.first_name || ''} ${staffData.last_name || ''}`.trim() || staffData.username;
+
+        return res.status(200).json({
+          status: 'success',
+          valid: true,
+          staffName,
+          username: staffData.username,
+          expiresAt: staffData.reset_token_expires_at
+        });
+      }
+
+      case 'CONFIRM_RESET_PASSWORD': {
+        const { token, newPassword } = payload || {};
+        if (!token || !newPassword) {
+          return res.status(400).json({ status: 'error', message: 'กรุณาระบุข้อมูลรหัสผ่านใหม่' });
+        }
+
+        if (String(newPassword).length < 6) {
+          return res.status(400).json({ status: 'error', message: 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+        }
+
+        // ค้นหาพนักงานจาก reset_token ในตาราง staff
+        const { data: staffRows, error: staffErr } = await supabaseAdmin
+          .from('staff')
+          .select('id, name, first_name, last_name, username, email, reset_token_expires_at')
+          .eq('reset_token', token);
+
+        if (staffErr || !staffRows || staffRows.length === 0) {
+          return res.status(404).json({ 
+            status: 'error', 
+            message: 'ลิงก์รีเซ็ตรหัสผ่านนี้ไม่ถูกต้อง ถูกยกเลิกแล้ว (เนื่องจากมีการสร้างลิงก์ใหม่ล่าสุด) หรือถูกใช้งานไปแล้ว' 
+          });
+        }
+
+        const staffData = staffRows[0];
+        const now = Date.now();
+        if (!staffData.reset_token_expires_at || now > Number(staffData.reset_token_expires_at)) {
+          return res.status(400).json({ status: 'error', message: 'ลิงก์รีเซ็ตรหัสผ่านนี้หมดอายุแล้ว (มีอายุ 15 นาที)' });
+        }
+
+        const staffId = staffData.id;
+        const staffName = staffData.name || `${staffData.first_name || ''} ${staffData.last_name || ''}`.trim() || staffData.username;
+
+        // 1. Update password in public.staff table และเคลียร์ reset_token / reset_token_expires_at ออก
+        const { error: updateStaffErr } = await supabaseAdmin
+          .from('staff')
+          .update({ 
+            password: String(newPassword).trim(),
+            reset_token: null,
+            reset_token_expires_at: null,
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', staffId);
+
+        if (updateStaffErr) {
+          console.error('Update staff table error:', updateStaffErr);
+          throw updateStaffErr;
+        }
+
+        // 2. Update password in Supabase Auth (auth.users)
+        try {
+          if (supabaseAdmin.auth?.admin) {
+            const { data: userListData } = await supabaseAdmin.auth.admin.listUsers();
+            const users = userListData?.users || [];
+            
+            const rawUser = String(tokenData.username || '').toLowerCase();
+            const cleanUser = rawUser.includes('@') ? rawUser.split('@')[0] : rawUser;
+            const staffEmail = (tokenData.email && tokenData.email.includes('@')) 
+              ? tokenData.email.toLowerCase() 
+              : `${cleanUser.replace(/[^a-z0-9._-]/g, '')}@anping.com`;
+
+            const authUser = users.find(u => 
+              (u.email && u.email.toLowerCase() === staffEmail) ||
+              (tokenData.email && u.email && u.email.toLowerCase() === tokenData.email.toLowerCase()) ||
+              (u.user_metadata?.username && String(u.user_metadata.username).toLowerCase() === cleanUser) ||
+              String(u.user_metadata?.staffId).toLowerCase() === String(staffId).toLowerCase() ||
+              String(u.id).toLowerCase() === String(staffId).toLowerCase()
+            );
+
+            if (authUser) {
+              await supabaseAdmin.auth.admin.updateUserById(authUser.id, { 
+                password: String(newPassword).trim() 
+              });
+            } else {
+              await supabaseAdmin.auth.admin.createUser({
+                email: staffEmail,
+                password: String(newPassword).trim(),
+                email_confirm: true,
+                user_metadata: {
+                  staffId: staffId,
+                  username: cleanUser,
+                  name: tokenData.staffName,
+                  role: 'staff'
+                }
+              });
+            }
+          }
+        } catch (authErr) {
+          console.warn('Supabase Auth update note in CONFIRM_RESET_PASSWORD:', authErr);
+        }
+
+        // 3. Delete used token from settings
+        delete tokensMap[token];
+        await supabaseAdmin.from('settings').upsert({
+          id: 'password_reset_tokens',
+          values: tokensMap,
+          updated_at: new Date().toISOString()
+        });
+
+        // 4. Log the password reset action
+        try {
+          await supabaseAdmin.from('logs').insert([{
+            id: `LOG_RESET_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            user_name: tokenData.staffName || 'Staff',
+            user_id: staffId,
+            role: 'staff',
+            action: 'PASSWORD_RESET',
+            target_sheet: 'Staff',
+            target_data_id: staffId,
+            detail: `พนักงาน (@${tokenData.username}) เปลี่ยนรหัสผ่านใหม่ด้วยตนเองสำเร็จผ่านลิงก์รีเซ็ต`,
+            created_at: new Date().toISOString()
+          }]);
+        } catch (logErr) {
+          console.warn('Logging password reset error:', logErr);
+        }
+
+        return res.status(200).json({
+          status: 'success',
+          message: 'เปลี่ยนรหัสผ่านใหม่สำเร็จเรียบร้อยแล้ว'
         });
       }
 

@@ -59,7 +59,7 @@ const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
 
       const { data: staffRows, error: staffErr } = await supabase
         .from('staff')
-        .select('*')
+        .select('id, emp_code, username, prefix, first_name, last_name, name, role, category, position, phone, email, branch_id, photo, is_active')
         .or(`email.eq.${loginEmail},username.eq.${cleanLower},id.eq.${authData.user.id}`);
 
       if (!staffErr && staffRows && staffRows.length > 0) {

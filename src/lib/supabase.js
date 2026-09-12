@@ -24,11 +24,12 @@ if (!clientInstance && supabaseUrl && supabaseAnonKey) {
 export const supabase = clientInstance;
 
 // Auto Cache Schema Version Check (ช่วยให้เครื่องที่เคยบันทึกค่าเก่า ดึงข้อมูลล่าสุดจาก Supabase ทันทีเมื่อเปิด/รีเฟรช โดยไม่ต้องสั่งล้างแคชด้วยตนเอง)
-const CACHE_SCHEMA_VERSION = 'v3_staff_df_comm_fix_2026';
+const CACHE_SCHEMA_VERSION = 'v4_pure_realtime_courses_2026';
 if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
   const currentVer = localStorage.getItem('clinic_cache_schema_version');
   if (currentVer !== CACHE_SCHEMA_VERSION) {
     replaceLocalStore('staff', []).catch(() => {});
+    replaceLocalStore('patient_courses', []).catch(() => {});
     localStorage.setItem('clinic_cache_schema_version', CACHE_SCHEMA_VERSION);
   }
 }
@@ -91,7 +92,7 @@ const TABLE_COLUMNS = {
   finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   staff: [
-    'id', 'emp_code', 'username', 'password', 'prefix', 'first_name', 'last_name', 'name', 
+    'id', 'emp_code', 'username', 'prefix', 'first_name', 'last_name', 'name', 
     'role', 'category', 'position', 'phone', 'email', 'id_card', 'license_number', 'dob', 'gender', 
     'nationality', 'ethnicity', 'religion', 
     'address', 'moo', 'road', 'sub_district', 'district', 'province', 'zipcode', 
@@ -687,6 +688,28 @@ function parseItemDate(item) {
 // Differential Sync Engine: ส่งข้อมูลจาก IndexedDB ขึ้นไปให้ Supabase เทียบ (Ingress ฟรี 100%)
 // และรับกลับมาเฉพาะแถวที่มีการแก้ไขจริงหรือ ID ที่ถูกลบ (Egress แทบเป็น 0 Byte)
 export async function differentialSyncTable(tableName, selectCols = '*', options = {}) {
+  // Pure Realtime Bypass สำหรับ patient_courses: ดึงตรงจาก Supabase 100% ไม่แคชลง IndexedDB
+  if (tableName === 'patient_courses') {
+    if (!supabase) return { status: 'success', data: [] };
+    try {
+      const { data, error } = await supabase
+        .from('patient_courses')
+        .select('*')
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('purchased_at', { ascending: false });
+      if (error) {
+        console.error("Direct fetch patient_courses error:", error);
+        return { status: 'error', data: [], message: error.message };
+      }
+      const formatted = (data || []).map(rowToJS);
+      replaceLocalStore('patient_courses', []).catch(() => {});
+      return { status: 'success', data: formatted };
+    } catch (err) {
+      console.error("Direct fetch patient_courses exception:", err);
+      return { status: 'error', data: [], message: err.message };
+    }
+  }
+
   const { scopeFilterFn = null, customManifestQuery = null, scopeCol = null, scopeVal = null, scopeVals = null } = options;
 
   // 1. อ่านข้อมูลเดิมจาก IndexedDB ทันที และ Normalize ด้วย rowToJS (0ms, 0 Egress)
@@ -1239,8 +1262,8 @@ export async function callSupabase(action, sheetName, payload = null) {
           resTotal,
           resActive
         ] = await Promise.all([
-          supabase.from('staff').select('*', { count: 'exact', head: true }),
-          supabase.from('staff').select('*', { count: 'exact', head: true }).eq('is_active', true)
+          supabase.from('staff').select('id', { count: 'exact', head: true }),
+          supabase.from('staff').select('id', { count: 'exact', head: true }).eq('is_active', true)
         ]);
 
         return {
@@ -1708,8 +1731,12 @@ export async function callSupabase(action, sheetName, payload = null) {
 
       const authoritativeRow = (upsertData && upsertData.length > 0) ? upsertData[0] : row;
       const savedJsRow = rowToJS(authoritativeRow);
-      await upsertLocalStore(tableName, [savedJsRow]);
-      await setLastSyncTime(tableName, new Date().toISOString());
+      if (tableName !== 'patient_courses') {
+        await upsertLocalStore(tableName, [savedJsRow]);
+        await setLastSyncTime(tableName, new Date().toISOString());
+      } else {
+        replaceLocalStore('patient_courses', []).catch(() => {});
+      }
 
       return { status: 'success', message: 'Data saved successfully', id: row.id, data: savedJsRow };
     }
@@ -1875,6 +1902,33 @@ async function logFailedLogin(usernameInput, reason, staffObj = null) {
         return { status: 'success', fileUrl: publicUrlData.publicUrl };
       } catch (err) {
         throw new Error(`อัปโหลดไฟล์ไป Supabase Storage ล้มเหลว: ${err.message}`);
+      }
+    }
+
+    case 'GENERATE_RESET_TOKEN':
+    case 'FORGOT_PASSWORD':
+    case 'VERIFY_RESET_TOKEN':
+    case 'CONFIRM_RESET_PASSWORD': {
+      try {
+        const sessionToken = localStorage.getItem('clinic_session_token') || 'recovery-token';
+        const res = await fetch('/api/db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: action === 'FORGOT_PASSWORD' ? 'GENERATE_RESET_TOKEN' : action,
+            sheetName: 'Staff',
+            payload: payload,
+            token: sessionToken
+          })
+        });
+        const result = await res.json();
+        if (result.status === 'error') {
+          throw new Error(result.message || 'การดำเนินการล้มเหลว');
+        }
+        return result;
+      } catch (err) {
+        console.error(`Error in ${action}:`, err);
+        throw err;
       }
     }
 

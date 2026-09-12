@@ -248,7 +248,7 @@ export default function App() {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const pdpaToken = urlParams.get('pdpa');
   const pdpaHn = urlParams.get('hn');
-  const resetToken = urlParams.get('reset_token');
+  const resetToken = urlParams.get('reset_token') || urlParams.get('token');
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -1738,7 +1738,7 @@ export default function App() {
         });
       }
     } else if (sheetName === 'PatientCourses' || sheetName === 'patient_courses' || sheetName === 'Patient_Courses') {
-      upsertLocalStore('patient_courses', [payload]).catch(() => {});
+      // Pure Realtime State: ไม่เก็บลง IndexedDB ตามคำสั่งเพื่อความถูกต้องของข้อมูลข้ามอุปกรณ์ 100%
       setPatientCoursesData(prev => {
         const idx = prev.findIndex(c => String(c.id).trim() === targetId);
         if (idx >= 0) {
@@ -1769,10 +1769,7 @@ export default function App() {
       Finance_Revenue: 'finance_revenue',
       Finance_Expenses: 'finance_expenses',
       Treatments: 'treatments',
-      Settings: 'settings',
-      PatientCourses: 'patient_courses',
-      patient_courses: 'patient_courses',
-      Patient_Courses: 'patient_courses'
+      Settings: 'settings'
     };
 
     const storeName = mapSheetToStore[sheetName];
@@ -2038,8 +2035,88 @@ export default function App() {
       )
       .subscribe();
 
+    // Dedicated Realtime Channel สำหรับ patient_courses โดยเฉพาะ เพื่อให้ทุกเครื่องอัปเดตทันทีแบบไม่มีดีเลย์
+    const coursesChannel = supabase
+      .channel('realtime-patient-courses')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'patient_courses' },
+        (payload) => {
+          const { eventType, new: newRow, old: oldRow } = payload;
+          console.log(
+            `%c⚡ [Pure Realtime: patient_courses]%c 📡 ${eventType} received!`,
+            'color: #059669; font-weight: bold; background: #ecfdf5; padding: 2px 6px; border-radius: 4px;',
+            'color: #047857; font-weight: 600;',
+            newRow || oldRow
+          );
+
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            if (newRow) {
+              const jsRow = rowToJS(newRow);
+              if (jsRow.is_deleted || jsRow.isDeleted) {
+                setPatientCoursesData(prev => prev.filter(c => String(c.id).trim() !== String(jsRow.id).trim()));
+              } else {
+                setPatientCoursesData(prev => {
+                  const cId = String(jsRow.id).trim();
+                  const idx = prev.findIndex(c => String(c.id).trim() === cId);
+                  if (idx >= 0) {
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], ...jsRow };
+                    return next;
+                  }
+                  return [jsRow, ...prev];
+                });
+              }
+            }
+          } else if (eventType === 'DELETE') {
+            if (oldRow && oldRow.id) {
+              const cId = String(oldRow.id).trim();
+              setPatientCoursesData(prev => prev.filter(c => String(c.id).trim() !== cId));
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(coursesChannel);
+    };
+  }, []);
+
+  // --- ดึงข้อมูลคอร์สล่าสุดจาก Supabase อัตโนมัติเมื่อโฟกัสหน้าต่าง หรือสลับแท็บกลับมา (Auto-Refresh on Tab Focus) ---
+  useEffect(() => {
+    if (!supabase) return;
+
+    const refreshCoursesFromSupabase = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('patient_courses')
+          .select('*')
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .order('purchased_at', { ascending: false });
+        if (!error && Array.isArray(data)) {
+          setPatientCoursesData(data.map(rowToJS));
+        }
+      } catch (err) {
+        console.warn('[Courses Focus Refresh Note]:', err);
+      }
+    };
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCoursesFromSupabase();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+    window.addEventListener('online', refreshCoursesFromSupabase);
+
+    return () => {
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+      window.removeEventListener('online', refreshCoursesFromSupabase);
     };
   }, []);
 
@@ -2066,9 +2143,7 @@ export default function App() {
         if (storeName === 'pos_transactions' || storeName === '*') {
           getLocalStore('pos_transactions').then(data => data && data.length && setPosHistoryData([...data].reverse()));
         }
-        if (storeName === 'patient_courses' || storeName === '*') {
-          getLocalStore('patient_courses').then(data => data && setPatientCoursesData(data));
-        }
+        // patient_courses ถูกแยกออกมาเป็น Pure Realtime ไม่โหลดจาก IndexedDB ตามคำสั่ง
       }
     });
     return () => unsubscribe();

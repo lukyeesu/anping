@@ -371,11 +371,30 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear() + 543}`;
   };
 
+  const getDefaultExpireThaiDateStr = (baseDateStr, addMonths = 12) => {
+    let d = new Date();
+    if (baseDateStr && baseDateStr.includes('/')) {
+      const parts = baseDateStr.split('/');
+      if (parts.length === 3) {
+        let day = parseInt(parts[0], 10) || 1;
+        let month = (parseInt(parts[1], 10) || 1) - 1;
+        let year = parseInt(parts[2], 10) || (new Date().getFullYear() + 543);
+        if (year > 2500) year -= 543;
+        d = new Date(year, month, day);
+      }
+    } else if (baseDateStr) {
+      const parsed = new Date(baseDateStr);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
+    d.setMonth(d.getMonth() + addMonths);
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear() + 543}`;
+  };
+
   const parseToThaiDateStr = (dateInput) => {
-    if (!dateInput) return getTodayThaiDateStr();
+    if (!dateInput) return '';
     if (typeof dateInput === 'string' && dateInput.includes('/')) return dateInput;
     const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return getTodayThaiDateStr();
+    if (isNaN(d.getTime())) return '';
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear() + 543}`;
   };
 
@@ -395,6 +414,25 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
   };
 
+  const parseThaiDateToIsoDateOnly = (thaiDateStr) => {
+    if (!thaiDateStr) return null;
+    if (thaiDateStr.includes('/')) {
+      const parts = thaiDateStr.split('/');
+      if (parts.length === 3) {
+        let d = String(parseInt(parts[0], 10) || 1).padStart(2, '0');
+        let m = String(parseInt(parts[1], 10) || 1).padStart(2, '0');
+        let y = parseInt(parts[2], 10) || (new Date().getFullYear() + 543);
+        if (y > 2500) y -= 543;
+        return `${y}-${m}-${d}`;
+      }
+    }
+    const d = new Date(thaiDateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+    return null;
+  };
+
   const [courseFormData, setCourseFormData] = useState({
     courseName: '',
     productId: '',
@@ -404,20 +442,25 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     price: 0,
     notes: '',
     isShareable: true,
-    purchasedAt: getTodayThaiDateStr()
+    purchasedAt: getTodayThaiDateStr(),
+    expireDate: getDefaultExpireThaiDateStr(getTodayThaiDateStr(), 12)
   });
 
   // States สำหรับปฏิทินของคอร์ส (Thai Buddhist Date Picker)
   const [showCourseCalendar, setShowCourseCalendar] = useState(false);
+  const [courseCalTarget, setCourseCalTarget] = useState('purchasedAt'); // 'purchasedAt' | 'expireDate'
   const [courseCalDate, setCourseCalDate] = useState(new Date());
   const [courseCalView, setCourseCalView] = useState('days'); // 'days', 'months', 'years'
   const [courseYearPageStart, setCourseYearPageStart] = useState(() => Math.floor((new Date().getFullYear() + 543) / 12) * 12);
   const [isCourseCalendarClosing, setIsCourseCalendarClosing] = useState(false);
   const courseWrapperRef = React.useRef(null);
+  const courseExpireWrapperRef = React.useRef(null);
 
-  const openCourseCalendar = () => {
-    if (courseFormData.purchasedAt?.length === 10) {
-      const parts = courseFormData.purchasedAt.split('/');
+  const openCourseCalendar = (target = 'purchasedAt') => {
+    setCourseCalTarget(target);
+    const dateVal = target === 'expireDate' ? courseFormData.expireDate : courseFormData.purchasedAt;
+    if (dateVal?.length === 10) {
+      const parts = dateVal.split('/');
       const y = parseInt(parts[2], 10) - 543;
       if (!isNaN(y)) setCourseCalDate(new Date(y, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10)));
       else setCourseCalDate(new Date());
@@ -437,10 +480,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   };
 
   const handleSelectCourseDate = (day) => {
-    setCourseFormData(prev => ({
-      ...prev,
-      purchasedAt: `${String(day).padStart(2, '0')}/${String(courseCalDate.getMonth() + 1).padStart(2, '0')}/${courseCalDate.getFullYear() + 543}`
-    }));
+    const formatted = `${String(day).padStart(2, '0')}/${String(courseCalDate.getMonth() + 1).padStart(2, '0')}/${courseCalDate.getFullYear() + 543}`;
+    if (courseCalTarget === 'expireDate') {
+      setCourseFormData(prev => ({
+        ...prev,
+        expireDate: formatted
+      }));
+    } else {
+      setCourseFormData(prev => ({
+        ...prev,
+        purchasedAt: formatted
+      }));
+    }
     closeCourseCalendar();
   };
 
@@ -456,8 +507,21 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     setCourseFormData({ ...courseFormData, purchasedAt: value });
   };
 
+  const handleExpireDateInputChange = (e) => {
+    if (e.nativeEvent && e.nativeEvent.inputType && e.nativeEvent.inputType.includes('delete')) {
+      setCourseFormData({ ...courseFormData, expireDate: e.target.value });
+      return;
+    }
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 8) value = value.slice(0, 8);
+    if (value.length > 4) value = `${value.slice(0, 2)}/${value.slice(2, 4)}/${value.slice(4)}`;
+    else if (value.length > 2) value = `${value.slice(0, 2)}/${value.slice(2)}`;
+    setCourseFormData({ ...courseFormData, expireDate: value });
+  };
+
   const handleOpenAddCourse = () => {
     setEditingCourse(null);
+    const today = getTodayThaiDateStr();
     setCourseFormData({
       courseName: '',
       productId: '',
@@ -467,7 +531,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       price: 0,
       notes: '',
       isShareable: true,
-      purchasedAt: getTodayThaiDateStr()
+      purchasedAt: today,
+      expireDate: getDefaultExpireThaiDateStr(today, 12) // ค่าเริ่มต้น 1 ปี
     });
     setIsCourseModalOpen(true);
   };
@@ -478,6 +543,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     const used = Number(course.usedSessions ?? course.used_sessions) || 0;
     const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 0;
     const rawDate = course.purchasedAt || course.purchased_at;
+    const rawExpire = course.expireDate || course.expire_date;
     setCourseFormData({
       courseName: course.courseName || course.course_name || course.name || '',
       productId: course.productId || course.product_id || '',
@@ -487,7 +553,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       price: Number(course.price) || 0,
       notes: course.notes || '',
       isShareable: course.isShareable !== false && course.is_shareable !== false,
-      purchasedAt: parseToThaiDateStr(rawDate)
+      purchasedAt: parseToThaiDateStr(rawDate) || getTodayThaiDateStr(),
+      expireDate: rawExpire ? parseToThaiDateStr(rawExpire) : ''
     });
     setIsCourseModalOpen(true);
   };
@@ -510,6 +577,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     const courseId = editingCourse?.id || `CRS${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const patientName = `${formData.prefix || ''}${formData.firstName || ''} ${formData.lastName || ''}`.trim() || formData.name || editingCourse?.patientName || editingCourse?.patient_name || 'คนไข้';
     const isoPurchasedAt = parseThaiDateToIso(courseFormData.purchasedAt);
+    const isoExpireDate = courseFormData.expireDate ? parseThaiDateToIsoDateOnly(courseFormData.expireDate) : null;
     const finalProductId = courseFormData.productId || editingCourse?.productId || editingCourse?.product_id || (posProducts.find(p => p.name === courseFormData.courseName)?.id) || 'cour_manual';
 
     const payload = {
@@ -538,8 +606,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       is_shareable: Boolean(courseFormData.isShareable),
       purchasedAt: isoPurchasedAt || null,
       purchased_at: isoPurchasedAt || null,
-      expireDate: editingCourse?.expireDate || editingCourse?.expire_date || null,
-      expire_date: editingCourse?.expire_date || editingCourse?.expireDate || null,
+      expireDate: isoExpireDate,
+      expire_date: isoExpireDate,
       posTransactionId: editingCourse?.posTransactionId || editingCourse?.pos_transaction_id || null,
       pos_transaction_id: editingCourse?.pos_transaction_id || editingCourse?.posTransactionId || null,
       receiptNo: editingCourse?.receiptNo || editingCourse?.receipt_no || null,
@@ -616,36 +684,61 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       updated_at: new Date().toISOString()
     };
 
+    // เก็บ snapshot ข้อมูลเดิมไว้ rollback กรณี network error
+    const prevCourseSnapshot = { ...course };
+
+    // 1. Optimistic Update (อัปเดต State ทันที 0ms เพื่อให้ Animation 60fps+ ทำงานทันทีโดยไม่สะดุด)
+    if (setPatientCoursesData) {
+      setPatientCoursesData(prev => {
+        const idx = prev.findIndex(c => c.id === courseId);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
+    }
+
+    setFormData(prev => {
+      const existing = prev.courses || [];
+      const idx = existing.findIndex(c => c.id === courseId);
+      let nextCourses = [...existing];
+      if (idx >= 0) {
+        nextCourses[idx] = { ...nextCourses[idx], ...payload };
+      } else {
+        nextCourses = [payload, ...nextCourses];
+      }
+      return { ...prev, courses: nextCourses };
+    });
+
     try {
       await callAppScript('SAVE_DATA', 'PatientCourses', payload);
-
+      showToast(`บันทึกการใช้คอร์สสำเร็จ (คงเหลือ ${newRem} ครั้ง)`, 'success');
+    } catch (err) {
+      console.error('Quick use course error:', err);
+      // Rollback ข้อมูลเดิมกรณี error
       if (setPatientCoursesData) {
         setPatientCoursesData(prev => {
           const idx = prev.findIndex(c => c.id === courseId);
           if (idx >= 0) {
             const next = [...prev];
-            next[idx] = { ...next[idx], ...payload };
+            next[idx] = { ...next[idx], ...prevCourseSnapshot };
             return next;
           }
-          return [payload, ...prev];
+          return prev;
         });
       }
-
       setFormData(prev => {
         const existing = prev.courses || [];
         const idx = existing.findIndex(c => c.id === courseId);
-        let nextCourses = [...existing];
         if (idx >= 0) {
-          nextCourses[idx] = { ...nextCourses[idx], ...payload };
-        } else {
-          nextCourses = [payload, ...nextCourses];
+          const nextCourses = [...existing];
+          nextCourses[idx] = { ...nextCourses[idx], ...prevCourseSnapshot };
+          return { ...prev, courses: nextCourses };
         }
-        return { ...prev, courses: nextCourses };
+        return prev;
       });
-
-      showToast(`บันทึกการใช้คอร์สสำเร็จ (คงเหลือ ${newRem} ครั้ง)`, 'success');
-    } catch (err) {
-      console.error('Quick use course error:', err);
       showToast(err?.message || 'เกิดข้อผิดพลาดในการบันทึกคอร์ส', 'error');
     }
   };
@@ -1193,6 +1286,37 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       });
     }
   }, [patientsData, medModal.isOpen, editingId, formData.hn, formData.id]);
+
+  // 🌟 Pure Real-time PatientCourses Sync: อัปเดตคอร์สทันทีเมื่อมีการตัดคอร์ส/แก้ไขคอร์สจากเครื่องอื่นแบบ Realtime
+  useEffect(() => {
+    if (!medModal.isOpen) return;
+    const currentPatientId = editingId || formData.hn || formData.id;
+    if (!currentPatientId) return;
+    const normPid = String(currentPatientId).trim().toLowerCase();
+
+    const currentPatientCourses = (patientCoursesData || []).filter(c => {
+      const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+      return cPid === normPid && !c.isDeleted;
+    });
+
+    setFormData(prev => {
+      const prevCourses = prev.courses || [];
+      const isDiff = prevCourses.length !== currentPatientCourses.length ||
+        prevCourses.some(pc => {
+          const matched = currentPatientCourses.find(c => String(c.id).trim() === String(pc.id).trim());
+          if (!matched) return true;
+          return Number(matched.usedSessions ?? matched.used_sessions) !== Number(pc.usedSessions ?? pc.used_sessions) ||
+                 Number(matched.remainingSessions ?? matched.remaining_sessions) !== Number(pc.remainingSessions ?? pc.remaining_sessions) ||
+                 matched.status !== pc.status ||
+                 matched.expireDate !== pc.expireDate;
+        });
+
+      if (isDiff) {
+        return { ...prev, courses: currentPatientCourses };
+      }
+      return prev;
+    });
+  }, [patientCoursesData, medModal.isOpen, editingId, formData.hn, formData.id]);
 
   // --- 5. Event Handlers ---
   const handleOpenCalendar = () => {
@@ -2593,20 +2717,30 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                           const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 0;
                           const total = Number(course.totalSessions ?? course.total_sessions) || 1;
                           const pDate = course.purchasedAt || course.purchased_at;
+                          const expDate = course.expireDate || course.expire_date;
+                          const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
                           const isFinished = rem === 0;
+                          const isInactive = isFinished || isExpired;
 
                           return (
                             <div key={course.id} className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 group ${
-                              isFinished 
+                              isInactive 
                                 ? 'bg-slate-50/60 border-slate-200/80 shadow-2xs opacity-75' 
                                 : 'bg-white border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md'
                             }`}>
-                              {/* ส่วนหัว: ชื่อคอร์ส และ ปุ่มแก้ไข/ลบ */}
+                              {/* ส่วนหัว: ชื่อคอร์ส, ป้ายสถานะหมดอายุ และ ปุ่มแก้ไข/ลบ */}
                               <div>
                                 <div className="flex justify-between items-start gap-2 mb-1">
-                                  <h5  className={`font-bold kanit-text text-sm sm:text-base leading-snug line-clamp-2 ${isFinished ? 'text-slate-600' : 'text-slate-800'}`}>
-                                    {cName}
-                                  </h5>
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className={`font-bold kanit-text text-sm sm:text-base leading-snug line-clamp-2 ${isInactive ? 'text-slate-600' : 'text-slate-800'}`}>
+                                      {cName}
+                                    </h5>
+                                    {isExpired && (
+                                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-200 font-bold text-[10px] kanit-text">
+                                        ⚠️ หมดอายุแล้ว
+                                      </span>
+                                    )}
+                                  </div>
                                   {!isViewMode && (
                                     <div className="flex items-center gap-1 shrink-0 -mr-1 -mt-1">
                                       <button
@@ -2630,45 +2764,64 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                 </div>
                               </div>
 
-                              {/* ส่วนหลอดพลัง + ตัวเลขคงเหลือ (วางติดกันให้อ่านง่าย) */}
-                              <div className={`p-2.5 rounded-xl border ${isFinished ? 'bg-slate-100/70 border-slate-200/60' : 'bg-slate-50 border-slate-100'}`}>
+                              {/* ส่วนหลอดพลัง + ตัวเลขคงเหลือ (วางติดกันให้อ่านง่าย แอนิเมชันลื่นไหล 60fps+) */}
+                              <div className={`p-2.5 rounded-xl border ${isInactive ? 'bg-slate-100/70 border-slate-200/60' : 'bg-slate-50 border-slate-100'}`}>
                                 <div className="flex justify-between items-baseline mb-1.5">
-                                  <span className={`text-[11px] font-semibold kanit-text ${isFinished ? 'text-slate-400' : 'text-slate-500'}`}>
-                                    {isFinished ? 'สถานะ: ใช้ครบแล้ว' : 'คงเหลือ'}
+                                  <span className={`text-[11px] font-semibold kanit-text ${isExpired ? 'text-rose-600 font-bold' : isFinished ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    {isExpired ? 'สถานะ: หมดอายุแล้ว' : isFinished ? 'สถานะ: ใช้ครบแล้ว' : 'คงเหลือ'}
                                   </span>
-                                  <div className="text-right font-data">
-                                    <span className={`text-sm font-black ${isFinished ? 'text-slate-500' : 'text-indigo-600'}`}>{rem}</span>
+                                  <div className="text-right font-data flex items-baseline justify-end gap-0.5">
+                                    <span 
+                                      key={rem} 
+                                      className={`text-sm font-black course-num-pop ${isExpired ? 'text-rose-600' : isFinished ? 'text-slate-500' : 'text-indigo-600'}`}
+                                    >
+                                      {rem}
+                                    </span>
                                     <span className="text-xs font-bold text-slate-400">/{total} ครั้ง</span>
                                   </div>
                                 </div>
-                                <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                                <div className="w-full bg-slate-200/80 h-2.5 rounded-full overflow-hidden relative isolate">
                                   <div 
-                                    className={`h-full rounded-full transition-all duration-500 ${isFinished ? 'bg-slate-300' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`} 
-                                    style={{ width: `${Math.min(100, Math.max(0, (rem / total) * 100))}%` }}
+                                    className={`h-full w-full rounded-full course-progress-bar ${isExpired ? 'bg-rose-400' : isFinished ? 'bg-slate-300' : 'bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-500'}`} 
+                                    style={{ transform: `scaleX(${Math.min(1, Math.max(0, rem / total))}) translateZ(0)` }}
                                   ></div>
                                 </div>
                               </div>
 
-                              {/* ส่วนล่าง: วันที่ซื้อ และ สถานะแชร์ */}
-                              <div className="flex items-center justify-between text-[11px] text-slate-400 font-data pt-1 border-t border-slate-100">
-                                <span className="flex items-center gap-1">
-                                  <CalendarIcon size={12} className="text-slate-400" />
-                                  ซื้อ: {formatDate(pDate)}
-                                </span>
-                                {isFinished ? (
-                                  <span className="px-2 py-0.5 rounded-md bg-slate-200/70 text-slate-500 font-bold text-[10px] kanit-text">
-                                    จบคอร์สแล้ว
+                              {/* ส่วนล่าง: วันที่ซื้อ, วันหมดอายุ และ สถานะแชร์ */}
+                              <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-slate-400 font-data pt-1 border-t border-slate-100">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="flex items-center gap-1">
+                                    <CalendarIcon size={12} className="text-slate-400 shrink-0" />
+                                    ซื้อ: {formatDate(pDate)}
                                   </span>
-                                ) : (course.isShareable !== false && course.is_shareable !== false ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-bold text-[10px] border border-emerald-100 kanit-text">
-                                    <Users size={10} /> แชร์ได้
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-slate-400 kanit-text">ใช้เฉพาะบุคคล</span>
-                                ))}
+                                  {expDate && (
+                                    <span className={`flex items-center gap-1 ${isExpired ? 'text-rose-600 font-semibold' : 'text-slate-400'}`}>
+                                      <CalendarIcon size={12} className={`shrink-0 ${isExpired ? 'text-rose-600' : 'text-slate-400'}`} />
+                                      หมดอายุ: {formatDate(expDate)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {isExpired ? (
+                                    <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-200 font-bold text-[10px] kanit-text">
+                                      หมดอายุแล้ว
+                                    </span>
+                                  ) : isFinished ? (
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-200/70 text-slate-500 font-bold text-[10px] kanit-text">
+                                      จบคอร์สแล้ว
+                                    </span>
+                                  ) : (course.isShareable !== false && course.is_shareable !== false ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 font-bold text-[10px] border border-emerald-100 kanit-text">
+                                      <Users size={10} /> แชร์ได้
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 kanit-text">ใช้เฉพาะบุคคล</span>
+                                  ))}
+                                </div>
                               </div>
 
-                              {!isViewMode && !isFinished && (
+                              {!isViewMode && !isFinished && !isExpired && (
                                 <button
                                   type="button"
                                   onClick={() => handleQuickUseSession(course)}
@@ -3509,7 +3662,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <Package size={22} className="text-indigo-200" />
                 <div>
@@ -3530,13 +3683,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
               </button>
             </div>
 
-            {/* Form Body */}
-            <form onSubmit={handleSaveCourse} className="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4">
-              {/* เลือกคอร์สจากแคตตาล็อก หรือ กำหนดชื่อคอร์ส */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
-                  ชื่อคอร์ส / แพ็กเกจ <span className="text-rose-500">*</span>
-                </label>
+            {/* Form wrapping body and footer */}
+            <form onSubmit={handleSaveCourse} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              {/* Scrollable Form Body */}
+              <div className="p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+                {/* เลือกคอร์สจากแคตตาล็อก หรือ กำหนดชื่อคอร์ส */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
+                    ชื่อคอร์ส / แพ็กเกจ <span className="text-rose-500">*</span>
+                  </label>
                 {posProducts && posProducts.filter(p => p.isCourse).length > 0 && (
                   <div className="mb-2">
                     <CustomSelect
@@ -3647,7 +3802,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 </div>
               </div>
 
-              {/* วันที่ซื้อ & ราคา (ใช้ปฏิทินของเว็บ) */}
+              {/* วันที่ซื้อ & วันหมดอายุ (พ.ศ.) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
@@ -3665,7 +3820,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     />
                     <button
                       type="button"
-                      onClick={openCourseCalendar}
+                      onClick={() => openCourseCalendar('purchasedAt')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                       title="เลือกวันที่จากปฏิทิน"
                     >
@@ -3674,20 +3829,102 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
-                    ราคา / มูลค่าคอร์ส (บาท)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">฿</span>
-                    <input
-                      type="number"
-                      min="0"
-                      className={`${theme.input} pl-8 font-data`}
-                      placeholder="0"
-                      value={courseFormData.price}
-                      onChange={(e) => setCourseFormData({ ...courseFormData, price: e.target.value })}
-                    />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700 kanit-text">
+                      วันหมดอายุ (พ.ศ.)
+                    </label>
+                    <span className="text-[10px] text-slate-400 kanit-text">
+                      (ค่าเริ่มต้น 1 ปี)
+                    </span>
                   </div>
+                  <div ref={courseExpireWrapperRef} className="relative group">
+                    <input
+                      type="text"
+                      className={`${theme.input} pr-10 font-data`}
+                      value={courseFormData.expireDate}
+                      onChange={handleExpireDateInputChange}
+                      placeholder="วว/ดด/ปปปป (เว้นว่าง = ไม่จำกัด)"
+                      maxLength="10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => openCourseCalendar('expireDate')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="เลือกวันหมดอายุจากปฏิทิน"
+                    >
+                      <CalendarIcon size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* ปุ่มลัดปรับอายุคอร์ส */}
+              <div className="flex flex-wrap items-center gap-1.5 -mt-1">
+                <span className="text-[11px] text-slate-500 font-medium kanit-text mr-1">กำหนดอายุเร็ว:</span>
+                <button
+                  type="button"
+                  onClick={() => setCourseFormData(prev => ({
+                    ...prev,
+                    expireDate: getDefaultExpireThaiDateStr(prev.purchasedAt || getTodayThaiDateStr(), 3)
+                  }))}
+                  className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg font-medium transition-colors kanit-text"
+                >
+                  +3 เดือน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCourseFormData(prev => ({
+                    ...prev,
+                    expireDate: getDefaultExpireThaiDateStr(prev.purchasedAt || getTodayThaiDateStr(), 6)
+                  }))}
+                  className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg font-medium transition-colors kanit-text"
+                >
+                  +6 เดือน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCourseFormData(prev => ({
+                    ...prev,
+                    expireDate: getDefaultExpireThaiDateStr(prev.purchasedAt || getTodayThaiDateStr(), 12)
+                  }))}
+                  className="px-2.5 py-1 text-[11px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-medium transition-colors kanit-text border border-indigo-100"
+                >
+                  +1 ปี (แนะนำ)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCourseFormData(prev => ({
+                    ...prev,
+                    expireDate: getDefaultExpireThaiDateStr(prev.purchasedAt || getTodayThaiDateStr(), 24)
+                  }))}
+                  className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg font-medium transition-colors kanit-text"
+                >
+                  +2 ปี
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCourseFormData(prev => ({ ...prev, expireDate: '' }))}
+                  className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-medium transition-colors kanit-text"
+                >
+                  ไม่จำกัด
+                </button>
+              </div>
+
+              {/* ราคา / มูลค่าคอร์ส */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 kanit-text">
+                  ราคา / มูลค่าคอร์ส (บาท)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">฿</span>
+                  <input
+                    type="number"
+                    min="0"
+                    className={`${theme.input} pl-8 font-data`}
+                    placeholder="0"
+                    value={courseFormData.price}
+                    onChange={(e) => setCourseFormData({ ...courseFormData, price: e.target.value })}
+                  />
                 </div>
               </div>
 
@@ -3717,27 +3954,29 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 </div>
               </label>
 
-              {/* Action Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsCourseModalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all kanit-text"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95 kanit-text flex items-center gap-1.5"
-                >
-                  <Save size={14} /> บันทึกข้อมูลคอร์ส
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCourseModalOpen(false)}
+                className="px-5 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 rounded-xl text-xs font-bold transition-all kanit-text shadow-2xs hover:shadow-sm active:scale-95"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-600/20 active:scale-95 kanit-text flex items-center gap-1.5"
+              >
+                <Save size={15} /> บันทึกข้อมูลคอร์ส
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>,
+      document.body
+    )}
 
       {/* --- ปฏิทินเลือกวันที่ซื้อคอร์ส (Thai Buddhist Date Picker) --- */}
       {showCourseCalendar && createPortal(
@@ -3750,6 +3989,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
           >
             <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+            </div>
+            <div className="text-xs font-bold text-slate-500 mb-3 text-center kanit-text">
+              {courseCalTarget === 'expireDate' ? 'เลือกวันหมดอายุคอร์ส' : 'เลือกวันที่ซื้อคอร์ส'}
             </div>
             {courseCalView === 'days' && (
               <>
@@ -3774,7 +4016,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>
                   ))}
                   {Array.from({ length: new Date(courseCalDate.getFullYear(), courseCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
-                    const isSelected = courseFormData.purchasedAt === `${String(day).padStart(2, '0')}/${String(courseCalDate.getMonth() + 1).padStart(2, '0')}/${courseCalDate.getFullYear() + 543}`;
+                    const currentTargetDate = courseCalTarget === 'expireDate' ? courseFormData.expireDate : courseFormData.purchasedAt;
+                    const isSelected = currentTargetDate === `${String(day).padStart(2, '0')}/${String(courseCalDate.getMonth() + 1).padStart(2, '0')}/${courseCalDate.getFullYear() + 543}`;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === courseCalDate.getMonth() && new Date().getFullYear() === courseCalDate.getFullYear();
                     return (
                       <button 
