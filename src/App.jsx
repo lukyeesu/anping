@@ -2084,11 +2084,20 @@ export default function App() {
     };
   }, []);
 
-  // --- ดึงข้อมูลคอร์สล่าสุดจาก Supabase อัตโนมัติเมื่อโฟกัสหน้าต่าง หรือสลับแท็บกลับมา (Auto-Refresh on Tab Focus) ---
+  // --- ดึงข้อมูลคอร์สล่าสุดจาก Supabase อัตโนมัติเมื่อโฟกัสหน้าต่าง หรือสลับแท็บกลับมา (พร้อมระบบ Cooldown 60s เพื่อประหยัด Egress 100%) ---
   useEffect(() => {
     if (!supabase) return;
 
-    const refreshCoursesFromSupabase = async () => {
+    let lastFetchTime = 0;
+    const COOLDOWN_MS = 60000; // รออย่างน้อย 60 วินาทีถึงจะยอมดึงใหม่เมื่อสลับแท็บ (ป้องกันการยิงซ้ำเวลากดสลับแท็บบ่อยๆ)
+
+    const refreshCoursesFromSupabase = async (force = false) => {
+      const now = Date.now();
+      if (!force && (now - lastFetchTime < COOLDOWN_MS)) {
+        return;
+      }
+      lastFetchTime = now;
+
       try {
         const { data, error } = await supabase
           .from('patient_courses')
@@ -2105,18 +2114,18 @@ export default function App() {
 
     const handleFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
-        refreshCoursesFromSupabase();
+        refreshCoursesFromSupabase(false);
       }
     };
 
     window.addEventListener('focus', handleFocusOrVisible);
     document.addEventListener('visibilitychange', handleFocusOrVisible);
-    window.addEventListener('online', refreshCoursesFromSupabase);
+    window.addEventListener('online', () => refreshCoursesFromSupabase(true));
 
     return () => {
       window.removeEventListener('focus', handleFocusOrVisible);
       document.removeEventListener('visibilitychange', handleFocusOrVisible);
-      window.removeEventListener('online', refreshCoursesFromSupabase);
+      window.removeEventListener('online', () => refreshCoursesFromSupabase(true));
     };
   }, []);
 

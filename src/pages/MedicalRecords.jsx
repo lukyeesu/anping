@@ -2735,11 +2735,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                     <h5 className={`font-bold kanit-text text-sm sm:text-base leading-snug line-clamp-2 ${isInactive ? 'text-slate-600' : 'text-slate-800'}`}>
                                       {cName}
                                     </h5>
-                                    {isExpired && (
-                                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-200 font-bold text-[10px] kanit-text">
-                                        ⚠️ หมดอายุแล้ว
-                                      </span>
-                                    )}
                                   </div>
                                   {!isViewMode && (
                                     <div className="flex items-center gap-1 shrink-0 -mr-1 -mt-1">
