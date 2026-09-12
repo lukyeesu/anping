@@ -433,7 +433,8 @@ function buildQueueNotificationFlex(payload: any, titleText: string, headerColor
             "size": "xxs",
             "color": "#94a3b8",
             "align": "center",
-            "margin": "sm"
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -576,7 +577,8 @@ function createDailySalesSummaryFlex(summary: any, branchName: string = 'สา�
             "size": "xxs",
             "color": "#94a3b8",
             "align": "center",
-            "margin": "sm"
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -784,7 +786,8 @@ function createMenuFlex() {
             "size": "xxs",
             "color": "#94a3b8",
             "align": "center",
-            "margin": "sm"
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -894,7 +897,8 @@ function createInventoryFlex(item: any) {
             "size": "xxs",
             "color": "#94a3b8",
             "align": "center",
-            "margin": "sm"
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -902,57 +906,167 @@ function createInventoryFlex(item: any) {
   };
 }
 
-function createPatientFlex(patient: any, queueList: any[] = []) {
+function parseToTimestamp(raw: any): number {
+  if (!raw) return 0;
+  const str = String(raw).trim();
+  const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (m) {
+    let yr = parseInt(m[3], 10);
+    if (yr > 2400) yr -= 543;
+    const hr = m[4] ? parseInt(m[4], 10) : 0;
+    const min = m[5] ? parseInt(m[5], 10) : 0;
+    return new Date(yr, parseInt(m[2], 10) - 1, parseInt(m[1], 10), hr, min).getTime();
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function formatThaiVisitDate(raw: any): string {
+  if (!raw || raw === '-') return '-';
+  const str = String(raw).trim();
+  
+  // 1. Format: DD/MM/YYYY (Thai or AD) with optional time
+  const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (slashMatch) {
+    const day = slashMatch[1].padStart(2, '0');
+    const month = slashMatch[2].padStart(2, '0');
+    let year = parseInt(slashMatch[3], 10);
+    if (year < 2400) year += 543;
+    const time = slashMatch[4] ? ` (${slashMatch[4]}:${slashMatch[5]} น.)` : '';
+    return `${day}/${month}/${year}${time}`;
+  }
+
+  // 2. Format: ISO Date (e.g. 2026-09-12T07:07:30.332Z)
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const thai = new Date(d.getTime() + (7 * 60 * 60 * 1000));
+      const day = String(thai.getUTCDate()).padStart(2, '0');
+      const month = String(thai.getUTCMonth() + 1).padStart(2, '0');
+      const year = thai.getUTCFullYear() + 543;
+      const hours = String(thai.getUTCHours()).padStart(2, '0');
+      const mins = String(thai.getUTCMinutes()).padStart(2, '0');
+      return `${day}/${month}/${year} (${hours}:${mins} น.)`;
+    }
+  } catch(_e) {}
+
+  return str;
+}
+
+function formatThaiPhone(phoneStr: any): string {
+  if (!phoneStr || phoneStr === '-') return '-';
+  const clean = String(phoneStr).replace(/\D/g, '');
+  if (clean.length === 10) {
+    return `${clean.slice(0, 3)}-${clean.slice(3, 6)}-${clean.slice(6)}`;
+  }
+  if (clean.length === 9) {
+    return `${clean.slice(0, 2)}-${clean.slice(2, 5)}-${clean.slice(5)}`;
+  }
+  return String(phoneStr);
+}
+
+function createPatientFlex(patient: any, queueList: any[] = [], treatmentList: any[] = [], courseList: any[] = []) {
   const fullName = patient.name || `${patient.firstName || patient.first_name || ''} ${patient.lastName || patient.last_name || ''}`.trim() || 'ไม่ระบุชื่อ';
   const hn = patient.hn || patient.id || '-';
   const rawPhone = patient.phone || patient.tel || '-';
+  const displayPhone = formatThaiPhone(rawPhone);
   const firstPhone = extractFirstPhone(rawPhone);
-  const allergy = patient.drugAllergy || patient.drug_allergy || patient.allergy || 'ไม่มี';
-  
+  const allergy = patient.drugAllergy || patient.drug_allergy || patient.allergy || patient.allergies || 'ไม่มี';
+  const underlyingDisease = patient.underlying_disease || patient.underlyingDisease || patient.disease || '';
+
+  // คำนวณอายุอย่างแม่นยำ
   let ageStr = '-';
   if (patient.age) {
     ageStr = `${patient.age} ปี`;
   } else if (patient.dob) {
-    const parts = patient.dob.split('/');
+    const cleanDob = String(patient.dob).trim();
+    const parts = cleanDob.split(/[\/\-]/);
     if (parts.length === 3) {
-      const birthYearTH = parseInt(parts[2], 10);
-      const currentYearTH = new Date().getFullYear() + 543;
-      const calculatedAge = currentYearTH - birthYearTH;
-      if (!isNaN(calculatedAge) && calculatedAge >= 0) {
-        ageStr = `${calculatedAge} ปี`;
+      let birthYear = parseInt(parts[0].length === 4 ? parts[0] : parts[2], 10);
+      const currentYear = new Date().getFullYear();
+      if (!isNaN(birthYear)) {
+        if (birthYear > 2400) birthYear -= 543;
+        const calculatedAge = currentYear - birthYear;
+        if (calculatedAge >= 0 && calculatedAge <= 120) {
+          ageStr = `${calculatedAge} ปี`;
+        }
       }
     }
   }
   const gender = patient.gender || '-';
 
-  let lastVisit = patient.lastVisit && patient.lastVisit !== '-' ? patient.lastVisit : '';
-  if (!lastVisit && queueList.length > 0) {
-    try {
-      const pId = patient.hn || patient.id;
-      const patientAppts = queueList.filter(q => q.hn === pId || q.patientId === pId || q.patient_id === pId);
-      if (patientAppts.length > 0) {
-        const pastAppts = patientAppts.filter(q => {
-          const d = new Date(q.date || q.rawDateTime || q.raw_date_time || 0);
-          return d.getTime() <= new Date().getTime();
-        });
-        if (pastAppts.length > 0) {
-          pastAppts.sort((a,b) => new Date(b.date || b.rawDateTime || b.raw_date_time || 0).getTime() - new Date(a.date || a.rawDateTime || a.raw_date_time || 0).getTime());
-          const latest = pastAppts[0];
-          lastVisit = latest.date || latest.rawDateTime || latest.raw_date_time || latest.datetime;
-        }
+  // ค้นหาวันที่รักษาล่าสุด และรายละเอียดการรักษาล่าสุด
+  let lastVisitRaw = '';
+  let latestTreatmentName = '';
+  let latestDoctor = '';
+
+  // 1. ดึงจาก treatmentList (ตาราง treatments ใน Supabase)
+  if (treatmentList && treatmentList.length > 0) {
+    const validTrts = treatmentList.filter((t: any) => !t.is_deleted);
+    if (validTrts.length > 0) {
+      validTrts.sort((a: any, b: any) => {
+        const timeA = parseToTimestamp(a.created_at || a.datetime || a.date);
+        const timeB = parseToTimestamp(b.created_at || b.datetime || b.date);
+        return timeB - timeA;
+      });
+      const latestTrt = validTrts[0];
+      const trtDateTime = latestTrt.datetime || (latestTrt.date ? (latestTrt.time ? `${latestTrt.date} ${latestTrt.time}` : latestTrt.date) : '') || latestTrt.created_at || '';
+      lastVisitRaw = trtDateTime;
+      latestDoctor = latestTrt.doctor || '';
+      if (Array.isArray(latestTrt.prescription) && latestTrt.prescription.length > 0) {
+        latestTreatmentName = latestTrt.prescription.filter(Boolean).join(', ');
+      } else if (typeof latestTrt.prescription === 'string' && latestTrt.prescription.trim()) {
+        latestTreatmentName = latestTrt.prescription.trim();
+      } else if (latestTrt.treatment_detail) {
+        latestTreatmentName = latestTrt.treatment_detail;
+      } else if (latestTrt.chief_complaint) {
+        latestTreatmentName = latestTrt.chief_complaint;
       }
-    } catch(e) {}
+    }
   }
 
-  if (lastVisit && lastVisit !== '-') {
+  // 2. สำรอง: ดึงจาก queueList (คิวนัดหมายที่ผ่านการรักษาแล้ว)
+  if (!lastVisitRaw && queueList && queueList.length > 0) {
     try {
-      const d = new Date(lastVisit.includes('/') ? lastVisit.split('/').reverse().join('-') : lastVisit);
-      if (!isNaN(d.getTime())) {
-        lastVisit = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+      const pId = patient.hn || patient.id;
+      const patientAppts = queueList.filter((q: any) => 
+        q.hn === pId || q.patientId === pId || q.patient_id === pId ||
+        (patient.name && q.patientName && q.patientName.includes(patient.name))
+      );
+      if (patientAppts.length > 0) {
+        const pastAppts = patientAppts.filter((q: any) => {
+          const d = new Date(q.rawDateTime || q.date || 0);
+          return !isNaN(d.getTime()) && (d.getTime() <= Date.now() || q.treated);
+        });
+        if (pastAppts.length > 0) {
+          pastAppts.sort((a: any, b: any) => new Date(b.rawDateTime || b.date || 0).getTime() - new Date(a.rawDateTime || a.date || 0).getTime());
+          const latest = pastAppts[0];
+          lastVisitRaw = latest.datetime || latest.date || latest.rawDateTime || '';
+          if (!latestDoctor && latest.doctor) latestDoctor = latest.doctor;
+          if (!latestTreatmentName && (latest.service || latest.reason)) latestTreatmentName = latest.service || latest.reason;
+        }
       }
-    } catch(e) {}
-  } else {
-    lastVisit = '-';
+    } catch(_e) {}
+  }
+
+  // 3. สำรอง: จากฟิลด์ใน patient
+  if (!lastVisitRaw) {
+    lastVisitRaw = patient.lastVisit || patient.last_visit || patient.data?.lastVisit || patient.data?.last_visit || '';
+  }
+
+  const lastVisitFormatted = formatThaiVisitDate(lastVisitRaw);
+
+  // คอร์สคงเหลือของคนไข้
+  let remainingCoursesText = '';
+  if (courseList && courseList.length > 0) {
+    const activeCourses = courseList.filter((c: any) => !c.is_deleted && Number(c.remaining_sessions ?? c.remainingSessions ?? 0) > 0);
+    if (activeCourses.length > 0) {
+      remainingCoursesText = activeCourses.map((c: any) => {
+        const cName = c.course_name || c.courseName || 'คอร์ส';
+        const rem = c.remaining_sessions ?? c.remainingSessions ?? 0;
+        return `${cName} (${rem} ครั้ง)`;
+      }).join(', ');
+    }
   }
 
   const patientRows: any[] = [
@@ -961,7 +1075,7 @@ function createPatientFlex(patient: any, queueList: any[] = []) {
       "layout": "horizontal",
       "contents": [
         { "type": "text", "text": "เบอร์โทร", "size": "sm", "color": "#64748b", "flex": 4 },
-        { "type": "text", "text": rawPhone, "size": "sm", "color": "#0ea5e9", "weight": "bold", "flex": 6 }
+        { "type": "text", "text": displayPhone, "size": "sm", "color": "#0ea5e9", "weight": "bold", "flex": 6 }
       ]
     },
     {
@@ -977,9 +1091,33 @@ function createPatientFlex(patient: any, queueList: any[] = []) {
       "layout": "horizontal",
       "contents": [
         { "type": "text", "text": "รักษาล่าสุด", "size": "sm", "color": "#64748b", "flex": 4 },
-        { "type": "text", "text": lastVisit, "size": "sm", "color": "#334155", "flex": 6 }
+        { "type": "text", "text": lastVisitFormatted, "size": "sm", "color": "#0f172a", "weight": "bold", "flex": 6, "wrap": true }
       ]
-    }
+    },
+    ...(latestTreatmentName ? [{
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "รายการรักษา", "size": "sm", "color": "#64748b", "flex": 4 },
+        { "type": "text", "text": latestTreatmentName, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
+      ]
+    }] : []),
+    ...(latestDoctor && latestDoctor !== '-' ? [{
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "แพทย์ผู้ตรวจ", "size": "sm", "color": "#64748b", "flex": 4 },
+        { "type": "text", "text": latestDoctor, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
+      ]
+    }] : []),
+    ...(remainingCoursesText ? [{
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "คอร์สคงเหลือ", "size": "sm", "color": "#64748b", "flex": 4 },
+        { "type": "text", "text": remainingCoursesText, "size": "sm", "color": "#d97706", "weight": "bold", "flex": 6, "wrap": true }
+      ]
+    }] : [])
   ];
 
   if (allergy && allergy !== 'ไม่มี' && allergy !== '-') {
@@ -989,6 +1127,17 @@ function createPatientFlex(patient: any, queueList: any[] = []) {
       "contents": [
         { "type": "text", "text": "ประวัติแพ้ยา", "size": "sm", "color": "#64748b", "flex": 4 },
         { "type": "text", "text": allergy, "size": "sm", "color": "#ef4444", "weight": "bold", "flex": 6, "wrap": true }
+      ]
+    });
+  }
+
+  if (underlyingDisease && underlyingDisease !== 'ไม่มี' && underlyingDisease !== '-') {
+    patientRows.push({
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
+        { "type": "text", "text": "โรคประจำตัว", "size": "sm", "color": "#64748b", "flex": 4 },
+        { "type": "text", "text": underlyingDisease, "size": "sm", "color": "#e11d48", "weight": "bold", "flex": 6, "wrap": true }
       ]
     });
   }
@@ -1075,6 +1224,15 @@ function createPatientFlex(patient: any, queueList: any[] = []) {
               "label": "พิมพ์ใบ OPD",
               "uri": `${WEBAPP_URL}?print_opd=${encodeURIComponent(hn)}`
             }
+          },
+          {
+            "type": "text",
+            "text": getThaiNotificationTimestamp(),
+            "size": "xxs",
+            "color": "#94a3b8",
+            "align": "center",
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -1314,6 +1472,15 @@ function createAppointmentCarouselFlex(appts: any[], titleStr: string, settings:
               "label": "โทร",
               "uri": firstPhone !== '-' ? `tel:${firstPhone}` : WEBAPP_URL
             }
+          },
+          {
+            "type": "text",
+            "text": getThaiNotificationTimestamp(),
+            "size": "xxs",
+            "color": "#94a3b8",
+            "align": "center",
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -1328,17 +1495,86 @@ function createAppointmentCarouselFlex(appts: any[], titleStr: string, settings:
 }
 
 function createPosFlex(pos: any) {
-  const patientName = pos.patientName || pos.patient_name || pos.customerName || 'ลูกค้าทั่วไป';
-  const totalAmount = pos.totalAmount || pos.grandTotal || pos.total || 0;
-  const id = pos.id || pos.receiptNo || pos.receipt_id || '-';
-  const payMethod = pos.paymentMethod || pos.payment_method || 'เงินสด';
-  const staff = pos.staff || pos.cashier || 'เจ้าหน้าที่';
-  const phone = pos.phone || pos.tel || '';
-  const dateStr = pos.datetime || pos.date || new Date().toLocaleDateString('th-TH');
+  const data = pos.data || {};
+  const patientName = pos.patient_name || pos.patientName || data.patient_name || data.patientName || pos.customerName || data.customerName || 'ลูกค้าทั่วไป';
+  const totalAmount = Number(
+    pos.net_amount ??
+    pos.total_amount ??
+    pos.totalAmount ??
+    pos.grandTotal ??
+    pos.grand_total ??
+    pos.total ??
+    pos.amount ??
+    data.net_amount ??
+    data.total_amount ??
+    data.totalAmount ??
+    data.grandTotal ??
+    data.grand_total ??
+    data.total ??
+    0
+  );
+  const id = pos.receipt_no || pos.receiptNo || pos.id || data.receipt_no || data.receiptNo || data.id || '-';
+  
+  // Payment method translation
+  let rawPay = String(pos.payment_method || pos.paymentMethod || data.payment_method || data.paymentMethod || 'เงินสด').toLowerCase();
+  let payMethod = '💵 เงินสด';
+  if (rawPay.includes('transfer') || rawPay.includes('โอน')) {
+    payMethod = '📲 โอนเงิน (QR Code)';
+  } else if (rawPay.includes('credit') || rawPay.includes('card') || rawPay.includes('บัตร')) {
+    payMethod = '💳 บัตรเครดิต';
+  } else if (rawPay.includes('cash') || rawPay.includes('สด')) {
+    payMethod = '💵 เงินสด';
+  } else if (rawPay && rawPay !== '-') {
+    payMethod = pos.payment_method || pos.paymentMethod || rawPay;
+  }
+
+  const staff = pos.staff_name || pos.staff || pos.seller_name || pos.cashier || data.staff_name || data.staff || 'เจ้าหน้าที่';
+  const phone = pos.phone || pos.tel || data.phone || data.tel || '';
+
+  // Thai Date formatting
+  let dateStr = '-';
+  const rawTime = pos.created_at || pos.datetime || pos.date || data.created_at || data.datetime || data.date;
+  if (rawTime) {
+    try {
+      const d = new Date(rawTime);
+      if (!isNaN(d.getTime())) {
+        const thai = new Date(d.getTime() + (7 * 60 * 60 * 1000));
+        const day = String(thai.getUTCDate()).padStart(2, '0');
+        const month = String(thai.getUTCMonth() + 1).padStart(2, '0');
+        const year = thai.getUTCFullYear() + 543;
+        const hours = String(thai.getUTCHours()).padStart(2, '0');
+        const minutes = String(thai.getUTCMinutes()).padStart(2, '0');
+        dateStr = `${day}/${month}/${year} ${hours}:${minutes} น.`;
+      } else {
+        dateStr = String(rawTime);
+      }
+    } catch (_e) {
+      dateStr = String(rawTime);
+    }
+  }
+
+  // Items list
+  const rawItems = pos.items || data.items || [];
+  let itemContents: any[] = [];
+  if (Array.isArray(rawItems) && rawItems.length > 0) {
+    itemContents = rawItems.slice(0, 5).map((it: any) => {
+      const itName = it.name || it.courseName || it.product_name || 'รายการสินค้า/บริการ';
+      const itQty = it.quantity || it.qty || 1;
+      const itPrice = it.total || it.price || 0;
+      return {
+        "type": "box",
+        "layout": "horizontal",
+        "contents": [
+          { "type": "text", "text": `• ${itName} x${itQty}`, "size": "xs", "color": "#334155", "flex": 7, "wrap": true },
+          { "type": "text", "text": `฿${Number(itPrice).toLocaleString()}`, "size": "xs", "color": "#0f172a", "weight": "bold", "flex": 3, "align": "end" }
+        ]
+      };
+    });
+  }
 
   return {
     "type": "flex",
-    "altText": `(เพิ่มบิลใหม่) รับชำระเงิน POS: ฿${Number(totalAmount).toLocaleString()} (${id})`,
+    "altText": `🧾 ใบเสร็จรับเงิน/บิล POS: ฿${Number(totalAmount).toLocaleString()} (${id})`,
     "contents": {
       "type": "bubble",
       "size": "kilo",
@@ -1350,14 +1586,14 @@ function createPosFlex(pos: any) {
         "contents": [
           {
             "type": "text",
-            "text": "(เพิ่มบิลใหม่) รับชำระเงิน POS",
+            "text": "🧾 ใบเสร็จรับเงิน / บิล POS",
             "color": "#ffffff",
             "weight": "bold",
             "size": "md"
           },
           {
             "type": "text",
-            "text": String(id),
+            "text": `เลขที่: ${String(id)}`,
             "color": "#e0f2fe",
             "size": "xs",
             "margin": "xs"
@@ -1386,7 +1622,7 @@ function createPosFlex(pos: any) {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "วันที่", "size": "sm", "color": "#64748b", "flex": 4 },
+                  { "type": "text", "text": "วันเวลา", "size": "sm", "color": "#64748b", "flex": 4 },
                   { "type": "text", "text": String(dateStr), "size": "sm", "color": "#334155", "flex": 6 }
                 ]
               },
@@ -1402,7 +1638,7 @@ function createPosFlex(pos: any) {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                  { "type": "text", "text": "ช่องทาง", "size": "sm", "color": "#64748b", "flex": 4 },
+                  { "type": "text", "text": "ช่องทางชำระ", "size": "sm", "color": "#64748b", "flex": 4 },
                   { "type": "text", "text": String(payMethod), "size": "sm", "color": "#334155", "flex": 6 }
                 ]
               },
@@ -1411,11 +1647,24 @@ function createPosFlex(pos: any) {
                 "layout": "horizontal",
                 "contents": [
                   { "type": "text", "text": "ผู้บันทึก", "size": "sm", "color": "#64748b", "flex": 4 },
-                  { "type": "text", "text": String(staff), "size": "sm", "color": "#334155", "flex": 6 }
+                  { "type": "text", "text": String(staff), "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
                 ]
               }
             ]
           },
+          ...(itemContents.length > 0 ? [
+            { "type": "separator", "margin": "md" },
+            {
+              "type": "box",
+              "layout": "vertical",
+              "margin": "md",
+              "spacing": "xs",
+              "contents": [
+                { "type": "text", "text": "รายการสินค้า / บริการ:", "size": "xs", "color": "#64748b", "weight": "bold" },
+                ...itemContents
+              ]
+            }
+          ] : []),
           {
             "type": "separator",
             "margin": "md"
@@ -1426,7 +1675,7 @@ function createPosFlex(pos: any) {
             "margin": "md",
             "contents": [
               { "type": "text", "text": "ยอดสุทธิ", "size": "md", "color": "#0f172a", "weight": "bold", "flex": 4 },
-              { "type": "text", "text": `฿${Number(totalAmount).toLocaleString()}`, "size": "xl", "color": "#0284c7", "weight": "bold", "flex": 6, align: "end" }
+              { "type": "text", "text": `฿${Number(totalAmount).toLocaleString()}`, "size": "xl", "color": "#0284c7", "weight": "bold", "flex": 6, "align": "end" }
             ]
           }
         ]
@@ -1445,9 +1694,18 @@ function createPosFlex(pos: any) {
             "height": "sm",
             "action": {
               "type": "uri",
-              "label": "พิมพ์บิล",
+              "label": "📄 ดู/พิมพ์ใบเสร็จ ↗",
               "uri": `${WEBAPP_URL}?print_pos=${encodeURIComponent(id)}`
             }
+          },
+          {
+            "type": "text",
+            "text": getThaiNotificationTimestamp(),
+            "size": "xxs",
+            "color": "#94a3b8",
+            "align": "center",
+            "margin": "sm",
+            "wrap": true
           }
         ]
       }
@@ -1921,9 +2179,9 @@ serve(async (req) => {
           return new Response(JSON.stringify({ success: true, count: queueList.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
         }
 
-        // 3.2 ดูนัดหมายรายบุคคล (เช่น "ดูนัดหมาย HN69-0071", "ดูนัดหมาย 0071", "ดูนัดหมาย ศิริลักษ์", "หา HN001")
-        if (cleanMsg.startsWith('ดูนัดหมาย') || cleanMsg.startsWith('นัดหมาย ') || cleanMsg.startsWith('หา ') || cleanMsg.startsWith('คิวนัดหมาย ')) {
-          const kw = cleanMsg.replace(/^(ดูนัดหมาย|นัดหมาย|คิวนัดหมาย|หา)\s*/, '').trim();
+        // 3.2 ดูนัดหมายรายบุคคล (เช่น "ดูนัดหมาย HN69-0071", "ดูนัดหมาย 0071", "ดูนัดหมาย ศิริลักษ์")
+        if (cleanMsg.startsWith('ดูนัดหมาย') || cleanMsg.startsWith('นัดหมาย ') || cleanMsg.startsWith('คิวนัดหมาย ')) {
+          const kw = cleanMsg.replace(/^(ดูนัดหมาย|นัดหมาย|คิวนัดหมาย)\s*/, '').trim();
           if (kw) {
             const { data: queueRaw } = await supabase.from('queue').select('*');
             const queueList = (queueRaw || [])
@@ -2020,9 +2278,58 @@ serve(async (req) => {
           }
         }
 
-        // 6. ค้นหาประวัติคนไข้ (เวชระเบียน) จาก Supabase (พิมพ์ชื่อ, HN เช่น HN001 -> HN69-0001, หรือ เบอร์โทร)
-        const keyword = cleanMsg.replace(/^(หา|ค้นหา|เช็ค|ข้อมูล|ประวัติ|คนไข้)\s*/, '').trim();
-        if (keyword.length > 0) {
+        // 5.5 ดูการรักษาล่าสุด / เคสล่าสุดของคลินิก
+        const isLatestTrtGeneric = (
+          cleanMsg === 'รักษาล่าสุด' ||
+          cleanMsg === 'การรักษาล่าสุด' ||
+          cleanMsg === 'ประวัติการรักษาล่าสุด' ||
+          cleanMsg === 'ดูการรักษาล่าสุด' ||
+          cleanMsg === 'เคสล่าสุด' ||
+          cleanMsg === 'opd ล่าสุด'
+        );
+
+        if (isLatestTrtGeneric) {
+          const { data: latestTrts } = await supabase
+            .from('treatments')
+            .select('*')
+            .eq('is_deleted', false)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (latestTrts && latestTrts.length > 0) {
+            const trt = latestTrts[0];
+            const pId = trt.patient_id;
+            const { data: ptRaw } = await supabase.from('patients').select('*').eq('id', pId).limit(1);
+            if (ptRaw && ptRaw.length > 0) {
+              const p = ptRaw[0];
+              const matchedPt = {
+                ...p,
+                ...(p.data || {}),
+                hn: p.hn || p.id || p.data?.hn || p.data?.id,
+                firstName: p.first_name || p.firstName || p.data?.first_name || p.data?.firstName || '',
+                lastName: p.last_name || p.lastName || p.data?.last_name || p.data?.lastName || '',
+                nickname: p.nickname || p.nick_name || p.data?.nickname || p.data?.nick_name || '',
+                name: p.name || p.data?.name || `${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''}`.trim(),
+                phone: p.phone || p.tel || p.data?.phone || p.data?.tel || '',
+                isDeleted: Boolean(p.is_deleted ?? p.data?.is_deleted ?? false)
+              };
+              const [queueRes, trtRes, courseRes] = await Promise.all([
+                supabase.from('queue').select('*').eq('is_deleted', false),
+                supabase.from('treatments').select('*').eq('is_deleted', false).eq('patient_id', pId).order('created_at', { ascending: false }).limit(10),
+                supabase.from('patient_courses').select('*').eq('is_deleted', false).eq('patient_id', pId).limit(10)
+              ]);
+              const queueList = (queueRes.data || []).map(normalizeQueueRow).filter((q: any) => !q.isDeleted);
+              const flexMsg = createPatientFlex(matchedPt, queueList, trtRes.data || [trt], courseRes.data || []);
+              await sendLineReply(replyToken, [flexMsg], lineToken);
+              return new Response(JSON.stringify({ success: true, type: 'latest_treatment' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+            }
+          }
+        }
+
+        // 6. ค้นหาประวัติคนไข้ (เวชระเบียน) จาก Supabase (พิมพ์ชื่อ, HN เช่น HN001 -> HN69-0001, เบอร์โทร, หรือ "รักษาล่าสุด...")
+        const rawKw = cleanMsg.replace(/^(ประวัติการรักษา|การรักษาล่าสุด|รักษาล่าสุด|การรักษา|รักษา|ดูประวัติคนไข้|ดูประวัติ|ค้นหาคนไข้|ค้นหา|ดูคนไข้|คนไข้|ประวัติคนไข้|ประวัติ|เวชระเบียน|ข้อมูล|เช็ค|หา|opd)\s*/i, '').trim();
+        const keyword = rawKw.replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '').trim();
+        if (keyword.length > 0 || rawKw.length > 0) {
           const { data: patientsRaw } = await supabase.from('patients').select('*');
           const patients = (patientsRaw || []).map((p: any) => ({
             ...p,
@@ -2030,24 +2337,38 @@ serve(async (req) => {
             hn: p.hn || p.id || p.data?.hn || p.data?.id,
             firstName: p.first_name || p.firstName || p.data?.first_name || p.data?.firstName || '',
             lastName: p.last_name || p.lastName || p.data?.last_name || p.data?.lastName || '',
+            nickname: p.nickname || p.nick_name || p.data?.nickname || p.data?.nick_name || '',
             name: p.name || p.data?.name || `${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''}`.trim(),
             phone: p.phone || p.tel || p.data?.phone || p.data?.tel || '',
             isDeleted: Boolean(p.is_deleted ?? p.data?.is_deleted ?? false)
           })).filter((p: any) => !p.isDeleted);
 
           const kw = keyword.toLowerCase();
+          const rawKwLower = rawKw.toLowerCase();
           const matched = patients.find((p: any) => 
             isHnMatch(p.hn, kw) ||
+            isHnMatch(p.hn, rawKwLower) ||
             (p.firstName && p.firstName.toLowerCase().includes(kw)) ||
             (p.lastName && p.lastName.toLowerCase().includes(kw)) ||
             (p.name && p.name.toLowerCase().includes(kw)) ||
-            (p.phone && String(p.phone).includes(kw))
+            (p.nickname && p.nickname.toLowerCase().includes(kw)) ||
+            (p.phone && String(p.phone).includes(kw)) ||
+            (rawKwLower && p.name && p.name.toLowerCase().includes(rawKwLower))
           );
 
           if (matched) {
-            const { data: queueRaw } = await supabase.from('queue').select('*');
-            const queueList = (queueRaw || []).map(normalizeQueueRow).filter((q: any) => !q.isDeleted);
-            const flexMsg = createPatientFlex(matched, queueList);
+            const pId = matched.id || matched.hn;
+            const pHn = matched.hn || matched.id;
+            const patientFilter = pId === pHn ? `patient_id.eq.${pId}` : `patient_id.eq.${pId},patient_id.eq.${pHn}`;
+
+            const [queueRes, trtRes, courseRes] = await Promise.all([
+              supabase.from('queue').select('*').eq('is_deleted', false),
+              supabase.from('treatments').select('*').eq('is_deleted', false).or(patientFilter).order('created_at', { ascending: false }).limit(10),
+              supabase.from('patient_courses').select('*').eq('is_deleted', false).or(patientFilter).limit(10)
+            ]);
+
+            const queueList = (queueRes.data || []).map(normalizeQueueRow).filter((q: any) => !q.isDeleted);
+            const flexMsg = createPatientFlex(matched, queueList, trtRes.data || [], courseRes.data || []);
             await sendLineReply(replyToken, [flexMsg], lineToken);
             return new Response(JSON.stringify({ success: true, type: 'patient' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
           }

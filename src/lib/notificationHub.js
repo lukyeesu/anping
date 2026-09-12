@@ -477,7 +477,8 @@ export function buildLineFlexMessage({
               size: "xxs",
               color: "#94a3b8",
               align: "center",
-              margin: "sm"
+              margin: "sm",
+              wrap: true
             }
           ]
         }
@@ -487,15 +488,79 @@ export function buildLineFlexMessage({
 
   // 2. POS / CHECKOUT FLEX (ตรงตาม Screenshot 114539 100%)
   if (eventType === 'pos') {
-    const totalAmount = rawPayload.grandTotal || (fields.find(f => f.name && f.name.includes('ยอดชำระ'))?.value?.replace(/[^\d.]/g, '')) || 0;
-    const receiptNo = rawPayload.receiptId || (fields.find(f => f.name && f.name.includes('เลขที่บิล'))?.value) || '-';
-    const payMethod = rawPayload.paymentMethod || (fields.find(f => f.name && f.name.includes('ช่องทาง'))?.value) || 'เงินสด';
-    const staff = rawPayload.staff || (fields.find(f => f.name && f.name.includes('ผู้ทำรายการ'))?.value) || 'เจ้าหน้าที่';
-    const dateStr = rawPayload.datetime || new Date().toLocaleDateString('th-TH');
+    const totalAmount = Number(
+      rawPayload.net_amount ??
+      rawPayload.total_amount ??
+      rawPayload.grandTotal ??
+      rawPayload.grand_total ??
+      rawPayload.totalAmount ??
+      rawPayload.total ??
+      rawPayload.amount ??
+      (fields.find(f => f.name && f.name.includes('ยอดชำระ'))?.value?.replace(/[^\d.]/g, '')) ??
+      (fields.find(f => f.name && f.name.includes('ยอดสุทธิ'))?.value?.replace(/[^\d.]/g, '')) ??
+      0
+    );
+    const receiptNo = rawPayload.receipt_no || rawPayload.receiptId || rawPayload.receiptNo || rawPayload.id || (fields.find(f => f.name && f.name.includes('เลขที่บิล'))?.value) || '-';
+    
+    // Payment method translation
+    let rawPay = String(rawPayload.payment_method || rawPayload.paymentMethod || (fields.find(f => f.name && f.name.includes('ช่องทาง'))?.value) || 'เงินสด').toLowerCase();
+    let payMethod = '💵 เงินสด';
+    if (rawPay.includes('transfer') || rawPay.includes('โอน')) {
+      payMethod = '📲 โอนเงิน (QR Code)';
+    } else if (rawPay.includes('credit') || rawPay.includes('card') || rawPay.includes('บัตร')) {
+      payMethod = '💳 บัตรเครดิต';
+    } else if (rawPay.includes('cash') || rawPay.includes('สด')) {
+      payMethod = '💵 เงินสด';
+    } else if (rawPay && rawPay !== '-') {
+      payMethod = rawPayload.payment_method || rawPayload.paymentMethod || rawPay;
+    }
+
+    const staff = rawPayload.staff_name || rawPayload.staff || rawPayload.seller_name || rawPayload.cashier || (fields.find(f => f.name && f.name.includes('ผู้ทำรายการ'))?.value) || 'เจ้าหน้าที่';
+    
+    // Thai Date formatting
+    let dateStr = '-';
+    const rawTime = rawPayload.created_at || rawPayload.datetime || rawPayload.date;
+    if (rawTime) {
+      try {
+        const d = new Date(rawTime);
+        if (!isNaN(d.getTime())) {
+          const thai = new Date(d.getTime() + (7 * 60 * 60 * 1000));
+          const day = String(thai.getUTCDate()).padStart(2, '0');
+          const month = String(thai.getUTCMonth() + 1).padStart(2, '0');
+          const year = thai.getUTCFullYear() + 543;
+          const hours = String(thai.getUTCHours()).padStart(2, '0');
+          const minutes = String(thai.getUTCMinutes()).padStart(2, '0');
+          dateStr = `${day}/${month}/${year} ${hours}:${minutes} น.`;
+        } else {
+          dateStr = String(rawTime);
+        }
+      } catch (_e) {
+        dateStr = String(rawTime);
+      }
+    }
+
+    // Items list
+    const rawItems = rawPayload.items || [];
+    let itemContents = [];
+    if (Array.isArray(rawItems) && rawItems.length > 0) {
+      itemContents = rawItems.slice(0, 5).map((it) => {
+        const itName = it.name || it.courseName || it.product_name || 'รายการสินค้า/บริการ';
+        const itQty = it.quantity || it.qty || 1;
+        const itPrice = it.total || it.price || 0;
+        return {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            { type: "text", text: `• ${itName} x${itQty}`, size: "xs", color: "#334155", flex: 7, wrap: true },
+            { type: "text", text: `฿${Number(itPrice).toLocaleString()}`, size: "xs", color: "#0f172a", weight: "bold", flex: 3, align: "end" }
+          ]
+        };
+      });
+    }
 
     return {
       type: "flex",
-      altText: `(เพิ่มบิลใหม่) รับชำระเงิน POS: ฿${Number(totalAmount).toLocaleString()}`,
+      altText: `🧾 ใบเสร็จรับเงิน/บิล POS: ฿${Number(totalAmount).toLocaleString()} (${receiptNo})`,
       contents: {
         type: "bubble",
         size: "kilo",
@@ -507,14 +572,14 @@ export function buildLineFlexMessage({
           contents: [
             {
               type: "text",
-              text: "(เพิ่มบิลใหม่) รับชำระเงิน POS",
+              text: "🧾 ใบเสร็จรับเงิน / บิล POS",
               color: "#ffffff",
               weight: "bold",
               size: "md"
             },
             {
               type: "text",
-              text: String(receiptNo),
+              text: `เลขที่: ${String(receiptNo)}`,
               color: "#e0f2fe",
               size: "xs",
               margin: "xs"
@@ -543,7 +608,7 @@ export function buildLineFlexMessage({
                   type: "box",
                   layout: "horizontal",
                   contents: [
-                    { type: "text", text: "วันที่", size: "sm", color: "#64748b", flex: 4 },
+                    { type: "text", text: "วันเวลา", size: "sm", color: "#64748b", flex: 4 },
                     { type: "text", text: dateStr, size: "sm", color: "#334155", flex: 6 }
                   ]
                 },
@@ -559,7 +624,7 @@ export function buildLineFlexMessage({
                   type: "box",
                   layout: "horizontal",
                   contents: [
-                    { type: "text", text: "ช่องทาง", size: "sm", color: "#64748b", flex: 4 },
+                    { type: "text", text: "ช่องทางชำระ", size: "sm", color: "#64748b", flex: 4 },
                     { type: "text", text: payMethod, size: "sm", color: "#334155", flex: 6 }
                   ]
                 },
@@ -568,11 +633,24 @@ export function buildLineFlexMessage({
                   layout: "horizontal",
                   contents: [
                     { type: "text", text: "ผู้บันทึก", size: "sm", color: "#64748b", flex: 4 },
-                    { type: "text", text: staff, size: "sm", color: "#334155", flex: 6 }
+                    { type: "text", text: String(staff), size: "sm", color: "#334155", flex: 6, wrap: true }
                   ]
                 }
               ]
             },
+            ...(itemContents.length > 0 ? [
+              { type: "separator", margin: "md" },
+              {
+                type: "box",
+                layout: "vertical",
+                margin: "md",
+                spacing: "xs",
+                contents: [
+                  { type: "text", text: "รายการสินค้า / บริการ:", size: "xs", color: "#64748b", weight: "bold" },
+                  ...itemContents
+                ]
+              }
+            ] : []),
             {
               type: "separator",
               margin: "md"
@@ -602,8 +680,8 @@ export function buildLineFlexMessage({
               height: "sm",
               action: {
                 type: "uri",
-                label: "พิมพ์บิล",
-                uri: webappUrl
+                label: "📄 ดู/พิมพ์ใบเสร็จ ↗",
+                uri: `${webappUrl}?print_pos=${encodeURIComponent(receiptNo)}`
               }
             },
             {
@@ -612,7 +690,8 @@ export function buildLineFlexMessage({
               size: "xxs",
               color: "#94a3b8",
               align: "center",
-              margin: "sm"
+              margin: "sm",
+              wrap: true
             }
           ]
         }
@@ -630,6 +709,7 @@ export function buildLineFlexMessage({
       ? `${rawPayload.newRem} ครั้ง` 
       : (fields.find(f => f.name && f.name.includes('คงเหลือ'))?.value || '-');
     const staff = rawPayload.staff || (fields.find(f => f.name && f.name.includes('ผู้ทำรายการ'))?.value) || 'เจ้าหน้าที่';
+    const usageDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
 
     return {
       type: "flex",
@@ -682,6 +762,14 @@ export function buildLineFlexMessage({
               margin: "md",
               spacing: "sm",
               contents: [
+                {
+                  type: "box",
+                  layout: "horizontal",
+                  contents: [
+                    { type: "text", text: "วันที่ใช้งาน", size: "sm", color: "#64748b", flex: 4 },
+                    { type: "text", text: usageDate, size: "sm", color: "#0f172a", weight: "bold", flex: 6, wrap: true }
+                  ]
+                },
                 {
                   type: "box",
                   layout: "horizontal",
@@ -761,7 +849,8 @@ export function buildLineFlexMessage({
               size: "xxs",
               color: "#94a3b8",
               align: "center",
-              margin: "sm"
+              margin: "sm",
+              wrap: true
             }
           ]
         }
@@ -773,8 +862,9 @@ export function buildLineFlexMessage({
   if (eventType === 'opd') {
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
     const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
-    const treatment = rawPayload.treatment || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
+    const treatment = rawPayload.treatment || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
     const cost = rawPayload.cost || (fields.find(f => f.name && f.name.includes('ค่ารักษา'))?.value) || '';
+    const visitDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
 
     return {
       type: "flex",
@@ -827,6 +917,14 @@ export function buildLineFlexMessage({
               margin: "md",
               spacing: "sm",
               contents: [
+                {
+                  type: "box",
+                  layout: "horizontal",
+                  contents: [
+                    { type: "text", text: "วันที่รักษา", size: "sm", color: "#64748b", flex: 4 },
+                    { type: "text", text: visitDate, size: "sm", color: "#0f172a", weight: "bold", flex: 6, wrap: true }
+                  ]
+                },
                 {
                   type: "box",
                   layout: "horizontal",
@@ -906,7 +1004,8 @@ export function buildLineFlexMessage({
               size: "xxs",
               color: "#94a3b8",
               align: "center",
-              margin: "sm"
+              margin: "sm",
+              wrap: true
             }
           ]
         }
@@ -1051,7 +1150,8 @@ export function buildLineFlexMessage({
               size: "xxs",
               color: "#94a3b8",
               align: "center",
-              margin: "sm"
+              margin: "sm",
+              wrap: true
             }
           ]
         }
@@ -1260,7 +1360,8 @@ export function buildLineFlexMessage({
               size: "xxs",
               color: "#94a3b8",
               align: "center",
-              margin: "sm"
+              margin: "sm",
+              wrap: true
             }
           ]
         }
@@ -1321,6 +1422,15 @@ export function buildLineFlexMessage({
               label: "เปิดระบบคลินิก ↗",
               uri: webappUrl
             }
+          },
+          {
+            type: "text",
+            text: formatThaiNotificationTimestamp(),
+            size: "xxs",
+            color: "#94a3b8",
+            align: "center",
+            margin: "sm",
+            wrap: true
           }
         ]
       }
@@ -1339,7 +1449,7 @@ export function buildDiscordFlexPayload({
   fields = [],
   rawPayload = {},
   discordColor,
-  footerText = 'Anping Clinic Notification',
+  footerText = 'Anping Clinic',
   webappUrl = 'https://anpingclinic.vercel.app'
 }) {
   const patientName = rawPayload.patientName || rawPayload.name || rawPayload.customerName || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.split('(')[0]?.trim()) || 'คนไข้ทั่วไป';
@@ -1445,9 +1555,12 @@ export function buildDiscordFlexPayload({
       ? `[${phone}](${webappUrl}/api/call?tel=${cleanPhone})` 
       : (phone || '-');
 
+    const usageDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
+
     embedTitle = `📋 ตัดรอบคอร์สคนไข้ • [ ${courseName} ]`;
 
     desc = `👤 **${displayName}**${hnDisplay ? ` (${hnDisplay})` : ''}\n` +
+           `📅 **วันที่ใช้งาน:** ${usageDate}\n` +
            `💊 **รายการคอร์ส:** ${courseName}\n` +
            `🔄 **การใช้งาน:** ${usage}\n` +
            `⏳ **จำนวนคงเหลือ:** **${remaining}**\n` +
@@ -1457,8 +1570,9 @@ export function buildDiscordFlexPayload({
     color = 0x7c3aed; // Violet
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
     const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
-    const treatment = rawPayload.treatment || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
+    const treatment = rawPayload.treatment || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
     const cost = rawPayload.cost || (fields.find(f => f.name && f.name.includes('ค่ารักษา'))?.value) || '';
+    const visitDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
     const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
     const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
     const phoneDisplay = cleanPhone 
@@ -1468,6 +1582,7 @@ export function buildDiscordFlexPayload({
     embedTitle = `🩺 บันทึกการรักษา OPD • [ ${doctor} ]`;
 
     desc = `👤 **${displayName}**${hnDisplay ? ` (${hnDisplay})` : ''}\n` +
+           `📅 **วันที่ตรวจรักษา:** ${visitDate}\n` +
            `🔬 **ผลวินิจฉัย:** ${diagnosis}\n` +
            `💊 **การรักษา/ยา:** ${treatment}\n` +
            `👨‍⚕️ **แพทย์ผู้ตรวจ:** ${doctor}\n` +
@@ -1537,7 +1652,7 @@ export async function sendDiscordEmbed(webhookUrl, {
   description, 
   color = 0x0284c7, 
   fields = [], 
-  footerText = 'Anping Clinic Notification',
+  footerText = 'Anping Clinic',
   linkUrl = 'https://anpingclinic.vercel.app',
   linkButtonLabel = '🌐 เปิดดูในระบบ Anping Clinic ↗',
   rawPayload = {},
@@ -1992,6 +2107,15 @@ export async function sendTestLinePush({ token, targetId }) {
                 }
               }
             ]
+          },
+          {
+            type: "text",
+            text: formatThaiNotificationTimestamp(),
+            size: "xxs",
+            color: "#94a3b8",
+            align: "center",
+            margin: "sm",
+            wrap: true
           }
         ]
       }

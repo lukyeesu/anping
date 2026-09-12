@@ -744,7 +744,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
           newRem,
           status: newRem === 0 ? 'จบคอร์สแล้ว 🎉' : `คงเหลือ ${newRem} ครั้ง ⏳`,
           staff: currentUser?.name || 'เจ้าหน้าที่คลินิก',
-          branch: currentBranch?.name || 'สาขาหลัก'
+          branch: currentBranch?.name || 'สาขาหลัก',
+          date: new Date().toLocaleDateString('th-TH'),
+          datetime: new Date().toISOString()
         },
         discordColor: 0xd97706,
         callAppScript
@@ -1825,7 +1827,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             diagnosis: opdDiagnosis,
             treatment: opdTreatment,
             cost: recordToSave.cost,
-            branch: currentBranch?.name || 'สาขาหลัก'
+            branch: currentBranch?.name || 'สาขาหลัก',
+            date: recordToSave.date || new Date().toLocaleDateString('th-TH'),
+            datetime: recordToSave.datetime || new Date().toISOString()
           },
           discordColor: 0x7c3aed,
           callAppScript

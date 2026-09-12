@@ -866,7 +866,10 @@ const POSSystem = ({
                 paymentMethod: payMethodStr,
                 staff: currentUser?.name || currentUser?.username || 'เจ้าหน้าที่',
                 itemsCount: `${cart.length} รายการ`,
-                branch: currentBranch?.name || 'สาขาหลัก'
+                items: cart.map(it => ({ name: it.name || it.productName || 'สินค้า', quantity: it.quantity || 1, price: it.price || it.sellingPrice || 0 })),
+                branch: currentBranch?.name || 'สาขาหลัก',
+                date: new Date().toLocaleDateString('th-TH'),
+                datetime: new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.'
             },
             discordColor: 0x059669,
             callAppScript

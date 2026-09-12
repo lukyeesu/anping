@@ -517,7 +517,7 @@ const SettingsManager = ({
           { name: '🎯 หมวดหมู่การแจ้งเตือน', value: channel.event === 'all' ? 'ทุกเหตุการณ์' : channel.event, inline: true },
           { name: '⚡ สถานะการเชื่อมต่อ', value: 'ออนไลน์และพร้อมใช้งาน 100%', inline: false }
         ],
-        footerText: 'Anping Clinic Notification System'
+        footerText: 'Anping Clinic'
       });
 
       if (res.success) {
