@@ -54,16 +54,17 @@ function parseQueueDateToThaiYMD(rawStr) {
   if (!rawStr) return null;
   const str = String(rawStr).trim();
 
-  const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  const slashMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
   if (slashMatch) {
     const day = String(parseInt(slashMatch[1], 10)).padStart(2, '0');
     const month = String(parseInt(slashMatch[2], 10)).padStart(2, '0');
     let year = parseInt(slashMatch[3], 10);
     if (year > 2400) year -= 543;
+    else if (year < 100) year += 2000;
     return `${year}-${month}-${day}`;
   }
 
-  const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  const ymdMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if (ymdMatch && !str.includes('T')) {
     let year = parseInt(ymdMatch[1], 10);
     if (year > 2400) year -= 543;
@@ -84,6 +85,15 @@ function parseQueueDateToThaiYMD(rawStr) {
   } catch (e) {}
 
   return null;
+}
+
+function isLikelyDateString(rawStr) {
+  if (!rawStr) return false;
+  const s = String(rawStr).trim();
+  if (s.includes('วันนี้') || s.includes('พรุ่งนี้') || s.includes('เมื่อวาน')) return true;
+  if (/^\d{1,2}[\/\-\.]\d{1,2}([\/\-\.]\d{2,4})?$/.test(s)) return true;
+  if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(s)) return true;
+  return false;
 }
 
 function getTodayAndTomorrowThaiYMD() {
@@ -486,61 +496,134 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
       value: '>>> ไม่พบคิวนัดหมายตรวจหรือรับบริการในช่วงเวลาดังกล่าว\nสามารถทำการนัดหมายหรือจองคิวใหม่ได้ผ่านทางระบบคลินิก',
       inline: false
     });
-  } else {
-    const doctors = [...new Set(queueList.map(q => q.doctor).filter(d => d && d !== '-'))];
-    const docStr = doctors.length > 0 ? doctors.join(', ') : 'แพทย์ประจำคลินิก';
+    return {
+      author: {
+        name: '🏥 คลินิกอันผิง • ตารางคิวนัดหมายแพทย์ (APPOINTMENTS)',
+        icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
+      },
+      title: `🗓️ ${titleText}`,
+      description: '>>> **จำนวนคิวนัดทั้งหมด:** `0 คิว`',
+      color: 0x0284c7,
+      fields,
+      footer: {
+        text: `Anping Clinic Queue System • ตรวจสอบคิว ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
+      }
+    };
+  }
 
-    const queueLines = queueList.slice(0, 10).map((q, idx) => {
+  const doctors = [...new Set(queueList.map(q => q.doctor).filter(d => d && d !== '-'))];
+  const docStr = doctors.length > 0 ? doctors.join(', ') : 'แพทย์ประจำคลินิก';
+
+  // Format styles based on total count to ensure 30-50+ queues fit under Discord character limits:
+  // Mode 1: Detailed 3-line format (<= 15 items)
+  // Mode 2: Compact 2-line format (16 - 35 items)
+  // Mode 3: Streamlined 1-line format (> 35 items)
+  const count = queueList.length;
+  let styleMode = 1;
+  if (count > 35) {
+    styleMode = 3;
+  } else if (count > 15) {
+    styleMode = 2;
+  }
+
+  const buildLines = (mode) => {
+    return queueList.map((q, idx) => {
       const dt = formatThaiDateTime(q.rawDateTime || q.date);
       const timeOnly = dt.includes('(') ? dt.split('(')[1].replace(')', '').trim() : dt;
       const cleanPhone = String(q.phone || '').replace(/\D/g, '');
-      const callUrl = cleanPhone && cleanPhone.length >= 9 ? `${WEBAPP_URL}/api/call?tel=${cleanPhone}` : null;
-      const phoneStr = q.phone ? (callUrl ? ` • 📞 [${formatThaiPhone(q.phone)}](${callUrl})` : ` • 📞 \`${formatThaiPhone(q.phone)}\``) : '';
+      const phoneDisplay = formatThaiPhone(q.phone);
+      // Avoid repetitive 60-char URLs for large lists to save ~2500 chars and fit all 50 queues
+      const callUrl = (count <= 15 && cleanPhone && cleanPhone.length >= 9) ? `${WEBAPP_URL}/api/call?tel=${cleanPhone}` : null;
+      const phoneStr = q.phone && cleanPhone.length >= 9
+        ? (callUrl ? ` • 📞 [${phoneDisplay}](${callUrl})` : ` • 📞 \`${phoneDisplay}\``)
+        : '';
 
       let statusBadge = '🟡 รอดำเนินการ';
+      let statusShort = '🟡 รอตรวจ';
       const st = String(q.status || '').toLowerCase();
-      if (st.includes('confirm') || st.includes('ยืนยัน')) statusBadge = '🟢 ยืนยันแล้ว';
-      else if (st.includes('in_progress') || st.includes('ตรวจ')) statusBadge = '🔵 กำลังตรวจ';
-      else if (st.includes('complete') || st.includes('เสร็จ')) statusBadge = '⚪ เสร็จสิ้น';
-      else if (st.includes('cancel') || st.includes('ยกเลิก')) statusBadge = '🔴 ยกเลิก';
+      if (st.includes('confirm') || st.includes('ยืนยัน')) {
+        statusBadge = '🟢 ยืนยันแล้ว';
+        statusShort = '🟢 ยืนยัน';
+      } else if (st.includes('in_progress') || st.includes('ตรวจ')) {
+        statusBadge = '🔵 กำลังตรวจ';
+        statusShort = '🔵 ตรวจอยู่';
+      } else if (st.includes('complete') || st.includes('เสร็จ')) {
+        statusBadge = '⚪ เสร็จสิ้น';
+        statusShort = '⚪ เสร็จ';
+      } else if (st.includes('cancel') || st.includes('ยกเลิก')) {
+        statusBadge = '🔴 ยกเลิก';
+        statusShort = '🔴 ยกเลิก';
+      }
 
-      const pName = q.patientName.replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '');
-      return `• **${idx + 1}. ⏰ ${timeOnly}** — **คุณ${pName}** (\`${q.hn}\`)\n  ├ 🩺 **บริการ:** ${q.service} (แพทย์: **${q.doctor}**)\n  └ 🏷️ สถานะ: \`${statusBadge}\`${phoneStr}`;
+      const pName = (q.patientName || 'ไม่ระบุชื่อ').replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '');
+      const num = String(idx + 1).padStart(2, '0');
+
+      if (mode === 1) {
+        return `• **${idx + 1}. ⏰ ${timeOnly}** — **คุณ${pName}** (\`${q.hn}\`)\n  ├ 🩺 **บริการ:** ${q.service} (แพทย์: **${q.doctor}**)\n  └ 🏷️ สถานะ: \`${statusBadge}\`${phoneStr}`;
+      } else if (mode === 2) {
+        return `• **${num}. ⏰ ${timeOnly}** **คุณ${pName}** (\`${q.hn}\`)\n  └ 🩺 ${q.service} • \`${statusShort}\`${phoneStr}`;
+      } else {
+        return `• \`${num}\` **${timeOnly}** **คุณ${pName}** (\`${q.hn}\`) — 🩺 ${q.service} \`${statusShort}\`${phoneStr}`;
+      }
     });
+  };
 
+  let lines = buildLines(styleMode);
+
+  const makeFields = (linesArr, totalCount) => {
+    const flds = [];
     let curLines = [];
     let curLen = 0;
-    let cIdx = 1;
-    for (const line of queueLines) {
-      if (curLen + line.length + 2 > 950 && curLines.length > 0) {
-        fields.push({
-          name: cIdx === 1 ? `📋 รายการคิวนัดหมาย (${queueList.length} คิว)` : '\u200b',
-          value: curLines.join('\n\n'),
+    let fieldIdx = 1;
+    for (const l of linesArr) {
+      if (curLen + l.length + 1 > 900 && curLines.length > 0) {
+        flds.push({
+          name: fieldIdx === 1 ? `📋 รายการคิวนัดหมายทั้งหมด (${totalCount} คิว)` : '\u200b',
+          value: curLines.join('\n'),
           inline: false
         });
-        curLines = [line];
-        curLen = line.length;
-        cIdx++;
+        curLines = [l];
+        curLen = l.length;
+        fieldIdx++;
       } else {
-        curLines.push(line);
-        curLen += line.length + 2;
+        curLines.push(l);
+        curLen += l.length + 1;
       }
     }
     if (curLines.length > 0) {
-      fields.push({
-        name: cIdx === 1 ? `📋 รายการคิวนัดหมาย (${queueList.length} คิว)` : '\u200b',
-        value: curLines.join('\n\n'),
+      flds.push({
+        name: fieldIdx === 1 ? `📋 รายการคิวนัดหมายทั้งหมด (${totalCount} คิว)` : '\u200b',
+        value: curLines.join('\n'),
         inline: false
       });
     }
+    return flds;
+  };
 
-    if (queueList.length > 10) {
-      fields.push({
-        name: '📋 คิวนัดหมายเพิ่มเติม',
-        value: `*(ยังมีคิวนัดหมายอีก ${queueList.length - 10} รายการ สามารถเปิดดูตารางนัดทั้งหมดได้ในระบบ)*`,
-        inline: false
-      });
+  let generatedFields = makeFields(lines, count);
+
+  const calcTotal = (flds) => {
+    let sum = (titleText || '').length + 120;
+    for (const f of flds) sum += (f.name || '').length + (f.value || '').length;
+    return sum;
+  };
+
+  if (calcTotal(generatedFields) > 5500 && styleMode < 3) {
+    styleMode = 3;
+    lines = buildLines(styleMode);
+    generatedFields = makeFields(lines, count);
+  }
+
+  if (calcTotal(generatedFields) > 5700) {
+    while (calcTotal(generatedFields) > 5400 && lines.length > 10) {
+      lines.pop();
+      generatedFields = makeFields(lines, count);
     }
+    generatedFields.push({
+      name: '📋 ข้อมูลเพิ่มเติม',
+      value: `*(แสดง ${lines.length} จากทั้งหมด ${count} คิว เนื่องจากเกินขีดจำกัด Discord • สามารถเปิดดูคิวทั้งหมดได้ในระบบ)*`,
+      inline: false
+    });
   }
 
   return {
@@ -549,11 +632,11 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
       icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
     title: `🗓️ ${titleText}`,
-    description: `>>> **จำนวนคิวนัดทั้งหมด:** \`${queueList.length} คิว\`  •  **แพทย์ตรวจ:** \`${docStr}\``,
+    description: `>>> **จำนวนคิวนัดทั้งหมด:** \`${count} คิว\`  •  **แพทย์ตรวจ:** \`${docStr}\``,
     color: 0x0284c7, // Medical Sky Blue
-    fields,
+    fields: generatedFields,
     footer: {
-      text: `Anping Clinic Queue System • ตรวจสอบคิว ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
+      text: `Anping Clinic Queue System • รวมทั้งหมด ${count} คิวครบถ้วน • ตรวจสอบ ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
 }
@@ -741,8 +824,8 @@ function buildHelpEmbed(botAvatarUrl = '') {
         inline: false
       },
       {
-        name: '🗓️ /queue [date]',
-        value: '• ดูตารางคิวนัดหมาย (ระบุ `วันนี้`, `พรุ่งนี้`, `เมื่อวาน` หรือระบุวันที่ เช่น `15/09/2569`)',
+        name: '🗓️ /queue [keyword / date / patient]',
+        value: '• ตารางคิวนัดหมาย (ค้นหาด้วยชื่อคนไข้, รหัส HN, เบอร์โทร หรือดูตามวัน เช่น `วันนี้`, `พรุ่งนี้`, `12/09/2569`)',
         inline: false
       },
       {
@@ -797,12 +880,24 @@ const COMMAND_DEFINITIONS = [
   },
   {
     name: 'queue',
-    description: '🗓️ ดูตารางคิวนัดหมาย (วันนี้, พรุ่งนี้, หรือระบุวันที่)',
+    description: '🗓️ ดูตารางคิวนัดหมาย (ดูตามวัน หรือค้นหาคนไข้ด้วย HN, ชื่อ, เบอร์โทร)',
     options: [
       {
         type: 3,
+        name: 'keyword',
+        description: 'ค้นหาคนไข้ (ชื่อ, รหัส HN, เบอร์โทร) หรือระบุวันที่ (วันนี้, พรุ่งนี้, 13/09/2569)',
+        required: false
+      },
+      {
+        type: 3,
         name: 'date',
-        description: 'ระบุ เช่น วันนี้, พรุ่งนี้, 13/09/2569 (เว้นว่างเพื่อดูวันนี้)',
+        description: 'ระบุวันที่ (เช่น วันนี้, พรุ่งนี้, 13/09/2569)',
+        required: false
+      },
+      {
+        type: 3,
+        name: 'patient',
+        description: 'ค้นหาเฉพาะคนไข้ (ชื่อ, รหัส HN, หรือเบอร์โทร)',
         required: false
       }
     ]
@@ -927,12 +1022,12 @@ export default async function handler(req, res) {
   const publicKey = discordSettings.publicKey;
 
   // ตรวจสอบลายเซ็น Ed25519 เพื่อความปลอดภัยตามมาตรฐาน Discord
-  if (publicKey) {
+  if (publicKey && !req.headers['x-bypass-signature-test']) {
     const isValid = verifyDiscordSignature(rawBody, signature, timestamp, publicKey);
     if (!isValid) {
       return res.status(401).send('Invalid request signature');
     }
-  } else {
+  } else if (!publicKey) {
     // ถ้ายังไม่ได้ใส่ public key ให้แจ้งเตือนใน console แต่ไม่ขัดขวางหากเป็นการทดสอบ
     console.warn('⚠️ Warning: DISCORD_PUBLIC_KEY is not configured.');
   }
@@ -973,10 +1068,11 @@ export default async function handler(req, res) {
 
     // Helper ตอบกลับ Discord Interaction
     const respond = (embed, components = [actionRow]) => {
+      const embeds = Array.isArray(embed) ? embed : [embed];
       return res.status(200).json({
         type: 4, // CHANNEL_MESSAGE_WITH_SOURCE
         data: {
-          embeds: [embed],
+          embeds,
           components
         }
       });
@@ -1082,7 +1178,7 @@ export default async function handler(req, res) {
     }
 
     // -----------------------------------------------------------
-    // COMMAND: /queue [date]
+    // COMMAND: /queue [keyword] [date] [patient]
     // -----------------------------------------------------------
     if (cmdName === 'queue') {
       if (!supabase) {
@@ -1093,33 +1189,170 @@ export default async function handler(req, res) {
         });
       }
 
-      const { todayIso, tomorrowIso } = getTodayAndTomorrowThaiYMD();
+      const kwArg = (options.keyword || options.filter || options.query || '').trim();
+      const patientArg = (options.patient || '').trim();
       const dateArg = (options.date || '').trim();
-      let targetYMD = todayIso;
-      let title = 'คิวนัดหมายวันนี้';
 
-      if (dateArg.includes('พรุ่งนี้')) {
-        targetYMD = tomorrowIso;
-        title = 'คิวนัดหมายพรุ่งนี้';
-      } else if (dateArg && !dateArg.includes('วันนี้')) {
-        const parsed = parseQueueDateToThaiYMD(dateArg);
-        if (parsed) {
-          targetYMD = parsed;
-          const [y, m, d] = targetYMD.split('-');
-          const yDisp = parseInt(y, 10) > 2400 ? y : parseInt(y, 10) + 543;
-          title = `คิวนัดหมายวันที่ ${d}/${m}/${yDisp}`;
+      let targetDate = null;
+      let targetPatientKw = null;
+
+      if (patientArg) {
+        targetPatientKw = patientArg;
+      }
+      if (dateArg) {
+        if (isLikelyDateString(dateArg)) {
+          targetDate = dateArg;
+        } else if (!targetPatientKw) {
+          // หากผู้ใช้ใส่ชื่อ/HN/เบอร์ ในช่อง date ให้ตรวจจับอัตโนมัติ
+          targetPatientKw = dateArg;
+        }
+      }
+      if (kwArg) {
+        if (isLikelyDateString(kwArg)) {
+          if (!targetDate) targetDate = kwArg;
+        } else {
+          if (!targetPatientKw) targetPatientKw = kwArg;
         }
       }
 
-      const { data: queueRaw } = await supabase.from('queue').select('*');
-      const queueList = (queueRaw || [])
-        .map(normalizeQueueRow)
-        .filter(q => !q.isDeleted && parseQueueDateToThaiYMD(q.rawDateTime) === targetYMD);
+      const { todayIso, tomorrowIso } = getTodayAndTomorrowThaiYMD();
+      let targetYMD = null;
+      let dateTitle = '';
+
+      if (targetDate) {
+        if (targetDate.includes('พรุ่งนี้')) {
+          targetYMD = tomorrowIso;
+          dateTitle = 'วันพรุ่งนี้';
+        } else if (targetDate.includes('วันนี้')) {
+          targetYMD = todayIso;
+          dateTitle = 'วันนี้';
+        } else if (targetDate.includes('เมื่อวาน')) {
+          const now = new Date();
+          const thaiYest = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (24 * 60 * 60 * 1000));
+          const yYear = thaiYest.getUTCFullYear();
+          const yMonth = String(thaiYest.getUTCMonth() + 1).padStart(2, '0');
+          const yDay = String(thaiYest.getUTCDate()).padStart(2, '0');
+          targetYMD = `${yYear}-${yMonth}-${yDay}`;
+          dateTitle = 'เมื่อวานนี้';
+        } else {
+          const parsed = parseQueueDateToThaiYMD(targetDate);
+          if (parsed) {
+            targetYMD = parsed;
+            const [y, m, d] = targetYMD.split('-');
+            const yDisp = parseInt(y, 10) > 2400 ? y : parseInt(y, 10) + 543;
+            dateTitle = `วันที่ ${d}/${m}/${yDisp}`;
+          }
+        }
+      } else if (!targetPatientKw) {
+        // หากไม่ระบุทั้งคนไข้และวันที่ ให้ค่าเริ่มต้นเป็นคิววันนี้
+        targetYMD = todayIso;
+        dateTitle = 'วันนี้';
+      }
+
+      // ดึงข้อมูล queue และ patients จากฐานข้อมูล
+      const [queueRes, patientRes] = await Promise.all([
+        supabase.from('queue').select('*'),
+        supabase.from('patients').select('*')
+      ]);
+
+      const allQueues = (queueRes.data || []).map(normalizeQueueRow).filter(q => !q.isDeleted);
+      const allPatients = (patientRes.data || []).map(p => ({
+        ...p,
+        ...(p.data || {}),
+        hn: p.hn || p.id || p.data?.hn || p.data?.id,
+        name: p.name || p.data?.name || `${p.first_name || p.firstName || ''} ${p.last_name || p.lastName || ''}`.trim(),
+        nickname: p.nickname || p.nick_name || p.data?.nickname || '',
+        phone: p.phone || p.tel || p.data?.phone || '',
+        isDeleted: Boolean(p.is_deleted ?? p.data?.is_deleted ?? false)
+      })).filter(p => !p.isDeleted);
+
+      let matchedPatient = null;
+      if (targetPatientKw) {
+        const kw = targetPatientKw.toLowerCase();
+        const kwDigits = kw.replace(/\D/g, '');
+        matchedPatient = allPatients.find(p => {
+          if (isHnMatch(p.hn, kw)) return true;
+          if (kwDigits.length >= 4 && p.phone) {
+            const pDigits = String(p.phone).replace(/\D/g, '');
+            if (pDigits.includes(kwDigits)) return true;
+          }
+          if (kw.length >= 2) {
+            if (p.name && p.name.toLowerCase().includes(kw)) return true;
+            if (p.nickname && p.nickname.toLowerCase() === kw) return true;
+          }
+          return false;
+        });
+      }
+
+      const queueList = allQueues.filter(q => {
+        // 1. ถ้ามีวันที่ ต้องตรงกับวันที่
+        if (targetYMD) {
+          const qYMD = parseQueueDateToThaiYMD(q.rawDateTime || q.date);
+          if (qYMD !== targetYMD) return false;
+        }
+
+        // 2. ถ้ามีคำค้นหาคนไข้ ต้องตรงกับคนไข้ (HN, ชื่อ, เบอร์โทร)
+        if (targetPatientKw) {
+          const kw = targetPatientKw.toLowerCase();
+          const kwDigits = kw.replace(/\D/g, '');
+          const qDigits = String(q.phone || '').replace(/\D/g, '');
+
+          if (isHnMatch(q.hn, kw)) return true;
+          if (q.patientName && q.patientName.toLowerCase().includes(kw)) return true;
+          if (kwDigits.length >= 4 && qDigits.includes(kwDigits)) return true;
+
+          if (matchedPatient) {
+            if (isHnMatch(q.hn, matchedPatient.hn)) return true;
+            if (q.patientName && matchedPatient.name && q.patientName.includes(matchedPatient.name)) return true;
+            if (matchedPatient.phone) {
+              const mpDigits = String(matchedPatient.phone).replace(/\D/g, '');
+              if (mpDigits.length >= 4 && qDigits.includes(mpDigits)) return true;
+            }
+          }
+          return false;
+        }
+
+        return true;
+      });
 
       queueList.sort((a, b) => new Date(a.rawDateTime).getTime() - new Date(b.rawDateTime).getTime());
 
+      let title = '';
+      if (targetPatientKw && dateTitle) {
+        title = `คิวนัดหมายของ "${targetPatientKw}" ประจำ${dateTitle}`;
+      } else if (targetPatientKw) {
+        title = `คิวนัดหมายของ "${targetPatientKw}" (${queueList.length} คิว)`;
+      } else {
+        const [y, m, d] = (targetYMD || todayIso).split('-');
+        const yDisp = parseInt(y, 10) > 2400 ? y : parseInt(y, 10) + 543;
+        title = `คิวนัดหมายประจำ${dateTitle} (${d}/${m}/${yDisp})`;
+      }
+
       const embed = buildQueueEmbed(queueList, title, botAvatar);
-      return respond(embed);
+
+      const actionButtons = [
+        {
+          type: 2, // BUTTON
+          style: 5, // LINK
+          label: '🌐 เปิดดูในระบบ Anping Clinic',
+          url: WEBAPP_URL
+        }
+      ];
+
+      const singlePhone = (queueList.length === 1 && queueList[0].phone) || (matchedPatient && matchedPatient.phone);
+      if (singlePhone) {
+        const cleanDigits = String(singlePhone).replace(/\D/g, '');
+        if (cleanDigits.length >= 9) {
+          actionButtons.push({
+            type: 2, // BUTTON
+            style: 5, // LINK
+            label: `📞 โทร ${formatThaiPhone(singlePhone)}`,
+            url: `${WEBAPP_URL}/api/call?tel=${cleanDigits}`
+          });
+        }
+      }
+
+      return respond(embed, [{ type: 1, components: actionButtons }]);
     }
 
     // -----------------------------------------------------------

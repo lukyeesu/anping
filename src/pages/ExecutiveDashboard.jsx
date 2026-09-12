@@ -50,6 +50,8 @@ const ExecutiveDashboard = ({
     return `${year}-${month}-${day}`;
   });
   const [staffRankingTab, setStaffRankingTab] = useState('all'); // 'all' | 'df' | 'sales'
+  const [chartMobileMode, setChartMobileMode] = useState('fit'); // 'fit' | 'scroll'
+  const [activeTrendIdx, setActiveTrendIdx] = useState(null);
 
   const buildDateRange = useCallback(() => {
     const now = new Date();
@@ -1034,12 +1036,33 @@ const ExecutiveDashboard = ({
   }, [netProfitPoints]);
 
   const isCompactFinancial = monthlyTrends.length > 7;
-  const financialBarWidthClass = isCompactFinancial 
-    ? "w-1 sm:w-1.5" 
-    : "w-3.5 sm:w-5";
-  const financialGroupGapClass = isCompactFinancial
-    ? "gap-0.5"
-    : "gap-1 sm:gap-1.5";
+  const isSuperCompactFinancial = monthlyTrends.length > 15;
+
+  const financialBarWidthClass = useMemo(() => {
+    if (chartMobileMode === 'scroll') {
+      return isCompactFinancial ? "w-1.5 sm:w-1.5" : "w-3.5 sm:w-5";
+    }
+    if (isSuperCompactFinancial) {
+      return "w-[2px] min-[400px]:w-[2.5px] sm:w-1.5";
+    }
+    if (isCompactFinancial) {
+      return "w-1 sm:w-1.5";
+    }
+    return "w-3.5 sm:w-5";
+  }, [chartMobileMode, isSuperCompactFinancial, isCompactFinancial]);
+
+  const financialGroupGapClass = useMemo(() => {
+    if (chartMobileMode === 'scroll') {
+      return isCompactFinancial ? "gap-0.5 sm:gap-1" : "gap-1 sm:gap-1.5";
+    }
+    if (isSuperCompactFinancial) {
+      return "gap-[0.5px] min-[400px]:gap-[1px] sm:gap-0.5";
+    }
+    if (isCompactFinancial) {
+      return "gap-0.5";
+    }
+    return "gap-1 sm:gap-1.5";
+  }, [chartMobileMode, isSuperCompactFinancial, isCompactFinancial]);
 
   return (
     <div className="fade-in pb-10 w-full">
@@ -1190,80 +1213,134 @@ const ExecutiveDashboard = ({
         </div>
 
         {/* Second Row: Charts & Payment Methods */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full min-w-0">
           {/* Trends Chart */}
-          <div className={`lg:col-span-2 ${theme.card} flex flex-col`}>
-            <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-6 kanit-text flex items-center gap-2">
-              <BarChart3 className="text-emerald-500 w-5 h-5" /> เทรนด์การเงินย้อนหลัง ({monthlyTrends.length} {monthlyTrends[0]?.type === 'daily' ? 'วัน' : 'เดือน'}ล่าสุด)
-            </h3>
-            <div className="flex-1 flex flex-col justify-end min-h-[220px] px-2 pt-8">
-              <div className="h-36 w-full relative">
-                {/* SVG Mixed Line Chart Overlay for Net Profit */}
-                <svg className="absolute left-0 right-0 top-0 h-full w-full pointer-events-none z-20" viewBox="0 0 600 144" preserveAspectRatio="none">
-                  {/* Glow effect for line */}
-                  <path d={financialLinePath} fill="none" stroke="rgba(99, 102, 241, 0.15)" strokeWidth="6" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-                  {/* Main Line */}
-                  <path d={financialLinePath} fill="none" stroke="#6366f1" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+          <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+              <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                <BarChart3 className="text-emerald-500 w-5 h-5 shrink-0" />
+                <span>เทรนด์การเงินย้อนหลัง ({monthlyTrends.length} {monthlyTrends[0]?.type === 'daily' ? 'วัน' : 'เดือน'}ล่าสุด)</span>
+              </h3>
 
-                {/* Bars Container */}
-                <div className="flex items-end h-full w-full relative">
-                  {monthlyTrends.map((t, idx) => {
-                    const point = netProfitPoints[idx] || { pct: 0, dotPct: 0 };
-                    const incomeHeight = t.income > 0 ? `${Math.max(4, (t.income / maxTrendValue) * 80)}%` : '0px';
-                    const expenseHeight = t.expense > 0 ? `${Math.max(4, (t.expense / maxTrendValue) * 80)}%` : '0px';
-                    const netProfitHeight = point.pct > 0 ? `${Math.max(4, point.pct)}%` : '0px';
-                    return (
-                      <div key={idx} className={`flex-1 flex items-end justify-center ${financialGroupGapClass} h-full relative group cursor-pointer z-10`}>
-                        {/* Beautiful Multi-value Tooltip */}
-                        <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-[10px] p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-md border border-slate-700/50 flex flex-col gap-0.5">
-                          <span className="font-bold text-slate-300 text-center border-b border-slate-700/50 pb-0.5 mb-0.5">{t.fullLabel || t.monthLabel}</span>
-                          <span className="font-semibold text-emerald-400">รายรับ: +{formatMoney(t.income)}</span>
-                          <span className="font-semibold text-rose-400">รายจ่าย: -{formatMoney(t.expense)}</span>
-                          <span className="font-bold text-indigo-300 pt-0.5 border-t border-slate-700/50">กำไรสุทธิ: {formatMoney(t.income - t.expense)}</span>
+              {/* View Mode Toggle on Mobile when data has more than 10 points */}
+              {monthlyTrends.length > 10 && (
+                <div className="flex sm:hidden items-center bg-slate-100 p-0.5 rounded-xl text-xs font-bold kanit-text border border-slate-200/60 shadow-xs self-start">
+                  <button
+                    type="button"
+                    onClick={() => setChartMobileMode('fit')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${chartMobileMode === 'fit' ? 'bg-white text-emerald-600 shadow-xs font-black' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    พอดีจอ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMobileMode('scroll')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${chartMobileMode === 'scroll' ? 'bg-white text-emerald-600 shadow-xs font-black' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    เลื่อนดู
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 flex flex-col justify-end min-h-[220px] px-1 sm:px-2 pt-6 sm:pt-8 w-full min-w-0">
+              {/* Scrollable Container on Mobile when in 'scroll' mode */}
+              <div className={`w-full ${chartMobileMode === 'scroll' ? 'overflow-x-auto custom-scrollbar pb-2' : 'overflow-hidden'}`}>
+                <div className={`${chartMobileMode === 'scroll' ? 'min-w-[620px] sm:min-w-full' : 'w-full'} h-36 relative`}>
+                  {/* SVG Mixed Line Chart Overlay for Net Profit */}
+                  <svg className="absolute left-0 right-0 top-0 h-full w-full pointer-events-none z-20" viewBox="0 0 600 144" preserveAspectRatio="none">
+                    {/* Glow effect for line */}
+                    <path d={financialLinePath} fill="none" stroke="rgba(99, 102, 241, 0.15)" strokeWidth={isSuperCompactFinancial && chartMobileMode === 'fit' ? "4" : "6"} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Main Line */}
+                    <path d={financialLinePath} fill="none" stroke="#6366f1" strokeWidth={isSuperCompactFinancial && chartMobileMode === 'fit' ? "2" : "3"} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+
+                  {/* Bars Container */}
+                  <div className="flex items-end h-full w-full relative">
+                    {monthlyTrends.map((t, idx) => {
+                      const point = netProfitPoints[idx] || { pct: 0, dotPct: 0 };
+                      const incomeHeight = t.income > 0 ? `${Math.max(4, (t.income / maxTrendValue) * 80)}%` : '0px';
+                      const expenseHeight = t.expense > 0 ? `${Math.max(4, (t.expense / maxTrendValue) * 80)}%` : '0px';
+                      const netProfitHeight = point.pct > 0 ? `${Math.max(4, point.pct)}%` : '0px';
+                      const isLeftEdge = idx < 2;
+                      const isRightEdge = idx >= monthlyTrends.length - 2;
+                      const tooltipAlign = isLeftEdge 
+                        ? 'left-0' 
+                        : isRightEdge 
+                          ? 'right-0' 
+                          : 'left-1/2 -translate-x-1/2';
+                      const isSelected = activeTrendIdx === idx;
+
+                      return (
+                        <div 
+                          key={idx} 
+                          onClick={() => setActiveTrendIdx(isSelected ? null : idx)}
+                          className={`flex-1 min-w-0 flex items-end justify-center ${financialGroupGapClass} h-full relative group cursor-pointer z-10`}
+                        >
+                          {/* Beautiful Multi-value Tooltip */}
+                          <div className={`absolute -top-20 ${tooltipAlign} bg-slate-900/95 text-white text-[10px] p-2 rounded-lg ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-lg border border-slate-700/50 flex flex-col gap-0.5`}>
+                            <span className="font-bold text-slate-300 text-center border-b border-slate-700/50 pb-0.5 mb-0.5">{t.fullLabel || t.monthLabel}</span>
+                            <span className="font-semibold text-emerald-400">รายรับ: +{formatMoney(t.income)}</span>
+                            <span className="font-semibold text-rose-400">รายจ่าย: -{formatMoney(t.expense)}</span>
+                            <span className="font-bold text-indigo-300 pt-0.5 border-t border-slate-700/50">กำไรสุทธิ: {formatMoney(t.income - t.expense)}</span>
+                          </div>
+
+                          {/* Income bar */}
+                          <div className={`${financialBarWidthClass} bg-emerald-500 hover:bg-emerald-600 rounded-t-[2px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: incomeHeight }}></div>
+
+                          {/* Net Profit bar */}
+                          <div className={`${financialBarWidthClass} bg-indigo-500 hover:bg-indigo-600 rounded-t-[2px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: netProfitHeight }}></div>
+
+                          {/* Expense bar */}
+                          <div className={`${financialBarWidthClass} bg-rose-500 hover:bg-rose-600 rounded-t-[2px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: expenseHeight }}></div>
+
+                          {/* Circle Dot for Net Profit */}
+                          <div 
+                            className={`absolute rounded-full shadow-sm z-20 left-1/2 -translate-x-1/2 -translate-y-1/2 transition-all ${
+                              isSuperCompactFinancial && chartMobileMode === 'fit'
+                                ? 'w-1.5 h-1.5 bg-indigo-500 sm:w-2.5 sm:h-2.5 sm:bg-white sm:border-2 sm:border-indigo-500'
+                                : 'w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white border-2 border-indigo-500'
+                            } ${isSelected ? '!scale-150 !bg-indigo-600 !border-white' : 'group-hover:scale-125'}`} 
+                            style={{ top: `${100 - point.dotPct}%` }}
+                          ></div>
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                        {/* Income bar */}
-                        <div className={`${financialBarWidthClass} bg-emerald-500 hover:bg-emerald-600 rounded-t-[3px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: incomeHeight }}></div>
-
-                        {/* Net Profit bar */}
-                        <div className={`${financialBarWidthClass} bg-indigo-500 hover:bg-indigo-600 rounded-t-[3px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: netProfitHeight }}></div>
-
-                        {/* Expense bar */}
-                        <div className={`${financialBarWidthClass} bg-rose-500 hover:bg-rose-600 rounded-t-[3px] sm:rounded-t-md transition-all relative cursor-pointer`} style={{ height: expenseHeight }}></div>
-
-                        {/* Perfect Circle Dot for Net Profit */}
-                        <div className="absolute w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full shadow-sm z-20 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ top: `${100 - point.dotPct}%` }}></div>
-                      </div>
-                    );
-                  })}
+                {/* Month Labels Row */}
+                <div className={`${chartMobileMode === 'scroll' ? 'min-w-[620px] sm:min-w-full' : 'w-full'} flex justify-between px-1 sm:px-2 mt-2`}>
+                  {monthlyTrends.map((t, idx) => (
+                    <span key={idx} className="flex-1 min-w-0 text-center text-[9px] sm:text-xs font-bold text-slate-500 font-data truncate">{t.monthLabel}</span>
+                  ))}
                 </div>
               </div>
 
-              {/* Month Labels Row */}
-              <div className="flex justify-between px-2 mt-2 w-full">
-                {monthlyTrends.map((t, idx) => (
-                  <span key={idx} className="flex-1 text-center text-[10px] sm:text-xs font-bold text-slate-500 font-data shrink-0">{t.monthLabel}</span>
-                ))}
-              </div>
+              {/* Scroll Hint on Mobile when in 'scroll' mode */}
+              {chartMobileMode === 'scroll' && (
+                <div className="sm:hidden text-center text-[10px] text-slate-400 font-medium kanit-text mt-1">
+                  ← เลื่อนในกราฟซ้าย-ขวาเพื่อดูรายวัน →
+                </div>
+              )}
 
               {/* Legend */}
-              <div className="flex justify-center flex-wrap gap-6 mt-6 border-t border-slate-100 pt-4 text-xs font-bold text-slate-500">
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-emerald-500 rounded-md"></div>
+              <div className="flex justify-center flex-wrap gap-3 sm:gap-6 mt-4 sm:mt-6 border-t border-slate-100 pt-3 sm:pt-4 text-[11px] sm:text-xs font-bold text-slate-500">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-3 h-3 sm:w-3.5 sm:h-3.5 bg-emerald-500 rounded-sm sm:rounded-md"></div>
                   <span className="kanit-text">รายรับ</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-rose-500 rounded-md"></div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-3 h-3 sm:w-3.5 sm:h-3.5 bg-rose-500 rounded-sm sm:rounded-md"></div>
                   <span className="kanit-text">รายจ่าย</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 bg-indigo-500 rounded-md"></div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-3 h-3 sm:w-3.5 sm:h-3.5 bg-indigo-500 rounded-sm sm:rounded-md"></div>
                   <span className="kanit-text">กำไรสุทธิ (แท่ง)</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-1 bg-indigo-500 rounded-full relative flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full"></div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-5 sm:w-6 h-1 bg-indigo-500 rounded-full relative flex items-center justify-center">
+                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white border-2 border-indigo-500 rounded-full"></div>
                   </div>
                   <span className="kanit-text">เทรนด์กำไรสุทธิ (เส้น)</span>
                 </div>
@@ -1272,7 +1349,7 @@ const ExecutiveDashboard = ({
           </div>
 
           {/* Payment Methods & Branch Revenue */}
-          <div className={`${theme.card} flex flex-col justify-between`}>
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col justify-between min-w-0 overflow-hidden">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-5 kanit-text flex items-center gap-2">
                 <CreditCard className="text-indigo-500 w-5 h-5" /> ช่องทางการชำระเงิน
@@ -1314,9 +1391,9 @@ const ExecutiveDashboard = ({
         </div>
 
         {/* Third Row: Staff ranking & Top Products */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full min-w-0">
           {/* Top Staff / Doctors Performance */}
-          <div className={`${theme.card} flex flex-col`}>
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col min-w-0 overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
                 <Award className="text-amber-500 w-5 h-5 shrink-0" />
@@ -1462,7 +1539,7 @@ const ExecutiveDashboard = ({
           </div>
 
           {/* Top Selling Products */}
-          <div className={`${theme.card} flex flex-col min-h-[380px] sm:min-h-[410px]`}>
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col min-h-[380px] sm:min-h-[410px] min-w-0 overflow-hidden">
             <div className="flex items-center justify-between gap-2 mb-4">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2 truncate">
                 <ShoppingBag className="text-emerald-500 w-5 h-5 shrink-0" />
