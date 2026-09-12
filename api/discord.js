@@ -119,6 +119,15 @@ function formatThaiPhone(phoneStr) {
 function formatThaiDateTime(raw) {
   if (!raw || raw === '-') return '-';
   const str = String(raw).trim();
+  const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (ymdMatch) {
+    let year = parseInt(ymdMatch[1], 10);
+    if (year < 2400) year += 543;
+    const month = ymdMatch[2].padStart(2, '0');
+    const day = ymdMatch[3].padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+
   const slashMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
   if (slashMatch) {
     const day = slashMatch[1].padStart(2, '0');
@@ -256,7 +265,8 @@ async function readRawBody(req) {
 function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseList = [], botAvatarUrl = '') {
   const fullName = patient.name || `${patient.firstName || patient.first_name || ''} ${patient.lastName || patient.last_name || ''}`.trim() || 'ไม่ระบุชื่อ';
   const hn = patient.hn || patient.id || '-';
-  const displayPhone = formatThaiPhone(patient.phone || patient.tel || '-');
+  const rawPhone = patient.phone || patient.tel || '-';
+  const displayPhone = formatThaiPhone(rawPhone);
   const allergy = patient.drugAllergy || patient.drug_allergy || patient.allergy || patient.allergies || 'ไม่มีประวัติแพ้ยา';
   const underlyingDisease = patient.underlying_disease || patient.underlyingDisease || patient.disease || 'ไม่มี';
 
@@ -276,19 +286,48 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
   }
 
   const genderStr = patient.gender === 'male' || patient.gender === 'ชาย' ? 'ชาย' : (patient.gender === 'female' || patient.gender === 'หญิง' ? 'หญิง' : '-');
+  const nickStr = patient.nickname ? `  •  **ชื่อเล่น:** \`${patient.nickname}\`` : '';
+
+  const isNoAllergy = !allergy || allergy === '-' || allergy.includes('ไม่มี');
+  const allergyDisplay = isNoAllergy ? '`🟢 ไม่มีประวัติแพ้ยา`' : `\`🔴 ${allergy}\``;
+
+  const isNoDisease = !underlyingDisease || underlyingDisease === '-' || underlyingDisease === 'ไม่มี';
+  const diseaseDisplay = isNoDisease ? '`🟢 ไม่มีโรคประจำตัว`' : `\`🟡 ${underlyingDisease}\``;
 
   const fields = [
     {
-      name: '👤 ข้อมูลพื้นฐาน',
-      value: `• **ชื่อ-นามสกุล:** ${fullName}\n• **รหัส HN:** \`${hn}\`\n• **เบอร์โทร:** ${displayPhone}\n• **อายุ / เพศ:** ${ageStr} / ${genderStr}`,
-      inline: false
+      name: '📞 เบอร์โทรศัพท์',
+      value: `\`${displayPhone}\``,
+      inline: true
     },
     {
-      name: '⚠️ ข้อมูลทางการแพทย์',
-      value: `• **แพ้ยา:** ${allergy}\n• **โรคประจำตัว:** ${underlyingDisease}`,
-      inline: false
+      name: '🚫 ประวัติแพ้ยา',
+      value: allergyDisplay,
+      inline: true
+    },
+    {
+      name: '🩺 โรคประจำตัว',
+      value: diseaseDisplay,
+      inline: true
     }
   ];
+
+  // ที่อยู่ / ภูมิลำเนา (ถ้ามี)
+  const fullAddress = [
+    patient.address,
+    patient.moo ? `ม.${patient.moo}` : '',
+    patient.sub_district || patient.subDistrict,
+    patient.district,
+    patient.province
+  ].filter(Boolean).join(' ').trim();
+
+  if (fullAddress) {
+    fields.push({
+      name: '📍 ที่อยู่ / ภูมิลำเนา',
+      value: fullAddress,
+      inline: false
+    });
+  }
 
   // คอร์สคงเหลือ
   const activeCourses = courseList.filter(c => !c.is_deleted && (c.remaining_sessions > 0 || c.remaining > 0));
@@ -298,18 +337,18 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
       const rem = c.remaining_sessions ?? c.remaining ?? c.data?.remaining_sessions ?? 0;
       const tot = c.total_sessions ?? c.total ?? c.data?.total_sessions ?? rem;
       const exp = c.expire_date || c.data?.expire_date;
-      const expStr = exp ? ` (หมดอายุ ${formatThaiDateTime(exp)})` : '';
-      return `• **${cName}**: เหลือ **${rem}/${tot}** ครั้ง${expStr}`;
+      const expStr = exp ? ` *(หมดอายุ ${formatThaiDateTime(exp)})*` : '';
+      return `• **${cName}**\n  └ คงเหลือ: \`${rem} / ${tot} ครั้ง\` [🟢 พร้อมใช้งาน]${expStr}`;
     });
     fields.push({
-      name: `💳 คอร์สคงเหลือ (${activeCourses.length} รายการ)`,
-      value: courseLines.join('\n'),
+      name: `💳 คอร์สการรักษาคงเหลือ (${activeCourses.length} รายการ)`,
+      value: courseLines.join('\n\n'),
       inline: false
     });
   } else {
     fields.push({
-      name: '💳 คอร์สคงเหลือ',
-      value: 'ไม่มีคอร์สการรักษาคงเหลือในระบบ',
+      name: '💳 คอร์สการรักษาคงเหลือ',
+      value: '*(ไม่มีคอร์สการรักษาคงเหลือในระบบ)*',
       inline: false
     });
   }
@@ -320,16 +359,18 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
     const trtLines = validTrts.slice(0, 3).map(t => {
       const vDate = formatThaiDateTime(t.datetime || t.created_at || t.visit_date || t.date);
       const doc = t.doctor || t.doctor_name || t.data?.doctor || '-';
-      const diag = t.diagnosis || t.data?.diagnosis || t.chief_complaint || t.symptoms || t.data?.symptoms || t.treatment || '-';
+      const diag = t.diagnosis || t.data?.diagnosis || t.treatment || '-';
+      const cc = t.chief_complaint || t.data?.chief_complaint || t.symptoms || t.data?.symptoms;
       const cost = t.cost || t.total_cost || t.data?.cost || t.data?.total_cost;
-      const costStr = cost ? ` [฿${Number(cost).toLocaleString()}]` : '';
+      const costStr = cost ? ` • ยอด: \`฿${Number(cost).toLocaleString()}\`` : '';
       const rx = Array.isArray(t.prescription) ? t.prescription.join(', ') : (t.prescription || '');
-      const rxStr = rx ? `\n  *การรักษา/ยา:* ${rx}` : '';
-      return `• **${vDate}** โดย ${doc}\n  *การวินิจฉัย:* ${diag}${costStr}${rxStr}`;
+      const rxStr = rx ? `\n  └ *การรักษา/ยา:* ${rx}` : '';
+      const ccStr = (cc && cc !== diag) ? `\n  ├ *อาการสำคัญ:* ${cc.length > 50 ? cc.slice(0, 50) + '...' : cc}` : '';
+      return `• **📅 วันที่ ${vDate}** (แพทย์: **${doc}**)${costStr}${ccStr}\n  ├ *การวินิจฉัย:* **${diag}**${rxStr}`;
     });
     fields.push({
-      name: `🩺 ประวัติการรักษาล่าสุด (${validTrts.length} ครั้ง)`,
-      value: trtLines.join('\n'),
+      name: `🩺 ประวัติการตรวจรักษา (${validTrts.length} ครั้งล่าสุด)`,
+      value: trtLines.join('\n\n'),
       inline: false
     });
   }
@@ -339,26 +380,26 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
   if (validAppts.length > 0) {
     const apptLines = validAppts.slice(0, 3).map(q => {
       const dt = formatThaiDateTime(q.rawDateTime || q.date);
-      return `• **${dt}**: ${q.service} (แพทย์: ${q.doctor}) [${q.status}]`;
+      return `• **⏰ ${dt}** — **${q.service}**\n  └ แพทย์: **${q.doctor}** • สถานะ: \`${q.status}\``;
     });
     fields.push({
-      name: `🗓️ นัดหมายที่กำลังจะมาถึง (${validAppts.length} รายการ)`,
-      value: apptLines.join('\n'),
+      name: `🗓️ คิวนัดหมายที่กำลังจะมาถึง (${validAppts.length} รายการ)`,
+      value: apptLines.join('\n\n'),
       inline: false
     });
   }
 
   return {
     author: {
-      name: '🏥 ANPING CLINIC • PATIENT RECORD',
-      icon_url: botAvatarUrl || undefined
+      name: '🏥 คลินิกอันผิง • เวชระเบียนผู้ป่วย (PATIENT RECORD)',
+      icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
-    title: `📁 เวชระเบียน: ${fullName} (${hn})`,
-    description: `>>> ข้อมูลเวชระเบียนผู้รับบริการจากฐานข้อมูลคลินิก`,
-    color: 0x0284c7, // Sky Blue
+    title: `📁 คุณ${fullName.replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '')} (${hn})`,
+    description: `>>> **รหัสประจำตัว HN:** \`${hn}\`  •  **เพศ:** \`${genderStr}\`  •  **อายุ:** \`${ageStr}\`${nickStr}`,
+    color: 0x0284c7, // Sky Blue / Cyan
     fields,
     footer: {
-      text: `Anping Clinic • ค้นหาเมื่อ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
+      text: `Anping Clinic OPD System • ตรวจสอบข้อมูล ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
 }
@@ -1074,7 +1115,33 @@ export default async function handler(req, res) {
           .filter(q => !q.isDeleted && (isHnMatch(q.hn, pHn) || (q.patientName && q.patientName.includes(matchedPt.name))));
 
         const embed = buildPatientEmbed(matchedPt, patientQueues, trtRes.data || [], courseRes.data || [], botAvatar);
-        return respond(embed);
+
+        const pPhone = matchedPt.phone || matchedPt.tel;
+        const cleanPhone = String(pPhone || '').replace(/\D/g, '');
+        const patientButtons = [
+          {
+            type: 2, // BUTTON
+            style: 5, // LINK
+            label: '🌐 เปิดดูประวัติคนไข้ในระบบ',
+            url: WEBAPP_URL
+          }
+        ];
+
+        if (cleanPhone && cleanPhone.length >= 9) {
+          patientButtons.push({
+            type: 2, // BUTTON
+            style: 5, // LINK
+            label: `📞 โทร ${formatThaiPhone(pPhone)}`,
+            url: `${WEBAPP_URL}/api/call?tel=${cleanPhone}`
+          });
+        }
+
+        const patientActionRow = {
+          type: 1,
+          components: patientButtons
+        };
+
+        return respond(embed, [patientActionRow]);
       }
 
       // 2. ถ้าเป็น /search แล้วไม่พบในเวชระเบียน: ลองค้นหาในคิวนัดหมาย
