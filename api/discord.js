@@ -9,8 +9,10 @@ export const config = {
 };
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://mjgdafabuzguofknhxvv.supabase.co';
-const serviceRoleKeyFallback = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qZ2RhZmFidXpndW9ma25oeHZ2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDgyMTYxMCwiZXhwIjoyMTAwMzk3NjEwfQ.r5_f0bbN8oIS8WIVBqCAgr_M3CZKGWyYKJAkV3Ec21s';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || serviceRoleKeyFallback;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
+  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || 
+  process.env.VITE_SUPABASE_ANON_KEY || 
+  process.env.SUPABASE_ANON_KEY || '';
 
 const supabase = (supabaseUrl && supabaseKey)
   ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
