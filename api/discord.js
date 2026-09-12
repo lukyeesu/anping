@@ -9,10 +9,11 @@ export const config = {
 };
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://mjgdafabuzguofknhxvv.supabase.co';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_uaARgpzqpsrsBLbTjLeVWw_ERbdwFwn';
+const serviceRoleKeyFallback = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qZ2RhZmFidXpndW9ma25oeHZ2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NDgyMTYxMCwiZXhwIjoyMTAwMzk3NjEwfQ.r5_f0bbN8oIS8WIVBqCAgr_M3CZKGWyYKJAkV3Ec21s';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || serviceRoleKeyFallback;
 
-const supabase = (supabaseUrl && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
+const supabase = (supabaseUrl && supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
   : null;
 
 const WEBAPP_URL = 'https://anpingclinic.vercel.app';
@@ -315,12 +316,14 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
   const validTrts = treatmentList.filter(t => !t.is_deleted);
   if (validTrts.length > 0) {
     const trtLines = validTrts.slice(0, 3).map(t => {
-      const vDate = formatThaiDateTime(t.created_at || t.visit_date || t.date);
+      const vDate = formatThaiDateTime(t.datetime || t.created_at || t.visit_date || t.date);
       const doc = t.doctor || t.doctor_name || t.data?.doctor || '-';
-      const diag = t.diagnosis || t.data?.diagnosis || t.symptoms || t.data?.symptoms || t.treatment || '-';
-      const cost = t.total_cost || t.cost || t.data?.total_cost;
+      const diag = t.diagnosis || t.data?.diagnosis || t.chief_complaint || t.symptoms || t.data?.symptoms || t.treatment || '-';
+      const cost = t.cost || t.total_cost || t.data?.cost || t.data?.total_cost;
       const costStr = cost ? ` [฿${Number(cost).toLocaleString()}]` : '';
-      return `• **${vDate}** โดย ${doc}\n  *การวินิจฉัย/การรักษา:* ${diag}${costStr}`;
+      const rx = Array.isArray(t.prescription) ? t.prescription.join(', ') : (t.prescription || '');
+      const rxStr = rx ? `\n  *การรักษา/ยา:* ${rx}` : '';
+      return `• **${vDate}** โดย ${doc}\n  *การวินิจฉัย:* ${diag}${costStr}${rxStr}`;
     });
     fields.push({
       name: `🩺 ประวัติการรักษาล่าสุด (${validTrts.length} ครั้ง)`,
