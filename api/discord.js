@@ -8,8 +8,8 @@ export const config = {
   },
 };
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://mjgdafabuzguofknhxvv.supabase.co';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_uaARgpzqpsrsBLbTjLeVWw_ERbdwFwn';
 
 const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
@@ -165,16 +165,28 @@ function normalizeQueueRow(q) {
 // -------------------------------------------------------------
 // 🔐 SETTINGS & DISCORD CREDENTIALS
 // -------------------------------------------------------------
+let cachedDiscordSettings = null;
+let lastSettingsFetch = 0;
+
 async function getDiscordSettings() {
+  const now = Date.now();
+  if (cachedDiscordSettings && (now - lastSettingsFetch < 60000)) {
+    return cachedDiscordSettings;
+  }
+
   let settings = {
-    applicationId: process.env.DISCORD_APPLICATION_ID || '',
-    publicKey: process.env.DISCORD_PUBLIC_KEY || '',
+    applicationId: process.env.DISCORD_APPLICATION_ID || '1548455329929494569',
+    publicKey: process.env.DISCORD_PUBLIC_KEY || 'a1c164649d9416e97e8c4284127a5daebf08db52ed834a63fdc660c1a866468b',
     botToken: process.env.DISCORD_BOT_TOKEN || '',
     botName: 'Anping Clinic Notifier',
     botAvatarUrl: ''
   };
 
-  if (!supabase) return settings;
+  if (!supabase) {
+    cachedDiscordSettings = settings;
+    lastSettingsFetch = now;
+    return settings;
+  }
 
   try {
     const { data } = await supabase.from('settings').select('*').eq('id', 'integration_tokens').limit(1);
@@ -192,6 +204,8 @@ async function getDiscordSettings() {
     console.error('Error fetching Discord settings:', e);
   }
 
+  cachedDiscordSettings = settings;
+  lastSettingsFetch = now;
   return settings;
 }
 
@@ -222,6 +236,9 @@ function verifyDiscordSignature(rawBody, signatureHex, timestamp, publicKeyHex) 
 async function readRawBody(req) {
   if (typeof req.body === 'string') return req.body;
   if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
+  if (req.body && typeof req.body === 'object') {
+    return JSON.stringify(req.body);
+  }
   return new Promise((resolve, reject) => {
     let data = '';
     req.on('data', chunk => { data += chunk; });
