@@ -299,9 +299,26 @@ export const useModal = (onClosedCallback) => {
             }
         };
 
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                // หากผู้ใช้กำลังพิมพ์ในช่องค้นหา/กรอกข้อมูลและมีข้อความอยู่ ให้ปล่อยให้ช่องค้นหาเคลียร์ข้อความก่อน
+                const el = document.activeElement;
+                if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value && el.value.trim().length > 0) {
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                close();
+            }
+        };
+
         if (isOpen) {
             window.addEventListener('popstate', handlePopState);
-            return () => window.removeEventListener('popstate', handlePopState);
+            window.addEventListener('keydown', handleKeyDown);
+            return () => {
+                window.removeEventListener('popstate', handlePopState);
+                window.removeEventListener('keydown', handleKeyDown);
+            };
         }
     }, [isOpen]);
 
@@ -1775,7 +1792,7 @@ export const getFinDynamicTextClass = (amountStr) => {
 export const toastSubscribers = new Set();
 export let globalToasts = [];
 
-export const triggerGlobalToast = (message, type = 'success') => {
+export const triggerGlobalToast = (message, type = 'success', customDuration = null) => {
   const id = 'toast_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
   const newToast = { id, message, type, isClosing: false };
   
@@ -1786,6 +1803,9 @@ export const triggerGlobalToast = (message, type = 'success') => {
   
   toastSubscribers.forEach(callback => callback(globalToasts));
   
+  // คำนวณเวลาแสดงผลให้อ่านทัน: ค่าเริ่มต้น 4.5 วินาที (จากเดิม 3 วิ) หากข้อความยาวให้แสดงนานขึ้นถึง 6.5 วินาที
+  const duration = customDuration || Math.max(4500, Math.min(6500, String(message || '').length * 90));
+  
   setTimeout(() => {
     globalToasts = globalToasts.map(t => t.id === id ? { ...t, isClosing: true } : t);
     toastSubscribers.forEach(callback => callback(globalToasts));
@@ -1794,7 +1814,7 @@ export const triggerGlobalToast = (message, type = 'success') => {
       globalToasts = globalToasts.filter(t => t.id !== id);
       toastSubscribers.forEach(callback => callback(globalToasts));
     }, 300);
-  }, 3000);
+  }, duration);
 };
 
 export const dismissGlobalToast = (id) => {

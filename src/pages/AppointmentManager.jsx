@@ -1249,9 +1249,19 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                     placeholder="ค้นหาชื่อ, รหัส HN, แพทย์ผู้นัด..." 
                     value={search} 
                     onChange={(e) => setSearch(e.target.value)} 
-                    className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" 
+                    className="w-full pl-11 pr-10 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" 
                   />
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-all"
+                      title="ล้างข้อความ"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1425,15 +1435,46 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                     
                     {/* ค้นหา HN หรือ ชื่อคนไข้ (เพิ่ม z-index ป้องกัน Dropdown โดนช่องอื่นทับ) */}
                     <div className="md:col-span-2 relative" style={{ zIndex: 20 }}>
-                        {/* แสดงคอร์สคงเหลือเมื่อเลือกคนไข้แล้ว (เฉพาะคอร์สที่เหลือ > 0 เท่านั้น ถ้าไม่มีไม่ต้องแสดง) */}
+                        {/* แสดงคอร์สคงเหลือเมื่อเลือกคนไข้แล้ว (เฉพาะคอร์สที่ยังไม่หมด และยังไม่หมดอายุเท่านั้น) */}
                         {(() => {
                             if (!formData.hn) return null;
                             const normHn = String(formData.hn || '').trim().toLowerCase();
+                            const normHnDigits = normHn.replace(/\D/g, '');
+                            const now = Date.now();
+
                             const courses = (patientCoursesData || []).filter(c => {
+                                if (!c) return false;
+                                if (c.isDeleted || c.is_deleted) return false;
+
+                                // 1. สถานะคอร์สต้องยังใช้งานได้ (active) ไม่ใช่ completed/cancelled/expired
+                                const status = String(c.status || 'active').toLowerCase().trim();
+                                if (['completed', 'cancelled', 'expired', 'inactive', 'closed'].includes(status)) {
+                                    return false;
+                                }
+
+                                // 2. ตรวจสอบจำนวนครั้งคงเหลือ (ต้อง > 0 เท่านั้น ถ้าใช้หมดแล้วจะไม่นำมาแสดง)
+                                const rem = Number(c.remainingSessions ?? c.remaining_sessions ?? 0);
+                                if (rem <= 0) return false;
+
+                                // 3. ตรวจสอบวันหมดอายุ (ถ้าหมดอายุแล้ว จะไม่นำมาแสดง)
+                                const rawExpire = c.expireDate || c.expire_date;
+                                if (rawExpire) {
+                                    const expDateObj = parseAnyDate(rawExpire) || new Date(rawExpire);
+                                    if (expDateObj && !isNaN(expDateObj.getTime())) {
+                                        const expTime = new Date(expDateObj).setHours(23, 59, 59, 999);
+                                        if (!isNaN(expTime) && expTime < now) {
+                                            return false;
+                                        }
+                                    }
+                                }
+
+                                // 4. ตรวจสอบ HN ของคนไข้ (ทั้งแบบตัวอักษรและตัวเลขล้วน)
                                 const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
-                                const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
-                                return cPid === normHn && rem > 0 && (c.status || 'active') === 'active' && !c.isDeleted;
+                                const cPidDigits = cPid.replace(/\D/g, '');
+                                const isMatch = (cPid === normHn) || (normHnDigits && cPidDigits && normHnDigits === cPidDigits);
+                                return isMatch;
                             });
+
                             if (courses.length === 0) return null;
                             return (
                                 <div className="mb-4 p-3.5 sm:p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex flex-col gap-2.5 shadow-xs animate-in fade-in slide-in-from-top-1">
@@ -1449,8 +1490,13 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                             const cName = c.courseName || c.course_name || c.name;
                                             const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 1;
                                             const total = Number(c.totalSessions ?? c.total_sessions) || 1;
+                                            const rawExp = c.expireDate || c.expire_date;
                                             return (
-                                                <div key={c.id}  className="px-3 py-1.5 bg-white border border-indigo-100/90 hover:border-indigo-300 rounded-xl text-xs font-bold text-indigo-700 kanit-text shadow-2xs inline-flex items-center gap-2 transition-all cursor-default">
+                                                <div 
+                                                    key={c.id} 
+                                                    title={rawExp ? `หมดอายุ: ${formatDate(rawExp)}` : undefined}
+                                                    className="px-3 py-1.5 bg-white border border-indigo-100/90 hover:border-indigo-300 rounded-xl text-xs font-bold text-indigo-700 kanit-text shadow-2xs inline-flex items-center gap-2 transition-all cursor-default"
+                                                >
                                                     <Package size={13} className="text-indigo-500 shrink-0" />
                                                     <span className="leading-tight">{cName}</span>
                                                     <span className="inline-flex items-center justify-center leading-none px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-data text-[11px] font-black border border-indigo-100 shrink-0">
@@ -1468,13 +1514,26 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                            <input 
                               required 
                               type="text" 
-                              className="w-full px-4 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" 
+                              className="w-full px-4 pr-10 py-3 rounded-2xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" 
                               value={formData.searchPatient} 
                               onChange={handlePatientSearchChange} 
                               onFocus={() => setShowPatientSuggest(true)}
                               onBlur={() => setTimeout(() => setShowPatientSuggest(false), 200)}
                               placeholder="พิมพ์ HN หรือ ชื่อคนไข้ (หากไม่พบระบบจะสร้างประวัติใหม่ให้อัตโนมัติ)" 
                            />
+                           {formData.searchPatient && (
+                              <button
+                                 type="button"
+                                 onClick={() => {
+                                    setFormData({ ...formData, searchPatient: '', patientName: '', hn: '' });
+                                    setShowPatientSuggest(false);
+                                 }}
+                                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+                                 title="ล้างข้อความ"
+                              >
+                                 <X className="w-4 h-4" />
+                              </button>
+                           )}
                            {showPatientSuggest && formData.searchPatient && (
                               <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
                                  {isServerSearching ? (

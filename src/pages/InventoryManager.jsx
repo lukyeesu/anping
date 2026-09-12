@@ -204,6 +204,12 @@ const InventoryManager = ({
   const initialForm = { 
     id: '', 
     productId: '', 
+    name: '',
+    category: 'อุปกรณ์ทางการแพทย์',
+    unit: 'ชิ้น',
+    minStock: 5,
+    costPrice: '',
+    itemSource: 'internal', // 'internal' | 'pos'
     receiveDate: new Date().toISOString().split('T')[0], // เพิ่มวันที่รับเข้าเริ่มต้น
     expireDate: '', 
     lotNo: '',
@@ -211,6 +217,7 @@ const InventoryManager = ({
   };
   const [formData, setFormData] = useState(initialForm);
   const [adjustData, setAdjustData] = useState({ type: 'add', amount: 1, reason: '', branchId: '', lotNo: '', expireDate: '', receiveDate: '' });
+  const [itemTypeFilter, setItemTypeFilter] = useState('all'); // 'all', 'pos', 'internal'
 
   const addBranchAssignment = () => {
     // ป้องกันการเพิ่มสาขาซ้ำในลิสต์
@@ -256,7 +263,7 @@ const InventoryManager = ({
     return cleanId === cleanTarget || cleanPId === cleanTarget || cleanCode === cleanTarget;
   }, []);
 
-  // แก้ไข: ปรับปรุง Logic การรวมข้อมูลให้รองรับการแยกตามล็อต (Lot-specific View)
+  // แก้ไข: ปรับปรุง Logic การรวมข้อมูลให้รองรับทั้งสินค้า POS และอุปกรณ์/เวชภัณฑ์ภายในคลินิก (Internal Inventory)
   const joinedData = useMemo(() => {
     const manageableProducts = (posProducts || []).filter(p => {
       if (!p || p.isDeleted || p.is_deleted) return false;
@@ -266,6 +273,7 @@ const InventoryManager = ({
     });
     const results = [];
 
+    // 1. ประมวลผลสินค้าจาก POS Catalog
     manageableProducts.forEach(product => {
       const productStocks = (inventoryData || []).filter(i => isStockForProduct(i, product.id));
       
@@ -285,7 +293,8 @@ const InventoryManager = ({
             expireDate: '',
             lotNo: '',
             product: product,
-            isGrouped: false
+            isGrouped: false,
+            isInternal: false
           });
         } else {
           // รวบรวมข้อมูลให้เป็นแบบ Group เสมอ เพื่อความเป็นระเบียบและรวม Lot ไว้ในปุ่ม
@@ -300,7 +309,8 @@ const InventoryManager = ({
             minStock: minStock,
             product: product,
             isGrouped: true,
-            stocks: branchStocks
+            stocks: branchStocks,
+            isInternal: false
           });
         }
       } else {
@@ -316,7 +326,101 @@ const InventoryManager = ({
           minStock: minStock,
           product: product,
           isGrouped: true,
-          stocks: productStocks // เก็บข้อมูลดิบของทุกสาขาและทุกล็อตไว้
+          stocks: productStocks,
+          isInternal: false
+        });
+      }
+    });
+
+    // 2. ประมวลผลอุปกรณ์การแพทย์ / เครื่องใช้สำนักงาน / เวชภัณฑ์ภายในคลินิก (ที่ไม่ได้อยู่ใน POS Catalog)
+    const processedIds = new Set();
+    (inventoryData || []).forEach(item => {
+      if (!item || item.isDeleted || item.is_deleted) return;
+
+      // ตรวจสอบว่าตรงกับสินค้า POS หรือไม่
+      const isPos = manageableProducts.some(p => isStockForProduct(item, p.id));
+      if (isPos) return;
+
+      const itemCode = String(item.productId || item.product_id || item.code || item.id || '').replace(/^INV_/, '').trim();
+      const itemName = String(item.name || itemCode).trim();
+      const groupKey = (itemCode || itemName).toLowerCase();
+
+      if (processedIds.has(groupKey)) return;
+      processedIds.add(groupKey);
+
+      // รวบรวมสต็อกของรายการอุปกรณ์นี้
+      const itemStocks = (inventoryData || []).filter(i => {
+        if (!i || i.isDeleted || i.is_deleted) return false;
+        const iCode = String(i.productId || i.product_id || i.code || i.id || '').replace(/^INV_/, '').trim();
+        const iName = String(i.name || iCode).trim();
+        return (itemCode && iCode.toLowerCase() === itemCode.toLowerCase()) ||
+               (itemName && iName.toLowerCase() === itemName.toLowerCase()) ||
+               isStockForProduct(i, itemCode);
+      });
+
+      const baseItem = itemStocks[0] || item;
+      const cat = baseItem.category || baseItem.type || 'อุปกรณ์และเครื่องใช้';
+      
+      let icon = 'Package';
+      if (cat.includes('แพทย์') || cat.includes('พยาบาล')) icon = 'Stethoscope';
+      else if (cat.includes('เวชภัณฑ์') || cat.includes('ยา')) icon = 'Pill';
+      else if (cat.includes('สำนักงาน') || cat.includes('เอกสาร')) icon = 'FileText';
+      else if (cat.includes('ทำความสะอาด') || cat.includes('ทั่วไป')) icon = 'Briefcase';
+
+      const internalProduct = {
+        id: itemCode || baseItem.id,
+        name: baseItem.name || itemCode || 'อุปกรณ์ไม่ระบุชื่อ',
+        category: cat,
+        type: cat,
+        unit: baseItem.unit || 'ชิ้น',
+        minStock: baseItem.minStock !== undefined ? Number(baseItem.minStock) : (baseItem.min_stock !== undefined ? Number(baseItem.min_stock) : 5),
+        costPrice: baseItem.costPrice !== undefined ? Number(baseItem.costPrice) : (baseItem.cost_price !== undefined ? Number(baseItem.cost_price) : 0),
+        icon: icon,
+        isInternal: true
+      };
+
+      if (activeBranch !== 'ทั้งหมด') {
+        const branchStocks = itemStocks.filter(i => (i.branchId || i.branch_id) === activeBranch);
+        if (branchStocks.length === 0) {
+          results.push({
+            id: `AUTO_${internalProduct.id}_${activeBranch}`,
+            productId: internalProduct.id,
+            branchId: activeBranch,
+            quantity: 0,
+            minStock: internalProduct.minStock,
+            receiveDate: '',
+            expireDate: '',
+            lotNo: '',
+            product: internalProduct,
+            isGrouped: false,
+            isInternal: true
+          });
+        } else {
+          const totalQty = branchStocks.reduce((sum, s) => sum + Number(s.quantity ?? s.stockQuantity ?? s.stock_quantity ?? 0), 0);
+          results.push({
+            id: `GROUPED_${internalProduct.id}_${activeBranch}`,
+            productId: internalProduct.id,
+            branchId: activeBranch,
+            quantity: totalQty,
+            minStock: internalProduct.minStock,
+            product: internalProduct,
+            isGrouped: true,
+            stocks: branchStocks,
+            isInternal: true
+          });
+        }
+      } else {
+        const totalQty = itemStocks.reduce((sum, s) => sum + Number(s.quantity ?? s.stockQuantity ?? s.stock_quantity ?? 0), 0);
+        results.push({
+          id: `GROUPED_${internalProduct.id}`,
+          productId: internalProduct.id,
+          branchId: 'ทุกสาขา',
+          quantity: totalQty,
+          minStock: internalProduct.minStock,
+          product: internalProduct,
+          isGrouped: true,
+          stocks: itemStocks,
+          isInternal: true
         });
       }
     });
@@ -324,68 +428,91 @@ const InventoryManager = ({
     return results;
   }, [inventoryData, posProducts, activeBranch, isStockForProduct]);
 
+  const counts = useMemo(() => {
+    let posCount = 0;
+    let internalCount = 0;
+    joinedData.forEach(item => {
+      if (item.isInternal || item.product?.isInternal) internalCount++;
+      else posCount++;
+    });
+    return {
+      all: joinedData.length,
+      pos: posCount,
+      internal: internalCount
+    };
+  }, [joinedData]);
+
   const filteredData = useMemo(() => {
     return joinedData.filter(item => {
       if (!item) return false;
+
+      // กรองตามประเภทรายการ
+      if (itemTypeFilter === 'pos' && (item.isInternal || item.product?.isInternal)) return false;
+      if (itemTypeFilter === 'internal' && (!item.isInternal && !item.product?.isInternal)) return false;
+
       const pName = String(item.product?.name || item.name || '').toLowerCase();
       const pId = String(item.productId || item.product?.id || item.code || '').toLowerCase();
+      const pCat = String(item.product?.category || item.category || '').toLowerCase();
       const pSearch = (search || '').toLowerCase();
-      return pName.includes(pSearch) || pId.includes(pSearch);
+      return pName.includes(pSearch) || pId.includes(pSearch) || pCat.includes(pSearch);
     });
-  }, [joinedData, search]);
+  }, [joinedData, search, itemTypeFilter]);
 
   // สถิติสต็อก
   const stats = useMemo(() => {
     const today = new Date();
-    let total = serverInvStats ? serverInvStats.totalItems : 0;
-    let low = 0, out = serverInvStats ? serverInvStats.outOfStock : 0, expired = 0, nearExpiry = 0;
+    let total = filteredData.length;
+    let low = 0, out = 0, expired = 0, nearExpiry = 0;
 
     filteredData.forEach(item => {
-      if (!serverInvStats) {
-        total++;
-        if (item.quantity <= 0) out++;
-      }
-      if (item.quantity > 0) {
-        if (item.quantity <= item.minStock) low++;
+      if (item.quantity <= 0) out++;
+      else if (item.quantity <= item.minStock) low++;
 
-        // เช็ควันหมดอายุ
-        const checkExpiration = (stockItem) => {
-          if (!stockItem.expireDate || !stockItem.expireDate.includes('/') || stockItem.quantity <= 0) return { isExpired: false, isNear: false };
-          const parts = stockItem.expireDate.split('/');
-          if (parts.length !== 3) return { isExpired: false, isNear: false };
-          const expDate = new Date(parseInt(parts[2], 10) - 543, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-          const monthsDiff = (expDate.getFullYear() - today.getFullYear()) * 12 + (expDate.getMonth() - today.getMonth());
-          
-          if (expDate < today) return { isExpired: true, isNear: false };
-          if (monthsDiff <= 3) return { isExpired: false, isNear: true };
-          return { isExpired: false, isNear: false };
-        };
+      // เช็ควันหมดอายุ
+      const checkExpiration = (stockItem) => {
+        if (!stockItem.expireDate || !stockItem.expireDate.includes('/') || stockItem.quantity <= 0) return { isExpired: false, isNear: false };
+        const parts = stockItem.expireDate.split('/');
+        if (parts.length !== 3) return { isExpired: false, isNear: false };
+        const expDate = new Date(parseInt(parts[2], 10) - 543, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        const monthsDiff = (expDate.getFullYear() - today.getFullYear()) * 12 + (expDate.getMonth() - today.getMonth());
+        
+        if (expDate < today) return { isExpired: true, isNear: false };
+        if (monthsDiff <= 3) return { isExpired: false, isNear: true };
+        return { isExpired: false, isNear: false };
+      };
 
-        if (item.isGrouped) {
-          let prodHasExpired = false;
-          let prodHasNear = false;
-          item.stocks.forEach(s => {
-            const { isExpired, isNear } = checkExpiration(s);
-            if (isExpired) prodHasExpired = true;
-            if (isNear) prodHasNear = true;
-          });
-          if (prodHasExpired) expired++;
-          if (prodHasNear) nearExpiry++;
-        } else {
-          const { isExpired, isNear } = checkExpiration(item);
-          if (isExpired) expired++;
-          if (isNear) nearExpiry++;
-        }
+      if (item.isGrouped && item.stocks) {
+        let prodHasExpired = false;
+        let prodHasNear = false;
+        item.stocks.forEach(s => {
+          const { isExpired, isNear } = checkExpiration(s);
+          if (isExpired) prodHasExpired = true;
+          if (isNear) prodHasNear = true;
+        });
+        if (prodHasExpired) expired++;
+        if (prodHasNear) nearExpiry++;
+      } else {
+        const { isExpired, isNear } = checkExpiration(item);
+        if (isExpired) expired++;
+        if (isNear) nearExpiry++;
       }
     });
 
     return { total, low, out, expired, nearExpiry };
-  }, [filteredData, serverInvStats]);
+  }, [filteredData]);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
+    const initialCode = `EQP-${Date.now().toString().slice(-4)}`;
     setFormData({ 
         ...initialForm, 
+        itemSource: 'internal', // ค่าเริ่มต้นเป็นอุปกรณ์ภายในตามที่ผู้ใช้ร้องขอ
+        productId: initialCode,
+        name: '',
+        category: 'อุปกรณ์ทางการแพทย์',
+        unit: 'ชิ้น',
+        minStock: 5,
+        costPrice: '',
         branchAssignments: [{ branchId: activeBranch === 'ทั้งหมด' ? 'b1' : activeBranch, quantity: 0, isNew: true }] 
     });
     setIsModalOpen(true);
@@ -395,11 +522,11 @@ const InventoryManager = ({
     setEditingItem(item);
     
     // ดึงข้อมูลทุกสาขาของสินค้านี้มาแสดงใน Modal (ไร้รอยต่อ)
-    const allProductStocks = inventoryData.filter(i => i.productId === item.productId);
+    const allProductStocks = (inventoryData || []).filter(i => isStockForProduct(i, item.productId));
     const assignments = allProductStocks.map(s => ({
         id: s.id,
-        branchId: s.branchId,
-        quantity: s.quantity
+        branchId: s.branchId || s.branch_id,
+        quantity: Number(s.quantity ?? s.stockQuantity ?? s.stock_quantity ?? 0)
     }));
 
     // ถ้ายังไม่มีสาขาไหนเลย ให้ใส่สาขาปัจจุบันเป็นค่าเริ่มต้น
@@ -409,16 +536,52 @@ const InventoryManager = ({
 
     // ใช้ข้อมูลจากแถวแรกเป็นค่าพื้นฐาน (กรณี grouped จะดึงจากข้อมูลที่มี)
     const baseInfo = allProductStocks[0] || item;
+    const isInternal = Boolean(item.isInternal || item.product?.isInternal || !posProducts.some(p => isStockForProduct(item, p.id)));
 
     setFormData({
       id: item.productId, 
       productId: item.productId,
-      receiveDate: baseInfo.receiveDate || new Date().toISOString().split('T')[0],
-      expireDate: baseInfo.expireDate || '',
-      lotNo: baseInfo.lotNo || '',
+      itemSource: isInternal ? 'internal' : 'pos',
+      name: item.product?.name || item.name || baseInfo.name || '',
+      category: item.product?.category || item.category || baseInfo.category || 'อุปกรณ์ทางการแพทย์',
+      unit: item.product?.unit || item.unit || baseInfo.unit || 'ชิ้น',
+      minStock: item.minStock ?? baseInfo.minStock ?? baseInfo.min_stock ?? 5,
+      costPrice: item.product?.costPrice ?? baseInfo.costPrice ?? baseInfo.cost_price ?? '',
+      receiveDate: baseInfo.receiveDate || baseInfo.receive_date || new Date().toISOString().split('T')[0],
+      expireDate: baseInfo.expireDate || baseInfo.expire_date || '',
+      lotNo: baseInfo.lotNo || baseInfo.lot_no || '',
       branchAssignments: assignments
     });
     setIsModalOpen(true);
+  };
+
+  const handleDeleteItem = async (item) => {
+    if (!item) return;
+    const targetName = item.product?.name || item.name || item.productId;
+    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบรายการ "${targetName}" ออกจากคลังสินค้า? การดำเนินการนี้จะลบสต็อกของทุกสาขา`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const targetPId = item.productId || item.product?.id || item.code || item.id;
+      const stocksToDelete = (inventoryData || []).filter(i => isStockForProduct(i, targetPId));
+      
+      for (const s of stocksToDelete) {
+        if (s.id) {
+          await callAppScript('DELETE_DATA', 'Inventory', { id: s.id });
+        }
+      }
+
+      setInventoryData(prev => prev.filter(i => !isStockForProduct(i, targetPId)));
+      showToast(`ลบรายการ "${targetName}" เรียบร้อยแล้ว`, 'success');
+      closeModal();
+    } catch (err) {
+      console.error('Delete error:', err);
+      showToast('ไม่สามารถลบรายการได้', 'warning');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleOpenAdjust = (item) => {
@@ -510,11 +673,39 @@ const InventoryManager = ({
   };
 
   const handleSaveItem = async (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+
+    // ตรวจสอบความครบถ้วนของข้อมูล
+    if (formData.itemSource === 'pos') {
+      if (!formData.productId) {
+        showToast('กรุณาเลือกสินค้าจาก POS', 'warning');
+        return;
+      }
+    } else {
+      if (!formData.name?.trim()) {
+        showToast('กรุณาระบุชื่ออุปกรณ์ / เครื่องใช้ / เวชภัณฑ์', 'warning');
+        return;
+      }
+      if (!formData.productId?.trim()) {
+        showToast('กรุณาระบุรหัสรายการ', 'warning');
+        return;
+      }
+    }
+
+    if (!formData.branchAssignments || formData.branchAssignments.length === 0) {
+      showToast('กรุณาระบุข้อมูลสาขาอย่างน้อย 1 สาขา', 'warning');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const results = [];
       const logs = [];
+      const finalProductId = formData.productId.trim();
+      const finalName = (formData.itemSource === 'pos'
+        ? (posProducts.find(p => p.id === formData.productId)?.name || formData.name || finalProductId)
+        : formData.name.trim()
+      );
 
       for (const assignment of formData.branchAssignments) {
           // ใช้ ID เดิมของสาขานั้นๆ ถ้ามี หรือสร้างใหม่ถ้าเป็นสาขาที่เพิ่งเพิ่ม
@@ -523,34 +714,46 @@ const InventoryManager = ({
           
           const payload = {
             id: finalId,
-            productId: formData.productId,
-            code: formData.productId,
+            productId: finalProductId,
+            product_id: finalProductId,
+            code: finalProductId,
+            name: finalName,
+            category: formData.category || 'อุปกรณ์และเครื่องใช้',
+            unit: formData.unit || 'ชิ้น',
+            minStock: Number(formData.minStock || 5),
+            min_stock: Number(formData.minStock || 5),
+            costPrice: Number(formData.costPrice || 0),
+            cost_price: Number(formData.costPrice || 0),
             branchId: assignment.branchId,
             branch_id: assignment.branchId,
-            quantity: Number(assignment.quantity),
-            stockQuantity: Number(assignment.quantity),
-            stock_quantity: Number(assignment.quantity),
+            quantity: Number(assignment.quantity || 0),
+            stockQuantity: Number(assignment.quantity || 0),
+            stock_quantity: Number(assignment.quantity || 0),
             receiveDate: formData.receiveDate || '',
             receive_date: formData.receiveDate || '',
             expireDate: formData.expireDate || '',
             expire_date: formData.expireDate || '',
-            lotNo: formData.lotNo || '',
-            lot_no: formData.lotNo || ''
+            lotNo: (formData.lotNo || '').trim(),
+            lot_no: (formData.lotNo || '').trim()
           };
           
           await callAppScript('SAVE_DATA', 'Inventory', payload);
           
-          // บันทึก Log เฉพาะเมื่อมีการเปลี่ยนแปลงจำนวน (หรือเป็นรายการใหม่)
-          // เพื่อความปลอดภัย ให้สร้าง Log เสมอสำหรับการตั้งค่าเริ่มต้น/แก้ไข
+          // บันทึก Log
           const logPayload = {
               id: `LOG${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
               productId: payload.productId,
               product_id: payload.productId,
+              itemId: payload.productId,
+              item_id: payload.productId,
+              productName: finalName,
+              item_name: finalName,
               branchId: payload.branchId,
               branch_id: payload.branchId,
               type: 'MANUAL',
               change_type: 'MANUAL',
               amount: payload.quantity,
+              quantity: payload.quantity,
               balance: payload.quantity,
               lotNo: payload.lotNo,
               lot_no: payload.lotNo,
@@ -558,8 +761,8 @@ const InventoryManager = ({
               expire_date: payload.expireDate,
               receiveDate: payload.receiveDate,
               receive_date: payload.receiveDate,
-              reason: isNew ? 'ตั้งค่าเริ่มต้นสาขาใหม่' : 'อัปเดตข้อมูลรวมศูนย์',
-              notes: isNew ? 'ตั้งค่าเริ่มต้นสาขาใหม่' : 'อัปเดตข้อมูลรวมศูนย์',
+              reason: isNew ? 'เพิ่มรายการเข้าสู่คลัง' : 'อัปเดตข้อมูลรวมศูนย์',
+              notes: isNew ? 'เพิ่มรายการเข้าสู่คลัง' : 'อัปเดตข้อมูลรวมศูนย์',
               timestamp: new Date().toISOString()
           };
           await callAppScript('SAVE_DATA', 'InventoryLogs', logPayload);
@@ -622,7 +825,15 @@ const InventoryManager = ({
       const payload = {
           id: finalId,
           productId: adjustItem.productId,
+          product_id: adjustItem.productId,
           code: adjustItem.productId,
+          name: pName,
+          category: adjustItem.product?.category || adjustItem.category || 'อุปกรณ์และเครื่องใช้',
+          unit: adjustItem.product?.unit || adjustItem.unit || 'ชิ้น',
+          minStock: adjustItem.minStock || 5,
+          min_stock: adjustItem.minStock || 5,
+          costPrice: adjustItem.costPrice || 0,
+          cost_price: adjustItem.costPrice || 0,
           branchId: targetBranchId,
           branch_id: targetBranchId,
           quantity: newQty,
@@ -789,11 +1000,21 @@ const InventoryManager = ({
               <input
                 type="text"
                 placeholder="ค้นหาชื่อสินค้า หรือรหัส..."
-                className="w-full pl-9 pr-3 sm:pl-11 sm:pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
+                className="w-full pl-9 pr-9 sm:pl-11 sm:pr-10 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               <Search className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-all"
+                  title="ล้างข้อความ"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[120px] sm:w-[240px]">
               <CustomSelect
@@ -812,6 +1033,44 @@ const InventoryManager = ({
       {/* Content Area */}
       {/* แก้ไข: เปลี่ยนจาก mt-4 เป็น mt-0 เพื่อล้างระยะขอบที่ทับซ้อนกัน */}
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
+        
+        {/* --- Category Filter Tabs (ทั้งหมด, สินค้าขายหน้าร้าน, อุปกรณ์/เวชภัณฑ์ภายใน) --- */}
+        <div className="flex items-center gap-2 mb-3.5 overflow-x-auto no-scrollbar py-1">
+          <button
+            type="button"
+            onClick={() => setItemTypeFilter('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold kanit-text transition-all flex items-center gap-2 shrink-0 ${
+              itemTypeFilter === 'all'
+                ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80 shadow-xs'
+            }`}
+          >
+            <LayoutList size={14} /> รายการทั้งหมด ({counts.all})
+          </button>
+          <button
+            type="button"
+            onClick={() => setItemTypeFilter('pos')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold kanit-text transition-all flex items-center gap-2 shrink-0 ${
+              itemTypeFilter === 'pos'
+                ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25'
+                : 'bg-white text-slate-600 hover:bg-sky-50 border border-slate-200/80 shadow-xs'
+            }`}
+          >
+            <Tag size={14} /> สินค้า POS ({counts.pos})
+          </button>
+          <button
+            type="button"
+            onClick={() => setItemTypeFilter('internal')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold kanit-text transition-all flex items-center gap-2 shrink-0 ${
+              itemTypeFilter === 'internal'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                : 'bg-white text-slate-600 hover:bg-indigo-50 border border-slate-200/80 shadow-xs'
+            }`}
+          >
+            <Stethoscope size={14} /> อุปกรณ์ / เครื่องใช้ภายใน ({counts.internal})
+          </button>
+        </div>
+
         <div className="flex-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
           {isGlobalLoading ? (
           <div className="flex-1 flex flex-col p-4 gap-3">
@@ -1174,37 +1433,253 @@ const InventoryManager = ({
             </div>
             </div>
 
-            {/* Add/Edit Modal */}      {isModalOpen && createPortal(
+            {/* Add/Edit Modal */}
+      {isModalOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeModal}></div>
-          <div className={`bg-white rounded-3xl w-full max-w-md max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+          <div className={`bg-white rounded-3xl w-full max-w-lg max-h-[92dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            
+            {/* Modal Header */}
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner shrink-0">
-                  <Package size={20} />
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner shrink-0 ${
+                  formData.itemSource === 'internal' ? 'bg-indigo-100 text-indigo-600' : 'bg-sky-100 text-sky-600'
+                }`}>
+                  {formData.itemSource === 'internal' ? <Stethoscope size={20} /> : <Package size={20} />}
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">{editingItem ? 'แก้ไขรายการสต็อก' : 'เพิ่มรายการสต็อกใหม่'}</h3>
-                  <p className="text-xs text-slate-500 kanit-text">จัดการข้อมูลพื้นฐานและจำนวนขั้นต่ำ</p>
+                  <h3 className="text-lg font-bold text-slate-800 kanit-text leading-tight">
+                    {editingItem ? (formData.itemSource === 'internal' ? 'แก้ไขอุปกรณ์ / เวชภัณฑ์' : 'แก้ไขสต็อกสินค้า') : 'เพิ่มรายการสต็อกใหม่'}
+                  </h3>
+                  <p className="text-xs text-slate-500 kanit-text">จัดการข้อมูลพื้นฐาน จำนวนสต็อก และสาขาที่จัดเก็บ</p>
                 </div>
               </div>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
             </div>
             
             <form onSubmit={handleSaveItem} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1 kanit-text uppercase">สินค้า / บริการ <span className="text-rose-500">*</span></label>
-                <CustomSelect 
-                  placeholder="เลือกสินค้าจาก POS"
-                  value={formData.productId}
-                  onChange={val => setFormData({...formData, productId: val})}
-                  options={posProducts.map(p => ({ value: p.id, label: `${p.name} (${p.id})` }))}
-                  className="w-full"
-                />
-              </div>
+              
+              {/* ประเภทรายการ (Segmented Toggle) - แสดงเฉพาะตอนเพิ่มใหม่ */}
+              {!editingItem && (
+                <div className="flex bg-slate-100/90 p-1.5 rounded-2xl gap-1 border border-slate-200/50">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ 
+                      ...prev, 
+                      itemSource: 'internal',
+                      productId: prev.productId && !prev.productId.startsWith('PROD') ? prev.productId : `EQP-${Date.now().toString().slice(-4)}`
+                    }))}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 ${
+                      formData.itemSource === 'internal' 
+                        ? 'bg-white text-indigo-700 shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Stethoscope size={14} /> อุปกรณ์ / เวชภัณฑ์ภายใน
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, itemSource: 'pos' }))}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 ${
+                      formData.itemSource === 'pos' 
+                        ? 'bg-white text-sky-700 shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Tag size={14} /> สินค้าจาก POS
+                  </button>
+                </div>
+              )}
+
+              {/* กรณี 1: สินค้าจาก POS Catalog */}
+              {formData.itemSource === 'pos' ? (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1 kanit-text uppercase">
+                    สินค้า / บริการ จาก POS <span className="text-rose-500">*</span>
+                  </label>
+                  <CustomSelect 
+                    placeholder="เลือกสินค้าจาก POS"
+                    value={formData.productId}
+                    onChange={val => {
+                      const selected = posProducts.find(p => p.id === val);
+                      setFormData(prev => ({
+                        ...prev, 
+                        productId: val,
+                        name: selected?.name || prev.name,
+                        category: selected?.category || selected?.type || prev.category,
+                        unit: selected?.unit || prev.unit,
+                        minStock: selected?.minStock ?? prev.minStock,
+                        costPrice: selected?.costPrice ?? prev.costPrice
+                      }));
+                    }}
+                    options={posProducts.map(p => ({ value: p.id, label: `${p.name} (${p.id})` }))}
+                    className="w-full"
+                  />
+                  {formData.productId && (
+                    <div className="mt-2.5 p-3 bg-sky-50/70 rounded-2xl border border-sky-100 text-xs text-sky-800 flex items-center justify-between kanit-text">
+                      <span>หมวด: <strong className="font-semibold">{formData.category || 'ทั่วไป'}</strong> | หน่วย: <strong className="font-semibold">{formData.unit || 'ชิ้น'}</strong></span>
+                      <span className="font-data font-bold bg-white px-2 py-0.5 rounded-lg border border-sky-200">รหัส: {formData.productId}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* กรณี 2: อุปกรณ์ / เครื่องใช้สำนักงาน / เวชภัณฑ์ภายในคลินิก */
+                <div className="space-y-4">
+                  {/* ชื่ออุปกรณ์ / รายการ */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 kanit-text uppercase">
+                      ชื่ออุปกรณ์ / เครื่องใช้ / เวชภัณฑ์ <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="เช่น ถุงมือแพทย์ Size M, กระดาษ A4 80g, เข็มฉีดยา 24G..."
+                      className={`${theme.input} !py-2.5 text-sm font-medium`}
+                    />
+                  </div>
+
+                  {/* หมวดหมู่อุปกรณ์ */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 kanit-text uppercase">
+                      หมวดหมู่อุปกรณ์ / การใช้งาน
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      {[
+                        { label: 'อุปกรณ์ทางการแพทย์', icon: Stethoscope },
+                        { label: 'เวชภัณฑ์และวัสดุสิ้นเปลือง', icon: Pill },
+                        { label: 'เครื่องใช้สำนักงาน', icon: FileText },
+                        { label: 'ของใช้ทั่วไป / แม่บ้าน', icon: Package }
+                      ].map(cat => (
+                        <button
+                          key={cat.label}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, category: cat.label })}
+                          className={`px-2.5 py-2 rounded-xl text-xs font-semibold kanit-text flex items-center gap-1.5 border transition-all text-left truncate ${
+                            formData.category === cat.label
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-bold shadow-xs'
+                              : 'bg-slate-50/50 text-slate-600 border-slate-200/70 hover:bg-slate-100'
+                          }`}
+                        >
+                          <cat.icon size={13} className="shrink-0 text-indigo-500" />
+                          <span className="truncate">{cat.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <input 
+                      type="text"
+                      value={formData.category}
+                      onChange={e => setFormData({ ...formData, category: e.target.value })}
+                      placeholder="หรือระบุหมวดหมู่อื่นๆ..."
+                      className={`${theme.input} !py-2 text-xs`}
+                    />
+                  </div>
+
+                  {/* รหัสรายการ & หน่วยนับ */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 kanit-text uppercase">
+                        รหัสรายการ <span className="text-rose-500">*</span>
+                      </label>
+                      <input 
+                        type="text"
+                        required
+                        value={formData.productId}
+                        onChange={e => setFormData({ ...formData, productId: e.target.value })}
+                        placeholder="เช่น EQP-001..."
+                        className={`${theme.input} !py-2.5 font-data text-sm uppercase`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 kanit-text uppercase">
+                        หน่วยนับ
+                      </label>
+                      <input 
+                        type="text"
+                        value={formData.unit}
+                        onChange={e => setFormData({ ...formData, unit: e.target.value })}
+                        placeholder="ชิ้น / กล่อง / รีม / ชุด..."
+                        className={`${theme.input} !py-2.5 text-sm`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* จุดเตือนสต็อก & ราคาต้นทุน */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 kanit-text uppercase">
+                        เตือนเมื่อสต็อกต่ำ (Min Stock)
+                      </label>
+                      <input 
+                        type="number"
+                        min="0"
+                        value={formData.minStock}
+                        onChange={e => setFormData({ ...formData, minStock: e.target.value })}
+                        className={`${theme.input} !py-2.5 font-data text-center text-sm`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5 ml-1 kanit-text uppercase">
+                        ราคาต้นทุน (บาท) <span className="text-slate-400 text-[10px] font-normal">(ไม่บังคับ)</span>
+                      </label>
+                      <input 
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.costPrice}
+                        onChange={e => setFormData({ ...formData, costPrice: e.target.value })}
+                        placeholder="0.00"
+                        className={`${theme.input} !py-2.5 font-data text-center text-sm`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* ข้อมูลล็อตและวันหมดอายุ (ถ้ามี) */}
+                  <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-100 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5">
+                        <Clock size={14} className="text-indigo-500" /> ข้อมูลล็อตและวันหมดอายุ (ถ้ามี)
+                      </span>
+                      <span className="text-[11px] text-slate-400 kanit-text">สำหรับเวชภัณฑ์ / วัสดุสิ้นเปลือง</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 ml-1 kanit-text uppercase">เลขที่ล็อต (Lot No.)</label>
+                        <input 
+                          type="text"
+                          value={formData.lotNo}
+                          onChange={e => setFormData({ ...formData, lotNo: e.target.value })}
+                          placeholder="เช่น LOT-01..."
+                          className={`${theme.input} !py-2 font-data text-xs uppercase`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 ml-1 kanit-text uppercase">วันหมดอายุ</label>
+                        <div className="relative group">
+                          <input 
+                            type="text"
+                            value={formData.expireDate}
+                            onChange={e => setFormData({ ...formData, expireDate: e.target.value })}
+                            placeholder="วว/ดด/ปปปป"
+                            className={`${theme.input} !py-2 pr-8 font-data text-xs`}
+                          />
+                          <button 
+                            type="button" 
+                            onClick={handleOpenCalendar} 
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-sky-500 transition-colors"
+                          >
+                            <CalendarIcon size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ส่วนการจัดการสาขาแบบ Array (เหมือนเพิ่มเบอร์โทร) */}
-              <div className="space-y-3">
+              <div className="space-y-3 pt-1">
                 <label className="block text-xs font-bold text-slate-500 ml-1 kanit-text uppercase">ข้อมูลสต็อกรายสาขา <span className="text-rose-500">*</span></label>
                 <div className="space-y-2.5">
                   {formData.branchAssignments.map((assignment, idx) => (
@@ -1218,10 +1693,10 @@ const InventoryManager = ({
                           compact
                         />
                       </div>
-                      <div className="w-[100px]">
+                      <div className="w-[110px]">
                         <input 
                           required type="number" min="0" 
-                          className={`${theme.input} !py-2.5 font-data text-center`}
+                          className={`${theme.input} !py-2.5 font-data text-center text-sm`}
                           value={assignment.quantity}
                           onChange={e => updateBranchAssignment(idx, 'quantity', e.target.value)}
                           placeholder="จำนวน"
@@ -1249,10 +1724,21 @@ const InventoryManager = ({
               </div>
             </form>
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3 shrink-0">
+            <div className="p-5 border-t border-slate-100 bg-slate-50/50 flex items-center gap-3 shrink-0">
+                {editingItem && (
+                  <button 
+                    type="button" 
+                    onClick={() => handleDeleteItem(editingItem)}
+                    disabled={isProcessing}
+                    className="p-3 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl font-bold kanit-text transition-colors border border-rose-200/70 shrink-0"
+                    title="ลบรายการนี้ออกจากคลัง"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
                 <button type="button" onClick={closeModal} className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text hover:bg-slate-50 transition-colors">ยกเลิก</button>
-                <button type="button" onClick={handleSaveItem} disabled={isProcessing} className="flex-1 py-3 bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 kanit-text hover:bg-sky-600 transition-colors flex items-center justify-center gap-2">
-                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 size={18} />} ยืนยัน
+                <button type="button" onClick={handleSaveItem} disabled={isProcessing} className="flex-[2] py-3 bg-sky-500 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 kanit-text hover:bg-sky-600 transition-colors flex items-center justify-center gap-2">
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 size={18} />} {editingItem ? 'บันทึกข้อมูล' : 'ยืนยันเพิ่มรายการ'}
                 </button>
             </div>
           </div>
@@ -1346,7 +1832,7 @@ const InventoryManager = ({
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-slate-800 kanit-text leading-tight">ปรับปรุงสต็อกสินค้า</h3>
-                  <p className="text-sm text-slate-500 kanit-text mt-0.5">{adjustItem?.product.name} <span className="mx-2 text-slate-300">|</span> <span className="font-data">{adjustItem?.productId}</span></p>
+                  <p className="text-sm text-slate-500 kanit-text mt-0.5">{adjustItem?.product?.name || adjustItem?.name || 'รายการสต็อก'} <span className="mx-2 text-slate-300">|</span> <span className="font-data">{adjustItem?.productId}</span></p>
                 </div>
               </div>
               <button onClick={closeAdjustModal} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-xl transition-colors"><X size={24} /></button>
@@ -1575,13 +2061,35 @@ const InventoryManager = ({
                             </div>
                           </div>
                           <div className="space-y-1.5">
-                            <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">หมายเหตุ</label>
+                            <label className="block text-[10px] font-black text-slate-400 ml-1 kanit-text uppercase">หมายเหตุ / เหตุผล</label>
                             <input 
-                              type="text" className={`${theme.input} !py-3.5 text-sm`}
-                              placeholder="ระบุเหตุผล..."
+                              type="text" className={`${theme.input} !py-3 text-sm`}
+                              placeholder="ระบุเหตุผล หรือเลือกด้านล่าง..."
                               value={adjustData.reason}
                               onChange={e => setAdjustData({...adjustData, reason: e.target.value})}
                             />
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {[
+                                'เบิกใช้งานในคลินิก',
+                                'รับเข้าสต็อกสั่งซื้อ',
+                                'ปรับยอดจากการตรวจนับ',
+                                'ชำรุด / เสียหาย',
+                                'หมดอายุ / เสื่อมสภาพ'
+                              ].map(chip => (
+                                <button
+                                  key={chip}
+                                  type="button"
+                                  onClick={() => setAdjustData({ ...adjustData, reason: chip })}
+                                  className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all kanit-text ${
+                                    adjustData.reason === chip 
+                                      ? 'bg-sky-50 text-sky-700 border-sky-300 font-semibold' 
+                                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {chip}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>

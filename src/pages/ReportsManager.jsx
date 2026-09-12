@@ -685,8 +685,24 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
         <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center gap-2 sm:gap-4 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
             <div className="relative flex-1 min-w-0">
-              <input type="text" placeholder="ค้นหาชื่อลูกค้า, รหัสเอกสาร, HN..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 shadow-inner font-data truncate" />
+              <input 
+                type="text" 
+                placeholder="ค้นหาชื่อลูกค้า, รหัสเอกสาร, HN..." 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)} 
+                className="w-full pl-11 pr-10 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 shadow-inner font-data truncate" 
+              />
               <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-all"
+                  title="ล้างข้อความ"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             <div className="w-[125px] sm:w-[165px] shrink-0">
                <CustomSelect

@@ -87,7 +87,7 @@ const TABLE_COLUMNS = {
     'seller_id', 'seller_name', 'seller_commission',
     'date', 'time', 'status', 'transaction_type', 'created_at', 'updated_at', 'is_deleted'
   ],
-  inventory: ['id', 'code', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'lot_no', 'expire_date', 'receive_date', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
+  inventory: ['id', 'code', 'product_id', 'product_name', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'lot_no', 'expire_date', 'receive_date', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
   inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at', 'updated_at', 'lot_no', 'expire_date', 'receive_date', 'product_id', 'branch_id', 'type', 'amount', 'balance', 'reason'],
   setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'icon', 'stock_managed', 'is_course', 'course_sessions', 'min_stock', 'is_vatable', 'is_active', 'created_at', 'updated_at', 'is_deleted'],
   finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
@@ -712,6 +712,26 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
     }
   }
 
+  // Pure Realtime Bypass สำหรับ settings: ดึงตรงจาก Supabase 100% เสมอ ป้องกันแคชเก่าค้างใน IndexedDB ตอนรีเฟรช
+  if (tableName === 'settings') {
+    if (!supabase) return { status: 'success', data: [] };
+    try {
+      const explicitCols = (TABLE_COLUMNS.settings || []).join(',') || '*';
+      const { data, error } = await supabase
+        .from('settings')
+        .select(explicitCols);
+      if (error) {
+        console.error("Direct fetch settings error:", error);
+        return { status: 'error', data: [], message: error.message };
+      }
+      const formatted = (data || []).map(rowToJS);
+      return { status: 'success', data: formatted };
+    } catch (err) {
+      console.error("Direct fetch settings exception:", err);
+      return { status: 'error', data: [], message: err.message };
+    }
+  }
+
   const { scopeFilterFn = null, customManifestQuery = null, scopeCol = null, scopeVal = null, scopeVals = null } = options;
 
   // 1. อ่านข้อมูลเดิมจาก IndexedDB ทันที และ Normalize ด้วย rowToJS (0ms, 0 Egress)
@@ -919,6 +939,11 @@ export async function callSupabase(action, sheetName, payload = null) {
         scopeVal: patientId,
         customManifestQuery: query => query.select('id,updated_at,is_deleted').ilike('patient_id', patientId)
       });
+    }
+
+    case 'PRELOAD_PATIENTS_OFFLINE': {
+      const selectCols = (TABLE_COLUMNS.patients || []).join(',') || '*';
+      return await differentialSyncTable('patients', selectCols);
     }
 
     case 'GET_PATIENTS_PAGINATED': {
@@ -1701,7 +1726,7 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       const row = jsToRow(payload, tableName);
-      const { data: upsertData, error } = await supabase.from(tableName).upsert(row).select();
+      const { data: upsertData, error } = await supabase.from(tableName).upsert(row, { onConflict: 'id' }).select();
       if (error) {
         console.error("🔥 SUPABASE UPSERT ERROR:", error);
         throw error;

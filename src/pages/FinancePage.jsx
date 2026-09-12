@@ -2040,9 +2040,19 @@ const FinancePage = ({
                     placeholder="ค้นหารายการ, หมวดหมู่..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-3 sm:pl-11 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:bg-white focus:border-sky-400 shadow-inner font-data truncate"
+                    className="w-full pl-10 pr-9 sm:pl-11 sm:pr-10 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:bg-white focus:border-sky-400 shadow-inner font-data truncate"
                   />
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-all"
+                      title="ล้างข้อความ"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                </div>
                
                <button 

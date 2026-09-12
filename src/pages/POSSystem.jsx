@@ -36,7 +36,9 @@ const POSSystem = ({
     showMobileBars,
     handlePrintReceipt,
     currentUser,
-    integrationTokens = {}
+    integrationTokens = {},
+    fetchPatientTreatments,
+    fetchPatientsPaginated
 }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +46,7 @@ const POSSystem = ({
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
+  const [isFetchingOpd, setIsFetchingOpd] = useState(false);
   const [discount, setDiscount] = useState(0);
   
   // State สำหรับเลือกแพทย์ผู้ตรวจและผู้แนะนำ/ผู้ขาย (Dual Commission)
@@ -86,6 +89,159 @@ const POSSystem = ({
   const [isShareCourseModalOpen, setIsShareCourseModalOpen] = useState(false);
   const [shareOwnerSearch, setShareOwnerSearch] = useState('');
   const [selectedOwnerPatient, setSelectedOwnerPatient] = useState(null);
+  const [visibleShareOwnerCount, setVisibleShareOwnerCount] = useState(15);
+  const [visibleShareCourseCount, setVisibleShareCourseCount] = useState(10);
+
+  // รีเซ็ตจำนวนรายการที่แสดงสำหรับ Infinite Scroll เมื่อเปิด Modal หรือค้นหา
+  useEffect(() => {
+    setVisibleShareOwnerCount(15);
+  }, [shareOwnerSearch, isShareCourseModalOpen]);
+
+  useEffect(() => {
+    setVisibleShareCourseCount(10);
+  }, [selectedOwnerPatient]);
+
+  // ฟังก์ชันดึงชื่อ-นามสกุลคนไข้แบบสมบูรณ์และแม่นยำ (รองรับทั้ง first_name, firstName, name, prefix)
+  const getDisplayPatientName = useCallback((p) => {
+    if (!p) return '';
+    if (typeof p === 'string') return p;
+    const fromHelper = getPatientFullName(p);
+    if (fromHelper && fromHelper !== '-' && fromHelper !== p.prefix && fromHelper.trim() !== '') {
+      return fromHelper;
+    }
+    const prefix = p.prefix || p.title || '';
+    const fn = p.first_name || p.firstName || '';
+    const ln = p.last_name || p.lastName || '';
+    if (fn || ln) {
+      return `${prefix}${fn} ${ln}`.trim();
+    }
+    if (p.name && p.name.trim() !== prefix.trim()) {
+      return p.name.trim();
+    }
+    return prefix || p.id || p.hn || '';
+  }, []);
+
+  // รายชื่อคอร์สทั้งหมดที่ยังไม่หมดอายุและยังใช้ไม่หมด (ตัดคอร์สของคนไข้ปัจจุบันออก)
+  const availableShareableCourses = useMemo(() => {
+    const currentPid = String(selectedPatientId || '').trim().toLowerCase();
+    const currentPidDigits = currentPid.replace(/\D/g, '');
+    const now = Date.now();
+
+    return (patientCoursesData || []).filter(c => {
+      if (!c) return false;
+      if (c.isDeleted || c.is_deleted) return false;
+      if ((c.status || 'active') !== 'active') return false;
+
+      // 1. เช็คจำนวนครั้งที่เหลือ: ต้องมากกว่า 0 (ไม่เอาคอร์สที่ใช้หมดแล้ว)
+      const rem = Number(c.remainingSessions ?? c.remaining_sessions ?? 0);
+      if (rem <= 0) return false;
+
+      // 2. เช็ควันหมดอายุ: หากมีวันหมดอายุ ต้องยังไม่หมดอายุ (ไม่เอาคอร์สที่หมดอายุแล้ว)
+      const expDate = c.expireDate || c.expire_date;
+      if (expDate) {
+        const expTime = new Date(expDate).setHours(23, 59, 59, 999);
+        if (!isNaN(expTime) && expTime < now) {
+          return false;
+        }
+      }
+
+      // 3. ต้องไม่ใช่คนไข้ที่กำลังคิดเงินอยู่ปัจจุบัน
+      const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+      const cPidDigits = cPid.replace(/\D/g, '');
+      if (cPid === currentPid || (currentPidDigits && cPidDigits === currentPidDigits)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [patientCoursesData, selectedPatientId]);
+
+  // ดึงข้อมูลคนไข้เจ้าของคอร์สเพิ่มเติมจาก Supabase หากยังไม่มีใน patientsData
+  useEffect(() => {
+    if (!isShareCourseModalOpen || availableShareableCourses.length === 0) return;
+    const missingIds = [];
+    availableShareableCourses.forEach(c => {
+      const pid = String(c.patientId || c.patient_id || '').trim();
+      if (pid) {
+        const exists = (patientsData || []).some(p => {
+          const pId = String(p.id || p.hn || '').trim().toLowerCase();
+          return pId === pid.toLowerCase() || (pid.replace(/\D/g, '') && pId.replace(/\D/g, '') === pid.replace(/\D/g, ''));
+        });
+        if (!exists && !missingIds.includes(pid)) {
+          missingIds.push(pid);
+        }
+      }
+    });
+
+    if (missingIds.length > 0 && supabase) {
+      supabase.from('patients')
+        .select('*')
+        .in('id', missingIds)
+        .then(({ data, error }) => {
+          if (!error && Array.isArray(data) && data.length > 0) {
+            setPatientsData(prev => {
+              const existingIds = new Set((prev || []).map(p => String(p.id || p.hn).toLowerCase()));
+              const toAdd = data.filter(p => !existingIds.has(String(p.id).toLowerCase()));
+              return [...prev, ...toAdd];
+            });
+          }
+        })
+        .catch(err => console.warn('[POS] Fetch missing course owners error:', err));
+    }
+  }, [isShareCourseModalOpen, availableShareableCourses, patientsData, setPatientsData]);
+
+  // รวมรายชื่อเจ้าของคอร์สที่ไม่ซ้ำ เฉพาะผู้ที่มีคอร์สใช้ได้จริงเท่านั้น
+  const eligibleShareOwners = useMemo(() => {
+    const ownerMap = new Map();
+
+    availableShareableCourses.forEach(course => {
+      const pId = String(course.patientId || course.patient_id || '').trim();
+      if (!pId) return;
+      const normPid = pId.toLowerCase();
+
+      if (!ownerMap.has(normPid)) {
+        const pObj = (patientsData || []).find(p => {
+          if (!p) return false;
+          const pid = String(p.id || p.hn || '').trim().toLowerCase();
+          return pid === normPid || (pId.replace(/\D/g, '') && pid.replace(/\D/g, '') === pId.replace(/\D/g, ''));
+        });
+
+        let fullName = '';
+        if (pObj) {
+          fullName = getDisplayPatientName(pObj);
+        }
+        if (!fullName || fullName === '-' || fullName === pObj?.prefix) {
+          fullName = course.patientName || course.patient_name || pId;
+        }
+
+        ownerMap.set(normPid, {
+          id: pObj?.id || pObj?.hn || pId,
+          raw: pObj || { id: pId, name: fullName, first_name: fullName },
+          fullName,
+          nickname: pObj?.nickname || '',
+          phone: pObj?.phone || (pObj?.phones && pObj.phones[0]) || '',
+          courses: []
+        });
+      }
+
+      ownerMap.get(normPid).courses.push(course);
+    });
+
+    return Array.from(ownerMap.values());
+  }, [availableShareableCourses, patientsData, getDisplayPatientName]);
+
+  // กรองรายชื่อเจ้าของคอร์สตามคำค้นหา (ค้นหาจาก HN, ชื่อ, นามสกุล, ชื่อเล่น, เบอร์โทร)
+  const filteredShareOwners = useMemo(() => {
+    const q = shareOwnerSearch.trim().toLowerCase();
+    if (!q) return eligibleShareOwners;
+    return eligibleShareOwners.filter(owner => {
+      const idMatch = owner.id.toLowerCase().includes(q);
+      const nameMatch = owner.fullName.toLowerCase().includes(q);
+      const nickMatch = owner.nickname.toLowerCase().includes(q);
+      const phoneMatch = owner.phone.toLowerCase().includes(q);
+      return idMatch || nameMatch || nickMatch || phoneMatch;
+    });
+  }, [eligibleShareOwners, shareOwnerSearch]);
   
   // --- แก้ไข: ให้ดึงค่าเริ่มต้นจาก LocalStorage ---
   const [discountType, setDiscountType] = useState(() => {
@@ -309,54 +465,249 @@ const POSSystem = ({
     }, 300);
   };
 
-  // --- ฟังก์ชันเมื่อเลือกคนไข้ ให้ดึงประวัติล่าสุดมาใส่ตะกร้า ---
-  const handleSelectPatient = (patientId, patientLabel) => {
-    setSelectedPatientId(patientId);
-    setPatientSearchTerm(patientLabel);
-    setIsPatientDropdownOpen(false);
+  // --- ฟังก์ชันดึงประวัติการรักษา OPD ล่าสุดของคนไข้มาใส่ตะกร้า POS อัตโนมัติ ---
+  const loadPatientOpdToCart = async (patientId, patientLabel) => {
+    if (!patientId) {
+      setSelectedPatientId('');
+      setPatientSearchTerm('');
+      setCart([]);
+      showToast('ล้างตะกร้า เริ่มบิลสำหรับลูกค้าทั่วไป', 'info');
+      return;
+    }
 
-    let newCartItems = []; // เริ่มต้นด้วยตะกร้าว่างเปล่าเสมอเพื่อล้างของเก่า
+    setIsFetchingOpd(true);
+    let newCartItems = [];
 
-    if (patientId) {
-      const patient = (patientsData || []).find(p => p && (p.id || p.hn) === patientId);
-      // เช็คว่าคนไข้มีประวัติการรักษา (OPD) หรือไม่
-      const opdList = Array.isArray(patient?.opdRecords) ? patient.opdRecords : [];
-      if (opdList.length > 0) {
-        const latestOpd = opdList[0]; // ดึงประวัติใบล่าสุด (index 0)
+    try {
+      let fetchedTreatments = [];
 
-        // 1. นำการรักษา (Tx) มาเทียบกับ Catalog สินค้า POS
-        if (latestOpd && latestOpd.tx) {
-          const treatments = Array.isArray(latestOpd.tx) ? latestOpd.tx : [latestOpd.tx];
-          treatments.forEach(tName => {
-            if (!tName || typeof tName !== 'string') return;
-            const matchedProduct = (products || []).find(p => p && p.name === tName);
-            if (matchedProduct) {
-              const existing = newCartItems.find(item => item && item.product && item.product.id === matchedProduct.id);
-              if (existing) existing.quantity += 1;
-              else newCartItems.push({ product: matchedProduct, quantity: 1 });
+      // 1. ดึงผ่านฟังก์ชัน fetchPatientTreatments (ถ้ามีส่งมาจาก App.jsx)
+      if (typeof fetchPatientTreatments === 'function') {
+        try {
+          const res = await fetchPatientTreatments(patientId);
+          if (Array.isArray(res) && res.length > 0) {
+            fetchedTreatments = res;
+          }
+        } catch (err) {
+          console.warn('[POS] fetchPatientTreatments warning:', err);
+        }
+      }
+
+      // 2. ถ้ายังไม่ได้ข้อมูล ให้ดึงตรงจาก Supabase ตาราง treatments
+      if (fetchedTreatments.length === 0 && supabase) {
+        try {
+          const pId = String(patientId).trim();
+          const digitsOnly = pId.replace(/\D/g, '');
+          let query = supabase
+            .from('treatments')
+            .select('*')
+            .or('is_deleted.is.null,is_deleted.eq.false')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          if (pId.startsWith('HN69-')) {
+            query = query.or(`patient_id.eq.${pId},patient_id.ilike.%${digitsOnly}`);
+          } else if (digitsOnly) {
+            query = query.or(`patient_id.eq.${pId},patient_id.ilike.%${digitsOnly}%`);
+          } else {
+            query = query.eq('patient_id', pId);
+          }
+
+          const { data: dbTrts, error: dbErr } = await query;
+          if (!dbErr && Array.isArray(dbTrts) && dbTrts.length > 0) {
+            fetchedTreatments = dbTrts;
+          }
+        } catch (err) {
+          console.warn('[POS] Supabase treatments query warning:', err);
+        }
+      }
+
+      // 3. Fallback ผ่าน callAppScript
+      if (fetchedTreatments.length === 0 && typeof callAppScript === 'function') {
+        try {
+          const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { patientId });
+          if (res?.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
+            fetchedTreatments = res.data;
+          }
+        } catch (err) {
+          console.warn('[POS] callAppScript treatments warning:', err);
+        }
+      }
+
+      // 4. Fallback จากแคชใน patientsData
+      if (fetchedTreatments.length === 0) {
+        const pNorm = String(patientId).trim().toLowerCase();
+        const patient = (patientsData || []).find(p => p && ((p.id && String(p.id).trim().toLowerCase() === pNorm) || (p.hn && String(p.hn).trim().toLowerCase() === pNorm)));
+        if (Array.isArray(patient?.opdRecords) && patient.opdRecords.length > 0) {
+          fetchedTreatments = patient.opdRecords;
+        }
+      }
+
+      if (fetchedTreatments.length > 0) {
+        // เรียงลำดับเอาใบล่าสุด (index 0)
+        const sortedTreatments = [...fetchedTreatments].sort((a, b) => {
+          const dateA = new Date(a.created_at || a.datetime || a.date || 0).getTime();
+          const dateB = new Date(b.created_at || b.datetime || b.date || 0).getTime();
+          return dateB - dateA;
+        });
+        const latestOpd = sortedTreatments[0];
+
+        // อัปเดตแคช opdRecords ใน patientsData เพื่อให้ส่วนอื่นๆ ในแอพใช้งานได้ทันที
+        if (typeof setPatientsData === 'function') {
+          setPatientsData(prev => (prev || []).map(p => {
+            if (p && ((p.id && String(p.id).trim().toLowerCase() === String(patientId).trim().toLowerCase()) || (p.hn && String(p.hn).trim().toLowerCase() === String(patientId).trim().toLowerCase()))) {
+              return { ...p, opdRecords: sortedTreatments };
+            }
+            return p;
+          }));
+        }
+
+        // ตั้งค่าแพทย์อัตโนมัติจากใบตรวจล่าสุด
+        const docName = String(latestOpd.doctor || latestOpd.doctorName || '').trim();
+        if (docName) {
+          const matchedDoc = (staffData || []).find(s => {
+            if (!s || !s.name) return false;
+            const sName = s.name.trim();
+            return sName === docName || sName.includes(docName) || docName.includes(sName);
+          });
+          if (matchedDoc) {
+            setSelectedDoctorId(matchedDoc.id);
+            if (doctorIsSeller) setSelectedSellerId(matchedDoc.id);
+          }
+        }
+
+        // ดึงรายการรักษาจาก prescription หรือ tx (เลือกใช้แหล่งเดียว ไม่ concat ทั้งสองฟิลด์ซ้ำซ้อน)
+        let rawItems = [];
+        if (latestOpd.prescription && (Array.isArray(latestOpd.prescription) ? latestOpd.prescription.length > 0 : Boolean(latestOpd.prescription))) {
+          rawItems = Array.isArray(latestOpd.prescription) ? latestOpd.prescription : [latestOpd.prescription];
+        } else if (latestOpd.tx && (Array.isArray(latestOpd.tx) ? latestOpd.tx.length > 0 : Boolean(latestOpd.tx))) {
+          rawItems = Array.isArray(latestOpd.tx) ? latestOpd.tx : [latestOpd.tx];
+        }
+
+        const parseTreatmentItems = (raw) => {
+          if (!raw) return [];
+          if (Array.isArray(raw)) {
+            return raw.flatMap(it => parseTreatmentItems(it));
+          }
+          if (typeof raw === 'object') {
+            if (raw.name) return [String(raw.name).trim()];
+            return [];
+          }
+          if (typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if (!trimmed) return [];
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parseTreatmentItems(parsed);
+              } catch (e) {}
+            }
+            if (trimmed.includes('\n') || trimmed.includes(',')) {
+              return trimmed.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            }
+            return [trimmed];
+          }
+          return [String(raw).trim()];
+        };
+
+        const treatmentNames = parseTreatmentItems(rawItems).filter(name => name && name.trim() !== '');
+        const normalizeName = (s) => String(s || '').replace(/[\s\-_+()\/]/g, '').toLowerCase();
+
+        treatmentNames.forEach((tName, idx) => {
+          const cleanName = tName.trim();
+          const normName = normalizeName(cleanName);
+
+          // 1. นำมาเทียบกับ Catalog สินค้า POS
+          let matchedProduct = (products || []).find(p => p && (p.name?.trim() === cleanName || p.id === cleanName));
+          if (!matchedProduct) {
+            matchedProduct = (products || []).find(p => p && normalizeName(p.name) === normName);
+          }
+          if (!matchedProduct) {
+            matchedProduct = (products || []).find(p => {
+              if (!p || !p.name) return false;
+              const pNorm = normalizeName(p.name);
+              return (pNorm.length >= 3 && (pNorm.includes(normName) || normName.includes(pNorm)));
+            });
+          }
+
+          if (matchedProduct) {
+            const existing = newCartItems.find(item => item && item.product && item.product.id === matchedProduct.id);
+            if (existing) {
+              existing.quantity += 1;
             } else {
-              // หากการรักษานั้นไม่ได้ถูกตั้งค่าไว้ใน POS ให้สร้างเป็นรายการชั่วคราวแจ้งเตือน
+              newCartItems.push({ product: matchedProduct, quantity: 1 });
+            }
+            return;
+          }
+
+          // 2. ถ้าไม่พบใน Products ให้หาใน คลังยา/เวชภัณฑ์ (inventoryData)
+          const matchedInv = (inventoryData || []).find(inv => {
+            if (!inv) return false;
+            const invName = (inv.name || inv.medicineName || inv.itemName || '').trim();
+            if (!invName) return false;
+            return invName === cleanName || normalizeName(invName) === normName || (normName.length >= 3 && normalizeName(invName).includes(normName));
+          });
+
+          if (matchedInv) {
+            const invId = matchedInv.id || `INV_${normName}`;
+            const existing = newCartItems.find(item => item && item.product && item.product.id === invId);
+            if (existing) {
+              existing.quantity += 1;
+            } else {
               newCartItems.push({
                 product: {
-                  id: `TEMP_TX_${Date.now()}_${Math.random()}`,
-                  name: tName,
-                  price: 0,
-                  type: 'รายการจากแพทย์ (รอระบุราคา/รหัส)',
-                  icon: 'Stethoscope',
-                  isTemp: true
+                  id: invId,
+                  name: matchedInv.name || matchedInv.medicineName || matchedInv.itemName,
+                  price: Number(matchedInv.price || matchedInv.unitPrice || matchedInv.salePrice || latestOpd.cost || 0),
+                  type: matchedInv.category || matchedInv.type || 'ยา/เวชภัณฑ์',
+                  icon: 'Pill',
+                  stockManaged: true,
+                  stock: matchedInv.stock !== undefined ? matchedInv.stock : (matchedInv.quantity || 0)
                 },
                 quantity: 1
               });
             }
+            return;
+          }
+
+          // 3. หากการรักษานั้นไม่ได้ถูกตั้งค่าไว้ใน POS ให้สร้างเป็นรายการชั่วคราวแจ้งเตือน
+          const fallbackPrice = (treatmentNames.length === 1 && Number(latestOpd.cost) > 0) ? Number(latestOpd.cost) : 0;
+          newCartItems.push({
+            product: {
+              id: `TEMP_TX_${Date.now()}_${idx}`,
+              name: cleanName,
+              price: fallbackPrice,
+              type: 'รายการจากแพทย์ (OPD)',
+              icon: 'Stethoscope',
+              isTemp: true
+            },
+            quantity: 1
+          });
+        });
+
+        // 4. กรณีที่ไม่มีชื่อหัตถการใน prescription แต่มี cost ใน OPD
+        if (treatmentNames.length === 0 && Number(latestOpd.cost) > 0) {
+          const itemTitle = latestOpd.treatment_detail?.trim() || latestOpd.diagnosis?.trim() || 'ค่าบริการทางการแพทย์ (OPD)';
+          newCartItems.push({
+            product: {
+              id: `TEMP_TX_${Date.now()}_cost`,
+              name: itemTitle,
+              price: Number(latestOpd.cost),
+              type: 'รายการจากแพทย์ (OPD)',
+              icon: 'Stethoscope',
+              isTemp: true
+            },
+            quantity: 1
           });
         }
 
-        // 2. นำหมายเหตุ (Note) มาใส่ตะกร้าด้วยในฐานะข้อความแจ้งเตือน (ราคา 0 บาท)
-        if (latestOpd && latestOpd.note) {
+        // 5. นำหมายเหตุ (Note) มาใส่ตะกร้าด้วยในฐานะข้อความแจ้งเตือน (ราคา 0 บาท)
+        const noteText = (latestOpd.note || latestOpd.treatment_detail || '').trim();
+        if (noteText && noteText !== '-' && noteText !== 'null') {
           newCartItems.push({
             product: {
               id: `NOTE_${Date.now()}`,
-              name: `หมายเหตุแพทย์: ${latestOpd.note}`,
+              name: `หมายเหตุแพทย์: ${noteText}`,
               price: 0,
               type: 'ข้อความแจ้งเตือน',
               icon: 'FileText',
@@ -366,18 +717,32 @@ const POSSystem = ({
           });
         }
       }
+    } catch (err) {
+      console.error('[POS] Error loading patient OPD:', err);
+    } finally {
+      setIsFetchingOpd(false);
     }
 
-    // แทนที่ตะกร้าเดิมด้วยรายการใหม่ทั้งหมด (เคลียร์ของเก่า)
     setCart(newCartItems);
 
     if (patientId && newCartItems.length > 0) {
-      showToast('ล้างตะกร้าและดึงรายการล่าสุดมาใส่ให้แล้ว', 'success');
+      const itemNames = newCartItems.filter(it => !it.product?.isNote).map(it => it.product?.name).filter(Boolean);
+      if (itemNames.length > 0) {
+        showToast(`ดึงรายการรักษา (${itemNames.join(', ')}) ลงตะกร้าแล้ว`, 'success');
+      } else {
+        showToast('ดึงรายการรักษาล่าสุดจาก OPD ลงตะกร้าแล้ว', 'success');
+      }
     } else if (patientId) {
-      showToast('ล้างตะกร้า เริ่มบิลใหม่สำหรับคนไข้ที่เลือก', 'success');
-    } else {
-      showToast('ล้างตะกร้า เริ่มบิลสำหรับลูกค้าทั่วไป', 'success');
+      showToast('ไม่พบประวัติการรักษาล่าสุดใน OPD สำหรับคนไข้นี้ (เริ่มบิลว่าง)', 'info');
     }
+  };
+
+  // --- ฟังก์ชันเมื่อเลือกคนไข้ ให้ดึงประวัติล่าสุดมาใส่ตะกร้า ---
+  const handleSelectPatient = (patientId, patientLabel) => {
+    setSelectedPatientId(patientId);
+    setPatientSearchTerm(patientLabel);
+    setIsPatientDropdownOpen(false);
+    loadPatientOpdToCart(patientId, patientLabel);
   };
 
   // ดึงรายการหมวดหมู่ที่มีทั้งหมดจากข้อมูล Products
@@ -394,8 +759,83 @@ const POSSystem = ({
     });
   }, [products, searchQuery, activeCategory]);
 
-  // ฟังก์ชันจัดการตะกร้า
+  // ฟังก์ชันตรวจสอบว่ารายการนี้ต้องคุมสต็อกสินค้าหรือไม่
+  const isStockManaged = useCallback((prod) => {
+    if (!prod) return false;
+    if (prod.isRedeem || prod.isNote || prod.isCourse) return false;
+    const cat = String(prod.category || prod.type || '').trim();
+    if (cat === 'บริการ' || cat === 'หัตถการ' || prod.type === 'service') return false;
+    return Boolean(
+      parseBool(prod.stockManaged) || 
+      parseBool(prod.stock_managed) || 
+      prod.itemKind === 'stock' || 
+      prod.kind === 'stock' || 
+      (typeof prod.id === 'string' && prod.id.toLowerCase().startsWith('prod'))
+    );
+  }, []);
+
+  // ฟังก์ชันคำนวณสต็อกคงเหลือจริงแบบเรียลไทม์ตามสาขาปัจจุบัน
+  const getProductStock = useCallback((productOrId, branch = currentBranch) => {
+    if (!productOrId) return 0;
+    const productId = typeof productOrId === 'object' ? productOrId.id : productOrId;
+    const productObj = typeof productOrId === 'object' ? productOrId : products.find(p => p && p.id === productId);
+
+    if (!productObj || !isStockManaged(productObj)) {
+      return Infinity; // บริการ/หัตถการ/คอร์ส ไม่จำกัดสต็อก
+    }
+
+    const cleanTarget = String(productId || '').replace(/^INV_/, '').trim().toLowerCase();
+    const cleanName = String(productObj?.name || '').trim().toLowerCase();
+    const targetBranch = branch === 'all' ? null : branch;
+
+    const matchedStocks = (inventoryData || []).filter(inv => {
+      if (!inv || inv.isDeleted || inv.is_deleted) return false;
+
+      const cleanId = String(inv.id || '').replace(/^INV_/, '').trim().toLowerCase();
+      const cleanPId = String(inv.productId || inv.product_id || '').replace(/^INV_/, '').trim().toLowerCase();
+      const cleanCode = String(inv.code || '').replace(/^INV_/, '').trim().toLowerCase();
+      const invName = String(inv.name || inv.itemName || inv.productName || '').trim().toLowerCase();
+
+      const isMatch = cleanId === cleanTarget || 
+                      cleanPId === cleanTarget || 
+                      cleanCode === cleanTarget ||
+                      (cleanName && invName && cleanName === invName);
+      if (!isMatch) return false;
+
+      if (targetBranch) {
+        const bId = inv.branchId || inv.branch_id;
+        if (bId === targetBranch) return true;
+        // กรณีไม่มีการระบุ branchId (เช่น ข้อมูลเริ่มต้น) ให้ถือเป็นสาขาหลัก (b1)
+        if (!bId && (targetBranch === 'b1' || branchesData.length <= 1)) return true;
+        return false;
+      }
+      return true;
+    });
+
+    const total = matchedStocks.reduce((sum, s) => {
+      const qty = Number(s.quantity ?? s.stockQuantity ?? s.stock_quantity ?? 0);
+      return sum + (isNaN(qty) ? 0 : Math.max(0, qty));
+    }, 0);
+
+    return total;
+  }, [inventoryData, currentBranch, products, isStockManaged, branchesData]);
+
+  // ฟังก์ชันจัดการตะกร้า (จำกัดจำนวนไม่ให้เกินสต็อกคงเหลือจริงของสาขา)
   const addToCart = (product) => {
+    if (isStockManaged(product)) {
+      const availableStock = getProductStock(product);
+      if (availableStock <= 0) {
+        showToast(`⚠️ "${product.name}" สินค้าหมด (0 ชิ้น)`, 'warning');
+        return;
+      }
+      const existing = cart.find(item => item.product.id === product.id);
+      const currentQty = existing ? existing.quantity : 0;
+      if (currentQty >= availableStock) {
+        showToast(`⚠️ "${product.name}" ครบตามสต็อกแล้ว (${availableStock} ${product.unit || 'ชิ้น'})`, 'warning');
+        return;
+      }
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
@@ -408,11 +848,19 @@ const POSSystem = ({
   const updateQuantity = (productId, delta) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === productId) {
-        const newQuantity = Math.max(0, item.quantity + delta);
+        const curQty = Number(item.quantity) || 1;
+        if (delta > 0 && isStockManaged(item.product)) {
+          const availableStock = getProductStock(item.product);
+          if (curQty + delta > availableStock) {
+            showToast(`⚠️ "${item.product.name}" สูงสุดตามสต็อกแล้ว (${availableStock} ${item.product.unit || 'ชิ้น'})`, 'warning');
+            return item;
+          }
+        }
+        const newQuantity = Math.max(0, curQty + delta);
         return { ...item, quantity: newQuantity };
       }
       return item;
-    }).filter(item => item.quantity > 0));
+    }).filter(item => (Number(item.quantity) || 0) > 0));
   };
 
   const removeFromCart = (productId) => {
@@ -430,14 +878,14 @@ const POSSystem = ({
   };
 
   // --- คำนวณยอดเงินและภาษีแบบละเอียด (แยก Vatable / Non-Vatable) ---
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * (Number(item.quantity) || 0)), 0);
   const discountAmount = discountType === 'percent' ? (subtotal * (discount / 100)) : Number(discount);
   const afterDiscount = Math.max(0, subtotal - discountAmount);
 
   let totalVatable = 0;
   let totalNonVatable = 0;
   cart.forEach(item => {
-      const itemTotal = item.product.price * item.quantity;
+      const itemTotal = item.product.price * (Number(item.quantity) || 0);
       if (item.product.isVatable) {
           totalVatable += itemTotal;
       } else {
@@ -473,18 +921,45 @@ const POSSystem = ({
     return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(validNum);
   };
 
-  // จัดการการชำระเงิน
+  // จัดการการชำระเงิน (ตรวจสอบสต็อกสินค้าก่อนเปิดหน้าต่างคิดเงิน)
   const handleCheckout = () => {
     if (cart.length === 0) {
       showToast('ตะกร้าสินค้าว่างเปล่า', 'warning');
       return;
     }
+
+    // ตรวจสอบสต็อกคงเหลือจริงของทุกสินค้าในตะกร้า
+    for (const item of cart) {
+      if (isStockManaged(item.product)) {
+        const available = getProductStock(item.product);
+        if (available <= 0) {
+          showToast(`⚠️ "${item.product.name}" สินค้าหมด (0 ชิ้น) กรุณาลบออก`, 'danger');
+          return;
+        }
+        if (item.quantity > available) {
+          showToast(`⚠️ "${item.product.name}" เกินสต็อก (${available} ${item.product.unit || 'ชิ้น'})`, 'warning');
+          return;
+        }
+      }
+    }
+
     checkoutModal.open();
     setCheckoutSuccess(false);
   };
 
   // แก้ไข: เปลี่ยนเป็นการทำงานแบบ Asynchronous และส่งข้อมูลไปบันทึกผ่าน API
   const confirmPayment = async () => {
+    // ตรวจสอบสต็อกล่าสุดอีกครั้งก่อนบันทึกเงิน ป้องกันการขายสินค้าเกินพร้อมกันหลายอุปกรณ์
+    for (const item of cart) {
+      if (isStockManaged(item.product)) {
+        const available = getProductStock(item.product);
+        if (item.quantity > available) {
+          showToast(`⚠️ "${item.product.name}" สต็อกไม่พอ (เหลือ ${available} ${item.product.unit || 'ชิ้น'})`, 'danger');
+          return;
+        }
+      }
+    }
+
     setIsProcessingPayment(true);
     
     // ดึงชื่อคนไข้จริงโดยตัด prefix HN ออก
@@ -661,19 +1136,47 @@ const POSSystem = ({
         let localLogs = [];
         
         for (const item of cart) {
-            if (item.product.stockManaged) {
+            if (isStockManaged(item.product)) {
+                const cleanTarget = String(item.product.id).replace(/^INV_/, '').trim().toLowerCase();
+                const cleanTargetName = String(item.product.name || '').trim().toLowerCase();
+
                 // ดึงรายการสต็อกทั้งหมดของสินค้านี้ในสาขานี้ และเรียงลำดับตามวันหมดอายุ (FEFO)
                 const productStocks = localInvData
-                    .filter(inv => inv.productId === item.product.id && inv.branchId === targetBranch)
+                    .filter(inv => {
+                        if (!inv || inv.isDeleted || inv.is_deleted) return false;
+                        const cleanId = String(inv.id || '').replace(/^INV_/, '').trim().toLowerCase();
+                        const cleanPId = String(inv.productId || inv.product_id || '').replace(/^INV_/, '').trim().toLowerCase();
+                        const cleanCode = String(inv.code || '').replace(/^INV_/, '').trim().toLowerCase();
+                        const invName = String(inv.name || inv.itemName || inv.productName || '').trim().toLowerCase();
+
+                        const isMatch = cleanId === cleanTarget || 
+                                        cleanPId === cleanTarget || 
+                                        cleanCode === cleanTarget ||
+                                        (cleanTargetName && invName && cleanTargetName === invName);
+                        if (!isMatch) return false;
+
+                        const bId = inv.branchId || inv.branch_id;
+                        if (targetBranch) {
+                            if (bId === targetBranch) return true;
+                            if (!bId && (targetBranch === 'b1' || branchesData.length <= 1)) return true;
+                            return false;
+                        }
+                        return true;
+                    })
                     .sort((a, b) => {
-                        if (!a.expireDate) return 1;
-                        if (!b.expireDate) return -1;
-                        // แปลง วว/ดด/ปปปป เป็น Date object (รองรับปี พ.ศ. โดย -543)
+                        const aDate = a.expireDate || a.expire_date;
+                        const bDate = b.expireDate || b.expire_date;
+                        if (!aDate) return 1;
+                        if (!bDate) return -1;
                         const parseDate = (d) => {
-                            const [day, month, year] = d.split('/').map(Number);
-                            return new Date(year - 543, month - 1, day);
+                            if (typeof d === 'string' && d.includes('/')) {
+                                const parts = d.split('/').map(Number);
+                                const yr = parts[2] > 2400 ? parts[2] - 543 : parts[2];
+                                return new Date(yr, parts[1] - 1, parts[0]);
+                            }
+                            return new Date(d);
                         };
-                        return parseDate(a.expireDate) - parseDate(b.expireDate);
+                        return parseDate(aDate) - parseDate(bDate);
                     });
 
                 let remainingToDeduct = item.quantity;
@@ -681,13 +1184,21 @@ const POSSystem = ({
                 for (const stockItem of productStocks) {
                     if (remainingToDeduct <= 0) break;
 
-                    const deductAmount = Math.min(stockItem.quantity, remainingToDeduct);
+                    const currentStockQty = Number(stockItem.quantity ?? stockItem.stockQuantity ?? stockItem.stock_quantity ?? 0);
+                    const deductAmount = Math.min(currentStockQty, remainingToDeduct);
                     if (deductAmount <= 0) continue;
 
-                    const newQty = stockItem.quantity - deductAmount;
+                    const newQty = currentStockQty - deductAmount;
                     remainingToDeduct -= deductAmount;
 
-                    const updatedStock = { ...stockItem, quantity: newQty };
+                    const updatedStock = { 
+                        ...stockItem, 
+                        quantity: newQty,
+                        stockQuantity: newQty,
+                        stock_quantity: newQty,
+                        branchId: stockItem.branchId || stockItem.branch_id || targetBranch,
+                        branch_id: stockItem.branchId || stockItem.branch_id || targetBranch
+                    };
                     
                     // เพิ่มคิวเข้า Background Tasks
                     backgroundTasks.push(callAppScript('SAVE_DATA', 'Inventory', updatedStock));
@@ -710,11 +1221,11 @@ const POSSystem = ({
                         quantity: deductAmount,
                         balance: newQty,
                         reason: `ขายสินค้า (บิล: ${receiptId})`,
-                        notes: `ล็อต: ${stockItem.lotNo || 'N/A'}, สาขา: ${branchName}`,
-                        lotNo: stockItem.lotNo || '',
-                        lot_no: stockItem.lotNo || '',
-                        expireDate: stockItem.expireDate || '',
-                        expire_date: stockItem.expireDate || '',
+                        notes: `ล็อต: ${stockItem.lotNo || stockItem.lot_no || 'N/A'}, สาขา: ${branchName}`,
+                        lotNo: stockItem.lotNo || stockItem.lot_no || '',
+                        lot_no: stockItem.lotNo || stockItem.lot_no || '',
+                        expireDate: stockItem.expireDate || stockItem.expire_date || '',
+                        expire_date: stockItem.expireDate || stockItem.expire_date || '',
                         timestamp: new Date().toISOString(),
                         created_at: new Date().toISOString()
                     };
@@ -1174,46 +1685,93 @@ const POSSystem = ({
     
     return [
       { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)' },
-      ...sortedPatients.map(p => ({ value: p.id || p.hn, label: `${p.hn || p.id} - ${getPatientFullName(p)}` }))
+      ...sortedPatients.map(p => ({ 
+        value: p.id || p.hn, 
+        label: `${p.hn || p.id} - ${getPatientFullName(p)}`,
+        phone: p.phone || p.phone1 || '',
+        raw: p
+      }))
     ];
   }, [patientsData]);
 
-  // Server-side search state
-  const [serverPatientResults, setServerPatientResults] = useState([]);
-  const [isServerSearching, setIsServerSearching] = useState(false);
-  
+  // รายการคนไข้ที่ผ่านการกรอง (หากไม่ค้นหา จะแสดงทั้งหมดเพื่อให้สามารถเลื่อนดู/scroll คนไข้ทุกคนได้ครบถ้วน)
+  const filteredPatientOptions = useMemo(() => {
+    const list = patientOptions.filter(p => p.value !== '');
+    if (!patientSearchTerm || !patientSearchTerm.trim()) {
+      return list;
+    }
+    const term = patientSearchTerm.toLowerCase().trim();
+    return list.filter(p => {
+      const matchLabel = (p.label || '').toLowerCase().includes(term);
+      const matchPhone = (p.phone || '').includes(term);
+      return matchLabel || matchPhone;
+    });
+  }, [patientOptions, patientSearchTerm]);
+
+  // State สำหรับ Infinite Scroll ใน Dropdown คนไข้หน้า POS (On-Demand Fetching ประหยัด Egress)
+  const [posHasMore, setPosHasMore] = useState(true);
+  const [posIsLoadingMore, setPosIsLoadingMore] = useState(false);
+  const posLoadingRef = useRef(false);
+  const searchDebounceTimerRef = useRef(null);
+
+  // ฟังก์ชันดึงข้อมูลคนไข้เพิ่มเติมเมื่อเลื่อน Scroll หรือเมื่อพิมพ์ค้นหา (โหลดเข้า patientsData และบันทึกลง IndexedDB อัตโนมัติ)
+  const loadMorePatients = useCallback(async (searchQuery = '', isNewSearch = false) => {
+    if (!fetchPatientsPaginated || posLoadingRef.current) return;
+    if (!posHasMore && !searchQuery && !isNewSearch) return;
+
+    posLoadingRef.current = true;
+    setPosIsLoadingMore(true);
+
+    try {
+      const currentOffset = isNewSearch ? 0 : (searchQuery ? filteredPatientOptions.length : patientsData.length);
+      const res = await fetchPatientsPaginated({
+        offset: currentOffset,
+        limit: 20,
+        search: (searchQuery || '').trim()
+      });
+
+      if (res && res.status === 'success' && Array.isArray(res.patients)) {
+        if (res.patients.length > 0) {
+          setPatientsData(prev => {
+            const existingIds = new Set(prev.map(p => String(p.id || p.hn || '').trim().toLowerCase()));
+            const newItems = res.patients.filter(p => !existingIds.has(String(p.id || p.hn || '').trim().toLowerCase()));
+            return [...prev, ...newItems];
+          });
+        }
+        setPosHasMore(Boolean(res.hasMore));
+      } else {
+        setPosHasMore(false);
+      }
+    } catch (err) {
+      console.error('POS loadMorePatients error:', err);
+    } finally {
+      posLoadingRef.current = false;
+      setPosIsLoadingMore(false);
+    }
+  }, [fetchPatientsPaginated, posHasMore, patientsData.length, filteredPatientOptions.length, setPatientsData]);
+
+  // เมื่อพิมพ์ค้นหาใน POS หากพิมพ์ 2 ตัวอักษรขึ้นไป ให้ดึงข้อมูลที่ตรงกันจาก Server/IndexedDB มาเสริมใน Dropdown
   useEffect(() => {
-     if (!patientSearchTerm || patientSearchTerm.trim().length < 2) {
-         // Fallback to initial patients if nothing searched
-         setServerPatientResults(patientOptions.filter(p => p.value !== '').map(p => ({
-             id: p.value,
-             label: p.label
-         })));
-         return;
-     }
-     const timer = setTimeout(async () => {
-         setIsServerSearching(true);
-         try {
-             const s = patientSearchTerm.trim();
-             const { data, error } = await supabase.from('patients')
-                  .select('id, prefix, first_name, last_name, phone, created_at, updated_at')
-                  .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,id.ilike.%${s}%,phone.ilike.%${s}%`)
-                  .order('updated_at', { ascending: false })
-                  .limit(10);
-             if (!error && data) {
-                 setServerPatientResults(data.map(p => ({
-                     id: p.id || p.hn,
-                     label: `${p.hn || p.id} - ${getPatientFullName(p)}`,
-                     raw: p
-                 })));
-             }
-         } catch (err) {
-             console.error("Patient search error", err);
-         }
-         setIsServerSearching(false);
-     }, 400);
-     return () => clearTimeout(timer);
-  }, [patientSearchTerm, patientOptions]);
+    if (!patientSearchTerm || patientSearchTerm.trim().length < 2) return;
+    if (!isPatientDropdownOpen) return;
+
+    clearTimeout(searchDebounceTimerRef.current);
+    searchDebounceTimerRef.current = setTimeout(() => {
+      loadMorePatients(patientSearchTerm, true);
+    }, 350);
+
+    return () => clearTimeout(searchDebounceTimerRef.current);
+  }, [patientSearchTerm, isPatientDropdownOpen, loadMorePatients]);
+
+  // จัดการ Event Scroll เมื่อเลื่อนลงมาใกล้ขอบล่างของ Dropdown ให้โหลดชุดถัดไป
+  const handleDropdownScroll = (e) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    if (scrollTop + clientHeight >= scrollHeight - 60) {
+      if (posHasMore && !posIsLoadingMore) {
+        loadMorePatients(patientSearchTerm, false);
+      }
+    }
+  };
 
   return (
     <>
@@ -1285,8 +1843,18 @@ const POSSystem = ({
                   placeholder="ค้นหารหัส, ชื่อสินค้า หรือบริการ..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-5 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-2xl text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors font-data shadow-sm"
+                  className="w-full pl-12 pr-11 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-2xl text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors font-data shadow-sm"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+                    title="ล้างข้อความ"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               
               {/* Category Pills */}
@@ -1308,12 +1876,12 @@ const POSSystem = ({
             </div>
 
             {/* Product Grid */}
-            <div className="pos-product-grid flex-1 p-4 sm:p-6 pb-24 lg:pb-6 overflow-y-auto custom-scrollbar bg-slate-50/30">
+            <div className="pos-product-grid flex-1 p-3 sm:p-6 pb-24 lg:pb-6 overflow-y-auto custom-scrollbar bg-slate-50/30">
               {isGlobalLoading ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-5 auto-rows-max">
                   {Array.from({ length: 12 }).map((_, i) => (
-                    <div key={`skel-pos-${i}`} className="bg-white p-5 sm:p-6 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col h-full">
-                      <div className="w-full max-w-[56px] h-14 bg-slate-200 rounded-2xl mb-4 animate-pulse shrink-0"></div>
+                    <div key={`skel-pos-${i}`} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col h-full">
+                      <div className="w-10 h-10 sm:w-14 sm:h-14 bg-slate-200 rounded-xl sm:rounded-2xl mb-4 animate-pulse shrink-0"></div>
                       <div className="flex-1 flex flex-col justify-between w-full">
                         <div className="mb-2">
                           <div className="h-3 w-full max-w-[64px] bg-slate-200 rounded animate-pulse mb-2"></div>
@@ -1327,33 +1895,106 @@ const POSSystem = ({
                   ))}
                 </div>
               ) : filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 min-[450px]:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 sm:gap-5 auto-rows-max">
+                <div className="grid grid-cols-2 min-[450px]:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5 sm:gap-5 auto-rows-max">
                   {filteredProducts.map((product, index) => {
                     const Icon = typeof product.icon === 'string' ? (POS_ICONS[product.icon] || Package) : (product.icon || Package);
+                    const isStock = isStockManaged(product);
+                    const stock = isStock ? getProductStock(product) : Infinity;
+                    const isOut = isStock && stock <= 0;
+                    const isLow = isStock && stock > 0 && stock <= (product.minStock || 5);
+                    const inCartItem = cart.find(item => item?.product?.id === product.id);
+                    const inCartQty = inCartItem ? (Number(inCartItem.quantity) || 0) : 0;
+
                     return (
                       <button 
                         key={product.id}
                         onClick={() => addToCart(product)}
-                        className="pos-product-card bg-white p-5 sm:p-6 rounded-[1.5rem] border border-slate-200 hover:border-sky-300 hover:shadow-lg hover:shadow-sky-500/10 transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation"
+                        className={`pos-product-card bg-white p-3 sm:p-5 rounded-2xl sm:rounded-[1.5rem] border transition-all flex flex-col h-full text-left group active:scale-[0.98] space-row-animation relative overflow-hidden ${
+                          isOut
+                            ? 'border-slate-200/80 bg-slate-50/40 opacity-80 hover:border-rose-300 hover:shadow-md hover:shadow-rose-500/5'
+                            : inCartQty > 0
+                              ? 'border-sky-300 ring-2 ring-sky-400/20 shadow-md shadow-sky-500/10 hover:border-sky-400'
+                              : 'border-slate-200 hover:border-sky-300 hover:shadow-lg hover:shadow-sky-500/10'
+                        }`}
                         style={{ animationDelay: `${(index % 20) * 30}ms` }}
                       >
-                        <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-sky-500 group-hover:text-white transition-colors shrink-0">
-                          <Icon className="w-7 h-7" strokeWidth={2} />
+                        {/* แถวบน: ไอคอนสินค้า (ซ้าย) และ ป้ายสต็อก (ขวา) แยกกันชัดเจน ไม่ล้นการ์ดบนมือถือ */}
+                        <div className="flex items-start justify-between w-full mb-2 sm:mb-3 gap-1.5 min-w-0">
+                          <div className={`w-9 h-9 sm:w-13 sm:h-13 rounded-xl sm:rounded-2xl flex items-center justify-center transition-colors shrink-0 ${
+                            isOut
+                              ? 'bg-rose-50 text-rose-400 group-hover:bg-rose-500 group-hover:text-white'
+                              : inCartQty > 0
+                                ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/20'
+                                : 'bg-sky-50 text-sky-500 group-hover:bg-sky-500 group-hover:text-white'
+                          }`}>
+                            <Icon className="w-4.5 h-4.5 sm:w-6.5 sm:h-6.5" strokeWidth={2} />
+                          </div>
+
+                          {/* ป้ายแสดงสถานะสต็อก (มุมขวาบน กระชับและจัดระเบียบสวยงาม) */}
+                          {isStock && (
+                            <div className={`text-[10px] sm:text-[11px] font-bold kanit-text px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-1.5 shrink-0 max-w-[calc(100%-2.6rem)] sm:max-w-none transition-all ${
+                              isOut
+                                ? 'bg-rose-50 text-rose-600 border border-rose-200/90'
+                                : isLow
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200/90'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200/90'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                isOut ? 'bg-rose-500' : isLow ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
+                              }`} />
+                              <span className="truncate whitespace-nowrap">{isOut ? 'หมด (0)' : `เหลือ ${stock}`}</span>
+                            </div>
+                          )}
                         </div>
                         
-                        <div className="flex-1 flex flex-col justify-between w-full">
-                          <div className="mb-2">
-                            <span className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-1.5 truncate">{product.type}</span>
-                            <h3 className="font-bold text-slate-800 text-sm sm:text-base kanit-text line-clamp-2 leading-tight min-h-[2.5rem]">{product.name}</h3>
+                        {/* ส่วนกลาง: หมวดหมู่ และ ชื่อสินค้า */}
+                        <div className="flex-1 flex flex-col justify-between w-full mb-2 sm:mb-3 min-w-0">
+                          <div>
+                            <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider block mb-0.5 sm:mb-1 truncate">
+                              {product.type || product.category}
+                            </span>
+                            <h3 className="font-bold text-slate-800 text-xs sm:text-base kanit-text line-clamp-2 leading-snug min-h-[2rem] sm:min-h-[2.5rem] group-hover:text-sky-600 transition-colors">
+                              {product.name}
+                            </h3>
                           </div>
-                          
-                          <div className="flex items-end justify-between mt-auto w-full pt-2 border-t border-slate-50">
-                            <div className="font-bold text-sky-600 text-base sm:text-lg font-data leading-none">
+                        </div>
+                        
+                        {/* แถวล่าง: ราคาเด่นชัด + ปุ่มกดแบบ E-Commerce กว้างขวาง เป็นระเบียบ */}
+                        <div className="flex items-center justify-between mt-auto w-full pt-2 sm:pt-2.5 border-t border-slate-100/90 gap-1.5 sm:gap-2 min-w-0">
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <div className="font-black text-sky-600 text-sm sm:text-base lg:text-lg font-data leading-none tracking-tight truncate">
                               {formatCurrency(product.price)}
                             </div>
-                            {product.stockManaged && (
-                              <div className="text-xs text-slate-400 font-bold kanit-text mb-0.5 shrink-0 ml-1 bg-slate-50 px-1.5 py-0.5 rounded">
-                                {product.stock !== undefined ? product.stock : 20}
+                            {product.unit && (
+                              <span className="text-[9px] sm:text-[10px] text-slate-400 font-data mt-0.5 sm:mt-1 truncate">
+                                /{product.unit}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Quick Action Button */}
+                          <div className="shrink-0">
+                            {isOut ? (
+                              <div 
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-slate-100 text-slate-400 border border-slate-200/60 flex items-center justify-center text-xs font-bold"
+                                title="สินค้าหมดสต็อก"
+                              >
+                                <Minus size={12} strokeWidth={2.5} className="opacity-40" />
+                              </div>
+                            ) : inCartQty > 0 ? (
+                              <div 
+                                className="h-7 sm:h-8 px-2 sm:px-2.5 rounded-lg sm:rounded-xl bg-sky-500 text-white font-data font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-sm shadow-sky-500/25 group-hover:bg-sky-600 transition-all active:scale-95"
+                                title={`อยู่ในตะกร้าแล้ว ${inCartQty} ชิ้น (กดเพื่อเพิ่มอีก)`}
+                              >
+                                <Plus size={10} strokeWidth={3} />
+                                <span>{inCartQty}</span>
+                              </div>
+                            ) : (
+                              <div 
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-sky-50 text-sky-600 border border-sky-100/80 flex items-center justify-center group-hover:bg-sky-500 group-hover:text-white group-hover:border-transparent transition-all shadow-2xs active:scale-95"
+                                title="เพิ่มลงตะกร้า"
+                              >
+                                <Plus size={14} strokeWidth={2.5} />
                               </div>
                             )}
                           </div>
@@ -1389,7 +2030,11 @@ const POSSystem = ({
             </h2>
             <div className="relative w-full">
               <div className="flex items-center w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-sm">
-                <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" />
+                {isFetchingOpd ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-sky-500 shrink-0 mr-3" />
+                ) : (
+                  <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" />
+                )}
                 <input 
                   type="text"
                   className="w-full bg-transparent outline-none text-sm sm:text-base font-data text-slate-700"
@@ -1403,52 +2048,74 @@ const POSSystem = ({
                   onFocus={() => setIsPatientDropdownOpen(true)}
                   onBlur={() => setTimeout(() => setIsPatientDropdownOpen(false), 200)}
                 />
-                {selectedPatientId && (
+                {selectedPatientId ? (
                   <button 
-                    onClick={() => { setSelectedPatientId(''); setPatientSearchTerm(''); setIsPatientDropdownOpen(false); }} 
-                    className="text-slate-400 hover:text-rose-500 ml-2 shrink-0"
+                    onClick={() => { 
+                      setSelectedPatientId(''); 
+                      setPatientSearchTerm(''); 
+                      setIsPatientDropdownOpen(false); 
+                      setCart([]);
+                      showToast('เริ่มบิลสำหรับลูกค้าทั่วไป (ล้างตะกร้าแล้ว)', 'info');
+                    }} 
+                    className="text-slate-400 hover:text-rose-500 ml-2 shrink-0 p-1 hover:bg-slate-100 rounded-full transition-all"
+                    title="ยกเลิกการเลือกคนไข้"
                   >
                     <X className="w-5 h-5" />
                   </button>
-                )}
+                ) : patientSearchTerm ? (
+                  <button 
+                    type="button"
+                    onClick={() => { 
+                      setPatientSearchTerm(''); 
+                    }} 
+                    className="text-slate-400 hover:text-slate-600 ml-2 shrink-0 p-1 hover:bg-slate-100 rounded-full transition-all"
+                    title="ล้างข้อความ"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : null}
               </div>
               
               {isPatientDropdownOpen && (
-                <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                <div 
+                  onScroll={handleDropdownScroll}
+                  className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-72 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top"
+                >
                     <div 
                       onMouseDown={(e) => { e.preventDefault(); handleSelectPatient('', ''); }}
                       className={`px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 font-data text-sm sm:text-base ${!selectedPatientId ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-500'}`}
                     >
                        ลูกค้าทั่วไป (ไม่ระบุ)
                     </div>
-                    {isServerSearching ? (
-                        <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data flex items-center justify-center gap-2">
-                           <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
+                    {filteredPatientOptions.length === 0 && !posIsLoadingMore && patientSearchTerm && (
+                        <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data">
+                            ไม่พบข้อมูลลูกค้า
                         </div>
-                    ) : (
-                        <>
-                           {serverPatientResults.length === 0 && patientSearchTerm && (
-                               <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data">
-                                   ไม่พบข้อมูลลูกค้า
-                               </div>
-                           )}
-                           {serverPatientResults.map((opt) => (
-                               <div
-                                   key={opt.id}
-                                   onMouseDown={(e) => { 
-                                      e.preventDefault(); 
-                                      // If the patient is not in patientsData yet, we should add it so POS can use it!
-                                      if (opt.raw && !patientsData.find(p => (p.id || p.hn) === opt.id)) {
-                                          setPatientsData(prev => [...prev, opt.raw]);
-                                      }
-                                      handleSelectPatient(opt.id, opt.label); 
-                                   }}
-                                   className={`px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors text-sm sm:text-base ${selectedPatientId === opt.id ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
-                               >
-                                   {opt.label}
-                               </div>
-                           ))}
-                        </>
+                    )}
+                    {filteredPatientOptions.map((opt) => (
+                        <div
+                            key={opt.value}
+                            onMouseDown={(e) => { 
+                               e.preventDefault(); 
+                               if (opt.raw && !patientsData.find(p => (p.id || p.hn) === opt.value)) {
+                                   setPatientsData(prev => [...prev, opt.raw]);
+                               }
+                               handleSelectPatient(opt.value, opt.label); 
+                            }}
+                            className={`px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors text-sm sm:text-base ${selectedPatientId === opt.value ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                        >
+                            {opt.label}
+                        </div>
+                    ))}
+                    {posIsLoadingMore && (
+                        <div className="px-4 py-2.5 text-center text-xs text-sky-600 font-data flex items-center justify-center gap-1.5 bg-sky-50/60 border-t border-sky-100">
+                            <Loader2 size={14} className="animate-spin text-sky-500" /> กำลังโหลดรายชื่อเพิ่มเติม...
+                        </div>
+                    )}
+                    {!posHasMore && patientsData.length > 20 && !patientSearchTerm && (
+                        <div className="px-4 py-2 text-center text-[11px] text-slate-400 font-data border-t border-slate-50 bg-slate-50/50">
+                            แสดงรายชื่อทั้งหมดแล้ว ({patientsData.length} คน)
+                        </div>
                     )}
                 </div>
               )}
@@ -1595,9 +2262,39 @@ const POSSystem = ({
                                  <button onClick={() => removeFromCart(item.product.id)} className="text-slate-300 hover:text-rose-500 transition-colors p-1 -mt-1 -mr-1 shrink-0"><X size={18} /></button>
                                </div>
 
+                                {/* แสดงสต็อกคงเหลือเรียลไทม์ในรายการบิล */}
+                                {isStockManaged(item.product) && (() => {
+                                  const availableStock = getProductStock(item.product);
+                                  const isOver = item.quantity > availableStock;
+                                  const isAtMax = item.quantity === availableStock;
+                                  return (
+                                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                      <span className={`text-[10px] font-bold kanit-text px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                                        isOver
+                                          ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
+                                          : isAtMax
+                                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                            : 'bg-slate-100 text-slate-600'
+                                      }`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${isOver ? 'bg-rose-500' : isAtMax ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                        {isOver 
+                                          ? `⚠️ เกินสต็อก! (สาขามี ${availableStock} ${item.product.unit || 'ชิ้น'})`
+                                          : `คลังสาขามี: ${availableStock} ${item.product.unit || 'ชิ้น'}`
+                                        }
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+
                               {/* ข้อความสถานะเพิ่มเติม (ถ้ามี) */}
                               {item.product.isTemp ? (
-                                <div className="text-rose-500 font-bold text-xs kanit-text mt-1.5">ไม่มีราคาในระบบ</div>
+                                Number(item.product.price) > 0 ? (
+                                  <div className="text-amber-600 font-bold text-xs kanit-text mt-1.5 flex items-center gap-1">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span> ราคาจาก OPD
+                                  </div>
+                                ) : (
+                                  <div className="text-rose-500 font-bold text-xs kanit-text mt-1.5">ไม่มีราคาในระบบ (ระบุราคาใน OPD)</div>
+                                )
                               ) : item.product.isNote ? null : (
                                 item.product.isRedeem ? <div className="text-indigo-500 font-bold text-xs font-data mt-1">FREE (REDEEM)</div> : null
                               )}
@@ -1608,22 +2305,91 @@ const POSSystem = ({
                          {!item.product.isNote && (
                            <div className="flex items-center justify-between pt-1">
                              
-                             {/* Qty Controls ชิดซ้าย */}
-                             <div className="flex items-center gap-1.5 bg-slate-50/80 rounded-xl border border-slate-200 p-1 w-fit">
-                               <button onClick={() => updateQuantity(item.product.id, -1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm border border-slate-100 hover:text-sky-500 transition-colors"><Minus size={14} strokeWidth={2.5}/></button>
-                               <span className="font-black text-sm sm:text-base text-slate-700 w-8 text-center font-data select-none">{item.quantity}</span>
-                               <button onClick={() => updateQuantity(item.product.id, 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm border border-slate-100 hover:text-sky-500 transition-colors"><Plus size={14} strokeWidth={2.5}/></button>
-                             </div>
-                             
-                             {/* ยอดเงินรวม ชิดขวา */}
-                             <div className="text-right flex flex-col justify-end">
-                               {item.quantity > 1 && !item.product.isRedeem && (
-                                   <span className="text-[10px] text-slate-400 font-data mb-0.5 tracking-tight">{formatCurrency(item.product.price)} / หน่วย</span>
-                               )}
-                               <span className={`font-black text-lg sm:text-xl font-data leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-500' : 'text-slate-800'}`}>
-                                 {item.product.isRedeem ? '0.00' : formatCurrency(item.product.price * item.quantity)}
-                               </span>
-                             </div>
+                              {/* Qty Controls ชิดซ้าย (จำกัดไม่ให้เกินสต็อก) */}
+                              {(() => {
+                                const isStock = isStockManaged(item.product);
+                                const availableStock = isStock ? getProductStock(item.product) : Infinity;
+                                const itemQty = Number(item.quantity) || 0;
+                                const isMax = isStock && itemQty >= availableStock;
+                                return (
+                                  <div className="flex items-center gap-1 bg-slate-50/90 rounded-xl border border-slate-200 p-1 w-fit shadow-xs">
+                                    <button 
+                                      type="button"
+                                      onClick={() => updateQuantity(item.product.id, -1)} 
+                                      className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm border border-slate-100 hover:text-sky-500 active:scale-95 transition-all"
+                                      title="ลดจำนวน"
+                                    >
+                                      <Minus size={14} strokeWidth={2.5}/>
+                                    </button>
+                                    <input 
+                                      type="text"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      value={item.quantity === '' ? '' : item.quantity}
+                                      onFocus={e => e.target.select()}
+                                      onChange={e => {
+                                        const rawVal = e.target.value;
+                                        if (rawVal === '') {
+                                          setCart(prev => prev.map(it => it.product.id === item.product.id ? { ...it, quantity: '' } : it));
+                                          return;
+                                        }
+                                        const cleanNum = rawVal.replace(/\D/g, '');
+                                        if (!cleanNum) return;
+                                        let num = parseInt(cleanNum, 10);
+                                        if (isStock) {
+                                          if (num > availableStock) {
+                                            showToast(`⚠️ สินค้า "${item.product.name}" มีสต็อก ${availableStock} ${item.product.unit || 'ชิ้น'}`, 'warning');
+                                            num = availableStock;
+                                          }
+                                        }
+                                        setCart(prev => prev.map(it => it.product.id === item.product.id ? { ...it, quantity: Math.max(1, num) } : it));
+                                      }}
+                                      onBlur={() => {
+                                        if (!item.quantity || Number(item.quantity) < 1) {
+                                          setCart(prev => prev.map(it => it.product.id === item.product.id ? { ...it, quantity: 1 } : it));
+                                        }
+                                      }}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                          e.target.blur();
+                                        }
+                                      }}
+                                      className="font-black text-sm sm:text-base text-slate-800 w-12 sm:w-14 text-center font-data bg-transparent hover:bg-white focus:bg-white border border-transparent focus:border-sky-300 focus:ring-2 focus:ring-sky-100 rounded-lg py-0.5 transition-all outline-none"
+                                      title="คลิกเพื่อพิมพ์ตัวเลขได้โดยตรง"
+                                      placeholder="1"
+                                    />
+                                    <button 
+                                      type="button"
+                                      onClick={() => {
+                                        if (isMax) {
+                                          showToast(`⚠️ สินค้า "${item.product.name}" เพิ่มได้ไม่เกินสต็อกคงเหลือ (${availableStock} ${item.product.unit || 'ชิ้น'})`, 'warning');
+                                          return;
+                                        }
+                                        updateQuantity(item.product.id, 1);
+                                      }} 
+                                      disabled={isMax}
+                                      className={`w-8 h-8 flex items-center justify-center rounded-lg shadow-sm border transition-all ${
+                                        isMax 
+                                          ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed' 
+                                          : 'bg-white text-slate-500 border-slate-100 hover:text-sky-500 active:scale-95 cursor-pointer'
+                                      }`}
+                                      title={isMax ? `สต็อกคงเหลือสูงสุดแล้ว (${availableStock} ${item.product.unit || 'ชิ้น'})` : "เพิ่มจำนวน"}
+                                    >
+                                      <Plus size={14} strokeWidth={2.5}/>
+                                    </button>
+                                  </div>
+                                );
+                              })()}
+                              
+                              {/* ยอดเงินรวม ชิดขวา */}
+                              <div className="text-right flex flex-col justify-end">
+                                {(Number(item.quantity) || 0) > 1 && !item.product.isRedeem && (
+                                    <span className="text-[10px] text-slate-400 font-data mb-0.5 tracking-tight">{formatCurrency(item.product.price)} / หน่วย</span>
+                                )}
+                                <span className={`font-black text-lg sm:text-xl font-data leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-500' : 'text-slate-800'}`}>
+                                  {item.product.isRedeem ? '0.00' : formatCurrency(item.product.price * (Number(item.quantity) || 0))}
+                                </span>
+                              </div>
                            </div>
                          )}
                       </div>
@@ -1824,7 +2590,7 @@ const POSSystem = ({
                   </div>
                   <div className="text-left flex flex-col justify-center">
                     <p className={`text-[10px] font-black kanit-text leading-none mb-1.5 uppercase tracking-widest ${cart.length > 0 ? 'text-sky-100' : 'text-slate-400'}`}>
-                      ตะกร้าสินค้า ({cart.reduce((sum, item) => sum + item.quantity, 0)})
+                      ตะกร้าสินค้า ({cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)})
                     </p>
                     <p className={`text-lg font-bold font-data leading-none ${cart.length > 0 ? 'text-white' : 'text-slate-600'}`}>
                       {formatCurrency(grandTotal)}
@@ -2507,14 +3273,16 @@ const POSSystem = ({
       {/* --- Modal เลือกคอร์สแชร์ข้ามคนไข้ (Cross-Patient Course Sharing) --- */}
       {isShareCourseModalOpen && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg h-[580px] max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users size={20} className="text-indigo-200" />
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Users size={20} className="text-white" />
+                </div>
                 <div>
                   <h3 className="text-base font-bold kanit-text">ใช้คอร์สแชร์ (จากคนไข้ท่านอื่น)</h3>
-                  <p className="text-xs text-indigo-100 font-data">ผู้รับบริการ: {patientSearchTerm || selectedPatientId}</p>
+                  <p className="text-xs text-indigo-100 font-data">ผู้รับบริการ: {patientSearchTerm || selectedPatientId || 'ลูกค้าทั่วไป'}</p>
                 </div>
               </div>
               <button 
@@ -2527,17 +3295,18 @@ const POSSystem = ({
             </div>
 
             {/* Body */}
-            <div className="p-5 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4">
-              <div>
+            <div className="p-5 flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              {/* ช่องค้นหา */}
+              <div className="shrink-0">
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 kanit-text">
-                  ค้นหาเจ้าของคอร์ส (ชื่อ, ชื่อเล่น, HN หรือเบอร์โทรศัพท์)
+                  ค้นหาเจ้าของคอร์ส (ชื่อ, นามสกุล, ชื่อเล่น, HN หรือเบอร์โทรศัพท์)
                 </label>
                 <div className="relative">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                   <input
                     type="text"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm font-data text-slate-700"
-                    placeholder="พิมพ์ชื่อ, ชื่อเล่น, HN หรือเบอร์โทร..."
+                    className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm font-data text-slate-700"
+                    placeholder="พิมพ์ชื่อ, นามสกุล, ชื่อเล่น, HN หรือเบอร์โทร..."
                     value={shareOwnerSearch}
                     onChange={(e) => {
                       setShareOwnerSearch(e.target.value);
@@ -2545,173 +3314,247 @@ const POSSystem = ({
                     }}
                     autoFocus
                   />
+                  {shareOwnerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShareOwnerSearch('');
+                        setSelectedOwnerPatient(null);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* ผลการค้นหาคนไข้เจ้าของคอร์ส */}
-              {!selectedOwnerPatient && shareOwnerSearch && (
-                <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar border border-slate-100 rounded-xl p-1 bg-slate-50/50">
-                  {(() => {
-                    const q = shareOwnerSearch.trim().toLowerCase();
-                    const matched = (patientsData || []).filter(p => {
-                      const pId = String(p.id || p.hn || '').toLowerCase();
-                      const pName = String(p.name || `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`).toLowerCase();
-                      const pNickname = String(p.nickname || '').toLowerCase();
-                      const pPhone = String(p.phone || (p.phones && p.phones[0]) || '').toLowerCase();
-                      return (pId.includes(q) || pName.includes(q) || pNickname.includes(q) || pPhone.includes(q)) && pId !== String(selectedPatientId).toLowerCase();
-                    }).slice(0, 10);
+              {/* รายชื่อคนไข้เจ้าของคอร์ส (แสดงเฉพาะผู้ที่มีคอร์สยังไม่หมดอายุและมีรอบคงเหลือ) */}
+              {!selectedOwnerPatient && (
+                <div className="flex-1 min-h-0 flex flex-col gap-2">
+                  <div className="flex items-center justify-between shrink-0">
+                    <span className="text-xs font-bold text-slate-600 kanit-text">
+                      {shareOwnerSearch 
+                        ? `ผลการค้นหา (${filteredShareOwners.length} ท่าน)` 
+                        : `คนไข้ที่มีคอร์สพร้อมแชร์ (${eligibleShareOwners.length} ท่าน)`}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-data">เฉพาะคอร์สที่ยังไม่หมดอายุและมีรอบคงเหลือ</span>
+                  </div>
 
-                    if (matched.length === 0) {
-                      return <div className="text-center py-4 text-xs text-slate-400 kanit-text">ไม่พบข้อมูลคนไข้ที่ค้นหา</div>;
-                    }
-
-                    return matched.map(p => {
-                      const pName = p.name || `${p.prefix || ''}${p.firstName || ''} ${p.lastName || ''}`.trim();
-                      const nickDisplay = p.nickname ? ` (${p.nickname})` : '';
-                      const pCourses = (patientCoursesData || []).filter(c => {
-                        if (!c) return false;
-                        const cPid = String(c.patientId || c.patient_id || '').toLowerCase();
-                        const cRem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
-                        const expDate = c.expireDate || c.expire_date;
-                        const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
-                        return cPid === String(p.id || p.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted && !isExpired;
-                      });
-
-                      return (
-                        <button
-                          key={p.id || p.hn}
-                          type="button"
-                          onClick={() => setSelectedOwnerPatient(p)}
-                          className="flex items-center justify-between p-2.5 rounded-lg bg-white hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all text-left group"
-                        >
-                          <div>
-                            <div className="text-xs font-bold text-slate-700 group-hover:text-indigo-600 kanit-text">
-                              {pName}{nickDisplay}
+                  <div 
+                    onScroll={(e) => {
+                      const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+                      if (scrollTop + clientHeight >= scrollHeight - 40) {
+                        setVisibleShareOwnerCount(prev => Math.min(prev + 15, filteredShareOwners.length));
+                      }
+                    }}
+                    className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-2 p-0.5"
+                  >
+                    {filteredShareOwners.length === 0 ? (
+                      <div className="flex-1 flex flex-col items-center justify-center py-12 text-slate-400 text-center">
+                        <Users className="w-12 h-12 mb-2 opacity-20 text-indigo-500" />
+                        <p className="text-xs font-bold kanit-text text-slate-600">ไม่พบคอร์สที่สามารถแชร์ได้</p>
+                        <p className="text-[11px] text-slate-400 font-data mt-1 max-w-[280px]">
+                          {shareOwnerSearch 
+                            ? 'ไม่พบคนไข้ที่มีคอร์สตรงกับคำค้นหา หรือคอร์สถูกใช้ครบแล้ว / หมดอายุ' 
+                            : 'ขณะนี้ยังไม่มีคนไข้ที่มีคอร์สคงเหลือในระบบ'}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {filteredShareOwners.slice(0, visibleShareOwnerCount).map(owner => (
+                          <button
+                            key={owner.id}
+                            type="button"
+                            onClick={() => setSelectedOwnerPatient(owner.raw)}
+                            className="flex items-center justify-between p-3 rounded-2xl bg-white hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 transition-all text-left shadow-xs hover:shadow-md group active:scale-[0.99]"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                <User size={18} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-indigo-600 kanit-text truncate">
+                                  {owner.fullName} {owner.nickname && <span className="text-xs font-normal text-slate-500">({owner.nickname})</span>}
+                                </div>
+                                <div className="text-[11px] text-slate-400 font-data flex items-center gap-2 mt-0.5">
+                                  <span className="font-semibold text-slate-600">{owner.id}</span>
+                                  {owner.phone && <span>• โทร {owner.phone}</span>}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-[10px] text-slate-400 font-data">{p.hn || p.id} {p.phone ? `• โทร ${p.phone}` : ''}</div>
+                            <div className="shrink-0 ml-2 text-right">
+                              <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100/80 group-hover:bg-indigo-100 transition-colors inline-flex items-center gap-1">
+                                <Award size={12} className="text-indigo-500" />
+                                {owner.courses.length} คอร์ส
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                        {visibleShareOwnerCount < filteredShareOwners.length && (
+                          <div className="py-2.5 text-center text-xs text-indigo-600 font-data flex items-center justify-center gap-1.5 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                            <Loader2 size={13} className="animate-spin text-indigo-500" />
+                            <span>กำลังแสดง {Math.min(visibleShareOwnerCount, filteredShareOwners.length)} จาก {filteredShareOwners.length} ท่าน (เลื่อนลงเพื่อดูเพิ่ม)</span>
                           </div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">
-                            {pCourses.length} คอร์สที่ใช้ได้
-                          </span>
-                        </button>
-                      );
-                    });
-                  })()}
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* แสดงคอร์สของเจ้าของที่เลือก */}
               {selectedOwnerPatient && (
-                <div className="flex flex-col gap-3">
-                  <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">เจ้าของคอร์ส</span>
-                      <div className="text-xs font-bold text-slate-800 kanit-text">
-                        {selectedOwnerPatient.hn || selectedOwnerPatient.id} {selectedOwnerPatient.name || `${selectedOwnerPatient.prefix || ''}${selectedOwnerPatient.firstName || ''} ${selectedOwnerPatient.lastName || ''}`.trim()}
+                <div className="flex-1 min-h-0 flex flex-col gap-3">
+                  {/* การ์ดข้อมูลเจ้าของคอร์ส */}
+                  <div className="p-3.5 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 rounded-2xl border border-indigo-100/80 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
+                        <UserCheck size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">เจ้าของคอร์สที่เลือก</span>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 kanit-text truncate">
+                          {selectedOwnerPatient.id || selectedOwnerPatient.hn} - {getDisplayPatientName(selectedOwnerPatient)} {selectedOwnerPatient.nickname && <span className="text-xs font-normal text-slate-500">({selectedOwnerPatient.nickname})</span>}
+                        </div>
+                        {selectedOwnerPatient.phone && (
+                          <div className="text-[11px] text-slate-500 font-data mt-0.5">โทร: {selectedOwnerPatient.phone}</div>
+                        )}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setSelectedOwnerPatient(null)}
-                      className="text-[11px] text-indigo-600 hover:underline font-bold"
+                      className="px-3 py-1.5 bg-white hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold border border-indigo-200 transition-all shadow-xs active:scale-95 shrink-0 ml-2"
                     >
                       เปลี่ยน
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-bold text-slate-700 kanit-text">เลือกคอร์สที่ต้องการตัดรอบ:</span>
-                    {(() => {
-                      const ownerCourses = (patientCoursesData || []).filter(c => {
-                        if (!c) return false;
-                        const cPid = String(c.patientId || c.patient_id || '').toLowerCase();
-                        const cRem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
-                        const expDate = c.expireDate || c.expire_date;
-                        const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
-                        return cPid === String(selectedOwnerPatient.id || selectedOwnerPatient.hn).toLowerCase() && cRem > 0 && (c.status || 'active') === 'active' && !c.isDeleted && !isExpired;
-                      });
+                  {/* รายการคอร์สที่เลือกได้ */}
+                  <div className="flex-1 min-h-0 flex flex-col gap-2">
+                    <div className="flex items-center justify-between shrink-0">
+                      <span className="text-xs font-bold text-slate-700 kanit-text">เลือกคอร์สที่ต้องการตัดรอบ:</span>
+                      <span className="text-[10px] text-slate-400 font-data">คลิกที่คอร์สเพื่อเพิ่มเข้าตะกร้า</span>
+                    </div>
 
-                      if (ownerCourses.length === 0) {
-                        return (
-                          <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400 kanit-text">
-                            คนไข้ท่านนี้ไม่มีคอร์สคงเหลือในระบบ
-                          </div>
-                        );
-                      }
+                    <div 
+                      onScroll={(e) => {
+                        const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+                        if (scrollTop + clientHeight >= scrollHeight - 30) {
+                          setVisibleShareCourseCount(prev => prev + 10);
+                        }
+                      }}
+                      className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-2 p-0.5"
+                    >
+                      {(() => {
+                        const ownerIdStr = String(selectedOwnerPatient.id || selectedOwnerPatient.hn || '').trim().toLowerCase();
+                        const ownerCourses = availableShareableCourses.filter(c => {
+                          const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+                          return cPid === ownerIdStr || (ownerIdStr.replace(/\D/g, '') && cPid.replace(/\D/g, '') === ownerIdStr.replace(/\D/g, ''));
+                        });
 
-                      return ownerCourses.map(course => {
-                        const courseName = course.courseName || course.course_name || course.name;
-                        const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 1;
-                        const total = Number(course.totalSessions ?? course.total_sessions) || 1;
-                        const isAlreadyInCart = cart.some(item => item?.product?.courseId === course?.id);
-
-                        return (
-                          <button
-                            key={course.id}
-                            type="button"
-                            disabled={isAlreadyInCart}
-                            onMouseEnter={(e) => handleCourseMouseEnter(e, { name: courseName, rem, total, owner: selectedOwnerPatient?.name || `${selectedOwnerPatient?.firstName || ''} ${selectedOwnerPatient?.lastName || ''}`.trim() })}
-                            onMouseLeave={handleCourseMouseLeave}
-                            onTouchStart={(e) => handleCourseTouchStart(e, { name: courseName, rem, total, owner: selectedOwnerPatient?.name || `${selectedOwnerPatient?.firstName || ''} ${selectedOwnerPatient?.lastName || ''}`.trim() })}
-                            onTouchEnd={handleCourseTouchEnd}
-                            onClick={() => {
-                              const courseProduct = products.find(p => p.id === course.productId) || {
-                                id: course.productId,
-                                name: courseName,
-                                price: 0,
-                                type: 'คอร์สเดิม',
-                                icon: 'Package'
-                              };
-                              const ownerName = selectedOwnerPatient.name || `${selectedOwnerPatient.firstName || ''} ${selectedOwnerPatient.lastName || ''}`.trim();
-                              const redeemItem = {
-                                product: {
-                                  ...courseProduct,
-                                  id: `REDEEM_${course.id}`,
-                                  price: 0,
-                                  isRedeem: true,
-                                  courseId: course.id,
-                                  courseName: courseName,
-                                  ownerPatientId: selectedOwnerPatient.id || selectedOwnerPatient.hn,
-                                  ownerPatientName: ownerName,
-                                  name: `${courseName} (${rem}/${total})`
-                                },
-                                quantity: 1
-                              };
-                              setCart(prev => [...prev, redeemItem]);
-                              setIsShareCourseModalOpen(false);
-                              showToast(`เพิ่มการตัดคอร์สแชร์ของ ${ownerName} เข้าตะกร้า`, 'success');
-                            }}
-                            className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                              isAlreadyInCart 
-                                ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
-                                : 'bg-white hover:bg-purple-50 border-slate-200 hover:border-purple-300 shadow-sm active:scale-98'
-                            }`}
-                          >
-                            <div>
-                              <div className="text-xs font-bold text-slate-800 kanit-text">{courseName}</div>
-                              <div className="text-[10px] text-slate-400 font-data">ซื้อเมื่อ: {formatDate(course.purchasedAt || course.purchased_at)}</div>
+                        if (ownerCourses.length === 0) {
+                          return (
+                            <div className="flex-1 flex flex-col items-center justify-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400 kanit-text">
+                              คนไข้ท่านนี้ไม่มีคอร์สที่สามารถใช้งานได้ (อาจหมดอายุหรือใช้ครบแล้ว)
                             </div>
-                            <div className="text-right">
-                              <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">
-                                คงเหลือ {rem}/{total} ครั้ง
-                              </span>
-                              {isAlreadyInCart && <div className="text-[10px] text-amber-500 font-bold mt-1">อยู่ในตะกร้าแล้ว</div>}
-                            </div>
-                          </button>
+                          );
+                        }
+
+                        const displayedCourses = ownerCourses.slice(0, visibleShareCourseCount);
+
+                        return (
+                          <>
+                            {displayedCourses.map(course => {
+                              const courseName = course.courseName || course.course_name || course.name;
+                              const rem = Number(course.remainingSessions ?? course.remaining_sessions) || 1;
+                              const total = Number(course.totalSessions ?? course.total_sessions) || 1;
+                              const isAlreadyInCart = cart.some(item => item?.product?.courseId === course?.id);
+                              const ownerFullName = getDisplayPatientName(selectedOwnerPatient);
+
+                              return (
+                                <button
+                                  key={course.id}
+                                  type="button"
+                                  disabled={isAlreadyInCart}
+                                  onMouseEnter={(e) => handleCourseMouseEnter(e, { name: courseName, rem, total, owner: ownerFullName })}
+                                  onMouseLeave={handleCourseMouseLeave}
+                                  onTouchStart={(e) => handleCourseTouchStart(e, { name: courseName, rem, total, owner: ownerFullName })}
+                                  onTouchEnd={handleCourseTouchEnd}
+                                  onClick={() => {
+                                    const courseProduct = products.find(p => p.id === course.productId) || {
+                                      id: course.productId,
+                                      name: courseName,
+                                      price: 0,
+                                      type: 'คอร์สเดิม',
+                                      icon: 'Package'
+                                    };
+                                    const redeemItem = {
+                                      product: {
+                                        ...courseProduct,
+                                        id: `REDEEM_${course.id}`,
+                                        price: 0,
+                                        isRedeem: true,
+                                        courseId: course.id,
+                                        courseName: courseName,
+                                        ownerPatientId: selectedOwnerPatient.id || selectedOwnerPatient.hn,
+                                        ownerPatientName: ownerFullName,
+                                        name: `${courseName} (${rem}/${total})`
+                                      },
+                                      quantity: 1
+                                    };
+                                    setCart(prev => [...prev, redeemItem]);
+                                    setIsShareCourseModalOpen(false);
+                                    showToast(`เพิ่มการตัดคอร์สแชร์ของ ${ownerFullName} เข้าตะกร้าแล้ว`, 'success');
+                                  }}
+                                  className={`p-3.5 rounded-2xl border text-left transition-all flex items-center justify-between ${
+                                    isAlreadyInCart 
+                                      ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
+                                      : 'bg-white hover:bg-purple-50 border-slate-200 hover:border-purple-300 shadow-sm active:scale-[0.99]'
+                                  }`}
+                                >
+                                  <div className="min-w-0 pr-2">
+                                    <div className="text-xs sm:text-sm font-bold text-slate-800 kanit-text truncate">{courseName}</div>
+                                    <div className="text-[11px] text-slate-400 font-data flex flex-wrap gap-x-2 mt-0.5">
+                                      {(course.purchasedAt || course.purchased_at) && (
+                                        <span>ซื้อเมื่อ: {formatDate(course.purchasedAt || course.purchased_at)}</span>
+                                      )}
+                                      {(course.expireDate || course.expire_date) && (
+                                        <span className="text-amber-600 font-semibold">หมดอายุ: {formatDate(course.expireDate || course.expire_date)}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100 block">
+                                      คงเหลือ {rem}/{total} ครั้ง
+                                    </span>
+                                    {isAlreadyInCart && <div className="text-[10px] text-amber-500 font-bold mt-1">อยู่ในตะกร้าแล้ว</div>}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                            {visibleShareCourseCount < ownerCourses.length && (
+                              <div className="py-2.5 text-center text-xs text-indigo-600 font-data flex items-center justify-center gap-1.5 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                                <Loader2 size={13} className="animate-spin text-indigo-500" />
+                                <span>กำลังแสดง {Math.min(visibleShareCourseCount, ownerCourses.length)} จาก {ownerCourses.length} คอร์ส (เลื่อนลงเพื่อดูเพิ่ม)</span>
+                              </div>
+                            )}
+                          </>
                         );
-                      });
-                    })()}
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => setIsShareCourseModalOpen(false)}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all kanit-text"
+                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all kanit-text active:scale-95"
               >
                 ปิดหน้าต่าง
               </button>

@@ -18,7 +18,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database
+  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -52,6 +52,7 @@ import PlaceholderPage from './pages/PlaceholderPage';
 import PortalDropdown from './pages/PortalDropdown';
 import AnimatedModal from './pages/AnimatedModal';
 import Skeleton from './pages/Skeleton';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 const theme = {
   primary: 'bg-sky-500 text-white hover:bg-sky-600',
   primaryText: 'text-sky-500',
@@ -971,8 +972,19 @@ export default function App() {
     return () => mainElement.removeEventListener('scroll', handleGlobalScroll);
   }, [isMobile, isLoggedIn, isGlobalLoading]);
 
+  const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
+  const [navUnsavedModal, setNavUnsavedModal] = useState({ isOpen: false, targetTab: null });
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+
   const handleTabClick = (tabId) => {
     if (hasDragged.current) return;
+    if (tabId === currentTab) return;
+
+    // หากมีข้อมูลการตั้งค่าที่ยังไม่ได้บันทึก ให้เด้งป๊อปอัพแจ้งเตือนก่อนเปลี่ยนหน้า
+    if (currentTab === 'settings' && hasUnsavedSettings) {
+      setNavUnsavedModal({ isOpen: true, targetTab: tabId });
+      return;
+    }
     
     // บันทึกตำแหน่ง Scroll ปัจจุบันก่อนเปลี่ยนหน้า
     if (mainRef.current) {
@@ -1265,6 +1277,253 @@ export default function App() {
       );
   };
 
+  // --- ระบบคีย์ลัดสากล (Global Keyboard Shortcuts) ---
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const activeEl = document.activeElement;
+      const isInput = activeEl && (activeEl.tagName === 'INPUT');
+      const isTextarea = activeEl && (activeEl.tagName === 'TEXTAREA');
+      const isEditable = isInput || isTextarea || activeEl?.isContentEditable;
+
+      // 1. Shift + ? หรือ Ctrl + / -> เปิด/ปิดหน้าต่างแสดงแป้นพิมพ์ลัด
+      if (((e.ctrlKey || e.metaKey) && e.key === '/') || (e.shiftKey && (e.key === '?' || e.key === '/'))) {
+        if ((e.ctrlKey || e.metaKey) || !isEditable) {
+          e.preventDefault();
+          setIsShortcutsModalOpen(prev => !prev);
+          return;
+        }
+      }
+
+      // 2. Escape: ปิด Modal หรือล้างข้อความในช่องค้นหา/ช่องพิมพ์
+      if (e.key === 'Escape') {
+        // ก) หากกำลังโฟกัสอยู่ที่ช่อง Input ที่มีข้อความอยู่ ให้ล้างข้อความก่อน
+        if (isInput && activeEl.value && activeEl.value.trim().length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // ลองกดปุ่มล้างข้อความที่อยู่ข้างๆ ก่อนถ้ามี
+          const clearBtn = activeEl.parentElement?.querySelector('button[title*="ล้างข้อความ"]');
+          if (clearBtn) {
+            clearBtn.click();
+          } else {
+            // ใช้ setter ของ HTMLInputElement เพื่อให้ React รับรู้ onChange
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+            if (nativeInputValueSetter) {
+              nativeInputValueSetter.call(activeEl, '');
+            } else {
+              activeEl.value = '';
+            }
+            activeEl.dispatchEvent(new Event('input', { bubbles: true }));
+            activeEl.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          return;
+        }
+
+        // หากอยู่ใน input แต่ไม่มีข้อความแล้ว ให้ unfocus
+        if (isInput) {
+          activeEl.blur();
+        }
+
+        // ข) หากไม่มีข้อความในช่อง หรืออยู่นอก input: ปิด Modal ต่างๆ
+        if (isShortcutsModalOpen) {
+          e.preventDefault();
+          setIsShortcutsModalOpen(false);
+          return;
+        }
+
+        if (navUnsavedModal.isOpen) {
+          e.preventDefault();
+          setNavUnsavedModal({ isOpen: false, targetTab: null });
+          return;
+        }
+
+        if (pdpaQrModal.isOpen) {
+          e.preventDefault();
+          setPdpaQrModal({ isOpen: false, link: '' });
+          return;
+        }
+
+        if (globalAlert.isOpen) {
+          e.preventDefault();
+          globalAlert.close();
+          return;
+        }
+
+        // ปิด Profile dropdown หากเปิดอยู่
+        if (isProfileDropdownOpen || isMobileProfileDropdownOpen) {
+          setIsProfileDropdownOpen(false);
+          setIsMobileProfileDropdownOpen(false);
+        }
+
+        // ค้นหา Modal หรือ Dialog อื่นๆ ที่เปิดอยู่บนหน้าจอ
+        const modals = Array.from(document.querySelectorAll('.fixed.inset-0, [role="dialog"]')).filter(el => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+        });
+
+        if (modals.length > 0) {
+          const topModal = modals[modals.length - 1];
+          const closeBtn = topModal.querySelector('button[title*="ปิด"], button[title*="Close"], button[aria-label*="close"], button:has(.lucide-x), button:has(.lucide-x-circle)');
+          if (closeBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeBtn.click();
+            return;
+          }
+        }
+      }
+
+      // ฟังก์ชันตรวจสอบความชัดเจนของ Element ว่าแสดงผลจริงบนหน้าจอ (ไม่ถูกซ่อน ไม่เป็น 0x0)
+      const isElementVisible = (el) => {
+        if (!el || el.disabled) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || style.pointerEvents === 'none') {
+          return false;
+        }
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+
+      // ฟังก์ชันค้นหาปุ่มบันทึกที่ถูกต้อง ปลอดภัย และแม่นยำที่สุด
+      const findActiveSaveButton = () => {
+        // ก) ค้นหา Modal หรือ Dialog ที่เปิดอยู่และแสดงผลจริงบนหน้าจอ
+        const activeModals = Array.from(document.querySelectorAll('.fixed.inset-0, [role="dialog"]')).filter(el => {
+          if (!isElementVisible(el)) return false;
+          // ต้องมีการ์ด modal หรือปุ่ม/เนื้อหาอยู่ข้างใน (ไม่เอา backdrop เปล่า)
+          return el.querySelector('button, input, form, [role="document"], .bg-white') !== null;
+        });
+
+        if (activeModals.length > 0) {
+          const topModal = activeModals[activeModals.length - 1];
+
+          // 1. ปุ่มที่มี data-save-btn="true" ใน Modal
+          const explicitModalBtn = topModal.querySelector('[data-save-btn="true"]:not(:disabled)');
+          if (explicitModalBtn && isElementVisible(explicitModalBtn)) return explicitModalBtn;
+
+          // 2. ปุ่ม type="submit"
+          const submitBtn = topModal.querySelector('button[type="submit"]:not(:disabled)');
+          if (submitBtn && isElementVisible(submitBtn)) return submitBtn;
+
+          // 3. ปุ่มข้อความบันทึกใน Modal (คัดกรองปุ่มยกเลิก, ปิด, หรือยังไม่บันทึก ออกเด็ดขาด)
+          const modalBtns = Array.from(topModal.querySelectorAll('button:not(:disabled)')).filter(isElementVisible);
+          const textModalBtn = modalBtns.find(btn => {
+            const txt = (btn.textContent || '').trim();
+            if (txt.includes('ยกเลิก') || txt.includes('ยังไม่บันทึก') || txt.includes('ไม่บันทึก') || txt.includes('ปิด')) return false;
+            return txt.includes('บันทึก') || txt.includes('ยืนยัน') || txt.includes('ตกลง') || txt.includes('ชำระเงิน');
+          });
+          if (textModalBtn) return textModalBtn;
+        }
+
+        // ข) หากไม่มี Modal ให้มองหาปุ่มบันทึกบนหน้าหลักปัจจุบัน
+        // 1. ปุ่มที่มี data-save-btn="true" บนหน้า
+        const explicitPageBtns = Array.from(document.querySelectorAll('[data-save-btn="true"]:not(:disabled)')).filter(isElementVisible);
+        if (explicitPageBtns.length > 0) {
+          return explicitPageBtns[explicitPageBtns.length - 1];
+        }
+
+        // 2. ค้นหาปุ่มที่มีคำว่าบันทึกบนหน้า (คัดกรอง 'ยังไม่บันทึก', 'ไม่บันทึก', 'ยกเลิก', 'ปิด' ออกเด็ดขาด)
+        const pageBtns = Array.from(document.querySelectorAll('button:not(:disabled)')).filter(isElementVisible);
+        const textPageBtn = pageBtns.find(btn => {
+          const txt = (btn.textContent || '').trim();
+          if (txt.includes('ยังไม่บันทึก') || txt.includes('ไม่บันทึก') || txt.includes('ยกเลิก') || txt.includes('ปิด')) return false;
+          return (
+            txt.includes('บันทึกการตั้งค่า') ||
+            txt.includes('บันทึกข้อมูล') ||
+            txt.includes('บันทึกสิทธิ์') ||
+            txt.includes('บันทึกรายการ') ||
+            txt.includes('บันทึกสถานะ') ||
+            txt.includes('บันทึก') ||
+            txt.includes('ชำระเงิน') ||
+            txt.includes('ยืนยัน')
+          );
+        });
+
+        return textPageBtn || null;
+      };
+
+      // 3. Ctrl + K หรือ / : ค้นหาด่วน (Quick Search - รองรับคีย์บอร์ดไทย)
+      const isKeyK = e.code === 'KeyK' || e.key?.toLowerCase() === 'k' || e.key === 'า' || e.keyCode === 75;
+      if (((e.ctrlKey || e.metaKey) && isKeyK) || (e.key === '/' && !isEditable)) {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="ค้นหา"], input[type="search"], input[placeholder*="พิมพ์"]');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select?.();
+        }
+        return;
+      }
+
+      // 4. Alt + S หรือ Ctrl + S: บันทึกข้อมูลทันที (รองรับทั้งภาษาไทยและอังกฤษ ป้องกันเบราว์เซอร์เด้ง Save HTML)
+      const isKeyS = e.code === 'KeyS' || e.key?.toLowerCase() === 's' || e.key === 'ห' || e.key === 'ฆ' || e.keyCode === 83;
+      if ((e.altKey && isKeyS) || ((e.ctrlKey || e.metaKey) && isKeyS)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (activeEl && typeof activeEl.blur === 'function') {
+          activeEl.blur();
+        }
+
+        const targetBtn = findActiveSaveButton();
+        if (targetBtn) {
+          targetBtn.click();
+        } else {
+          // ตรวจสอบว่ามีปุ่มบันทึกที่ disabled อยู่หรือไม่
+          const disabledSaveBtn = document.querySelector('[data-save-btn="true"]:disabled');
+          if (disabledSaveBtn) {
+            triggerGlobalToast('ระบบกำลังบันทึกข้อมูลอยู่ กรุณารอสักครู่...', 'warning');
+          }
+        }
+        return;
+      }
+
+      // 5. Alt + N หรือ F2: เพิ่มรายการใหม่ด่วน (รองรับคีย์บอร์ดไทย)
+      const isKeyN = e.code === 'KeyN' || e.key?.toLowerCase() === 'n' || e.key === 'ื' || e.keyCode === 78;
+      if ((e.altKey && isKeyN) || e.key === 'F2') {
+        e.preventDefault();
+        const newBtn = Array.from(document.querySelectorAll('button:not(:disabled)')).find(btn => {
+          const txt = (btn.textContent || '').trim();
+          if (txt.includes('ยกเลิก') || txt.includes('ปิด')) return false;
+          return (txt.includes('เพิ่ม') || txt.includes('ลงทะเบียน') || txt.includes('นัดหมายใหม่')) &&
+            isElementVisible(btn);
+        }) || document.querySelector('button:not(:disabled):has(.lucide-plus)');
+
+        if (newBtn) {
+          newBtn.click();
+        }
+        return;
+      }
+
+      // 6. Enter: บันทึก/ยืนยันข้อมูล หากไม่ได้อยู่ใน Textarea หรือ Button
+      if (e.key === 'Enter') {
+        if (isTextarea) return;
+        if (activeEl?.tagName === 'BUTTON') return;
+        if (activeEl?.tagName === 'SELECT') return;
+
+        // หากอยู่ใน input ที่อยู่ใน <form> ปล่อยให้เบราว์เซอร์ submit ธรรมชาติ
+        if (activeEl?.tagName === 'INPUT' && activeEl.form) {
+          return;
+        }
+
+        // หากไม่ได้อยู่ใน Input (เช่น กด Enter ว่างๆ ในหน้า) หรืออยู่ใน Modal
+        const activeModals = Array.from(document.querySelectorAll('.fixed.inset-0, [role="dialog"]')).filter(el => {
+          if (!isElementVisible(el)) return false;
+          return el.querySelector('button, input, form, [role="document"], .bg-white') !== null;
+        });
+
+        if (!isInput || activeModals.length > 0) {
+          const targetBtn = findActiveSaveButton();
+          if (targetBtn) {
+            e.preventDefault();
+            targetBtn.click();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, [isShortcutsModalOpen, navUnsavedModal, pdpaQrModal, globalAlert, isProfileDropdownOpen, isMobileProfileDropdownOpen]);
+
   // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน (แยก Component เพื่อความปลอดภัยไม่ให้ App re-render)
   const showToast = (message, type = 'success') => {
     triggerGlobalToast(message, type);
@@ -1548,10 +1807,28 @@ export default function App() {
       });
     } else if (sheetName === 'Inventory') {
       setInventoryData(prev => {
-        const idx = prev.findIndex(i => 
-          (targetId && String(i.id || i.code || '').trim() === targetId) ||
-          (targetName && String(i.name || '').trim().toLowerCase() === targetName)
-        );
+        const pId = String(payload.id || '').trim();
+        // 1. หาตาม ID แถวโดยตรง (สำหรับสต็อกรายล็อต)
+        let idx = pId ? prev.findIndex(i => String(i.id || '').trim() === pId) : -1;
+        // 2. ถ้าไม่พบ หาตามรหัสสินค้า + สาขา + ล็อต
+        if (idx === -1 && (payload.code || payload.productId)) {
+          const cleanCode = String(payload.code || payload.productId).replace(/^INV_/, '').trim().toLowerCase();
+          const pBranch = String(payload.branchId || payload.branch_id || '').trim();
+          const pLot = String(payload.lotNo || payload.lot_no || '').trim();
+          idx = prev.findIndex(i => {
+            const iCode = String(i.code || i.productId || i.id || '').replace(/^INV_/, '').trim().toLowerCase();
+            const iBranch = String(i.branchId || i.branch_id || '').trim();
+            const iLot = String(i.lotNo || i.lot_no || '').trim();
+            return iCode === cleanCode && (iBranch === pBranch || (!iBranch && !pBranch)) && (iLot === pLot || (!iLot && !pLot));
+          });
+        }
+        // 3. Fallback สำหรับรายการทั่วไป
+        if (idx === -1 && targetId) {
+          idx = prev.findIndex(i => 
+            String(i.id || i.code || '').trim() === targetId ||
+            (targetName && String(i.name || '').trim().toLowerCase() === targetName)
+          );
+        }
         if (idx >= 0) {
           const next = [...prev];
           next[idx] = { ...next[idx], ...payload };
@@ -1769,6 +2046,31 @@ export default function App() {
         }
         return [payload, ...prev];
       });
+    } else if (sheetName === 'Settings' || sheetName === 'settings') {
+      const settingId = String(payload.id || '').trim();
+      let vals = payload.values;
+      if (typeof vals === 'string') {
+        try { vals = JSON.parse(vals); } catch (e) {}
+      }
+      if (settingId === 'integration_tokens') {
+        setIntegrationTokens(vals);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('clinic_integration_tokens', JSON.stringify(vals));
+          }
+        } catch (e) {}
+      } else if (settingId === 'staff_prefixes') {
+        if (Array.isArray(vals)) setStaffPrefixes(vals);
+      } else if (settingId === 'staff_categories') {
+        if (Array.isArray(vals)) setStaffCategories(vals);
+      } else if (settingId === 'role_permissions') {
+        if (vals) setRolePermissions(vals);
+        if (payload.labels) setRoleLabels(payload.labels);
+      } else if (settingId === 'appointment_statuses') {
+        if (Array.isArray(vals)) setAppointmentStatuses(vals);
+      } else if (settingId === 'gdrive_tokens') {
+        if (vals) setGdriveTokens(vals);
+      }
     }
   };
 
@@ -1936,10 +2238,14 @@ export default function App() {
       }
       const intTokens = resSettings.data.find(s => s.id === 'integration_tokens');
       if (intTokens && intTokens.values) {
-        setIntegrationTokens(intTokens.values);
+        let val = intTokens.values;
+        if (typeof val === 'string') {
+          try { val = JSON.parse(val); } catch (e) {}
+        }
+        setIntegrationTokens(val);
         try {
           if (typeof window !== 'undefined' && window.localStorage) {
-            localStorage.setItem('clinic_integration_tokens', JSON.stringify(intTokens.values));
+            localStorage.setItem('clinic_integration_tokens', JSON.stringify(val));
           }
         } catch (e) {}
       }
@@ -2104,20 +2410,66 @@ export default function App() {
       )
       .subscribe();
 
+    // Dedicated Realtime Channel สำหรับ inventory และ setting_pos เพื่อให้สต็อกสินค้าของทุกเครื่อง (POS/Inventory) ซิงค์แบบเรียลไทม์ 100% ทันที
+    const inventoryChannel = supabase
+      .channel('realtime-inventory-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory' },
+        (payload) => {
+          const { eventType, new: newRow, old: oldRow } = payload;
+          console.log(
+            `%c⚡ [Pure Realtime: inventory]%c 📦 ${eventType} received!`,
+            'color: #0284c7; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;',
+            'color: #0369a1; font-weight: 600;',
+            newRow || oldRow
+          );
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            if (newRow) {
+              const jsRow = rowToJS(newRow);
+              syncLocalStateOnSave('Inventory', jsRow);
+            }
+          } else if (eventType === 'DELETE') {
+            if (oldRow && oldRow.id) {
+              syncLocalStateOnDelete('Inventory', { id: oldRow.id });
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'setting_pos' },
+        (payload) => {
+          const { eventType, new: newRow, old: oldRow } = payload;
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            if (newRow) {
+              const jsRow = rowToJS(newRow);
+              syncLocalStateOnSave('setting_pos', jsRow);
+            }
+          } else if (eventType === 'DELETE') {
+            if (oldRow && oldRow.id) {
+              syncLocalStateOnDelete('setting_pos', { id: oldRow.id });
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(coursesChannel);
+      supabase.removeChannel(inventoryChannel);
     };
   }, []);
 
-  // --- ดึงข้อมูลคอร์สล่าสุดจาก Supabase อัตโนมัติเมื่อโฟกัสหน้าต่าง หรือสลับแท็บกลับมา (พร้อมระบบ Cooldown 60s เพื่อประหยัด Egress 100%) ---
+  // --- ดึงข้อมูลคอร์สและสต็อกสินค้าล่าสุดจาก Supabase อัตโนมัติเมื่อโฟกัสหน้าต่าง หรือสลับแท็บกลับมา (พร้อมระบบ Cooldown 60s เพื่อประหยัด Egress 100%) ---
   useEffect(() => {
     if (!supabase) return;
 
     let lastFetchTime = 0;
     const COOLDOWN_MS = 60000; // รออย่างน้อย 60 วินาทีถึงจะยอมดึงใหม่เมื่อสลับแท็บ (ป้องกันการยิงซ้ำเวลากดสลับแท็บบ่อยๆ)
 
-    const refreshCoursesFromSupabase = async (force = false) => {
+    const refreshClinicDataFromSupabase = async (force = false) => {
       const now = Date.now();
       if (!force && (now - lastFetchTime < COOLDOWN_MS)) {
         return;
@@ -2125,6 +2477,15 @@ export default function App() {
       lastFetchTime = now;
 
       try {
+        // รีเฟรชสต็อกสินค้าล่าสุด
+        const { data: invData, error: invErr } = await supabase
+          .from('inventory')
+          .select('*')
+          .or('is_deleted.is.null,is_deleted.eq.false');
+        if (!invErr && Array.isArray(invData)) {
+          setInventoryData(invData.map(rowToJS));
+        }
+
         const explicitCols = 'id,patient_id,patient_name,product_id,course_name,total_sessions,used_sessions,remaining_sessions,price,pos_transaction_id,receipt_no,branch_id,status,is_shareable,shared_patient_ids,expire_date,notes,purchased_at,created_at,updated_at,is_deleted';
         const { data, error } = await supabase
           .from('patient_courses')
@@ -2135,24 +2496,58 @@ export default function App() {
           setPatientCoursesData(data.map(rowToJS));
         }
       } catch (err) {
-        console.warn('[Courses Focus Refresh Note]:', err);
+        console.warn('[Focus Refresh Note]:', err);
       }
     };
 
     const handleFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
-        refreshCoursesFromSupabase(false);
+        refreshClinicDataFromSupabase(false);
       }
     };
 
     window.addEventListener('focus', handleFocusOrVisible);
     document.addEventListener('visibilitychange', handleFocusOrVisible);
-    window.addEventListener('online', () => refreshCoursesFromSupabase(true));
+    window.addEventListener('online', () => refreshClinicDataFromSupabase(true));
 
     return () => {
       window.removeEventListener('focus', handleFocusOrVisible);
       document.removeEventListener('visibilitychange', handleFocusOrVisible);
-      window.removeEventListener('online', () => refreshCoursesFromSupabase(true));
+      window.removeEventListener('online', () => refreshClinicDataFromSupabase(true));
+    };
+  }, []);
+
+  // --- [BACKGROUND IDLE SYNC] พรีโหลดข้อมูลคนไข้ลง IndexedDB สำหรับ Offline Mode โดยไม่บล็อก UI และประหยัด Egress ---
+  useEffect(() => {
+    let timeoutId;
+    let idleId;
+
+    const runBackgroundIdleSync = async () => {
+      try {
+        if (!supabase) return;
+        // เรียกซิงค์ข้อมูลคนไข้ผ่าน Zero-Egress Reconcile ในช่วงเวลาที่เครื่องว่าง (บันทึกลง IndexedDB ตาราง patients)
+        await callAppScript('PRELOAD_PATIENTS_OFFLINE', 'Patients');
+        console.log('[Offline Engine] ⚡ Background patient sync to IndexedDB completed (Zero Egress).');
+      } catch (err) {
+        console.warn('[Offline Engine] Background patient sync note:', err?.message);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      if ('requestIdleCallback' in window) {
+        idleId = window.requestIdleCallback(() => {
+          runBackgroundIdleSync();
+        }, { timeout: 10000 });
+      } else {
+        timeoutId = setTimeout(runBackgroundIdleSync, 4000);
+      }
+    }
+
+    return () => {
+      if (idleId && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 
@@ -2495,12 +2890,28 @@ export default function App() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsProfileDropdownOpen(false);
-                      setCurrentTab('profile');
+                      handleTabClick('profile');
                     }}
                     className="w-full text-left px-3 py-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2"
                   >
                     <User size={14} className="opacity-80 text-slate-500" />
                     <span>โปรไฟล์</span>
+                  </button>
+
+                  {/* Row 3: แป้นพิมพ์ลัด */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsProfileDropdownOpen(false);
+                      setIsShortcutsModalOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Keyboard size={14} className="opacity-80 text-slate-500" />
+                      <span>แป้นพิมพ์ลัด</span>
+                    </div>
+                    <kbd className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">Shift+?</kbd>
                   </button>
 
 
@@ -2533,12 +2944,28 @@ export default function App() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setIsProfileDropdownOpen(false);
-                      setCurrentTab('profile');
+                      handleTabClick('profile');
                     }}
                     className="w-full text-left px-3 py-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2"
                   >
                     <User size={14} className="opacity-80 text-slate-500" />
                     <span>โปรไฟล์</span>
+                  </button>
+
+                  {/* Row 3: แป้นพิมพ์ลัด */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsProfileDropdownOpen(false);
+                      setIsShortcutsModalOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Keyboard size={14} className="opacity-80 text-slate-500" />
+                      <span>แป้นพิมพ์ลัด</span>
+                    </div>
+                    <kbd className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">Shift+?</kbd>
                   </button>
 
 
@@ -2639,12 +3066,28 @@ export default function App() {
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsMobileProfileDropdownOpen(false);
-                    setCurrentTab('profile');
+                    handleTabClick('profile');
                   }}
                   className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center gap-2"
                 >
                   <User size={14} className="opacity-80 text-slate-500" />
                   <span>โปรไฟล์</span>
+                </button>
+
+                {/* Row 3: แป้นพิมพ์ลัด */}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMobileProfileDropdownOpen(false);
+                    setIsShortcutsModalOpen(true);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <Keyboard size={14} className="opacity-80 text-slate-500" />
+                    <span>แป้นพิมพ์ลัด</span>
+                  </div>
+                  <kbd className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">Shift+?</kbd>
                 </button>
 
 
@@ -2749,6 +3192,8 @@ export default function App() {
                         showMobileBars={showMobileBars}
                         handlePrintReceipt={handlePrintReceipt}
                         integrationTokens={integrationTokens}
+                        fetchPatientTreatments={fetchPatientTreatments}
+                        fetchPatientsPaginated={fetchPatientsPaginated}
                     showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
@@ -2872,6 +3317,7 @@ export default function App() {
                         callAppScript={callAppScript}
                         showToast={showToast}
                         isGlobalLoading={isGlobalLoading}
+                        onDirtyChange={setHasUnsavedSettings}
                     />
                 </div>
             )}
@@ -3236,6 +3682,56 @@ export default function App() {
               </div>
           </div>
       )}
+
+      {/* Modal แจ้งเตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึกก่อนเปลี่ยนหน้าหลัก */}
+      {navUnsavedModal.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-4 border border-amber-200/60 shadow-xs">
+              <AlertTriangle size={26} />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 text-center kanit-text mb-2">
+              มีข้อมูลที่ยังไม่ได้บันทึก!
+            </h3>
+            <p className="text-slate-600 text-xs sm:text-sm text-center kanit-text leading-relaxed mb-6">
+              คุณได้กรอกหรือแก้ไขข้อมูลการตั้งค่าแจ้งเตือน (บอท LINE / Discord) ไว้แต่ยังไม่ได้กดบันทึก หากออกจากหน้านี้ข้อมูลที่แก้ไขจะสูญหาย
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setNavUnsavedModal({ isOpen: false, targetTab: null })}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-sm kanit-text transition-colors"
+              >
+                อยู่หน้านี้ต่อ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = navUnsavedModal.targetTab;
+                  setHasUnsavedSettings(false);
+                  setNavUnsavedModal({ isOpen: false, targetTab: null });
+                  if (target) {
+                    if (mainRef.current) {
+                      scrollPositions.current[currentTab] = mainRef.current.scrollTop;
+                    }
+                    setCurrentTab(target);
+                    if (isMobile) setIsSidebarExpanded(false);
+                  }
+                }}
+                className="flex-1 py-3 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm kanit-text transition-colors shadow-sm"
+              >
+                ออกจากหน้านี้ (ไม่บันทึก)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal แป้นพิมพ์ลัด */}
+      <KeyboardShortcutsModal 
+        isOpen={isShortcutsModalOpen} 
+        onClose={() => setIsShortcutsModalOpen(false)} 
+      />
 
       {GlobalAlertUI()}
     </div>

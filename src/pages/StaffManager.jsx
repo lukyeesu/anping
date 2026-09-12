@@ -2097,7 +2097,23 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm z-20">
            <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input type="text" placeholder="ค้นหาชื่อ, เบอร์โทร..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500/20 transition-colors font-data" />
+              <input 
+                type="text" 
+                placeholder="ค้นหาชื่อ, เบอร์โทร..." 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)} 
+                className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500/20 transition-colors font-data" 
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-all"
+                  title="ล้างข้อความ"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
            </div>
            <div className="w-full sm:w-48 relative shrink-0">
              <CustomSelect 

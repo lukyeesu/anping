@@ -38,6 +38,16 @@ export function setCachedIntegrationTokens(tokens) {
   }
 }
 
+export function formatDirectImageUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  const gdMatch = trimmed.match(/(?:drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/);
+  if (gdMatch && gdMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${gdMatch[1]}`;
+  }
+  return trimmed;
+}
+
 export const DEFAULT_INTEGRATION_SETTINGS = {
   line: {
     enabled: true,
@@ -45,7 +55,7 @@ export const DEFAULT_INTEGRATION_SETTINGS = {
       { id: 'rec_1', name: 'กลุ่มหลัก', chatId: '' }
     ],
     bots: [
-      { id: 'bot_1', name: 'SHK Metal1', token: '', customChatId: '', usedQuota: 0, totalQuota: 300 }
+      { id: 'bot_1', name: 'บอทตัวที่ 1', token: '', customChatId: '', usedQuota: 0, totalQuota: 300 }
     ],
     events: {
       queue: true,
@@ -57,12 +67,14 @@ export const DEFAULT_INTEGRATION_SETTINGS = {
   },
   discord: {
     enabled: true,
+    botName: 'Anping Clinic Notifier',
+    botAvatarUrl: '',
     channels: [
-      { id: 'dc_queue', name: 'นัดหมาย 🗓️', event: 'queue', webhookUrl: '' },
-      { id: 'dc_pos', name: 'pos 💵', event: 'pos', webhookUrl: '' },
-      { id: 'dc_opd', name: 'opd 🩺', event: 'opd', webhookUrl: '' },
-      { id: 'dc_mr', name: 'mr 📁', event: 'mr', webhookUrl: '' },
-      { id: 'dc_dashboard', name: 'dashboard 🌻', event: 'dashboard', webhookUrl: '' }
+      { id: 'dc_queue', name: 'นัดหมาย 🗓️', event: 'queue', webhookUrl: '', botAvatarUrl: '' },
+      { id: 'dc_pos', name: 'pos 💵', event: 'pos', webhookUrl: '', botAvatarUrl: '' },
+      { id: 'dc_opd', name: 'opd 🩺', event: 'opd', webhookUrl: '', botAvatarUrl: '' },
+      { id: 'dc_mr', name: 'mr 📁', event: 'mr', webhookUrl: '', botAvatarUrl: '' },
+      { id: 'dc_dashboard', name: 'dashboard 🌻', event: 'dashboard', webhookUrl: '', botAvatarUrl: '' }
     ]
   }
 };
@@ -80,7 +92,7 @@ export function normalizeIntegrationTokens(raw) {
           : [{ id: 'rec_1', name: 'กลุ่มหลัก', chatId: raw.line.lineGroupId || raw.lineGroupId || '' }],
         bots: Array.isArray(raw.line.bots) && raw.line.bots.length > 0
           ? raw.line.bots
-          : [{ id: 'bot_1', name: 'SHK Metal1', token: raw.line.token || raw.line || '', customChatId: '', usedQuota: 0, totalQuota: 300 }],
+          : [{ id: 'bot_1', name: 'บอทตัวที่ 1', token: raw.line.token || raw.line || '', customChatId: '', usedQuota: 0, totalQuota: 300 }],
         events: {
           queue: raw.line.events?.queue !== false,
           pos: raw.line.events?.pos !== false,
@@ -91,8 +103,13 @@ export function normalizeIntegrationTokens(raw) {
       },
       discord: {
         enabled: raw.discord.enabled !== false,
+        botName: raw.discord.botName || 'Anping Clinic Notifier',
+        botAvatarUrl: raw.discord.botAvatarUrl || '',
         channels: Array.isArray(raw.discord.channels) && raw.discord.channels.length > 0
-          ? raw.discord.channels
+          ? raw.discord.channels.map(ch => ({
+              ...ch,
+              botAvatarUrl: ch.botAvatarUrl || ''
+            }))
           : DEFAULT_INTEGRATION_SETTINGS.discord.channels
       }
     };
@@ -118,9 +135,12 @@ export function normalizeIntegrationTokens(raw) {
     },
     discord: {
       enabled: Boolean(raw.discord),
+      botName: 'Anping Clinic Notifier',
+      botAvatarUrl: '',
       channels: DEFAULT_INTEGRATION_SETTINGS.discord.channels.map((ch, idx) => ({
         ...ch,
-        webhookUrl: idx === 0 ? (raw.discord || '') : ''
+        webhookUrl: idx === 0 ? (raw.discord || '') : '',
+        botAvatarUrl: ''
       }))
     }
   };
@@ -1450,7 +1470,9 @@ export function buildDiscordFlexPayload({
   rawPayload = {},
   discordColor,
   footerText = 'Anping Clinic',
-  webappUrl = 'https://anpingclinic.vercel.app'
+  webappUrl = 'https://anpingclinic.vercel.app',
+  botName = '',
+  botAvatarUrl = ''
 }) {
   const patientName = rawPayload.patientName || rawPayload.name || rawPayload.customerName || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.split('(')[0]?.trim()) || 'คนไข้ทั่วไป';
   const rawHn = rawPayload.hn || rawPayload.patientId || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.match(/HN[^\s)]+/)?.[0]) || '';
@@ -1468,25 +1490,23 @@ export function buildDiscordFlexPayload({
     const isConfirm = Boolean(rawPayload.status?.includes('ยืนยัน') || rawPayload.status === 'confirmed');
     
     let statusLabel = 'นัดหมายใหม่';
-    let headerTitle = title ? title.replace(/^🗓️\s*/, '').trim() : 'แจ้งเตือนการนัดหมาย';
-
+    let statusEmoji = '🗓️';
     if (isCancel) {
-      color = 0xf43f5e;
-      statusLabel = 'ยกเลิกแล้ว';
-      headerTitle = 'ยกเลิกการนัดหมาย';
+      statusLabel = 'ยกเลิกนัดหมาย';
+      statusEmoji = '❌';
+      color = 0xe11d48; // Rose Red
     } else if (isPostpone) {
-      color = 0xf59e0b;
       statusLabel = 'เลื่อนนัดหมาย';
-      headerTitle = 'เลื่อนการนัดหมาย';
+      statusEmoji = '🔄';
+      color = 0xf59e0b; // Amber
     } else if (isConfirm) {
-      color = 0x10b981;
-      statusLabel = 'ยืนยันแล้ว';
-    } else if (rawPayload.status) {
-      statusLabel = rawPayload.status.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9\s]/g, '').trim() || 'รอยืนยัน';
+      statusLabel = 'ยืนยันนัดหมาย';
+      statusEmoji = '✅';
+      color = 0x10b981; // Emerald Green
     }
 
-    const statusEmoji = isCancel ? '❌' : (isPostpone ? '🔄' : (isConfirm ? '✅' : '⏳'));
-    const formattedStatus = statusLabel.includes(statusEmoji) ? statusLabel : `${statusLabel} ${statusEmoji}`;
+    const headerTitle = rawPayload.actionTitle || (title && !title.includes('[') ? title : statusLabel);
+    const formattedStatus = `${statusEmoji} ${rawPayload.status || statusLabel}`;
 
     embedTitle = `🗓️ ${headerTitle} • [ ${formattedStatus} ]`;
 
@@ -1538,74 +1558,56 @@ export function buildDiscordFlexPayload({
            `📞 **เบอร์ติดต่อ:** ${phoneDisplay}\n` +
            `💳 **ช่องทาง:** ${payMethod}\n` +
            `👨‍💼 **ผู้บันทึก:** ${staff}\n` +
-           `💰 **ยอดสุทธิ:** **฿${Number(totalAmount).toLocaleString()}**`;
-  } else if (eventType === 'mr') {
-    color = 0xd97706; // Amber
-    const courseName = rawPayload.courseName || (fields.find(f => f.name && f.name.includes('คอร์ส'))?.value) || '-';
-    const usage = rawPayload.newUsed 
-      ? `ครั้งที่ ${rawPayload.newUsed}/${rawPayload.currentTotal}` 
-      : (rawPayload.usage || (fields.find(f => f.name && f.name.includes('การใช้งาน'))?.value) || '1 ครั้ง');
-    const remaining = rawPayload.newRem !== undefined 
-      ? `${rawPayload.newRem} ครั้ง` 
-      : (rawPayload.remaining || (fields.find(f => f.name && f.name.includes('คงเหลือ'))?.value) || '0 ครั้ง');
-    const staff = rawPayload.staff || (fields.find(f => f.name && f.name.includes('ผู้ทำรายการ'))?.value) || 'เจ้าหน้าที่';
-    const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
-    const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
-    const phoneDisplay = cleanPhone 
-      ? `[${phone}](${webappUrl}/api/call?tel=${cleanPhone})` 
-      : (phone || '-');
-
-    const usageDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
-
-    embedTitle = `📋 ตัดรอบคอร์สคนไข้ • [ ${courseName} ]`;
-
-    desc = `👤 **${displayName}**${hnDisplay ? ` (${hnDisplay})` : ''}\n` +
-           `📅 **วันที่ใช้งาน:** ${usageDate}\n` +
-           `💊 **รายการคอร์ส:** ${courseName}\n` +
-           `🔄 **การใช้งาน:** ${usage}\n` +
-           `⏳ **จำนวนคงเหลือ:** **${remaining}**\n` +
-           `📞 **เบอร์ติดต่อ:** ${phoneDisplay}\n` +
-           `👨‍💼 **ผู้บันทึก:** ${staff}`;
+           `💰 **ยอดรวมทั้งสิ้น:** ฿${Number(totalAmount).toLocaleString()}`;
   } else if (eventType === 'opd') {
-    color = 0x7c3aed; // Violet
-    const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
+    color = 0x10b981; // Emerald Green
+    const rawDoctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
+    const doctorDisplay = rawDoctor.startsWith('หมอ') || rawDoctor.startsWith('พญ.') || rawDoctor.startsWith('นพ.') || rawDoctor.startsWith('ทพ.') ? rawDoctor : `พญ.${rawDoctor}`;
+    const dateStr = rawPayload.date || (fields.find(f => f.name && f.name.includes('วัน'))?.value) || new Date().toLocaleDateString('th-TH');
     const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
-    const treatment = rawPayload.treatment || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
-    const cost = rawPayload.cost || (fields.find(f => f.name && f.name.includes('ค่ารักษา'))?.value) || '';
-    const visitDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
+    const treatments = rawPayload.treatments || (fields.find(f => f.name && f.name.includes('หัตถการ'))?.value) || '-';
+    const medications = rawPayload.medications || (fields.find(f => f.name && f.name.includes('ยา'))?.value) || '-';
     const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
     const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
     const phoneDisplay = cleanPhone 
       ? `[${phone}](${webappUrl}/api/call?tel=${cleanPhone})` 
       : (phone || '-');
 
-    embedTitle = `🩺 บันทึกการรักษา OPD • [ ${doctor} ]`;
+    embedTitle = `🩺 บันทึกตรวจรักษา OPD • [ ${displayName} ]`;
 
-    desc = `👤 **${displayName}**${hnDisplay ? ` (${hnDisplay})` : ''}\n` +
-           `📅 **วันที่ตรวจรักษา:** ${visitDate}\n` +
-           `🔬 **ผลวินิจฉัย:** ${diagnosis}\n` +
-           `💊 **การรักษา/ยา:** ${treatment}\n` +
-           `👨‍⚕️ **แพทย์ผู้ตรวจ:** ${doctor}\n` +
-           (cost ? `💰 **ค่ารักษา:** ฿${Number(cost).toLocaleString()}\n` : '') +
-           `📞 **เบอร์ติดต่อ:** ${phoneDisplay}`;
+    desc = `👤 **${displayName}** (${hnDisplay || 'ทั่วไป'})\n` +
+           `📅 **วันที่ตรวจ:** ${dateStr}\n` +
+           `👩‍⚕️ **แพทย์ผู้ตรวจ:** ${doctorDisplay}\n` +
+           `📞 **เบอร์ติดต่อ:** ${phoneDisplay}\n` +
+           `🩺 **ผลการวินิจฉัย:** ${diagnosis}\n` +
+           `💉 **การรักษา/หัตถการ:** ${treatments}\n` +
+           `💊 **รายการยา:** ${medications}`;
+  } else if (eventType === 'mr') {
+    color = 0x8b5cf6; // Purple
+    const actionDesc = rawPayload.actionDesc || (fields.find(f => f.name && (f.name.includes('รายการ') || f.name.includes('การกระทำ')))?.value) || 'อัปเดตข้อมูลเวชระเบียน';
+    const staff = rawPayload.staff || (fields.find(f => f.name && f.name.includes('เจ้าหน้าที่'))?.value) || 'เจ้าหน้าที่';
+    const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
+    const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
+
+    embedTitle = `📁 เวชระเบียนผู้ป่วย • [ ${displayName} ]`;
+
+    desc = `👤 **${displayName}** (${hnDisplay || 'ทั่วไป'})\n` +
+           `📝 **รายการ:** ${actionDesc}\n` +
+           `👨‍💼 **ผู้ดำเนินการ:** ${staff}`;
   } else if (eventType === 'dashboard') {
-    color = 0x1e40af; // Royal Blue
-    const totalAmount = rawPayload.totalAmount || rawPayload.grandTotal || (fields.find(f => f.name && f.name.includes('ยอดขายรวม'))?.value?.replace(/[^\d.]/g, '')) || 0;
-    const billsCount = rawPayload.billsCount || (fields.find(f => f.name && f.name.includes('จำนวนบิล'))?.value?.replace(/[^\d.]/g, '')) || 0;
-    const patientsCount = rawPayload.patientsCount || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.replace(/[^\d.]/g, '')) || 0;
-    const cashAmount = rawPayload.cashAmount !== undefined ? rawPayload.cashAmount : (fields.find(f => f.name && f.name.includes('เงินสด'))?.value?.replace(/[^\d.]/g, '') || 0);
-    const transferAmount = rawPayload.transferAmount !== undefined ? rawPayload.transferAmount : (fields.find(f => f.name && f.name.includes('เงินโอน'))?.value?.replace(/[^\d.]/g, '') || 0);
-    const creditAmount = rawPayload.creditAmount !== undefined ? rawPayload.creditAmount : (fields.find(f => f.name && f.name.includes('บัตรเครดิต'))?.value?.replace(/[^\d.]/g, '') || 0);
-    const branchName = rawPayload.branch || rawPayload.branchName || 'สาขาหลัก';
-    const dateStr = rawPayload.date || rawPayload.datetime || new Date().toLocaleDateString('th-TH');
+    color = 0x059669; // Forest Green
+    const branchName = rawPayload.branchName || 'ทุกสาขารวม';
+    const dateStr = rawPayload.date || new Date().toLocaleDateString('th-TH');
+    const totalRev = rawPayload.totalRevenue || 0;
+    const totalPatients = rawPayload.patientCount || 0;
+    const cashAmount = rawPayload.cashTotal || 0;
+    const transferAmount = rawPayload.transferTotal || 0;
+    const creditAmount = rawPayload.creditTotal || 0;
 
-    embedTitle = `📊 สรุปยอดขายประจำวัน • [ ฿${Number(totalAmount).toLocaleString()} ]`;
+    embedTitle = `🌻 สรุปยอดคลินิกประจำวัน • [ ${dateStr} ]`;
 
-    desc = `📅 **ประจำวันที่:** ${dateStr}\n` +
-           `💰 **ยอดขายรวมสุทธิ:** **฿${Number(totalAmount).toLocaleString()}**\n` +
-           `🧾 **จำนวนบิลทั้งหมด:** ${billsCount} บิล\n` +
-           `👥 **คนไข้ที่รับบริการ:** ${patientsCount} ท่าน\n\n` +
-           `💳 **จำแนกตามช่องทางชำระเงิน:**\n` +
+    desc = `💰 **ยอดรายรับรวม:** ฿${Number(totalRev).toLocaleString()}\n` +
+           `👥 **จำนวนผู้รับบริการ:** ${totalPatients} ราย\n` +
            `• 💵 **เงินสด:** ฿${Number(cashAmount).toLocaleString()}\n` +
            `• 📲 **เงินโอน:** ฿${Number(transferAmount).toLocaleString()}\n` +
            `• 💳 **บัตรเครดิต:** ฿${Number(creditAmount).toLocaleString()}\n\n` +
@@ -1624,14 +1626,18 @@ export function buildDiscordFlexPayload({
            (fieldsText ? `${fieldsText}` : '');
   }
 
+  const defaultAvatar = 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150';
+  const finalAvatar = formatDirectImageUrl(botAvatarUrl) || defaultAvatar;
+  const finalUsername = botName?.trim() || 'Anping Clinic Notifier';
+
   return {
-    username: 'Anping Clinic Notifier',
-    avatar_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150',
+    username: finalUsername,
+    avatar_url: finalAvatar,
     embeds: [
       {
         author: {
           name: '🏥 ANPING CLINIC • MEDICAL SYSTEM',
-          icon_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150'
+          icon_url: finalAvatar
         },
         title: embedTitle,
         description: desc,
@@ -1656,11 +1662,17 @@ export async function sendDiscordEmbed(webhookUrl, {
   linkUrl = 'https://anpingclinic.vercel.app',
   linkButtonLabel = '🌐 เปิดดูในระบบ Anping Clinic ↗',
   rawPayload = {},
-  eventType = null
+  eventType = null,
+  botName = '',
+  botAvatarUrl = ''
 }) {
   if (!webhookUrl || typeof webhookUrl !== 'string' || !webhookUrl.trim().startsWith('http')) {
     return { success: false, error: 'Missing or invalid Webhook URL' };
   }
+
+  const defaultAvatar = 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150';
+  const finalAvatar = formatDirectImageUrl(botAvatarUrl) || defaultAvatar;
+  const finalUsername = botName?.trim() || 'Anping Clinic Notifier';
 
   // Format with blockquote Flex Card container if fields or eventType exists
   let payload;
@@ -1673,17 +1685,19 @@ export async function sendDiscordEmbed(webhookUrl, {
       rawPayload,
       discordColor: color,
       footerText,
-      webappUrl: linkUrl
+      webappUrl: linkUrl,
+      botName: finalUsername,
+      botAvatarUrl: finalAvatar
     });
   } else {
     payload = {
-      username: 'Anping Clinic Notifier',
-      avatar_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150',
+      username: finalUsername,
+      avatar_url: finalAvatar,
       embeds: [
         {
           author: {
             name: '🏥 ANPING CLINIC • MEDICAL SYSTEM',
-            icon_url: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150'
+            icon_url: finalAvatar
           },
           title: title,
           description: description ? (description.startsWith('>>>') ? description : `>>> ${description}`) : '',
@@ -1856,6 +1870,8 @@ export async function dispatchClinicNotification({
 
     for (const channel of matchingChannels) {
       try {
+        const channelAvatar = channel.botAvatarUrl || normalized.discord.botAvatarUrl || '';
+        const channelBotName = channel.botName || normalized.discord.botName || 'Anping Clinic Notifier';
         const res = await sendDiscordEmbed(channel.webhookUrl, {
           eventType,
           title: title || `แจ้งเตือนจากระบบ Anping Clinic`,
@@ -1865,7 +1881,9 @@ export async function dispatchClinicNotification({
           rawPayload: rawPayload,
           footerText: `Anping Clinic • ห้อง ${channel.name}`,
           linkUrl: 'https://anpingclinic.vercel.app',
-          linkButtonLabel: '🌐 เปิดดูในระบบ Anping Clinic ↗'
+          linkButtonLabel: '🌐 เปิดดูในระบบ Anping Clinic ↗',
+          botAvatarUrl: channelAvatar,
+          botName: channelBotName
         });
         results.discord.push({ channelId: channel.id, channelName: channel.name, success: res.success });
       } catch (err) {

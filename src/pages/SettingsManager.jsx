@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { clearAllLocalStores } from '../lib/offlineStore';
 import { theme } from '../global/theme';
-import { normalizeIntegrationTokens, syncLineBotQuotas, sendDiscordEmbed, sendTestLinePush, sendMenuLinePush } from '../lib/notificationHub';
+import { supabase } from '../lib/supabase';
+import { normalizeIntegrationTokens, syncLineBotQuotas, sendDiscordEmbed, sendTestLinePush, sendMenuLinePush, formatDirectImageUrl } from '../lib/notificationHub';
 
 const SettingsManager = ({
   staffPrefixes = [],
@@ -37,7 +38,8 @@ const SettingsManager = ({
   setGdriveTokens,
   callAppScript,
   showToast,
-  isGlobalLoading
+  isGlobalLoading,
+  onDirtyChange
 }) => {
   const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses' | 'integrations' | 'logs'
   const [newPrefix, setNewPrefix] = useState('');
@@ -85,6 +87,74 @@ const SettingsManager = ({
   const [showBotTokens, setShowBotTokens] = useState({});
   const [localGdriveTokens, setLocalGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
 
+  // Modal แจ้งเตือนเมื่อมีข้อมูลการเชื่อมต่อที่ยังไม่ได้บันทึกก่อนสลับแท็บย่อย
+  const [subTabUnsavedModal, setSubTabUnsavedModal] = useState({ isOpen: false, targetSubTab: null });
+
+  // ตรวจสอบว่ามีการเปลี่ยนแปลงข้อมูลการเชื่อมต่อ (LINE / Discord) ที่ยังไม่ได้กดบันทึกหรือไม่
+  const isIntegrationsDirty = useMemo(() => {
+    try {
+      const getComparable = (tokens) => {
+        const norm = normalizeIntegrationTokens(tokens);
+        return {
+          lineEnabled: norm.line?.enabled ?? true,
+          lineEvents: norm.line?.events || {},
+          lineRecipients: (norm.line?.recipients || []).map(r => ({
+            name: String(r.name || '').trim(),
+            chatId: String(r.chatId || '').trim()
+          })),
+          lineBots: (norm.line?.bots || []).map(b => ({
+            name: String(b.name || '').trim(),
+            token: String(b.token || '').trim(),
+            customChatId: String(b.customChatId || '').trim()
+          })),
+          discordEnabled: norm.discord?.enabled ?? true,
+          discordBotAvatarUrl: String(norm.discord?.botAvatarUrl || '').trim(),
+          discordBotName: String(norm.discord?.botName || '').trim(),
+          discordChannels: (norm.discord?.channels || []).map(c => ({
+            name: String(c.name || '').trim(),
+            event: String(c.event || '').trim(),
+            webhookUrl: String(c.webhookUrl || '').trim(),
+            botAvatarUrl: String(c.botAvatarUrl || '').trim()
+          }))
+        };
+      };
+      return JSON.stringify(getComparable(localIntegrationTokens)) !== JSON.stringify(getComparable(integrationTokens));
+    } catch (e) {
+      return false;
+    }
+  }, [localIntegrationTokens, integrationTokens]);
+
+  // แจ้ง parent component (App.jsx) ทราบสถานะ unsaved เพื่อดักการเปลี่ยนหน้าหลัก
+  useEffect(() => {
+    onDirtyChange?.(isIntegrationsDirty);
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [isIntegrationsDirty, onDirtyChange]);
+
+  // ดักจับการปิดหน้าต่าง หรือรีเฟรชหน้าเว็บ (F5) ขณะที่ยังมีข้อมูลที่ยังไม่ได้บันทึก
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isIntegrationsDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isIntegrationsDirty]);
+
+  // จัดการการคลิกเปลี่ยนแท็บย่อยในหน้า Settings
+  const handleSubTabClick = (targetSubTab) => {
+    if (targetSubTab === activeSubTab) return;
+    if (activeSubTab === 'integrations' && isIntegrationsDirty) {
+      setSubTabUnsavedModal({ isOpen: true, targetSubTab });
+      return;
+    }
+    setActiveSubTab(targetSubTab);
+  };
+
   // Sync with props
   useEffect(() => {
     if (staffPrefixes) setLocalPrefixes([...staffPrefixes]);
@@ -107,8 +177,11 @@ const SettingsManager = ({
   }, [appointmentStatuses]);
 
   useEffect(() => {
-    if (integrationTokens) setLocalIntegrationTokens(normalizeIntegrationTokens(integrationTokens));
-  }, [integrationTokens]);
+    // ป้องกันไม่ให้การซิงก์ background มาทับข้อมูลที่ผู้ใช้กำลังพิมพ์แก้ไขอยู่
+    if (integrationTokens && !isIntegrationsDirty) {
+      setLocalIntegrationTokens(normalizeIntegrationTokens(integrationTokens));
+    }
+  }, [integrationTokens, isIntegrationsDirty]);
 
   useEffect(() => {
     if (gdriveTokens) setLocalGdriveTokens({ ...gdriveTokens });
@@ -365,7 +438,7 @@ const SettingsManager = ({
     const nextNum = (localIntegrationTokens.line?.bots || []).length + 1;
     const newBot = {
       id: `bot_${Date.now()}`,
-      name: `SHK Metal${nextNum}`,
+      name: `บอทตัวที่ ${nextNum}`,
       token: '',
       customChatId: '',
       usedQuota: 0,
@@ -416,15 +489,22 @@ const SettingsManager = ({
           bots: updated
         }
       }));
-      // ซิงก์ค่ากลับไปบันทึกลงตาราง settings อัตโนมัติ
-      if (typeof callAppScript === 'function') {
-        callAppScript('SAVE_DATA', 'Settings', {
+      // ซิงก์ค่ากลับไปบันทึกลงตาราง settings อัตโนมัติ เฉพาะเมื่อผู้ใช้กดปุ่มซิงก์โควต้าโดยตรง (ไม่บันทึกทับใน silent background)
+      if (!silent && typeof callAppScript === 'function') {
+        const updatedTokens = {
+          ...localIntegrationTokens,
+          line: { ...(localIntegrationTokens.line || {}), bots: updated }
+        };
+        await callAppScript('SAVE_DATA', 'Settings', {
           id: 'integration_tokens',
-          values: {
-            ...localIntegrationTokens,
-            line: { ...(localIntegrationTokens.line || {}), bots: updated }
+          values: updatedTokens
+        });
+        setIntegrationTokens(updatedTokens);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('clinic_integration_tokens', JSON.stringify(updatedTokens));
           }
-        }).catch(() => {});
+        } catch (e) {}
       }
       if (!silent) showToast('ซิงก์ข้อมูลโควต้าจริงจาก LINE สำเร็จเรียบร้อย', 'success');
     } catch (err) {
@@ -436,7 +516,7 @@ const SettingsManager = ({
 
   // Auto-sync real-time LINE quota on subtab open
   useEffect(() => {
-    if (activeSubTab === 'integrations') {
+    if (activeSubTab === 'integrations' && !isIntegrationsDirty) {
       const bots = localIntegrationTokens?.line?.bots || [];
       if (bots.length > 0 && bots.some(b => b.token)) {
         handleSyncLineQuotas(true);
@@ -444,9 +524,9 @@ const SettingsManager = ({
     }
   }, [activeSubTab]);
 
-  // Periodic real-time quota polling every 20s while viewing Integrations subtab
+  // Periodic real-time quota polling every 20s while viewing Integrations subtab (pause while editing)
   useEffect(() => {
-    if (activeSubTab !== 'integrations') return;
+    if (activeSubTab !== 'integrations' || isIntegrationsDirty) return;
     const interval = setInterval(() => {
       const bots = localIntegrationTokens?.line?.bots || [];
       if (bots.length > 0 && bots.some(b => b.token)) {
@@ -454,7 +534,7 @@ const SettingsManager = ({
       }
     }, 20000);
     return () => clearInterval(interval);
-  }, [activeSubTab, localIntegrationTokens?.line?.bots]);
+  }, [activeSubTab, isIntegrationsDirty, localIntegrationTokens?.line?.bots]);
 
   // --- Discord Handlers ---
   const handleToggleDiscord = (enabled) => {
@@ -464,13 +544,73 @@ const SettingsManager = ({
     }));
   };
 
+  const discordAvatarInputRef = useRef(null);
+  const channelAvatarInputRefs = useRef({});
+  const [isUploadingDiscordAvatar, setIsUploadingDiscordAvatar] = useState(false);
+  const [uploadingChannelAvatarId, setUploadingChannelAvatarId] = useState(null);
+
+  const handleUploadDiscordAvatar = async (file, targetChannelId = null) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('ไฟล์รูปภาพต้องมีขนาดไม่เกิน 5MB', 'warning');
+      return;
+    }
+
+    if (targetChannelId) {
+      setUploadingChannelAvatarId(targetChannelId);
+    } else {
+      setIsUploadingDiscordAvatar(true);
+    }
+    showToast('กำลังอัปโหลดรูปภาพ...', 'info');
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result.split(',')[1];
+      try {
+        const response = await callAppScript('UPLOAD_FILE', 'Settings', {
+          fileName: `DISCORD_BOT_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`,
+          mimeType: file.type,
+          data: base64Data,
+          folderId: gdriveTokens?.generalDriveFolderId
+        });
+
+        if (response.status === 'success' && response.fileUrl) {
+          const directUrl = formatDirectImageUrl(response.fileUrl);
+          if (targetChannelId) {
+            handleUpdateDiscordChannel(targetChannelId, 'botAvatarUrl', directUrl);
+            showToast('อัปโหลดรูปบอทเฉพาะห้องสำเร็จ (อย่าลืมกดปุ่มบันทึกด้านล่าง)', 'success');
+          } else {
+            setLocalIntegrationTokens(prev => ({
+              ...prev,
+              discord: {
+                ...(prev.discord || {}),
+                botAvatarUrl: directUrl
+              }
+            }));
+            showToast('อัปโหลดรูปบอท Discord สำเร็จ (อย่าลืมกดปุ่มบันทึกด้านล่าง)', 'success');
+          }
+        } else {
+          throw new Error(response.message || 'ไม่ได้รับ URL ของรูปภาพจากระบบ');
+        }
+      } catch (err) {
+        console.error('Discord Avatar Upload Error:', err);
+        showToast(`อัปโหลดไม่สำเร็จ: ${err.message}`, 'danger');
+      } finally {
+        setIsUploadingDiscordAvatar(false);
+        setUploadingChannelAvatarId(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddDiscordChannel = () => {
     const nextNum = (localIntegrationTokens.discord?.channels || []).length + 1;
     const newChannel = {
       id: `dc_${Date.now()}`,
       name: `ห้องที่ ${nextNum} 💬`,
       event: 'all',
-      webhookUrl: ''
+      webhookUrl: '',
+      botAvatarUrl: ''
     };
     setLocalIntegrationTokens(prev => ({
       ...prev,
@@ -508,6 +648,8 @@ const SettingsManager = ({
     }
     setTestingDiscordId(channel.id);
     try {
+      const channelAvatar = channel.botAvatarUrl || localIntegrationTokens.discord?.botAvatarUrl || '';
+      const botName = channel.botName || localIntegrationTokens.discord?.botName || 'Anping Clinic Notifier';
       const res = await sendDiscordEmbed(channel.webhookUrl.trim(), {
         title: `🔔 ทดสอบการแจ้งเตือนห้อง #${channel.name}`,
         description: `ระบบเชื่อมต่อ Webhook ของห้องนี้สำเร็จเรียบร้อยแล้ว!\nข้อความนี้ส่งมาจากระบบบริหารคลินิก Anping Clinic`,
@@ -517,7 +659,9 @@ const SettingsManager = ({
           { name: '🎯 หมวดหมู่การแจ้งเตือน', value: channel.event === 'all' ? 'ทุกเหตุการณ์' : channel.event, inline: true },
           { name: '⚡ สถานะการเชื่อมต่อ', value: 'ออนไลน์และพร้อมใช้งาน 100%', inline: false }
         ],
-        footerText: 'Anping Clinic'
+        footerText: 'Anping Clinic',
+        botAvatarUrl: channelAvatar,
+        botName: botName
       });
 
       if (res.success) {
@@ -604,7 +748,22 @@ const SettingsManager = ({
   const saveIntegrations = async () => {
     setIsSaving(true);
     try {
-      await callAppScript('SAVE_DATA', 'Settings', { id: 'integration_tokens', values: localIntegrationTokens });
+      if (supabase) {
+        const { error: sbErr } = await supabase
+          .from('settings')
+          .upsert({
+            id: 'integration_tokens',
+            values: localIntegrationTokens,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+        if (sbErr) {
+          console.error("Direct upsert settings error:", sbErr);
+          throw sbErr;
+        }
+      }
+      if (typeof callAppScript === 'function') {
+        await callAppScript('SAVE_DATA', 'Settings', { id: 'integration_tokens', values: localIntegrationTokens });
+      }
       setIntegrationTokens(localIntegrationTokens);
       try {
         if (typeof window !== 'undefined' && window.localStorage) {
@@ -622,7 +781,22 @@ const SettingsManager = ({
   const saveGdriveTokens = async () => {
     setIsSaving(true);
     try {
-      await callAppScript('SAVE_DATA', 'Settings', { id: 'gdrive_tokens', values: localGdriveTokens });
+      if (supabase) {
+        const { error: sbErr } = await supabase
+          .from('settings')
+          .upsert({
+            id: 'gdrive_tokens',
+            values: localGdriveTokens,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+        if (sbErr) {
+          console.error("Direct upsert gdrive tokens error:", sbErr);
+          throw sbErr;
+        }
+      }
+      if (typeof callAppScript === 'function') {
+        await callAppScript('SAVE_DATA', 'Settings', { id: 'gdrive_tokens', values: localGdriveTokens });
+      }
       setGdriveTokens(localGdriveTokens);
       showToast('บันทึกการตั้งค่า GDrive สำเร็จ', 'success');
     } catch (e) {
@@ -666,7 +840,7 @@ const SettingsManager = ({
         {/* Navigation Sidebar inside Settings */}
         <div className="lg:col-span-1 flex flex-col gap-2.5">
           <button
-            onClick={() => setActiveSubTab('prefixes')}
+            onClick={() => handleSubTabClick('prefixes')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'prefixes'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -677,7 +851,7 @@ const SettingsManager = ({
             คำนำหน้าชื่อพนักงาน
           </button>
           <button
-            onClick={() => setActiveSubTab('permissions')}
+            onClick={() => handleSubTabClick('permissions')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'permissions'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -688,7 +862,7 @@ const SettingsManager = ({
             จัดการสิทธิ์เข้าระบบ
           </button>
           <button
-            onClick={() => setActiveSubTab('categories')}
+            onClick={() => handleSubTabClick('categories')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'categories'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -699,7 +873,7 @@ const SettingsManager = ({
             ตัวเลือกหมวดหมู่
           </button>
           <button
-            onClick={() => setActiveSubTab('statuses')}
+            onClick={() => handleSubTabClick('statuses')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'statuses'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -710,18 +884,29 @@ const SettingsManager = ({
             สถานะนัดหมาย
           </button>
           <button
-            onClick={() => setActiveSubTab('integrations')}
-            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
+            onClick={() => handleSubTabClick('integrations')}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center justify-between shadow-sm ${
               activeSubTab === 'integrations'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
                 : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
             }`}
           >
-            <Link size={18} />
-            การเชื่อมต่อแจ้งเตือน
+            <div className="flex items-center gap-3">
+              <Link size={18} />
+              การเชื่อมต่อแจ้งเตือน
+            </div>
+            {isIntegrationsDirty && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse border ${
+                activeSubTab === 'integrations'
+                  ? 'bg-amber-300 text-slate-900 border-amber-400'
+                  : 'bg-amber-100 text-amber-800 border-amber-300'
+              }`}>
+                ยังไม่บันทึก
+              </span>
+            )}
           </button>
           <button
-            onClick={() => setActiveSubTab('gdrive')}
+            onClick={() => handleSubTabClick('gdrive')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'gdrive'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -732,7 +917,7 @@ const SettingsManager = ({
             เชื่อมต่อ GDrive
           </button>
           <button
-            onClick={() => setActiveSubTab('logs')}
+            onClick={() => handleSubTabClick('logs')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'logs'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -743,7 +928,7 @@ const SettingsManager = ({
             ประวัติการใช้งาน (Logs)
           </button>
           <button
-            onClick={() => setActiveSubTab('cache')}
+            onClick={() => handleSubTabClick('cache')}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold kanit-text text-sm transition-all flex items-center gap-3 shadow-sm ${
               activeSubTab === 'cache'
                 ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
@@ -803,9 +988,10 @@ const SettingsManager = ({
 
                 <div className="border-t border-slate-100 pt-6 flex justify-end">
                   <button
+                    data-save-btn="true"
                     onClick={savePrefixes}
                     disabled={isSaving}
-                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกรายการคำนำหน้าชื่อ
@@ -900,9 +1086,10 @@ const SettingsManager = ({
 
                 <div className="border-t border-slate-100 pt-6 flex justify-end">
                   <button
+                    data-save-btn="true"
                     onClick={savePermissions}
                     disabled={isSaving}
-                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกสิทธิ์เข้าระบบ
@@ -963,9 +1150,10 @@ const SettingsManager = ({
 
                 <div className="border-t border-slate-100 pt-6 flex justify-end">
                   <button
+                    data-save-btn="true"
                     onClick={saveCategories}
                     disabled={isSaving}
-                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกตัวเลือกหมวดหมู่
@@ -1127,9 +1315,10 @@ const SettingsManager = ({
 
                 <div className="border-t border-slate-100 pt-6 flex justify-end">
                   <button
+                    data-save-btn="true"
                     onClick={saveApptStatuses}
                     disabled={isSaving}
-                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกสถานะนัดหมาย
@@ -1347,7 +1536,7 @@ const SettingsManager = ({
                                   type="text"
                                   value={bot.name || ''}
                                   onChange={(e) => handleUpdateLineBot(bot.id, 'name', e.target.value)}
-                                  placeholder={`ชื่อบอท (เช่น SHK Metal${index + 1})`}
+                                  placeholder={`ชื่อบอท (เช่น บอทตัวที่ ${index + 1})`}
                                   className="font-bold text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 kanit-text outline-none focus:ring-1 focus:ring-sky-500 w-36 sm:w-44"
                                 />
                                 <span
@@ -1490,7 +1679,162 @@ const SettingsManager = ({
                     </div>
                   </div>
 
-                  {/* 2. รายชื่อห้องแชทใน Discord (เพิ่มห้องได้ไม่จำกัด ตามที่ผู้ใช้สั่ง) */}
+                  {/* 2. ตั้งค่ารูปโปรไฟล์และชื่อ Bot Discord (Global) */}
+                  <div className="mb-6 p-5 rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                      {/* Left: Avatar Preview + Upload Controls */}
+                      <div className="flex items-center gap-4">
+                        <div className="relative shrink-0">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-100 border-2 border-indigo-200 shadow-sm flex items-center justify-center relative">
+                            {localIntegrationTokens.discord?.botAvatarUrl ? (
+                              <img 
+                                src={formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl)} 
+                                alt="Discord Bot Avatar"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150';
+                                }}
+                              />
+                            ) : (
+                              <img 
+                                src="https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150" 
+                                alt="Default Bot Avatar"
+                                className="w-full h-full object-cover opacity-80"
+                              />
+                            )}
+                            {isUploadingDiscordAvatar && (
+                              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-2xs flex flex-col items-center justify-center text-white p-1">
+                                <Loader2 size={20} className="animate-spin text-white mb-1" />
+                                <span className="text-[10px] font-bold">อัปโหลด...</span>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => discordAvatarInputRef.current?.click()}
+                            disabled={isUploadingDiscordAvatar}
+                            className="absolute -bottom-1 -right-1 w-7 h-7 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center shadow-md transition-transform active:scale-95 disabled:opacity-50"
+                            title="อัปโหลดรูป"
+                          >
+                            <Camera size={14} />
+                          </button>
+                          <input 
+                            type="file" 
+                            ref={discordAvatarInputRef} 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => {
+                              if (e.target.files?.[0]) {
+                                handleUploadDiscordAvatar(e.target.files[0]);
+                                e.target.value = '';
+                              }
+                            }} 
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text">
+                              รูปโปรไฟล์และชื่อบอท Discord
+                            </h4>
+                            <span className="text-[11px] px-2 py-0.5 rounded-md font-bold bg-indigo-100 text-indigo-700 kanit-text">
+                              ส่วนกลาง (Global)
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 kanit-text mt-0.5">
+                            {localIntegrationTokens.discord?.botAvatarUrl 
+                              ? 'ใช้รูปที่กำหนดเอง (แสดงข้างข้อความแจ้งเตือนใน Discord)' 
+                              : 'กำลังใช้รูปเริ่มต้นของระบบ (สามารถเปลี่ยนรูปหรือวาง URL ได้)'}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                            <button
+                              type="button"
+                              onClick={() => discordAvatarInputRef.current?.click()}
+                              disabled={isUploadingDiscordAvatar}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs kanit-text transition-all shadow-2xs disabled:opacity-50"
+                            >
+                              <Upload size={13} /> {isUploadingDiscordAvatar ? 'กำลังอัปโหลด...' : 'อัปโหลดรูป'}
+                            </button>
+                            {localIntegrationTokens.discord?.botAvatarUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLocalIntegrationTokens(prev => ({
+                                    ...prev,
+                                    discord: { ...(prev.discord || {}), botAvatarUrl: '' }
+                                  }));
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 font-bold text-xs kanit-text transition-all"
+                              >
+                                ใช้รูปเริ่มต้น
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Bot Name + URL input */}
+                      <div className="w-full md:flex-1 md:max-w-md space-y-2.5">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 kanit-text mb-1">
+                            ชื่อแสดงของบอท (Bot Display Name):
+                          </label>
+                          <input
+                            type="text"
+                            value={localIntegrationTokens.discord?.botName || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalIntegrationTokens(prev => ({
+                                ...prev,
+                                discord: { ...(prev.discord || {}), botName: val }
+                              }));
+                            }}
+                            placeholder="Anping Clinic Notifier (หรือชื่อคลินิก)"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 kanit-text outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 kanit-text mb-1">
+                            ลิงก์ URL รูปภาพบอท:
+                          </label>
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={localIntegrationTokens.discord?.botAvatarUrl || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setLocalIntegrationTokens(prev => ({
+                                  ...prev,
+                                  discord: { ...(prev.discord || {}), botAvatarUrl: val }
+                                }));
+                              }}
+                              placeholder="https://... (วางลิงก์รูปภาพ)"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 pr-8 text-xs font-mono text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                            />
+                            {localIntegrationTokens.discord?.botAvatarUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLocalIntegrationTokens(prev => ({
+                                    ...prev,
+                                    discord: { ...(prev.discord || {}), botAvatarUrl: '' }
+                                  }));
+                                }}
+                                className="absolute right-2 text-slate-400 hover:text-slate-600 p-1"
+                                title="ล้างลิงก์รูปภาพ"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. รายชื่อห้องแชทใน Discord (เพิ่มห้องได้ไม่จำกัด ตามที่ผู้ใช้สั่ง) */}
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                       <div>
@@ -1578,6 +1922,80 @@ const SettingsManager = ({
                                 className="w-full bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-xl px-3 py-2 font-mono outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                               />
                             </div>
+
+                            {/* Option: รูปบอทเฉพาะห้องนี้ (ถ้าต้องการกำหนดแยก) */}
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
+                              <div className="w-8 h-8 rounded-lg overflow-hidden bg-white border border-slate-200 shrink-0 flex items-center justify-center relative shadow-2xs">
+                                {channel.botAvatarUrl ? (
+                                  <img 
+                                    src={formatDirectImageUrl(channel.botAvatarUrl)} 
+                                    alt="Channel Bot Avatar" 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.onerror = null;
+                                      e.target.src = formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl) || 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150';
+                                    }}
+                                  />
+                                ) : (
+                                  <img 
+                                    src={formatDirectImageUrl(localIntegrationTokens.discord?.botAvatarUrl) || 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=150'} 
+                                    alt="Inherited Bot Avatar" 
+                                    className="w-full h-full object-cover opacity-60"
+                                    title="ใช้รูปหลักส่วนกลางของบอท"
+                                  />
+                                )}
+                                {uploadingChannelAvatarId === channel.id && (
+                                  <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white">
+                                    <Loader2 size={12} className="animate-spin text-white" />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex-1 min-w-[200px] flex items-center gap-2">
+                                <div className="relative flex-1">
+                                  <input
+                                    type="text"
+                                    value={channel.botAvatarUrl || ''}
+                                    onChange={(e) => handleUpdateDiscordChannel(channel.id, 'botAvatarUrl', e.target.value)}
+                                    placeholder="รูปบอทเฉพาะห้องนี้ (เว้นว่างไว้หากต้องการใช้รูปหลักส่วนกลาง)"
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 pr-7 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono transition-all"
+                                  />
+                                  {channel.botAvatarUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateDiscordChannel(channel.id, 'botAvatarUrl', '')}
+                                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                                      title="ล้างรูปเฉพาะห้อง (กลับไปใช้รูปหลักส่วนกลาง)"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  )}
+                                </div>
+
+                                <input
+                                  type="file"
+                                  ref={(el) => { if (el) channelAvatarInputRefs.current[channel.id] = el; }}
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                      handleUploadDiscordAvatar(e.target.files[0], channel.id);
+                                      e.target.value = '';
+                                    }
+                                  }}
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => channelAvatarInputRefs.current[channel.id]?.click()}
+                                  disabled={uploadingChannelAvatarId === channel.id}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold text-xs kanit-text transition-all shrink-0 disabled:opacity-50"
+                                  title="อัปโหลดรูปเฉพาะห้อง"
+                                >
+                                  <Upload size={12} /> {uploadingChannelAvatarId === channel.id ? 'อัปโหลด...' : 'อัปโหลดรูป'}
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -1600,9 +2018,10 @@ const SettingsManager = ({
                 {/* 💾 ปุ่มบันทึกการตั้งค่าทั้งหมด */}
                 <div className="flex justify-end pt-2">
                   <button
+                    data-save-btn="true"
                     onClick={saveIntegrations}
                     disabled={isSaving}
-                    className="px-8 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white hover:opacity-95 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white hover:opacity-95 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     <Save size={16} /> บันทึกการตั้งค่าการแจ้งเตือนทั้งหมด
@@ -1643,9 +2062,10 @@ const SettingsManager = ({
 
                 <div className="border-t border-slate-100 pt-6 mt-8 flex justify-end">
                   <button
+                    data-save-btn="true"
                     onClick={saveGdriveTokens}
                     disabled={isSaving}
-                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-3 bg-sky-500 text-white hover:bg-sky-600 rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกการตั้งค่า GDrive
@@ -1784,6 +2204,44 @@ const SettingsManager = ({
           </div>
         </div>
       </div>
+
+      {/* Modal แจ้งเตือนเมื่อมีข้อมูลการเชื่อมต่อที่ยังไม่บันทึกก่อนสลับแท็บย่อย */}
+      {subTabUnsavedModal.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-4 border border-amber-200/60 shadow-xs">
+              <AlertTriangle size={26} />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 text-center kanit-text mb-2">
+              มีข้อมูลที่ยังไม่ได้บันทึก!
+            </h3>
+            <p className="text-slate-600 text-xs sm:text-sm text-center kanit-text leading-relaxed mb-6">
+              คุณมีการแก้ไขการตั้งค่าการแจ้งเตือน (บอท LINE หรือ Webhook Discord) ที่ยังไม่ได้กดบันทึก หากสลับแท็บย่อยตอนนี้ ข้อมูลที่คุณแก้ไขจะหายไป
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setSubTabUnsavedModal({ isOpen: false, targetSubTab: null })}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-sm kanit-text transition-colors"
+              >
+                อยู่หน้านี้ต่อ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = subTabUnsavedModal.targetSubTab;
+                  setLocalIntegrationTokens(normalizeIntegrationTokens(integrationTokens));
+                  setSubTabUnsavedModal({ isOpen: false, targetSubTab: null });
+                  if (target) setActiveSubTab(target);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm kanit-text transition-colors shadow-sm"
+              >
+                สลับแท็บ (ไม่บันทึก)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
