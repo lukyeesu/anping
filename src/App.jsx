@@ -2737,7 +2737,7 @@ export default function App() {
       <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-200/30 blur-[100px] pointer-events-none z-0"></div>
 
       {/* แก้ไขกลับมาเป็น h-screen เพราะ 100dvh อาจทำให้หน้าจอยุบตัวบนบาง Browser */}
-      <div className="flex h-screen overflow-hidden w-full flex-col md:flex-row relative">
+      <div className="flex h-screen overflow-hidden overflow-x-hidden w-full max-w-full flex-col md:flex-row relative">
         
         {/* Backdrop สำหรับ Mobile เมื่อกางเมนู (ใช้ CSS Transition ธรรมดา ไม่กิน CPU) */}
         <div 
@@ -3109,14 +3109,14 @@ export default function App() {
         </header>
 
         {/* เพิ่ม ref={mainRef} ให้กล่องหลัก ปลด z-20 ออกเพื่อให้ Modal ทำงานอิสระ */}
-        <main id="main-scroll-container" ref={mainRef} className="flex-1 flex flex-col overflow-y-auto pb-24 md:pb-0 w-full relative custom-scrollbar" style={{ overflowAnchor: 'none', '--mobile-header-offset': (isMobile && showMobileBars) ? '61px' : '0px' }}>
+        <main id="main-scroll-container" ref={mainRef} className="flex-1 min-w-0 flex flex-col overflow-y-auto pb-24 md:pb-0 relative custom-scrollbar" style={{ overflowAnchor: 'none', '--mobile-header-offset': (isMobile && showMobileBars) ? '61px' : '0px' }}>
           
           {/* --- [FIX] ย้าย Spacer มาไว้ด้านในกล่อง Scroll แบบตายตัว ไม่ให้ Layout สั่นกระตุก --- */}
           <div className="md:hidden shrink-0 w-full h-[61px] pointer-events-none"></div>
 
-          <div className="flex-1 flex flex-col w-full min-h-full">
+          <div className="flex-1 min-w-0 flex flex-col w-full min-h-full">
             {currentTab === 'dashboard' && (
-                <div className="w-full">
+                <div className="w-full min-w-0">
                     <Dashboard 
                         queueData={queueData} 
                         patientsData={patientsData} 
@@ -3134,7 +3134,7 @@ export default function App() {
             )}
 
             {currentTab === 'exec_dashboard' && (
-                <div className="w-full">
+                <div className="w-full min-w-0">
                     <ExecutiveDashboard 
                         queueData={queueData}
                         patientsData={patientsData}
@@ -3641,6 +3641,32 @@ export default function App() {
         /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก (เพิ่มระยะห่างจากขอบบนเพื่อความสวยงามและไม่โดนบัง) */
         .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 52px); z-index: 40; }
         @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 60px); } }
+
+        /* --- Executive Dashboard Sticky Header (Opaque & Clean) --- */
+        .exec-sticky-header {
+          background-color: #f8fafc;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+          transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        .is-scrolled .exec-sticky-header {
+          background-color: #ffffff;
+          border-bottom-color: rgba(203, 213, 225, 0.9);
+          box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+        }
+        .exec-header-inner {
+          transition: padding 0.25s ease;
+        }
+        .is-scrolled .exec-header-inner {
+          padding-top: 0.375rem !important;
+          padding-bottom: 0.375rem !important;
+        }
+        @media (min-width: 640px) {
+          .is-scrolled .exec-header-inner {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+          }
+        }
       `}} />
 
       {/* PDPA QR Code Modal */}
