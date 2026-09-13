@@ -63,8 +63,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   // --- [NEW] State สำหรับระบบจดจำการรักษาล่าสุด (Recent Treatments) ---
   const [recentTreatments, setRecentTreatments] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
+      try {
         const saved = localStorage.getItem('clinic_recent_treatments');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.map(item => typeof item === 'string' ? item : (item?.name || String(item || ''))).filter(Boolean);
+          }
+        }
+      } catch (e) {}
     }
     return [];
   });
@@ -90,16 +97,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
   // ฟังก์ชันจัดการเมื่อเลือกการรักษา
   const handleSelectTreatment = (treatmentName, txIndex) => {
+    const cleanName = typeof treatmentName === 'string' ? treatmentName : (treatmentName?.name || String(treatmentName || ''));
     const updatedTx = [...(newOpdRecord.tx || [])];
-    updatedTx[txIndex] = treatmentName;
+    updatedTx[txIndex] = cleanName;
     setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
     setOpenTxDropdownIndex(null);
     
     // อัปเดตรายการรักษาล่าสุด (เอาไปไว้บนสุด และจำกัดแค่ 5 ชื่อ)
-    setRecentTreatments(prev => {
-        const newRecents = [treatmentName, ...prev.filter(name => name !== treatmentName)].slice(0, 5);
-        return newRecents;
-    });
+    if (cleanName && cleanName.trim()) {
+      setRecentTreatments(prev => {
+        const list = Array.isArray(prev) ? prev : [];
+        const cleanList = list.map(item => typeof item === 'string' ? item : (item?.name || String(item || ''))).filter(name => name !== cleanName && name.trim());
+        return [cleanName, ...cleanList].slice(0, 5);
+      });
+    }
   };
 
   // --- จำลองระบบ Login User (ดึงจาก Auth Context ในระบบจริง) ---
@@ -1661,11 +1672,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const handleOpenOpdForm = (index = null, record = null) => {
     if (index !== null && record) { 
       setEditingOpdIndex(index);
-      const initialTx = Array.isArray(record.tx) && record.tx.length > 0 
+      const rawTxList = Array.isArray(record.tx) && record.tx.length > 0 
         ? record.tx 
         : (Array.isArray(record.prescription) && record.prescription.length > 0 
             ? record.prescription 
             : (record.tx ? [record.tx] : (record.prescription ? [record.prescription] : [''])));
+      const initialTx = rawTxList.map(t => {
+        if (typeof t === 'string') return t;
+        if (t && typeof t === 'object') return t.name || t.title || t.item || t.drugName || '';
+        return t != null ? String(t) : '';
+      });
+      if (initialTx.length === 0) initialTx.push('');
       setNewOpdRecord({
         ...record,
         tx: [...initialTx],
@@ -3170,8 +3187,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                         <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">รายชื่อทั้งหมด</span>
                                     </div>
                                     {(() => {
-                                        const allDocs = staffData.filter(s => s.role === 'doctor' || s.category === 'doctor');
-                                        const filteredDocs = allDocs.filter(d => !newOpdRecord.doctor || d.name.toLowerCase().includes(newOpdRecord.doctor.toLowerCase()));
+                                        const dQuery = String(newOpdRecord.doctor || '').trim().toLowerCase();
+                                        const filteredDocs = allDocs.filter(d => {
+                                          if (!dQuery) return true;
+                                          const dName = typeof d?.name === 'string' ? d.name.toLowerCase() : String(d?.name || '').toLowerCase();
+                                          return dName.includes(dQuery);
+                                        });
                                         
                                         if (filteredDocs.length > 0) {
                                             return filteredDocs.map((doc, idx) => (
@@ -3226,110 +3247,135 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">การรักษาที่ให้</label>
                           <div className="flex flex-col gap-2">
-                            {newOpdRecord.tx.map((treatment, txIndex) => (
-                              <div key={txIndex} className="flex gap-2 items-stretch w-full">
-                                {/* ใช้ z-index คำนวณตาม index เพื่อให้ dropdown ของรายการบน ทับรายการล่าง */}
-                                <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
-                                  <input 
-                                      type="text"
-                                      className={`${theme.input} bg-white py-2 text-sm font-data ${treatment ? 'pr-14' : 'pr-10'}`}
-                                      value={treatment} 
-                                      onChange={(e) => {
-                                          const updatedTx = [...newOpdRecord.tx];
-                                          updatedTx[txIndex] = e.target.value;
-                                          setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
-                                      }} 
-                                      onFocus={() => setOpenTxDropdownIndex(txIndex)}
-                                      onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
-                                      placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
-                                  />
-                                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
-                                    {treatment && (
-                                      <button
-                                        type="button"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          const updatedTx = [...newOpdRecord.tx];
-                                          updatedTx[txIndex] = '';
-                                          setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
-                                        }}
-                                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                                        title="ล้างข้อมูล"
-                                      >
-                                        <X size={14} />
-                                      </button>
-                                    )}
-                                    <div className="pointer-events-none text-slate-400">
-                                      <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                            {newOpdRecord.tx.map((treatment, txIndex) => {
+                              const treatmentStr = typeof treatment === 'string' 
+                                ? treatment 
+                                : (treatment && typeof treatment === 'object' 
+                                    ? (treatment.name || treatment.title || treatment.label || '') 
+                                    : (treatment != null ? String(treatment) : ''));
+                              const hasTreatment = Boolean(treatmentStr && treatmentStr.trim());
+                              const treatmentLower = treatmentStr.trim().toLowerCase();
+
+                              return (
+                                <div key={txIndex} className="flex gap-2 items-stretch w-full">
+                                  {/* ใช้ z-index คำนวณตาม index เพื่อให้ dropdown ของรายการบน ทับรายการล่าง */}
+                                  <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
+                                    <input 
+                                        type="text"
+                                        className={`${theme.input} bg-white py-2 text-sm font-data ${hasTreatment ? 'pr-14' : 'pr-10'}`}
+                                        value={treatmentStr} 
+                                        onChange={(e) => {
+                                            const updatedTx = [...newOpdRecord.tx];
+                                            updatedTx[txIndex] = e.target.value;
+                                            setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                        }} 
+                                        onFocus={() => setOpenTxDropdownIndex(txIndex)}
+                                        onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
+                                        placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+                                      {hasTreatment && (
+                                        <button
+                                          type="button"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            const updatedTx = [...newOpdRecord.tx];
+                                            updatedTx[txIndex] = '';
+                                            setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                          }}
+                                          className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                                          title="ล้างข้อมูล"
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      )}
+                                      <div className="pointer-events-none text-slate-400">
+                                        <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                                      </div>
                                     </div>
-                                  </div>
-                                  
-                                  {openTxDropdownIndex === txIndex && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top flex flex-col">
-                                      
-                                      {/* ส่วนที่ 1: การรักษาล่าสุด (แสดงเฉพาะตอนที่ยังไม่ได้พิมพ์ค้นหา) */}
-                                      {recentTreatments.length > 0 && !treatment && (
-                                        <div className="flex flex-col">
+                                    
+                                    {openTxDropdownIndex === txIndex && (
+                                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top flex flex-col">
+                                        
+                                        {/* ส่วนที่ 1: การรักษาล่าสุด (แสดงเฉพาะตอนที่ยังไม่ได้พิมพ์ค้นหา) */}
+                                        {recentTreatments.length > 0 && !hasTreatment && (
+                                          <div className="flex flex-col">
+                                            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
+                                              <History size={12} className="text-slate-400" />
+                                              <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">การรักษาล่าสุด (Recent)</span>
+                                            </div>
+                                            {recentTreatments.map((txItem, idx) => {
+                                              const txName = typeof txItem === 'string' ? txItem : (txItem?.name || String(txItem || ''));
+                                              if (!txName) return null;
+                                              return (
+                                                <div 
+                                                  key={`recent-tx-${idx}`} 
+                                                  onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleSelectTreatment(txName, txIndex);
+                                                  }}
+                                                  className="px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors text-slate-700 flex items-center gap-2"
+                                                >
+                                                  <Clock size={12} className="text-slate-300" />
+                                                  {txName}
+                                                </div>
+                                              );
+                                            })}
+                                            <div className="h-px bg-slate-200 mx-3 my-1"></div>
+                                          </div>
+                                        )}
+
+                                        {/* ส่วนที่ 2: รายการการรักษาทั้งหมด (Catalog) */}
+                                        {recentTreatments.length > 0 && !hasTreatment && (
                                           <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
-                                            <History size={12} className="text-slate-400" />
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">การรักษาล่าสุด (Recent)</span>
+                                            <Package size={12} className="text-slate-400" />
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">รายการทั้งหมด</span>
                                           </div>
-                                          {recentTreatments.map((txName, idx) => (
-                                            <div 
-                                              key={`recent-tx-${idx}`} 
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                handleSelectTreatment(txName, txIndex);
-                                              }}
-                                              className="px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors text-slate-700 flex items-center gap-2"
-                                            >
-                                              <Clock size={12} className="text-slate-300" />
-                                              {txName}
-                                            </div>
-                                          ))}
-                                          <div className="h-px bg-slate-200 mx-3 my-1"></div>
-                                        </div>
-                                      )}
+                                        )}
 
-                                      {/* ส่วนที่ 2: รายการการรักษาทั้งหมด (Catalog) */}
-                                      {recentTreatments.length > 0 && !treatment && (
-                                        <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 sticky top-0 z-10">
-                                          <Package size={12} className="text-slate-400" />
-                                          <span className="text-[10px] font-bold text-slate-500 uppercase kanit-text tracking-wider">รายการทั้งหมด</span>
-                                        </div>
-                                      )}
+                                        {(() => {
+                                          const filteredProducts = (posProducts || []).filter(p => {
+                                            if (!p) return false;
+                                            const pName = typeof p.name === 'string' ? p.name.toLowerCase() : String(p.name || '').toLowerCase();
+                                            return !treatmentLower || pName.includes(treatmentLower);
+                                          });
 
-                                      {posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).length > 0 ? (
-                                          posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).map(p => (
-                                            <div
-                                              key={p.id}
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                handleSelectTreatment(p.name, txIndex);
-                                              }}
-                                              className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatment === p.name ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
-                                            >
-                                              {p.name}
-                                            </div>
-                                          ))
-                                      ) : (
-                                          <div className="px-3 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
+                                          return filteredProducts.length > 0 ? (
+                                            filteredProducts.map(p => {
+                                              const pName = p.name || String(p.id || '');
+                                              return (
+                                                <div
+                                                  key={p.id || pName}
+                                                  onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleSelectTreatment(pName, txIndex);
+                                                  }}
+                                                  className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatmentStr === pName ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                                >
+                                                  {pName}
+                                                </div>
+                                              );
+                                            })
+                                          ) : (
+                                            <div className="px-3 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
                                               <Plus size={14} className="text-sky-500" /> พิมพ์เพื่อระบุการรักษาเพิ่มเติม...
-                                          </div>
-                                      )}
-                                    </div>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {newOpdRecord.tx.length > 1 && (
+                                    <button type="button" onClick={() => {
+                                        const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
+                                        setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                    }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center shrink-0">
+                                      <Trash2 size={16} />
+                                    </button>
                                   )}
                                 </div>
-                                {newOpdRecord.tx.length > 1 && (
-                                  <button type="button" onClick={() => {
-                                      const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
-                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
-                                  }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center shrink-0">
-                                    <Trash2 size={16} />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
+                              );
+                            })}
                             <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, ''], prescription: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
                               <Plus size={16} /> เพิ่มรายการรักษา
                             </button>

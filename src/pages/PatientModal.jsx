@@ -393,68 +393,88 @@ const PatientModal = React.memo(({
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">การรักษาที่ให้</label>
                       <div className="flex flex-col gap-2">
-                        {newOpdRecord.tx.map((treatment, txIndex) => (
-                          <div key={txIndex} className="flex gap-2 items-stretch w-full">
-                            <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
-                              <input 
-                                  type="text"
-                                  className={`${theme.input} bg-white py-2 text-sm font-data ${treatment ? 'pr-14' : 'pr-10'}`}
-                                  value={treatment} 
-                                  onChange={(e) => {
-                                      const updatedTx = [...newOpdRecord.tx];
-                                      updatedTx[txIndex] = e.target.value;
-                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
-                                  }} 
-                                  onFocus={() => setOpenTxDropdownIndex(txIndex)}
-                                  onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
-                                  placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
-                              />
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
-                                {treatment && (
-                                  <button
-                                    type="button"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      const updatedTx = [...newOpdRecord.tx];
-                                      updatedTx[txIndex] = '';
-                                      setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
-                                    }}
-                                    className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                                    title="ล้างข้อมูล"
-                                  >
-                                    <X size={14} />
-                                  </button>
-                                )}
-                                <div className="pointer-events-none text-slate-400">
-                                  <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
-                                </div>
-                              </div>
-                              {openTxDropdownIndex === txIndex && (
-                                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
-                                  {posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).length > 0 ? (
-                                      posProducts.filter(p => p.name.toLowerCase().includes(treatment.toLowerCase())).map(p => (
-                                        <div
-                                          key={p.id}
-                                          onMouseDown={(e) => {
-                                            e.preventDefault();
-                                            const updatedTx = [...newOpdRecord.tx];
-                                            updatedTx[txIndex] = p.name;
-                                            setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
-                                            setOpenTxDropdownIndex(null);
-                                          }}
-                                          className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatment === p.name ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
-                                        >
-                                          {p.name}
-                                        </div>
-                                      ))
-                                  ) : (
-                                      <div className="px-3 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
-                                          <Plus size={14} className="text-sky-500" /> พิมพ์เพื่อระบุการรักษาเพิ่มเติม...
-                                      </div>
+                        {newOpdRecord.tx.map((treatment, txIndex) => {
+                          const treatmentStr = typeof treatment === 'string' 
+                            ? treatment 
+                            : (treatment && typeof treatment === 'object' 
+                                ? (treatment.name || treatment.title || treatment.label || '') 
+                                : (treatment != null ? String(treatment) : ''));
+                          const hasTreatment = Boolean(treatmentStr && treatmentStr.trim());
+                          const treatmentLower = treatmentStr.trim().toLowerCase();
+
+                          return (
+                            <div key={txIndex} className="flex gap-2 items-stretch w-full">
+                              <div className="relative flex-1" style={{ zIndex: 50 - txIndex }}>
+                                <input 
+                                    type="text"
+                                    className={`${theme.input} bg-white py-2 text-sm font-data ${hasTreatment ? 'pr-14' : 'pr-10'}`}
+                                    value={treatmentStr} 
+                                    onChange={(e) => {
+                                        const updatedTx = [...newOpdRecord.tx];
+                                        updatedTx[txIndex] = e.target.value;
+                                        setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                    }} 
+                                    onFocus={() => setOpenTxDropdownIndex(txIndex)}
+                                    onBlur={() => setTimeout(() => { if (openTxDropdownIndex === txIndex) setOpenTxDropdownIndex(null) }, 200)}
+                                    placeholder="พิมพ์ค้นหา หรือเลือกจากรายการ..."
+                                />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 z-10">
+                                  {hasTreatment && (
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        const updatedTx = [...newOpdRecord.tx];
+                                        updatedTx[txIndex] = '';
+                                        setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                                      title="ล้างข้อมูล"
+                                    >
+                                      <X size={14} />
+                                    </button>
                                   )}
+                                  <div className="pointer-events-none text-slate-400">
+                                    <ChevronDown size={18} className={`transition-transform duration-200 ${openTxDropdownIndex === txIndex ? 'rotate-180' : ''}`} />
+                                  </div>
                                 </div>
-                              )}
-                            </div>
+                                {openTxDropdownIndex === txIndex && (
+                                  <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                    {(() => {
+                                      const filteredProducts = (posProducts || []).filter(p => {
+                                        if (!p) return false;
+                                        const pName = typeof p.name === 'string' ? p.name.toLowerCase() : String(p.name || '').toLowerCase();
+                                        return !treatmentLower || pName.includes(treatmentLower);
+                                      });
+
+                                      return filteredProducts.length > 0 ? (
+                                        filteredProducts.map(p => {
+                                          const pName = p.name || String(p.id || '');
+                                          return (
+                                            <div
+                                              key={p.id || pName}
+                                              onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                const updatedTx = [...newOpdRecord.tx];
+                                                updatedTx[txIndex] = pName;
+                                                setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
+                                                setOpenTxDropdownIndex(null);
+                                              }}
+                                              className={`px-3 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${treatmentStr === pName ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                                            >
+                                              {pName}
+                                            </div>
+                                          );
+                                        })
+                                      ) : (
+                                        <div className="px-3 py-2.5 text-sm text-slate-400 font-data flex items-center gap-2 pointer-events-none">
+                                          <Plus size={14} className="text-sky-500" /> พิมพ์เพื่อระบุการรักษาเพิ่มเติม...
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
                             {newOpdRecord.tx.length > 1 && (
                               <button type="button" onClick={() => {
                                   const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
@@ -464,7 +484,8 @@ const PatientModal = React.memo(({
                               </button>
                             )}
                           </div>
-                        ))}
+                        );
+                      })}
                         <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, ''], prescription: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
                           <Plus size={16} /> เพิ่มรายการรักษา
                         </button>
