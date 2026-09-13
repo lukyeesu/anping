@@ -847,7 +847,7 @@ const FinancePage = ({
 
   // --- [NEW] Server-side Fetching Logic ---
   const [financeTransactions, setFinanceTransactions] = useState([]);
-  const [statsData, setStatsData] = useState({ income: 0, expense: 0, count_income: 0, count_expense: 0, netIncome: 0, costPercent: 0, marginPercent: 0 });
+  const [statsData, setStatsData] = useState({ income: 0, expense: 0, incomeCount: 0, expenseCount: 0, count_income: 0, count_expense: 0, transactionsCount: 0, netIncome: 0, costPercent: 0, marginPercent: 0 });
   const [isStatsFromServer, setIsStatsFromServer] = useState(false);
   const [isFetchingData, setIsFetchingData] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -933,6 +933,10 @@ const FinancePage = ({
                       totalIncome: total_income,
                       totalExpense: total_expense,
                       netIncome,
+                      incomeCount: count_income,
+                      expenseCount: count_expense,
+                      count_income,
+                      count_expense,
                       transactionsCount: count_income + count_expense,
                       costPercent,
                       marginPercent
@@ -941,7 +945,7 @@ const FinancePage = ({
               } else {
                   // Fallback query if RPC parameter mismatch or offline
                   let catQuery = supabase.from('finance_all_transactions')
-                      .select('type, amount, is_auto, status')
+                      .select('type, amount, is_auto, status, id, category')
                       .gte('timestamp_date', startDate)
                       .lte('timestamp_date', endDate)
                       .or('is_deleted.is.null,is_deleted.eq.false')
@@ -976,10 +980,8 @@ const FinancePage = ({
 
                       catStatsRows.forEach(row => {
                           const amt = Number(row.amount || 0);
-                          if (row.type === 'income') {
-                              total_income += amt;
-                              count_income++;
-                          } else if (row.type === 'expense') {
+                          const isExp = row.type === 'expense' || String(row.id || '').toUpperCase().startsWith('EXP') || row.category === 'รายจ่าย';
+                          if (isExp) {
                               total_expense += amt;
                               count_expense++;
                           } else {
@@ -1003,6 +1005,10 @@ const FinancePage = ({
                           totalIncome: total_income,
                           totalExpense: total_expense,
                           netIncome,
+                          incomeCount: count_income,
+                          expenseCount: count_expense,
+                          count_income,
+                          count_expense,
                           transactionsCount: count_income + count_expense,
                           costPercent,
                           marginPercent
@@ -1078,8 +1084,12 @@ const FinancePage = ({
                   const cleanPName = rawHn ? rawPName.replace(new RegExp(`^${rawHn}\\s*[-•]?\\s*`, 'i'), '').trim() : rawPName;
                   const finalPatientName = (rawHn && cleanPName && cleanPName !== 'ลูกค้าทั่วไป (ไม่ระบุ)') ? `${rawHn} - ${cleanPName}` : (rawPName || '');
 
+                  const isExp = tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') || tx.category === 'รายจ่าย';
+                  const txType = isExp ? 'expense' : (tx.type || 'income');
+
                   return {
                       ...tx,
+                      type: txType,
                       status: effectiveStatus,
                       date: tx.timestamp_date,
                       timestamp: parseTxTimestamp(tx.timestamp_date),
@@ -1362,9 +1372,10 @@ const FinancePage = ({
     }
 
     // 2. Type Filter
-    if (filterType === 'income' && tx.type !== 'income') return false;
-    if (filterType === 'expense' && tx.type !== 'expense') return false;
-    if (filterType === 'pos' && !tx.isAuto && !tx.is_auto) return false;
+    const isExp = tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') || tx.category === 'รายจ่าย';
+    if (filterType === 'income' && isExp) return false;
+    if (filterType === 'expense' && !isExp) return false;
+    if (filterType === 'pos' && (!tx.isAuto && !tx.is_auto)) return false;
     if (filterType === 'manual' && (tx.isAuto || tx.is_auto)) return false;
 
     // 2.1 Category Filter
@@ -1468,21 +1479,20 @@ const FinancePage = ({
   const stats = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
-    let count = 0;
+    let incomeCount = 0;
+    let expenseCount = 0;
 
     visibleTransactions.forEach(tx => {
       if (tx.status === 'cancelled') return;
 
       const amt = Number(tx.amount || tx.net_amount || tx.netAmount || 0) || 0;
-      if (tx.type === 'income') {
-        totalIncome += amt;
-        count++;
-      } else if (tx.type === 'expense') {
+      const isExp = tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') || tx.category === 'รายจ่าย';
+      if (isExp) {
         totalExpense += amt;
-        count++;
+        expenseCount++;
       } else {
         totalIncome += amt;
-        count++;
+        incomeCount++;
       }
     });
 
@@ -1501,7 +1511,11 @@ const FinancePage = ({
       totalIncome,
       totalExpense,
       netIncome,
-      transactionsCount: count,
+      incomeCount,
+      expenseCount,
+      count_income: incomeCount,
+      count_expense: expenseCount,
+      transactionsCount: incomeCount + expenseCount,
       costPercent,
       marginPercent
     };
@@ -1987,7 +2001,7 @@ const FinancePage = ({
               </h2>
             </div>
             <div className={`text-[10px] sm:text-xs text-emerald-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
-              จาก <AnimatedNumber value={displayStats.transactionsCount || 0} duration={600} /> รายการ
+              จาก <AnimatedNumber value={displayStats.incomeCount ?? displayStats.count_income ?? 0} duration={600} /> บิล/รายการ
             </div>
           </div>
           
@@ -2005,7 +2019,7 @@ const FinancePage = ({
               </h2>
             </div>
             <div className={`text-[10px] sm:text-xs text-rose-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
-              Cost: <AnimatedNumber value={displayStats.costPercent || 0} duration={600} decimals={2} suffix="%" />
+              จาก <AnimatedNumber value={displayStats.expenseCount ?? displayStats.count_expense ?? 0} duration={600} /> รายการ • Cost: <AnimatedNumber value={displayStats.costPercent || 0} duration={600} decimals={2} suffix="%" />
             </div>
           </div>
 
@@ -2023,7 +2037,7 @@ const FinancePage = ({
               </h2>
             </div>
             <div className={`text-[10px] sm:text-xs text-sky-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
-              Margin: <AnimatedNumber value={displayStats.marginPercent || 0} duration={600} decimals={2} suffix="%" />
+              รวม <AnimatedNumber value={displayStats.transactionsCount || 0} duration={600} /> รายการ • Margin: <AnimatedNumber value={displayStats.marginPercent || 0} duration={600} decimals={2} suffix="%" />
             </div>
           </div>
         </div>

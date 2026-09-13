@@ -57,8 +57,8 @@ const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, ha
             </span>
         </td>
         <td className="p-4 text-right">
-            <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {tx.type === 'income' ? '+' : '-'}{formatFinCurrency(tx.amount)}
+            <span className={`text-base font-bold font-data ${tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? '-' : '+'}{formatFinCurrency(tx.amount)}
             </span>
         </td>
         <td className="p-4 text-center">

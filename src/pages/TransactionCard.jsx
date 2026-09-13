@@ -57,8 +57,8 @@ const TransactionCard = React.memo(({ tx, openDetailModal, handlePrintReceipt, h
                 </div>
             </div>
             <div className="text-right flex flex-col gap-1 shrink-0">
-                <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {tx.type === 'income' ? '+' : '-'}{formatFinCurrency(tx.amount)}
+                <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? '-' : '+'}{formatFinCurrency(tx.amount)}
                 </div>
             </div>
         </div>

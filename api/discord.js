@@ -529,6 +529,26 @@ async function readRawBody(req) {
 // -------------------------------------------------------------
 // 📦 DISCORD EMBED BUILDERS
 // -------------------------------------------------------------
+function isCourseExpired(expDateStr) {
+  if (!expDateStr || expDateStr === '-' || expDateStr === 'null') return false;
+
+  const ymd = parseQueueDateToThaiYMD(expDateStr);
+  const { todayIso } = getTodayAndTomorrowThaiYMD();
+  if (ymd) {
+    return ymd < todayIso;
+  }
+
+  try {
+    const d = new Date(expDateStr);
+    if (!isNaN(d.getTime())) {
+      const now = new Date();
+      return d.getTime() < now.getTime();
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseList = [], botAvatarUrl = '') {
   const fullName = patient.name || `${patient.firstName || patient.first_name || ''} ${patient.lastName || patient.last_name || ''}`.trim() || 'ไม่ระบุชื่อ';
   const hn = patient.hn || patient.id || '-';
@@ -605,26 +625,31 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
     });
   }
 
-  // คอร์สคงเหลือ
-  const activeCourses = courseList.filter(c => !c.is_deleted && (c.remaining_sessions > 0 || c.remaining > 0));
+  // คอร์สคงเหลือที่ยังไม่หมดอายุและยังมีสิทธิ์คงเหลือ
+  const activeCourses = courseList.filter(c => {
+    if (c.is_deleted) return false;
+    const st = String(c.status || '').toLowerCase();
+    if (st === 'expired' || st === 'หมดอายุ' || st === 'completed' || st === 'เสร็จสิ้น' || st === 'cancelled' || st === 'ยกเลิก') return false;
+    const rem = Number(c.remaining_sessions ?? c.remaining ?? c.data?.remaining_sessions ?? 0);
+    if (rem <= 0) return false;
+    const exp = c.expire_date || c.expireDate || c.data?.expire_date || c.data?.expireDate;
+    if (isCourseExpired(exp)) return false;
+    return true;
+  });
+
   if (activeCourses.length > 0) {
     const courseLines = activeCourses.slice(0, 5).map(c => {
       const cName = c.course_name || c.name || c.data?.course_name || 'คอร์สการรักษา';
       const rem = c.remaining_sessions ?? c.remaining ?? c.data?.remaining_sessions ?? 0;
       const tot = c.total_sessions ?? c.total ?? c.data?.total_sessions ?? rem;
-      const exp = c.expire_date || c.data?.expire_date;
-      const expStr = exp ? ` *(หมดอายุ ${formatThaiDateTime(exp)})*` : '';
+      const exp = c.expire_date || c.expireDate || c.data?.expire_date || c.data?.expireDate;
+      const expYMD = exp ? parseQueueDateToThaiYMD(exp) : null;
+      const expStr = expYMD ? ` *(หมดอายุ ${formatDateDisplay(expYMD)})*` : (exp ? ` *(หมดอายุ ${formatThaiDateTime(exp)})*` : '');
       return `• **${cName}**\n  └ คงเหลือ: \`${rem} / ${tot} ครั้ง\` [🟢 พร้อมใช้งาน]${expStr}`;
     });
     fields.push({
       name: `💳 คอร์สการรักษาคงเหลือ (${activeCourses.length} รายการ)`,
       value: courseLines.join('\n\n'),
-      inline: false
-    });
-  } else {
-    fields.push({
-      name: '💳 คอร์สการรักษาคงเหลือ',
-      value: '*(ไม่มีคอร์สการรักษาคงเหลือในระบบ)*',
       inline: false
     });
   }
