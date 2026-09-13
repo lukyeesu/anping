@@ -891,7 +891,7 @@ export function buildLineFlexMessage({
   if (eventType === 'opd') {
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
     const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
-    const treatment = rawPayload.treatment || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
+    const treatment = rawPayload.treatment || rawPayload.treatments || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('หัตถการ') || f.name.includes('ยา'))))?.value || '-';
     const visitDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
 
     return {
@@ -1562,11 +1562,15 @@ export function buildDiscordFlexPayload({
   } else if (eventType === 'opd') {
     color = 0x10b981; // Emerald Green
     const rawDoctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
-    const doctorDisplay = rawDoctor.startsWith('หมอ') || rawDoctor.startsWith('พญ.') || rawDoctor.startsWith('นพ.') || rawDoctor.startsWith('ทพ.') ? rawDoctor : `พญ.${rawDoctor}`;
+    const doctorDisplay = (!rawDoctor || rawDoctor === '-') 
+      ? '-' 
+      : (rawDoctor.startsWith('หมอ') || rawDoctor.startsWith('พญ.') || rawDoctor.startsWith('นพ.') || rawDoctor.startsWith('ทพ.') || rawDoctor.startsWith('ดร.') 
+          ? rawDoctor 
+          : (rawDoctor.includes('หมอ') ? rawDoctor : `หมอ${rawDoctor}`));
     const dateStr = rawPayload.date || (fields.find(f => f.name && f.name.includes('วัน'))?.value) || new Date().toLocaleDateString('th-TH');
     const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
-    const treatments = rawPayload.treatments || (fields.find(f => f.name && f.name.includes('หัตถการ'))?.value) || '-';
-    const medications = rawPayload.medications || (fields.find(f => f.name && f.name.includes('ยา'))?.value) || '-';
+    const treatments = rawPayload.treatment || rawPayload.treatments || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('หัตถการ') || f.name.includes('รักษา'))))?.value || '-';
+    const medications = rawPayload.medications || (fields.find(f => f.name && f.name.includes('ยา') && !f.name.includes('รักษา'))?.value) || '';
     const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
     const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
     const phoneDisplay = cleanPhone 
@@ -1580,8 +1584,8 @@ export function buildDiscordFlexPayload({
            `👩‍⚕️ **แพทย์ผู้ตรวจ:** ${doctorDisplay}\n` +
            `📞 **เบอร์ติดต่อ:** ${phoneDisplay}\n` +
            `🩺 **ผลการวินิจฉัย:** ${diagnosis}\n` +
-           `💉 **การรักษา/หัตถการ:** ${treatments}\n` +
-           `💊 **รายการยา:** ${medications}`;
+           `💉 **การรักษา/หัตถการ:** ${treatments}` +
+           (medications && medications !== '-' ? `\n💊 **รายการยา:** ${medications}` : '');
   } else if (eventType === 'mr') {
     color = 0x8b5cf6; // Purple
     const actionDesc = rawPayload.actionDesc || (fields.find(f => f.name && (f.name.includes('รายการ') || f.name.includes('การกระทำ')))?.value) || 'อัปเดตข้อมูลเวชระเบียน';
