@@ -87,11 +87,34 @@ function parseQueueDateToThaiYMD(rawStr) {
   return null;
 }
 
+const THAI_MONTHS = [
+  { m: 1, full: 'มกราคม', stem: 'มกรา', abbr: 'ม.ค.' },
+  { m: 2, full: 'กุมภาพันธ์', stem: 'กุมภา', abbr: 'ก.พ.' },
+  { m: 3, full: 'มีนาคม', stem: 'มีนา', abbr: 'มี.ค.' },
+  { m: 4, full: 'เมษายน', stem: 'เมษา', abbr: 'เม.ย.' },
+  { m: 5, full: 'พฤษภาคม', stem: 'พฤษภา', abbr: 'พ.ค.' },
+  { m: 6, full: 'มิถุนายน', stem: 'มิถุนา', abbr: 'มิ.ย.' },
+  { m: 7, full: 'กรกฎาคม', stem: 'กรกฎา', abbr: 'ก.ค.' },
+  { m: 8, full: 'สิงหาคม', stem: 'สิงหา', abbr: 'ส.ค.' },
+  { m: 9, full: 'กันยายน', stem: 'กันยา', abbr: 'ก.ย.' },
+  { m: 10, full: 'ตุลาคม', stem: 'ตุลา', abbr: 'ต.ค.' },
+  { m: 11, full: 'พฤศจิกายน', stem: 'พฤศจิกา', abbr: 'พ.ย.' },
+  { m: 12, full: 'ธันวาคม', stem: 'ธันวา', abbr: 'ธ.ค.' }
+];
+
 function isLikelyDateString(rawStr) {
   if (!rawStr) return false;
-  const s = String(rawStr).trim();
+  const s = String(rawStr).trim().toLowerCase();
   if (s.includes('วันนี้') || s.includes('พรุ่งนี้') || s.includes('เมื่อวาน')) return true;
+  if (s.includes('อาทิตย์') || s.includes('สัปดาห์') || s.includes('วีค')) return true;
+  if (s.includes('เดือน') || s.includes('month') || s.includes('week')) return true;
+  for (const m of THAI_MONTHS) {
+    const cleanS = s.replace(/\./g, '').replace(/\s+/g, '');
+    const cleanAbbr = m.abbr.replace(/\./g, '');
+    if (cleanS.includes(m.stem) || cleanS.includes(cleanAbbr) || s.includes(m.abbr)) return true;
+  }
   if (/^\d{1,2}[\/\-\.]\d{1,2}([\/\-\.]\d{2,4})?$/.test(s)) return true;
+  if (/^\d{1,2}[\/\-]\d{2,4}$/.test(s)) return true;
   if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(s)) return true;
   return false;
 }
@@ -140,7 +163,7 @@ function getDaysInMonth(year, month1Indexed) {
   return new Date(Date.UTC(year, month1Indexed, 0)).getUTCDate();
 }
 
-function parseSalesPeriod(rawStr) {
+function parsePeriod(rawStr) {
   const thaiNow = getBangkokNow();
   const currentYear = thaiNow.getUTCFullYear();
   const currentMonth = thaiNow.getUTCMonth() + 1; // 1-12
@@ -154,27 +177,40 @@ function parseSalesPeriod(rawStr) {
     const todayYMD = toYMD(currentYear, currentMonth, currentDay);
     return {
       type: 'day',
-      title: `ประจำวันนี้: ${formatDateDisplay(todayYMD)}`,
+      title: `ประจำวันนี้ (${formatDateDisplay(todayYMD)})`,
       periodLabel: formatDateDisplay(todayYMD),
       startYMD: todayYMD,
       endYMD: todayYMD
     };
   }
 
-  // 2. เมื่อวาน (Yesterday)
+  // 2. พรุ่งนี้ (Tomorrow)
+  if (str.includes('พรุ่งนี้') || str === 'tomorrow') {
+    const tomDate = new Date(thaiNow.getTime() + (24 * 60 * 60 * 1000));
+    const tomYMD = toYMD(tomDate.getUTCFullYear(), tomDate.getUTCMonth() + 1, tomDate.getUTCDate());
+    return {
+      type: 'day',
+      title: `ประจำวันพรุ่งนี้ (${formatDateDisplay(tomYMD)})`,
+      periodLabel: formatDateDisplay(tomYMD),
+      startYMD: tomYMD,
+      endYMD: tomYMD
+    };
+  }
+
+  // 3. เมื่อวาน (Yesterday)
   if (str.includes('เมื่อวาน') || str === 'yesterday') {
     const yestDate = new Date(thaiNow.getTime() - (24 * 60 * 60 * 1000));
     const yestYMD = toYMD(yestDate.getUTCFullYear(), yestDate.getUTCMonth() + 1, yestDate.getUTCDate());
     return {
       type: 'day',
-      title: `ประจำเมื่อวานนี้: ${formatDateDisplay(yestYMD)}`,
+      title: `ประจำเมื่อวานนี้ (${formatDateDisplay(yestYMD)})`,
       periodLabel: formatDateDisplay(yestYMD),
       startYMD: yestYMD,
       endYMD: yestYMD
     };
   }
 
-  // 3. อาทิตย์นี้ / สัปดาห์นี้ / วีคนี้ (This week: Monday to Sunday)
+  // 4. อาทิตย์นี้ / สัปดาห์นี้ / วีคนี้ (This week: Monday to Sunday)
   if (str.includes('อาทิตย์นี้') || str.includes('สัปดาห์นี้') || str.includes('วีคนี้') || str === 'this week') {
     const dayOfWeek = thaiNow.getUTCDay();
     const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -192,7 +228,7 @@ function parseSalesPeriod(rawStr) {
     };
   }
 
-  // 4. อาทิตย์ก่อน / อาทิตย์ที่แล้ว / สัปดาห์ก่อน / สัปดาห์ที่แล้ว (Last week: Monday to Sunday)
+  // 5. อาทิตย์ก่อน / อาทิตย์ที่แล้ว / สัปดาห์ก่อน / สัปดาห์ที่แล้ว (Last week: Monday to Sunday)
   if (str.includes('อาทิตย์ก่อน') || str.includes('อาทิตย์ที่แล้ว') || str.includes('สัปดาห์ก่อน') || str.includes('สัปดาห์ที่แล้ว') || str === 'last week') {
     const dayOfWeek = thaiNow.getUTCDay();
     const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + 7;
@@ -210,12 +246,13 @@ function parseSalesPeriod(rawStr) {
     };
   }
 
-  // 5. เดือนนี้ (This month)
+  // 6. เดือนนี้ (This month)
   if (str === 'เดือนนี้' || str === 'this month') {
     const daysInM = getDaysInMonth(currentYear, currentMonth);
     const startYMD = toYMD(currentYear, currentMonth, 1);
     const endYMD = toYMD(currentYear, currentMonth, daysInM);
-    const mName = THAI_MONTH_NAMES[currentMonth];
+    const mItem = THAI_MONTHS.find(item => item.m === currentMonth);
+    const mName = mItem ? mItem.full : '';
     const yDisp = currentYear + 543;
     return {
       type: 'month',
@@ -226,7 +263,7 @@ function parseSalesPeriod(rawStr) {
     };
   }
 
-  // 6. เดือนก่อน / เดือนที่แล้ว (Last month)
+  // 7. เดือนก่อน / เดือนที่แล้ว (Last month)
   if (str === 'เดือนก่อน' || str === 'เดือนที่แล้ว' || str === 'last month') {
     let targetYear = currentYear;
     let targetMonth = currentMonth - 1;
@@ -237,7 +274,8 @@ function parseSalesPeriod(rawStr) {
     const daysInM = getDaysInMonth(targetYear, targetMonth);
     const startYMD = toYMD(targetYear, targetMonth, 1);
     const endYMD = toYMD(targetYear, targetMonth, daysInM);
-    const mName = THAI_MONTH_NAMES[targetMonth];
+    const mItem = THAI_MONTHS.find(item => item.m === targetMonth);
+    const mName = mItem ? mItem.full : '';
     const yDisp = targetYear + 543;
     return {
       type: 'month',
@@ -249,14 +287,45 @@ function parseSalesPeriod(rawStr) {
   }
 
   let specifiedYear = currentYear;
-  const yearMatch = str.match(/(25\d{2}|20\d{2})/);
-  if (yearMatch) {
-    let yVal = parseInt(yearMatch[1], 10);
+  const year4Match = str.match(/(25\d{2}|20\d{2})/);
+  if (year4Match) {
+    let yVal = parseInt(year4Match[1], 10);
     if (yVal > 2400) yVal -= 543;
     specifiedYear = yVal;
   }
 
-  // 7. เดือนระบุด้วยตัวเลข: "เดือน5", "เดือน 5", "เดือน 12", "เดือน12"
+  // 8. รูปแบบ MM/YY หรือ MM/YYYY หรือ MM-YY หรือ MM-YYYY (เช่น 09/69, 9/69, 08/2569, 08/2026)
+  const myMatch = str.match(/^(\d{1,2})[\/\-](\d{2,4})$/);
+  if (myMatch) {
+    const mVal = parseInt(myMatch[1], 10);
+    let yRaw = parseInt(myMatch[2], 10);
+    let yVal = yRaw;
+    if (yRaw >= 50 && yRaw <= 99) {
+      yVal = 2500 + yRaw - 543; // 2-digit Thai Buddhist era (e.g. 69 -> 2569 -> 2026)
+    } else if (yRaw < 50) {
+      yVal = 2000 + yRaw;
+    } else if (yRaw > 2400) {
+      yVal = yRaw - 543;
+    }
+
+    if (mVal >= 1 && mVal <= 12) {
+      const daysInM = getDaysInMonth(yVal, mVal);
+      const startYMD = toYMD(yVal, mVal, 1);
+      const endYMD = toYMD(yVal, mVal, daysInM);
+      const mItem = THAI_MONTHS.find(item => item.m === mVal);
+      const mName = mItem ? mItem.full : '';
+      const yDisp = yVal + 543;
+      return {
+        type: 'month',
+        title: `ประจำเดือน${mName} ${yDisp} (${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)})`,
+        periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+        startYMD,
+        endYMD
+      };
+    }
+  }
+
+  // 9. เดือนระบุด้วยตัวเลข: "เดือน5", "เดือน 5", "เดือน 12", "เดือน12"
   const monthNumMatch = str.match(/เดือน\s*(\d{1,2})/);
   if (monthNumMatch) {
     const mVal = parseInt(monthNumMatch[1], 10);
@@ -264,11 +333,12 @@ function parseSalesPeriod(rawStr) {
       const daysInM = getDaysInMonth(specifiedYear, mVal);
       const startYMD = toYMD(specifiedYear, mVal, 1);
       const endYMD = toYMD(specifiedYear, mVal, daysInM);
-      const mName = THAI_MONTH_NAMES[mVal];
+      const mItem = THAI_MONTHS.find(item => item.m === mVal);
+      const mName = mItem ? mItem.full : '';
       const yDisp = specifiedYear + 543;
       return {
         type: 'month',
-        title: `ประจำเดือน${mName} ${yDisp}`,
+        title: `ประจำเดือน${mName} ${yDisp} (${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)})`,
         periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
         startYMD,
         endYMD
@@ -276,43 +346,29 @@ function parseSalesPeriod(rawStr) {
     }
   }
 
-  // 8. รูปแบบ MM/YYYY หรือ MM-YYYY (เช่น 08/2569, 08/2026)
-  const myMatch = str.match(/^(\d{1,2})[\/\-](\d{2,4})$/);
-  if (myMatch) {
-    const mVal = parseInt(myMatch[1], 10);
-    let yVal = parseInt(myMatch[2], 10);
-    if (yVal < 100) yVal += 2000;
-    else if (yVal > 2400) yVal -= 543;
-    if (mVal >= 1 && mVal <= 12) {
-      const daysInM = getDaysInMonth(yVal, mVal);
-      const startYMD = toYMD(yVal, mVal, 1);
-      const endYMD = toYMD(yVal, mVal, daysInM);
-      const mName = THAI_MONTH_NAMES[mVal];
-      const yDisp = yVal + 543;
-      return {
-        type: 'month',
-        title: `ประจำเดือน${mName} ${yDisp}`,
-        periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
-        startYMD,
-        endYMD
-      };
-    }
+  // 10. ชื่อเดือนภาษาไทย: ทั้งเต็ม (สิงหาคม), ตัดหาง (สิงหา), หรือย่อ (ส.ค., เดือนส.ค)
+  const yr2Match = str.match(/\b([5-9]\d)\b/);
+  if (yr2Match && !year4Match) {
+    const y2 = parseInt(yr2Match[1], 10);
+    specifiedYear = 2500 + y2 - 543;
   }
 
-  // 9. ชื่อเดือนภาษาไทย (เช่น มกราคม, ม.ค., เดือนม.ค., เดือนพฤษภาคม)
-  for (let m = 1; m <= 12; m++) {
-    const fullName = THAI_MONTH_NAMES[m];
-    const abbr = THAI_MONTH_ABBRS[m].replace(/\./g, '');
-    const cleanS = str.replace(/\./g, '').replace(/\s+/g, '');
-    if (cleanS.includes(fullName) || cleanS.includes(abbr) || str.includes(THAI_MONTH_ABBRS[m])) {
-      const daysInM = getDaysInMonth(specifiedYear, m);
-      const startYMD = toYMD(specifiedYear, m, 1);
-      const endYMD = toYMD(specifiedYear, m, daysInM);
-      const mName = THAI_MONTH_NAMES[m];
+  const cleanS = str.replace(/\./g, '').replace(/\s+/g, '');
+  for (const mItem of THAI_MONTHS) {
+    const cleanAbbr = mItem.abbr.replace(/\./g, '');
+    if (
+      cleanS.includes(mItem.full) ||
+      cleanS.includes(mItem.stem) ||
+      cleanS.includes(cleanAbbr) ||
+      str.includes(mItem.abbr)
+    ) {
+      const daysInM = getDaysInMonth(specifiedYear, mItem.m);
+      const startYMD = toYMD(specifiedYear, mItem.m, 1);
+      const endYMD = toYMD(specifiedYear, mItem.m, daysInM);
       const yDisp = specifiedYear + 543;
       return {
         type: 'month',
-        title: `ประจำเดือน${mName} ${yDisp}`,
+        title: `ประจำเดือน${mItem.full} ${yDisp} (${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)})`,
         periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
         startYMD,
         endYMD
@@ -320,19 +376,22 @@ function parseSalesPeriod(rawStr) {
     }
   }
 
-  // 10. วันที่เจาะจง เช่น 12/09/2569, 12-09-2026, 2026-09-12
+  // 11. วันที่เจาะจง เช่น 12/09/2569, 12-09-2026, 2026-09-12, 12/09/69
   const dmyMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (dmyMatch) {
     const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
     const month = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
-    let year = parseInt(dmyMatch[3], 10);
-    if (year < 100) year += 2000;
-    else if (year > 2400) year -= 543;
-    const ymd = `${year}-${month}-${day}`;
+    let yRaw = parseInt(dmyMatch[3], 10);
+    let yVal = yRaw;
+    if (yRaw >= 50 && yRaw <= 99) yVal = 2500 + yRaw - 543;
+    else if (yRaw < 50) yVal = 2000 + yRaw;
+    else if (yRaw > 2400) yVal = yRaw - 543;
+
+    const ymd = `${yVal}-${month}-${day}`;
     return {
       type: 'day',
-      title: `ประจำวันที่ ${day}/${month}/${year > 2400 ? year : year + 543}`,
-      periodLabel: `${day}/${month}/${year > 2400 ? year : year + 543}`,
+      title: `ประจำวันที่ ${day}/${month}/${yVal + 543}`,
+      periodLabel: `${day}/${month}/${yVal + 543}`,
       startYMD: ymd,
       endYMD: ymd
     };
@@ -342,12 +401,15 @@ function parseSalesPeriod(rawStr) {
   const todayYMD = toYMD(currentYear, currentMonth, currentDay);
   return {
     type: 'day',
-    title: `ประจำวันที่: ${formatDateDisplay(todayYMD)}`,
+    title: `ประจำวันนี้ (${formatDateDisplay(todayYMD)})`,
     periodLabel: formatDateDisplay(todayYMD),
     startYMD: todayYMD,
     endYMD: todayYMD
   };
 }
+
+// Alias for backwards compatibility with sales command
+const parseSalesPeriod = parsePeriod;
 
 function formatThaiPhone(phoneStr) {
   if (!phoneStr || phoneStr === '-') return '-';
@@ -549,6 +611,41 @@ function isCourseExpired(expDateStr) {
   return false;
 }
 
+function splitFieldsIntoEmbeds(baseEmbed, fields, maxCharsPerEmbed = 5000) {
+  const embeds = [];
+  let currentEmbed = { ...baseEmbed, fields: [] };
+  let currentChars = (baseEmbed.title || '').length + (baseEmbed.description || '').length + 150;
+
+  for (const field of fields) {
+    const fChars = (field.name || '').length + (field.value || '').length;
+    if (currentEmbed.fields.length >= 20 || (currentChars + fChars > maxCharsPerEmbed && currentEmbed.fields.length > 0)) {
+      embeds.push(currentEmbed);
+      currentEmbed = {
+        color: baseEmbed.color,
+        fields: []
+      };
+      currentChars = 50;
+    }
+    currentEmbed.fields.push(field);
+    currentChars += fChars;
+  }
+
+  if (currentEmbed.fields.length > 0 || embeds.length === 0) {
+    if (baseEmbed.footer) {
+      currentEmbed.footer = baseEmbed.footer;
+    }
+    embeds.push(currentEmbed);
+  }
+
+  if (embeds.length > 1) {
+    for (let i = 0; i < embeds.length - 1; i++) {
+      delete embeds[i].footer;
+    }
+  }
+
+  return embeds;
+}
+
 function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseList = [], botAvatarUrl = '') {
   const fullName = patient.name || `${patient.firstName || patient.first_name || ''} ${patient.lastName || patient.last_name || ''}`.trim() || 'ไม่ระบุชื่อ';
   const hn = patient.hn || patient.id || '-';
@@ -625,7 +722,7 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
     });
   }
 
-  // คอร์สคงเหลือที่ยังไม่หมดอายุและยังมีสิทธิ์คงเหลือ
+  // คอร์สคงเหลือที่ยังไม่หมดอายุและยังมีสิทธิ์คงเหลือ (แสดงครบถ้วนและตัดต่อลงด้านล่างเนียนๆ)
   const activeCourses = courseList.filter(c => {
     if (c.is_deleted) return false;
     const st = String(c.status || '').toLowerCase();
@@ -638,7 +735,7 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
   });
 
   if (activeCourses.length > 0) {
-    const courseLines = activeCourses.slice(0, 5).map(c => {
+    const courseLines = activeCourses.map(c => {
       const cName = c.course_name || c.name || c.data?.course_name || 'คอร์สการรักษา';
       const rem = c.remaining_sessions ?? c.remaining ?? c.data?.remaining_sessions ?? 0;
       const tot = c.total_sessions ?? c.total ?? c.data?.total_sessions ?? rem;
@@ -647,20 +744,41 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
       const expStr = expYMD ? ` *(หมดอายุ ${formatDateDisplay(expYMD)})*` : (exp ? ` *(หมดอายุ ${formatThaiDateTime(exp)})*` : '');
       return `• **${cName}**\n  └ คงเหลือ: \`${rem} / ${tot} ครั้ง\` [🟢 พร้อมใช้งาน]${expStr}`;
     });
-    fields.push({
-      name: `💳 คอร์สการรักษาคงเหลือ (${activeCourses.length} รายการ)`,
-      value: courseLines.join('\n\n'),
-      inline: false
-    });
+
+    let curCourseLines = [];
+    let curCourseLen = 0;
+    let cIdx = 1;
+    for (const cl of courseLines) {
+      if (curCourseLen + cl.length + 2 > 900 && curCourseLines.length > 0) {
+        fields.push({
+          name: cIdx === 1 ? `💳 คอร์สการรักษาคงเหลือ (${activeCourses.length} รายการ)` : '\u200b',
+          value: curCourseLines.join('\n\n'),
+          inline: false
+        });
+        curCourseLines = [cl];
+        curCourseLen = cl.length;
+        cIdx++;
+      } else {
+        curCourseLines.push(cl);
+        curCourseLen += cl.length + 2;
+      }
+    }
+    if (curCourseLines.length > 0) {
+      fields.push({
+        name: cIdx === 1 ? `💳 คอร์สการรักษาคงเหลือ (${activeCourses.length} รายการ)` : '\u200b',
+        value: curCourseLines.join('\n\n'),
+        inline: false
+      });
+    }
   }
 
-  // ประวัติการตรวจรักษา (เรียงจากวันที่ตรวจล่าสุดไปหาเก่าสุด)
+  // ประวัติการตรวจรักษา (เรียงจากวันที่ตรวจล่าสุดไปหาเก่าสุด ต่อลงด้านล่างเนียนๆ โดยไม่ใช้คำว่า "(ต่อ)")
   const validTrts = treatmentList
     .filter(t => !t.is_deleted)
     .sort((a, b) => parseOpdDateVal(b) - parseOpdDateVal(a));
 
   if (validTrts.length > 0) {
-    const maxShow = 10;
+    const maxShow = 25;
     const lines = validTrts.slice(0, maxShow).map((t, idx) => {
       const vDate = formatThaiDateTime(t.datetime || t.created_at || t.visit_date || t.date);
       const doc = t.doctor || t.doctor_name || t.data?.doctor || '-';
@@ -706,34 +824,55 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
 
     if (validTrts.length > maxShow) {
       fields.push({
-        name: '📋 ประวัติการรักษาเพิ่มเติม',
-        value: `*(คนไข้มีประวัติการรักษาทั้งหมด ${validTrts.length} ครั้ง สามารถเปิดดูประวัติย้อนหลังทั้งหมดได้ในระบบ)*`,
+        name: '\u200b',
+        value: `*(คนไข้มีประวัติการรักษาทั้งหมด ${validTrts.length} ครั้ง แสดง ${maxShow} ครั้งล่าสุด สามารถเปิดดูประวัติย้อนหลังทั้งหมดได้ในระบบ)*`,
         inline: false
       });
     }
   }
 
-  // นัดหมายที่กำลังจะมาถึง (เรียงจากนัดที่ใกล้มาถึงที่สุด)
+  // นัดหมายที่กำลังจะมาถึง (เรียงจากนัดที่ใกล้มาถึงที่สุด ต่อลงด้านล่าง)
   const validAppts = queueList
     .filter(q => !q.isDeleted)
     .sort((a, b) => parseOpdDateVal(a) - parseOpdDateVal(b));
 
   if (validAppts.length > 0) {
-    const apptLines = validAppts.slice(0, 3).map(q => {
+    const apptLines = validAppts.map(q => {
       const dt = formatThaiDateTime(q.rawDateTime || q.date);
       const qClean = String(q.phone || '').replace(/\D/g, '');
       const qCall = qClean && qClean.length >= 9 ? `${WEBAPP_URL}/api/call?tel=${qClean}` : null;
       const qPhoneStr = q.phone ? (qCall ? ` • โทร: [${formatThaiPhone(q.phone)}](${qCall})` : ` • โทร: \`${formatThaiPhone(q.phone)}\``) : '';
       return `• **⏰ ${dt}** — **${q.service}**\n  └ แพทย์: **${q.doctor}** • สถานะ: \`${q.status}\`${qPhoneStr}`;
     });
-    fields.push({
-      name: `🗓️ คิวนัดหมายที่กำลังจะมาถึง (${validAppts.length} รายการ)`,
-      value: apptLines.join('\n\n'),
-      inline: false
-    });
+
+    let curApptLines = [];
+    let curApptLen = 0;
+    let aIdx = 1;
+    for (const al of apptLines) {
+      if (curApptLen + al.length + 2 > 900 && curApptLines.length > 0) {
+        fields.push({
+          name: aIdx === 1 ? `🗓️ คิวนัดหมายที่กำลังจะมาถึง (${validAppts.length} รายการ)` : '\u200b',
+          value: curApptLines.join('\n\n'),
+          inline: false
+        });
+        curApptLines = [al];
+        curApptLen = al.length;
+        aIdx++;
+      } else {
+        curApptLines.push(al);
+        curApptLen += al.length + 2;
+      }
+    }
+    if (curApptLines.length > 0) {
+      fields.push({
+        name: aIdx === 1 ? `🗓️ คิวนัดหมายที่กำลังจะมาถึง (${validAppts.length} รายการ)` : '\u200b',
+        value: curApptLines.join('\n\n'),
+        inline: false
+      });
+    }
   }
 
-  return {
+  const baseEmbed = {
     author: {
       name: '🏥 คลินิกอันผิง • เวชระเบียนผู้ป่วย (PATIENT RECORD)',
       icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
@@ -741,44 +880,41 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
     title: `📁 คุณ${fullName.replace(/^(คุณ|นาย|นางสาว|นาง|ด\.ช\.|ด\.ญ\.)\s*/, '')} (${hn})`,
     description: `>>> **รหัสประจำตัว HN:** \`${hn}\`  •  **เพศ:** \`${genderStr}\`  •  **อายุ:** \`${ageStr}\`${nickStr}${callLinkHeader}`,
     color: 0x0284c7, // Sky Blue / Cyan
-    fields,
     footer: {
       text: `Anping Clinic OPD System • ตรวจสอบข้อมูล ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
+
+  return splitFieldsIntoEmbeds(baseEmbed, fields);
 }
 
-function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
-  const fields = [];
+function buildQueueEmbed(queueList, titleText, isMultiDay = false, botAvatarUrl = '') {
   if (queueList.length === 0) {
-    fields.push({
-      name: 'ℹ️ สถานะคิวนัดหมาย',
-      value: '>>> ไม่พบคิวนัดหมายตรวจหรือรับบริการในช่วงเวลาดังกล่าว\nสามารถทำการนัดหมายหรือจองคิวใหม่ได้ผ่านทางระบบคลินิก',
-      inline: false
-    });
-    return {
+    return [{
       author: {
         name: '🏥 คลินิกอันผิง • ตารางคิวนัดหมายแพทย์ (APPOINTMENTS)',
         icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
       },
       title: `🗓️ ${titleText}`,
-      description: '>>> **จำนวนคิวนัดทั้งหมด:** `0 คิว`',
+      description: '>>> **จำนวนคิวนัดทั้งหมด:** `0 คิว`\nℹ️ ไม่พบคิวนัดหมายตรวจหรือรับบริการในช่วงเวลาดังกล่าว\nสามารถทำการนัดหมายหรือจองคิวใหม่ได้ผ่านทางระบบคลินิก',
       color: 0x0284c7,
-      fields,
+      fields: [
+        {
+          name: 'ℹ️ สถานะคิวนัดหมาย',
+          value: 'สามารถทำการนัดหมายหรือจองคิวใหม่ได้ผ่านทางระบบคลินิก',
+          inline: false
+        }
+      ],
       footer: {
         text: `Anping Clinic Queue System • ตรวจสอบคิว ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
       }
-    };
+    }];
   }
 
   const doctors = [...new Set(queueList.map(q => q.doctor).filter(d => d && d !== '-'))];
   const docStr = doctors.length > 0 ? doctors.join(', ') : 'แพทย์ประจำคลินิก';
-
-  // Format styles based on total count to ensure 30-50+ queues fit under Discord character limits:
-  // Mode 1: Detailed 3-line format (<= 15 items)
-  // Mode 2: Compact 2-line format (16 - 35 items)
-  // Mode 3: Streamlined 1-line format (> 35 items)
   const count = queueList.length;
+
   let styleMode = 1;
   if (count > 35) {
     styleMode = 3;
@@ -789,10 +925,20 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
   const buildLines = (mode) => {
     return queueList.map((q, idx) => {
       const dt = formatThaiDateTime(q.rawDateTime || q.date);
-      const timeOnly = dt.includes('(') ? dt.split('(')[1].replace(')', '').trim() : dt;
+      let timeDisplay = dt;
+      if (isMultiDay) {
+        const m = dt.match(/^(\d{2}\/\d{2})\/\d{4}\s*\(([^)]+)\)/);
+        if (m) {
+          timeDisplay = `📅 ${m[1]} • ⏰ ${m[2]}`;
+        } else {
+          timeDisplay = dt;
+        }
+      } else {
+        timeDisplay = dt.includes('(') ? `⏰ ${dt.split('(')[1].replace(')', '').trim()}` : dt;
+      }
+
       const cleanPhone = String(q.phone || '').replace(/\D/g, '');
       const phoneDisplay = formatThaiPhone(q.phone);
-      // Avoid repetitive 60-char URLs for large lists to save ~2500 chars and fit all 50 queues
       const callUrl = (count <= 15 && cleanPhone && cleanPhone.length >= 9) ? `${WEBAPP_URL}/api/call?tel=${cleanPhone}` : null;
       const phoneStr = q.phone && cleanPhone.length >= 9
         ? (callUrl ? ` • 📞 [${phoneDisplay}](${callUrl})` : ` • 📞 \`${phoneDisplay}\``)
@@ -819,11 +965,11 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
       const num = String(idx + 1).padStart(2, '0');
 
       if (mode === 1) {
-        return `• **${idx + 1}. ⏰ ${timeOnly}** — **คุณ${pName}** (\`${q.hn}\`)\n  ├ 🩺 **บริการ:** ${q.service} (แพทย์: **${q.doctor}**)\n  └ 🏷️ สถานะ: \`${statusBadge}\`${phoneStr}`;
+        return `• **${idx + 1}. ${timeDisplay}** — **คุณ${pName}** (\`${q.hn}\`)\n  ├ 🩺 **บริการ:** ${q.service} (แพทย์: **${q.doctor}**)\n  └ 🏷️ สถานะ: \`${statusBadge}\`${phoneStr}`;
       } else if (mode === 2) {
-        return `• **${num}. ⏰ ${timeOnly}** **คุณ${pName}** (\`${q.hn}\`)\n  └ 🩺 ${q.service} • \`${statusShort}\`${phoneStr}`;
+        return `• **${num}. ${timeDisplay}** **คุณ${pName}** (\`${q.hn}\`)\n  └ 🩺 ${q.service} • \`${statusShort}\`${phoneStr}`;
       } else {
-        return `• \`${num}\` **${timeOnly}** **คุณ${pName}** (\`${q.hn}\`) — 🩺 ${q.service} \`${statusShort}\`${phoneStr}`;
+        return `• \`${num}\` **${timeDisplay}** **คุณ${pName}** (\`${q.hn}\`) — 🩺 ${q.service} \`${statusShort}\`${phoneStr}`;
       }
     });
   };
@@ -862,31 +1008,7 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
 
   let generatedFields = makeFields(lines, count);
 
-  const calcTotal = (flds) => {
-    let sum = (titleText || '').length + 120;
-    for (const f of flds) sum += (f.name || '').length + (f.value || '').length;
-    return sum;
-  };
-
-  if (calcTotal(generatedFields) > 5500 && styleMode < 3) {
-    styleMode = 3;
-    lines = buildLines(styleMode);
-    generatedFields = makeFields(lines, count);
-  }
-
-  if (calcTotal(generatedFields) > 5700) {
-    while (calcTotal(generatedFields) > 5400 && lines.length > 10) {
-      lines.pop();
-      generatedFields = makeFields(lines, count);
-    }
-    generatedFields.push({
-      name: '📋 ข้อมูลเพิ่มเติม',
-      value: `*(แสดง ${lines.length} จากทั้งหมด ${count} คิว เนื่องจากเกินขีดจำกัด Discord • สามารถเปิดดูคิวทั้งหมดได้ในระบบ)*`,
-      inline: false
-    });
-  }
-
-  return {
+  const baseEmbed = {
     author: {
       name: '🏥 คลินิกอันผิง • ตารางคิวนัดหมายแพทย์ (APPOINTMENTS)',
       icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
@@ -894,11 +1016,12 @@ function buildQueueEmbed(queueList, titleText, botAvatarUrl = '') {
     title: `🗓️ ${titleText}`,
     description: `>>> **จำนวนคิวนัดทั้งหมด:** \`${count} คิว\`  •  **แพทย์ตรวจ:** \`${docStr}\``,
     color: 0x0284c7, // Medical Sky Blue
-    fields: generatedFields,
     footer: {
       text: `Anping Clinic Queue System • รวมทั้งหมด ${count} คิวครบถ้วน • ตรวจสอบ ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
+
+  return splitFieldsIntoEmbeds(baseEmbed, generatedFields);
 }
 
 function buildPosEmbed(tx, botAvatarUrl = '') {
@@ -936,21 +1059,39 @@ function buildPosEmbed(tx, botAvatarUrl = '') {
   ];
 
   if (items.length > 0) {
-    const itemLines = items.slice(0, 8).map((it, i) => {
+    const itemLines = items.map((it, i) => {
       const name = it.name || it.item_name || 'สินค้า/บริการ';
       const qty = it.quantity || it.qty || 1;
       const price = Number(it.price || it.unit_price || 0);
       const total = Number(it.total || price * qty);
       return `• **${i + 1}. ${name}**  (x${qty})\n  └ ยอด: \`฿${total.toLocaleString()}\` *(ราคา/หน่วย: ฿${price.toLocaleString()})*`;
     });
-    if (items.length > 8) {
-      itemLines.push(`*...และรายการอื่นๆ อีก ${items.length - 8} รายการ*`);
+
+    let curItemLines = [];
+    let curItemLen = 0;
+    let itIdx = 1;
+    for (const il of itemLines) {
+      if (curItemLen + il.length + 2 > 900 && curItemLines.length > 0) {
+        fields.push({
+          name: itIdx === 1 ? `📦 รายการสินค้าและบริการ (${items.length} รายการ)` : '\u200b',
+          value: curItemLines.join('\n\n'),
+          inline: false
+        });
+        curItemLines = [il];
+        curItemLen = il.length;
+        itIdx++;
+      } else {
+        curItemLines.push(il);
+        curItemLen += il.length + 2;
+      }
     }
-    fields.push({
-      name: `📦 รายการสินค้าและบริการ (${items.length} รายการ)`,
-      value: itemLines.join('\n\n'),
-      inline: false
-    });
+    if (curItemLines.length > 0) {
+      fields.push({
+        name: itIdx === 1 ? `📦 รายการสินค้าและบริการ (${items.length} รายการ)` : '\u200b',
+        value: curItemLines.join('\n\n'),
+        inline: false
+      });
+    }
   }
 
   if (discount > 0) {
@@ -961,7 +1102,7 @@ function buildPosEmbed(tx, botAvatarUrl = '') {
     });
   }
 
-  return {
+  const baseEmbed = {
     author: {
       name: '🏥 คลินิกอันผิง • ใบเสร็จรับเงิน POS (OFFICIAL RECEIPT)',
       icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
@@ -969,11 +1110,12 @@ function buildPosEmbed(tx, botAvatarUrl = '') {
     title: `🧾 ใบเสร็จรับเงินเลขที่: ${rNo}`,
     description: `>>> **ผู้รับบริการ:** คุณ${cleanPName}  •  **รหัส HN:** \`${hn}\`\n**📅 วันที่ออกบิล:** \`${dt}\``,
     color: 0x10b981, // Emerald Green
-    fields,
     footer: {
       text: `Anping Clinic POS System • ตรวจสอบใบเสร็จ ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
+
+  return splitFieldsIntoEmbeds(baseEmbed, fields);
 }
 
 function buildSalesSummaryEmbed(summary, botAvatarUrl = '') {
@@ -1021,7 +1163,7 @@ function buildInventoryEmbed(items, title = '📦 คลังยา & เวช
       inline: false
     });
   } else {
-    const itemLines = items.slice(0, 10).map((it, i) => {
+    const itemLines = items.map((it, i) => {
       const name = it.name || it.product_name || '-';
       const code = it.code || it.id || '-';
       const qty = Number(it.stock_quantity ?? it.quantity ?? 0);
@@ -1036,22 +1178,34 @@ function buildInventoryEmbed(items, title = '📦 คลังยา & เวช
       return `• **${i + 1}. ${name}** (\`${code}\`)\n  ├ 📦 คงเหลือ: \`${qty} ${unit}\` [${badge}]\n  └ 🏷️ ราคาจำหน่าย: \`฿${price.toLocaleString()} บาท\``;
     });
 
-    fields.push({
-      name: `📋 รายการยาและเวชภัณฑ์ (${items.length} รายการ)`,
-      value: itemLines.join('\n\n'),
-      inline: false
-    });
-
-    if (items.length > 10) {
+    let curItemLines = [];
+    let curItemLen = 0;
+    let itIdx = 1;
+    for (const il of itemLines) {
+      if (curItemLen + il.length + 2 > 900 && curItemLines.length > 0) {
+        fields.push({
+          name: itIdx === 1 ? `📋 รายการยาและเวชภัณฑ์ (${items.length} รายการ)` : '\u200b',
+          value: curItemLines.join('\n\n'),
+          inline: false
+        });
+        curItemLines = [il];
+        curItemLen = il.length;
+        itIdx++;
+      } else {
+        curItemLines.push(il);
+        curItemLen += il.length + 2;
+      }
+    }
+    if (curItemLines.length > 0) {
       fields.push({
-        name: '📦 รายการเพิ่มเติม',
-        value: `*(ยังมีรายการยาอีก ${items.length - 10} รายการ สามารถเปิดดูทั้งหมดในระบบคลังยา)*`,
+        name: itIdx === 1 ? `📋 รายการยาและเวชภัณฑ์ (${items.length} รายการ)` : '\u200b',
+        value: curItemLines.join('\n\n'),
         inline: false
       });
     }
   }
 
-  return {
+  const baseEmbed = {
     author: {
       name: '🏥 คลินิกอันผิง • คลังยาและเวชภัณฑ์ (PHARMACY & INVENTORY)',
       icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
@@ -1059,11 +1213,12 @@ function buildInventoryEmbed(items, title = '📦 คลังยา & เวช
     title,
     description: `>>> **จำนวนรายการยาที่ค้นพบ:** \`${items.length} รายการ\``,
     color: 0x8b5cf6, // Violet / Purple
-    fields,
     footer: {
       text: `Anping Clinic Pharmacy System • ตรวจสอบสต็อก ณ ${new Date().toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })} น.`
     }
   };
+
+  return splitFieldsIntoEmbeds(baseEmbed, fields);
 }
 
 function buildHelpEmbed(botAvatarUrl = '') {
@@ -1078,7 +1233,7 @@ function buildHelpEmbed(botAvatarUrl = '') {
     fields: [
       {
         name: '🔍 /search [keyword]',
-        value: '• ค้นหาอัจฉริยะครอบคลุมทุกระบบ (พิมพ์ชื่อคนไข้, เบอร์โทร, รหัส HN, ยอดขายเมื่อวาน, คิววันนี้, ยาในคลัง)',
+        value: '• ค้นหาอัจฉริยะครอบคลุมทุกระบบ (พิมพ์ชื่อคนไข้, เบอร์โทร, รหัส HN, ยอดขายเมื่อวาน, คิววันนี้, คิวเดือนสิงหา, ยาในคลัง)',
         inline: false
       },
       {
@@ -1088,7 +1243,7 @@ function buildHelpEmbed(botAvatarUrl = '') {
       },
       {
         name: '🗓️ /queue [keyword / date / patient]',
-        value: '• ตารางคิวนัดหมาย (ค้นหาด้วยชื่อคนไข้, รหัส HN, เบอร์โทร หรือดูตามวัน เช่น `วันนี้`, `พรุ่งนี้`, `12/09/2569`)',
+        value: '• ตารางคิวนัดหมาย (ค้นหารายวัน/สัปดาห์/เดือน เช่น `วันนี้`, `อาทิตย์นี้`, `เดือนสิงหาคม`, `สิงหา`, `เดือนส.ค`, `09/69` หรือค้นหาคนไข้ด้วยชื่อ, HN, เบอร์โทร)',
         inline: false
       },
       {
@@ -1098,7 +1253,7 @@ function buildHelpEmbed(botAvatarUrl = '') {
       },
       {
         name: '📊 /sales [period]',
-        value: '• สรุปยอดขาย (ระบุ `วันนี้`, `เมื่อวาน`, `อาทิตย์นี้`, `อาทิตย์ก่อน`, `เดือนนี้`, `เดือนก่อน`, `เดือน5`, `ส.ค.`)',
+        value: '• สรุปยอดขาย (ระบุ `วันนี้`, `เมื่อวาน`, `อาทิตย์นี้`, `อาทิตย์ก่อน`, `เดือนนี้`, `เดือนก่อน`, `เดือน5`, `ส.ค.`, `09/69`)',
         inline: false
       },
       {
@@ -1143,18 +1298,18 @@ const COMMAND_DEFINITIONS = [
   },
   {
     name: 'queue',
-    description: '🗓️ ดูตารางคิวนัดหมาย (ดูตามวัน หรือค้นหาคนไข้ด้วย HN, ชื่อ, เบอร์โทร)',
+    description: '🗓️ ดูตารางคิวนัดหมาย (รายวัน, รายสัปดาห์, รายเดือน เช่น อาทิตย์นี้, เดือนสิงหา, 09/69, หรือค้นหาคนไข้)',
     options: [
       {
         type: 3,
         name: 'keyword',
-        description: 'ค้นหาคนไข้ (ชื่อ, รหัส HN, เบอร์โทร) หรือระบุวันที่ (วันนี้, พรุ่งนี้, 13/09/2569)',
+        description: 'ค้นหารายวัน/สัปดาห์/เดือน (เช่น วันนี้, อาทิตย์นี้, เดือนสิงหา, 09/69) หรือคนไข้ (ชื่อ, HN, เบอร์โทร)',
         required: false
       },
       {
         type: 3,
         name: 'date',
-        description: 'ระบุวันที่ (เช่น วันนี้, พรุ่งนี้, 13/09/2569)',
+        description: 'ระบุวันหรือช่วงเวลา (เช่น วันนี้, พรุ่งนี้, อาทิตย์นี้, เดือนสิงหาคม, 09/69)',
         required: false
       },
       {
@@ -1447,7 +1602,7 @@ export default async function handler(req, res) {
       const patientArg = (options.patient || '').trim();
       const dateArg = (options.date || '').trim();
 
-      let targetDate = null;
+      let targetPeriod = null;
       let targetPatientKw = null;
 
       if (patientArg) {
@@ -1455,7 +1610,7 @@ export default async function handler(req, res) {
       }
       if (dateArg) {
         if (isLikelyDateString(dateArg)) {
-          targetDate = dateArg;
+          targetPeriod = parsePeriod(dateArg);
         } else if (!targetPatientKw) {
           // หากผู้ใช้ใส่ชื่อ/HN/เบอร์ ในช่อง date ให้ตรวจจับอัตโนมัติ
           targetPatientKw = dateArg;
@@ -1463,44 +1618,30 @@ export default async function handler(req, res) {
       }
       if (kwArg) {
         if (isLikelyDateString(kwArg)) {
-          if (!targetDate) targetDate = kwArg;
+          if (!targetPeriod) targetPeriod = parsePeriod(kwArg);
         } else {
-          if (!targetPatientKw) targetPatientKw = kwArg;
+          // ตรวจสอบกรณีพิมพ์ชื่อคนไข้พร้อมระบุเดือน/สัปดาห์ เช่น "กัญญามาศ 08/69" หรือ "สุมินตรา สิงหา"
+          const tokens = kwArg.split(/\s+/);
+          let foundDate = false;
+          for (let i = 0; i < tokens.length; i++) {
+            if (isLikelyDateString(tokens[i])) {
+              const datePart = tokens[i];
+              const ptPart = tokens.filter((_, idx) => idx !== i).join(' ').trim();
+              if (!targetPeriod) targetPeriod = parsePeriod(datePart);
+              if (!targetPatientKw && ptPart) targetPatientKw = ptPart;
+              foundDate = true;
+              break;
+            }
+          }
+          if (!foundDate && !targetPatientKw) {
+            targetPatientKw = kwArg;
+          }
         }
       }
 
-      const { todayIso, tomorrowIso } = getTodayAndTomorrowThaiYMD();
-      let targetYMD = null;
-      let dateTitle = '';
-
-      if (targetDate) {
-        if (targetDate.includes('พรุ่งนี้')) {
-          targetYMD = tomorrowIso;
-          dateTitle = 'วันพรุ่งนี้';
-        } else if (targetDate.includes('วันนี้')) {
-          targetYMD = todayIso;
-          dateTitle = 'วันนี้';
-        } else if (targetDate.includes('เมื่อวาน')) {
-          const now = new Date();
-          const thaiYest = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (24 * 60 * 60 * 1000));
-          const yYear = thaiYest.getUTCFullYear();
-          const yMonth = String(thaiYest.getUTCMonth() + 1).padStart(2, '0');
-          const yDay = String(thaiYest.getUTCDate()).padStart(2, '0');
-          targetYMD = `${yYear}-${yMonth}-${yDay}`;
-          dateTitle = 'เมื่อวานนี้';
-        } else {
-          const parsed = parseQueueDateToThaiYMD(targetDate);
-          if (parsed) {
-            targetYMD = parsed;
-            const [y, m, d] = targetYMD.split('-');
-            const yDisp = parseInt(y, 10) > 2400 ? y : parseInt(y, 10) + 543;
-            dateTitle = `วันที่ ${d}/${m}/${yDisp}`;
-          }
-        }
-      } else if (!targetPatientKw) {
-        // หากไม่ระบุทั้งคนไข้และวันที่ ให้ค่าเริ่มต้นเป็นคิววันนี้
-        targetYMD = todayIso;
-        dateTitle = 'วันนี้';
+      // หากไม่ระบุทั้งคนไข้และช่วงเวลา ให้ค่าเริ่มต้นเป็นคิววันนี้
+      if (!targetPeriod && !targetPatientKw) {
+        targetPeriod = parsePeriod('วันนี้');
       }
 
       // ดึงข้อมูล queue และ patients จากฐานข้อมูล
@@ -1539,10 +1680,10 @@ export default async function handler(req, res) {
       }
 
       const queueList = allQueues.filter(q => {
-        // 1. ถ้ามีวันที่ ต้องตรงกับวันที่
-        if (targetYMD) {
+        // 1. ถ้ามีช่วงเวลา (วัน, สัปดาห์, เดือน) ต้องอยู่ในช่วง startYMD ถึง endYMD
+        if (targetPeriod) {
           const qYMD = parseQueueDateToThaiYMD(q.rawDateTime || q.date);
-          if (qYMD !== targetYMD) return false;
+          if (!qYMD || qYMD < targetPeriod.startYMD || qYMD > targetPeriod.endYMD) return false;
         }
 
         // 2. ถ้ามีคำค้นหาคนไข้ ต้องตรงกับคนไข้ (HN, ชื่อ, เบอร์โทร)
@@ -1571,18 +1712,19 @@ export default async function handler(req, res) {
 
       queueList.sort((a, b) => new Date(a.rawDateTime).getTime() - new Date(b.rawDateTime).getTime());
 
+      const isMultiDay = targetPeriod ? targetPeriod.type !== 'day' : false;
       let title = '';
-      if (targetPatientKw && dateTitle) {
-        title = `คิวนัดหมายของ "${targetPatientKw}" ประจำ${dateTitle}`;
+      if (targetPatientKw && targetPeriod) {
+        title = `คิวนัดหมายของ "${targetPatientKw}" ${targetPeriod.title}`;
       } else if (targetPatientKw) {
-        title = `คิวนัดหมายของ "${targetPatientKw}" (${queueList.length} คิว)`;
+        title = `คิวนัดหมายทั้งหมดของ "${targetPatientKw}" (${queueList.length} คิว)`;
+      } else if (targetPeriod) {
+        title = `คิวนัดหมาย${targetPeriod.title}`;
       } else {
-        const [y, m, d] = (targetYMD || todayIso).split('-');
-        const yDisp = parseInt(y, 10) > 2400 ? y : parseInt(y, 10) + 543;
-        title = `คิวนัดหมายประจำ${dateTitle} (${d}/${m}/${yDisp})`;
+        title = `คิวนัดหมาย (${queueList.length} คิว)`;
       }
 
-      const embed = buildQueueEmbed(queueList, title, botAvatar);
+      const embed = buildQueueEmbed(queueList, title, isMultiDay, botAvatar);
 
       const actionButtons = [
         {
@@ -1795,36 +1937,30 @@ export default async function handler(req, res) {
           return respond(embed);
         }
 
-        // 2. ตรวจสอบว่าเป็นการถามหาคิวหรือนัดหมายหรือไม่ (เช่น "คิววันนี้", "นัดหมายวันนี้")
-        const isQueueQuery = /^(คิว|นัด|นัดหมาย|ตารางนัด)/i.test(cleanKw) || cleanKw.includes('คิววันนี้') || cleanKw.includes('นัดวันนี้');
+        // 2. ตรวจสอบว่าเป็นการถามหาคิวหรือนัดหมายหรือไม่ (เช่น "คิววันนี้", "นัดหมายวันนี้", "คิวเดือนสิงหา", "คิวสัปดาห์นี้")
+        const isQueueQuery = /^(คิว|นัด|นัดหมาย|ตารางนัด)/i.test(cleanKw) || cleanKw.includes('คิววันนี้') || cleanKw.includes('นัดวันนี้') || cleanKw.includes('คิวเดือน') || cleanKw.includes('นัดเดือน');
         if (isQueueQuery) {
-          const { todayIso, tomorrowIso } = getTodayAndTomorrowThaiYMD();
-          let targetYMD = todayIso;
-          let dateTitle = 'วันนี้';
-          if (cleanKw.includes('พรุ่งนี้')) {
-            targetYMD = tomorrowIso;
-            dateTitle = 'วันพรุ่งนี้';
-          } else if (cleanKw.includes('เมื่อวาน')) {
-            const now = new Date();
-            const thaiYest = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (24 * 60 * 60 * 1000));
-            const yYear = thaiYest.getUTCFullYear();
-            const yMonth = String(thaiYest.getUTCMonth() + 1).padStart(2, '0');
-            const yDay = String(thaiYest.getUTCDate()).padStart(2, '0');
-            targetYMD = `${yYear}-${yMonth}-${yDay}`;
-            dateTitle = 'เมื่อวานนี้';
-          }
+          const qPeriodKw = cleanKw.replace(/^(คิว|นัด|นัดหมาย|ตารางนัด)\s*/i, '').trim();
+          const period = parsePeriod(qPeriodKw || 'วันนี้');
+          const isMultiDay = period.type !== 'day';
 
           const { data: queueRaw } = await supabase.from('queue').select('*');
           const queueList = (queueRaw || [])
             .map(normalizeQueueRow)
-            .filter(q => !q.isDeleted && parseQueueDateToThaiYMD(q.rawDateTime || q.date) === targetYMD);
+            .filter(q => {
+              if (q.isDeleted) return false;
+              const qYMD = parseQueueDateToThaiYMD(q.rawDateTime || q.date);
+              return qYMD && qYMD >= period.startYMD && qYMD <= period.endYMD;
+            });
 
           queueList.sort((a, b) => new Date(a.rawDateTime).getTime() - new Date(b.rawDateTime).getTime());
-          const embed = buildQueueEmbed(queueList, `คิวนัดหมายประจำ${dateTitle} (${targetYMD})`, botAvatar);
-          embed.footer = {
-            text: `Anping Clinic • ค้นหาคิวอัตโนมัติจาก "${rawKw}" (แนะนำ: ใช้คำสั่ง /queue ได้โดยตรง)`
-          };
-          return respond(embed);
+          const embeds = buildQueueEmbed(queueList, `คิวนัดหมาย${period.title}`, isMultiDay, botAvatar);
+          if (embeds.length > 0) {
+            embeds[embeds.length - 1].footer = {
+              text: `Anping Clinic • ค้นหาคิวอัตโนมัติจาก "${rawKw}" (แนะนำ: ใช้คำสั่ง /queue ได้โดยตรง)`
+            };
+          }
+          return respond(embeds);
         }
       }
 
@@ -1923,7 +2059,7 @@ export default async function handler(req, res) {
 
         if (queueList.length > 0) {
           queueList.sort((a, b) => new Date(b.rawDateTime).getTime() - new Date(a.rawDateTime).getTime());
-          const embed = buildQueueEmbed(queueList, `นัดหมายที่ตรงกับ "${rawKw}"`, botAvatar);
+          const embed = buildQueueEmbed(queueList, `นัดหมายที่ตรงกับ "${rawKw}"`, true, botAvatar);
           return respond(embed);
         }
 
