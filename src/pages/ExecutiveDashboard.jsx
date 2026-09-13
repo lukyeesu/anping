@@ -1069,7 +1069,7 @@ const ExecutiveDashboard = ({
       {/* Header Panel */}
       <div className={`sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out ${isScrolled ? 'is-scrolled' : ''}`} style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className={`w-full pointer-events-auto transition-all duration-300 ${isScrolled ? 'bg-white/70 backdrop-blur-xl border-b border-slate-200/50 shadow-[0_8px_32px_rgba(0,0,0,0.03)]' : 'bg-transparent border-b border-transparent'}`}>
-          <div className={`w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 transition-all duration-300 ${isScrolled ? 'py-1.5 sm:py-2.5' : 'py-3 sm:py-4'}`}>
+          <div className={`w-full mx-auto px-3.5 sm:px-6 md:px-8 2xl:px-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 transition-all duration-300 ${isScrolled ? 'py-1.5 sm:py-2.5' : 'py-3 sm:py-4'}`}>
             
             {/* Title & Branch Dropdown Row on Mobile */}
             <div className="flex items-center justify-between w-full md:w-auto gap-4">
@@ -1154,66 +1154,66 @@ const ExecutiveDashboard = ({
         </div>
       </div>
 
-      <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 space-y-6">
+      <div className="w-full mx-auto px-3.5 sm:px-6 md:px-8 2xl:px-12 mt-3 sm:mt-4 space-y-4 sm:space-y-6">
         {/* KPI Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 lg:gap-6 w-full min-w-0">
           {/* Card 1: Revenue */}
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-[2rem] p-7 shadow-lg shadow-emerald-500/10 flex flex-col justify-between relative overflow-hidden group">
-            <div className="flex justify-between items-start z-10">
-              <div>
-                <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider kanit-text">รายรับรวมทั้งหมด</p>
-                <h3 className="text-3xl font-black font-data mt-2">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.income)}</h3>
+          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl sm:rounded-[1.75rem] lg:rounded-[2rem] p-4 sm:p-5 lg:p-7 shadow-md sm:shadow-lg shadow-emerald-500/10 flex flex-col justify-between relative overflow-hidden group min-w-0">
+            <div className="flex justify-between items-start z-10 gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-emerald-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">รายรับรวมทั้งหมด</p>
+                <h3 className="text-2xl sm:text-2xl lg:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight truncate">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.income)}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
-                <TrendingUp size={24} />
+              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0">
+                <TrendingUp size={20} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
               </div>
             </div>
-            <div className="mt-8 border-t border-white/10 pt-4 z-10 flex justify-between items-center text-xs text-emerald-100">
-              <span className="kanit-text">ยอดผ่าน POS: {summary.checkoutsCount} บิล</span>
-              <span className="font-data font-bold">โอนเงิน {((summary.transfer / (summary.income || 1)) * 100).toFixed(0)}%</span>
+            <div className="mt-4 sm:mt-6 lg:mt-8 border-t border-white/10 pt-2.5 sm:pt-3 lg:pt-4 z-10 flex justify-between items-center text-[10px] sm:text-[11px] lg:text-xs text-emerald-100 gap-2">
+              <span className="kanit-text truncate">ยอดผ่าน POS: {summary.checkoutsCount} บิล</span>
+              <span className="font-data font-bold shrink-0">โอนเงิน {((summary.transfer / (summary.income || 1)) * 100).toFixed(0)}%</span>
             </div>
-            <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
+            <div className="absolute -bottom-6 -right-6 w-24 h-24 lg:w-28 lg:h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
           </div>
 
           {/* Card 2: Expenses */}
-          <div className="bg-gradient-to-br from-rose-500 to-red-600 text-white rounded-[2rem] p-7 shadow-lg shadow-rose-500/10 flex flex-col justify-between relative overflow-hidden group">
-            <div className="flex justify-between items-start z-10">
-              <div>
-                <p className="text-rose-100 text-xs font-bold uppercase tracking-wider kanit-text">รายจ่ายรวมทั้งหมด</p>
-                <h3 className="text-3xl font-black font-data mt-2">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.expense)}</h3>
+          <div className="bg-gradient-to-br from-rose-500 to-red-600 text-white rounded-2xl sm:rounded-[1.75rem] lg:rounded-[2rem] p-4 sm:p-5 lg:p-7 shadow-md sm:shadow-lg shadow-rose-500/10 flex flex-col justify-between relative overflow-hidden group min-w-0">
+            <div className="flex justify-between items-start z-10 gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-rose-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">รายจ่ายรวมทั้งหมด</p>
+                <h3 className="text-2xl sm:text-2xl lg:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight truncate">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.expense)}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
-                <TrendingDown size={24} />
+              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0">
+                <TrendingDown size={20} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
               </div>
             </div>
-            <div className="mt-8 border-t border-white/10 pt-4 z-10 flex justify-between items-center text-xs text-rose-100">
-              <span className="kanit-text">ค่าคอม & สวัสดิการรวมอยู่ด้วย</span>
-              <span className="font-data font-bold">อัตราส่วน: {((summary.expense / (summary.income || 1)) * 100).toFixed(0)}%</span>
+            <div className="mt-4 sm:mt-6 lg:mt-8 border-t border-white/10 pt-2.5 sm:pt-3 lg:pt-4 z-10 flex justify-between items-center text-[10px] sm:text-[11px] lg:text-xs text-rose-100 gap-2">
+              <span className="kanit-text truncate">ค่าคอม & สวัสดิการ</span>
+              <span className="font-data font-bold shrink-0">อัตราส่วน: {((summary.expense / (summary.income || 1)) * 100).toFixed(0)}%</span>
             </div>
-            <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
+            <div className="absolute -bottom-6 -right-6 w-24 h-24 lg:w-28 lg:h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
           </div>
 
           {/* Card 3: Net Profit */}
-          <div className="bg-gradient-to-br from-indigo-500 to-sky-600 text-white rounded-[2rem] p-7 shadow-lg shadow-indigo-500/10 flex flex-col justify-between relative overflow-hidden group">
-            <div className="flex justify-between items-start z-10">
-              <div>
-                <p className="text-indigo-100 text-xs font-bold uppercase tracking-wider kanit-text">กำไรสุทธิ (Net Profit)</p>
-                <h3 className="text-3xl font-black font-data mt-2">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.netProfit)}</h3>
+          <div className="bg-gradient-to-br from-indigo-500 to-sky-600 text-white rounded-2xl sm:rounded-[1.75rem] lg:rounded-[2rem] p-4 sm:p-5 lg:p-7 shadow-md sm:shadow-lg shadow-indigo-500/10 flex flex-col justify-between relative overflow-hidden group min-w-0">
+            <div className="flex justify-between items-start z-10 gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-indigo-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">กำไรสุทธิ (Net Profit)</p>
+                <h3 className="text-2xl sm:text-2xl lg:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight truncate">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.netProfit)}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
-                <Wallet size={24} />
+              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0">
+                <Wallet size={20} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
               </div>
             </div>
-            <div className="mt-8 border-t border-white/10 pt-4 z-10 flex justify-between items-center text-xs text-indigo-100">
-              <span className="kanit-text">กำไรหักค่าใช้จ่ายของสาขาแล้ว</span>
-              <span className="font-data font-bold">อัตรากำไร: {summary.profitMargin || (summary.income > 0 ? ((summary.netProfit / summary.income) * 100).toFixed(0) : '0')}%</span>
+            <div className="mt-4 sm:mt-6 lg:mt-8 border-t border-white/10 pt-2.5 sm:pt-3 lg:pt-4 z-10 flex justify-between items-center text-[10px] sm:text-[11px] lg:text-xs text-indigo-100 gap-2">
+              <span className="kanit-text truncate">กำไรหักค่าใช้จ่ายแล้ว</span>
+              <span className="font-data font-bold shrink-0">อัตรากำไร: {summary.profitMargin || (summary.income > 0 ? ((summary.netProfit / summary.income) * 100).toFixed(0) : '0')}%</span>
             </div>
-            <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
+            <div className="absolute -bottom-6 -right-6 w-24 h-24 lg:w-28 lg:h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
           </div>
         </div>
 
         {/* Second Row: Charts & Payment Methods */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6 w-full min-w-0">
           {/* Trends Chart */}
           <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col min-w-0 overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
@@ -1349,51 +1349,60 @@ const ExecutiveDashboard = ({
           </div>
 
           {/* Payment Methods & Branch Revenue */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col justify-between min-w-0 overflow-hidden">
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-5 kanit-text flex items-center gap-2">
-                <CreditCard className="text-indigo-500 w-5 h-5" /> ช่องทางการชำระเงิน
-              </h3>
-              <div className="space-y-4">
-                {[
-                  { label: 'เงินสด', amount: summary.cash, color: 'bg-emerald-500', pct: summary.income > 0 ? (summary.cash / summary.income) * 100 : 0 },
-                  { label: 'โอนเงิน / สแกนจ่าย', amount: summary.transfer + (summary.qr || 0), color: 'bg-sky-500', pct: summary.income > 0 ? ((summary.transfer + (summary.qr || 0)) / summary.income) * 100 : 0 },
-                  { label: 'บัตรเครดิต', amount: summary.card, color: 'bg-indigo-500', pct: summary.income > 0 ? (summary.card / summary.income) * 100 : 0 }
-                ].map((item, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-600">
-                      <span className="kanit-text">{item.label}</span>
-                      <span className="font-data">{formatMoney(item.amount)} ({item.pct.toFixed(0)}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.pct}%` }}></div>
-                    </div>
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-6 lg:p-7 flex flex-col justify-between min-w-0 overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-5 md:gap-8 lg:gap-0 h-full">
+              {/* Payment Methods */}
+              <div className="flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-4 sm:mb-5 kanit-text flex items-center gap-2">
+                    <CreditCard className="text-indigo-500 w-5 h-5 shrink-0" />
+                    <span>ช่องทางการชำระเงิน</span>
+                  </h3>
+                  <div className="space-y-3.5 sm:space-y-4">
+                    {[
+                      { label: 'เงินสด', amount: summary.cash, color: 'bg-emerald-500', pct: summary.income > 0 ? (summary.cash / summary.income) * 100 : 0 },
+                      { label: 'โอนเงิน / สแกนจ่าย', amount: summary.transfer + (summary.qr || 0), color: 'bg-sky-500', pct: summary.income > 0 ? ((summary.transfer + (summary.qr || 0)) / summary.income) * 100 : 0 },
+                      { label: 'บัตรเครดิต', amount: summary.card, color: 'bg-indigo-500', pct: summary.income > 0 ? (summary.card / summary.income) * 100 : 0 }
+                    ].map((item, idx) => (
+                      <div key={idx} className="space-y-1.5">
+                        <div className="flex justify-between items-center text-xs sm:text-sm font-bold text-slate-600">
+                          <span className="kanit-text">{item.label}</span>
+                          <span className="font-data">{formatMoney(item.amount)} ({item.pct.toFixed(0)}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${item.pct}%` }}></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
 
-            <div className="border-t border-slate-100 pt-5 mt-5">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest kanit-text mb-3">สรุปยอดแบ่งตามสาขา</h4>
-              <div className="space-y-2.5 max-h-40 overflow-y-auto custom-scrollbar">
-                {branchRevenue.map((br, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-slate-700 kanit-text truncate max-w-[120px]">{br.name}</span>
-                    <div className="text-right">
-                      <div className="font-bold text-emerald-600 font-data">+{formatMoney(br.income)}</div>
-                      <div className="text-[10px] text-slate-400 font-data mt-0.5">-{formatMoney(br.expense)}</div>
-                    </div>
+              {/* Branch Breakdown */}
+              <div className="border-t md:border-t-0 lg:border-t border-slate-100 pt-5 md:pt-0 lg:pt-5 md:border-l lg:border-l-0 md:pl-8 lg:pl-0 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest kanit-text mb-3">สรุปยอดแบ่งตามสาขา</h4>
+                  <div className="space-y-2.5 max-h-40 md:max-h-[220px] lg:max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                    {branchRevenue.map((br, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs sm:text-sm">
+                        <span className="font-bold text-slate-700 kanit-text flex-1 min-w-0 pr-2 truncate">{br.name}</span>
+                        <div className="text-right shrink-0">
+                          <div className="font-bold text-emerald-600 font-data">+{formatMoney(br.income)}</div>
+                          <div className="text-[10px] text-slate-400 font-data mt-0.5">-{formatMoney(br.expense)}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Third Row: Staff ranking & Top Products */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 lg:gap-6 w-full min-w-0">
           {/* Top Staff / Doctors Performance */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col min-w-0 overflow-hidden">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-6 lg:p-7 flex flex-col min-w-0 overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
                 <Award className="text-amber-500 w-5 h-5 shrink-0" />
@@ -1401,53 +1410,53 @@ const ExecutiveDashboard = ({
               </h3>
 
               {/* Segmented Tabs */}
-              <div className="flex bg-slate-100 p-1 rounded-xl gap-1 text-xs font-bold kanit-text border border-slate-200/60 shrink-0 shadow-xs self-start sm:self-auto">
+              <div className="w-full sm:w-auto overflow-x-auto scrollbar-none flex bg-slate-100 p-1 rounded-xl gap-1 text-[11px] sm:text-xs font-bold kanit-text border border-slate-200/60 shrink-0 shadow-xs">
                 <button
                   type="button"
                   onClick={() => setStaffRankingTab('all')}
-                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${staffRankingTab === 'all' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap ${staffRankingTab === 'all' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   ทั้งหมด
                 </button>
                 <button
                   type="button"
                   onClick={() => setStaffRankingTab('df')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${staffRankingTab === 'df' ? 'bg-white text-emerald-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${staffRankingTab === 'df' ? 'bg-white text-emerald-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   <Stethoscope size={12} /> ค่า DF (เคสรักษา)
                 </button>
                 <button
                   type="button"
                   onClick={() => setStaffRankingTab('sales')}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${staffRankingTab === 'sales' ? 'bg-white text-amber-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap ${staffRankingTab === 'sales' ? 'bg-white text-amber-600 shadow-xs' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   <Award size={12} /> ค่าคอม (ยอดขาย)
                 </button>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="table-auto w-full text-left text-xs sm:text-sm border-collapse">
+            <div className="overflow-x-auto custom-scrollbar -mx-2 sm:mx-0 px-2 sm:px-0">
+              <table className="table-auto w-full min-w-[320px] sm:min-w-full text-left text-xs sm:text-sm border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100 text-slate-500 font-bold">
-                    <th className={`${staffRankingTab === 'all' ? 'w-[34%]' : 'w-[38%]'} py-3 px-2 kanit-text`}>
+                  <tr className="border-b border-slate-100 text-slate-500 font-bold text-[11px] sm:text-xs">
+                    <th className={`${staffRankingTab === 'all' ? 'w-[34%]' : 'w-[38%]'} py-2.5 sm:py-3 px-1.5 sm:px-2 kanit-text`}>
                       {staffRankingTab === 'df' ? 'แพทย์ผู้รักษา' : staffRankingTab === 'sales' ? 'ผู้แนะนำ / ผู้ขาย' : 'พนักงาน'}
                     </th>
                     {staffRankingTab === 'all' ? (
                       <>
-                        <th className="w-[18%] py-3 px-2 kanit-text text-center text-emerald-700 whitespace-nowrap">
+                        <th className="w-[18%] py-2.5 sm:py-3 px-1 sm:px-2 kanit-text text-center text-emerald-700 whitespace-nowrap">
                           🩺 เคสรักษา
                         </th>
-                        <th className="w-[18%] py-3 px-2 kanit-text text-center text-amber-700 whitespace-nowrap">
+                        <th className="w-[18%] py-2.5 sm:py-3 px-1 sm:px-2 kanit-text text-center text-amber-700 whitespace-nowrap">
                           💼 บิลขาย
                         </th>
                       </>
                     ) : (
-                      <th className="w-[28%] py-3 px-2 kanit-text text-center whitespace-nowrap">
-                        {staffRankingTab === 'df' ? '🩺 จำนวนเคสรักษา' : '💼 จำนวนบิลขาย'}
+                      <th className="w-[28%] py-2.5 sm:py-3 px-1 sm:px-2 kanit-text text-center whitespace-nowrap">
+                        {staffRankingTab === 'df' ? '🩺 เคสรักษา' : '💼 บิลขาย'}
                       </th>
                     )}
-                    <th className={`${staffRankingTab === 'all' ? 'w-[30%]' : 'w-[34%]'} py-3 px-2 kanit-text text-right whitespace-nowrap`}>
+                    <th className={`${staffRankingTab === 'all' ? 'w-[30%]' : 'w-[34%]'} py-2.5 sm:py-3 px-1.5 sm:px-2 kanit-text text-right whitespace-nowrap`}>
                       {staffRankingTab === 'df' ? 'ค่า DF หัตถการ' : staffRankingTab === 'sales' ? 'ค่าคอมมิชชั่น' : 'ค่าตอบแทนรวม'}
                     </th>
                   </tr>
@@ -1466,33 +1475,33 @@ const ExecutiveDashboard = ({
                   ) : (
                     displayedStaffStats.map((st, idx) => (
                       <tr key={st.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 px-2 flex items-center gap-2.5">
-                          <span className="font-bold text-slate-400 font-data w-4 shrink-0">{idx + 1}</span>
+                        <td className="py-2.5 sm:py-3 px-1.5 sm:px-2 flex items-center gap-2 sm:gap-2.5 min-w-0">
+                          <span className="font-bold text-slate-400 font-data w-3.5 sm:w-4 text-[11px] sm:text-xs shrink-0">{idx + 1}</span>
                           {st.photo ? (
-                            <img src={st.photo} className="w-7 h-7 rounded-full object-cover border border-slate-200" alt="Avatar"/>
+                            <img src={st.photo} className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover border border-slate-200 shrink-0" alt="Avatar"/>
                           ) : (
-                            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><User size={14}/></div>
+                            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0"><User size={13}/></div>
                           )}
-                          <div className="min-w-0">
-                            <div className="font-bold text-slate-700 kanit-text truncate">{st.name}</div>
-                            <div className="text-[9px] text-slate-400 font-medium kanit-text truncate mt-0.5">{st.position || st.role}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-slate-700 kanit-text truncate text-xs sm:text-sm">{st.name}</div>
+                            <div className="text-[9px] sm:text-[10px] text-slate-400 font-medium kanit-text truncate mt-0.5">{st.position || st.role}</div>
                           </div>
                         </td>
 
                         {staffRankingTab === 'all' ? (
                           <>
-                            <td className="py-3 px-2 text-center font-data text-emerald-700 font-bold">
+                            <td className="py-2.5 sm:py-3 px-1 sm:px-2 text-center font-data text-emerald-700 font-bold">
                               {st.dfCases > 0 ? (
-                                <span className="bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100/80 text-xs">
+                                <span className="bg-emerald-50 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-100/80 text-[10px] sm:text-xs whitespace-nowrap">
                                   {st.dfCases} เคส
                                 </span>
                               ) : (
                                 <span className="text-slate-300">-</span>
                               )}
                             </td>
-                            <td className="py-3 px-2 text-center font-data text-amber-700 font-bold">
+                            <td className="py-2.5 sm:py-3 px-1 sm:px-2 text-center font-data text-amber-700 font-bold">
                               {st.salesCases > 0 ? (
-                                <span className="bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100/80 text-xs">
+                                <span className="bg-amber-50 px-1.5 sm:px-2 py-0.5 rounded-full border border-amber-100/80 text-[10px] sm:text-xs whitespace-nowrap">
                                   {st.salesCases} บิล
                                 </span>
                               ) : (
@@ -1501,29 +1510,29 @@ const ExecutiveDashboard = ({
                             </td>
                           </>
                         ) : (
-                          <td className="py-3 px-2 text-center font-data text-slate-600 font-bold">
+                          <td className="py-2.5 sm:py-3 px-1 sm:px-2 text-center font-data text-slate-600 font-bold">
                             {staffRankingTab === 'df' ? (
-                              <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100/80 text-xs">
+                              <span className="bg-emerald-50 text-emerald-700 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-100/80 text-[10px] sm:text-xs whitespace-nowrap">
                                 {st.dfCases} เคส
                               </span>
                             ) : (
-                              <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-100/80 text-xs">
+                              <span className="bg-amber-50 text-amber-700 px-1.5 sm:px-2 py-0.5 rounded-full border border-amber-100/80 text-[10px] sm:text-xs whitespace-nowrap">
                                 {st.salesCases} บิล
                               </span>
                             )}
                           </td>
                         )}
 
-                        <td className="py-3 px-2 text-right font-bold text-emerald-600 font-data">
+                        <td className="py-2.5 sm:py-3 px-1.5 sm:px-2 text-right font-bold text-emerald-600 font-data">
                           {staffRankingTab === 'df' ? (
-                            <div>{formatMoney(st.dfCommission)}</div>
+                            <div className="text-xs sm:text-sm">{formatMoney(st.dfCommission)}</div>
                           ) : staffRankingTab === 'sales' ? (
-                            <div>{formatMoney(st.salesCommission)}</div>
+                            <div className="text-xs sm:text-sm">{formatMoney(st.salesCommission)}</div>
                           ) : (
                             <div>
-                              <div>{formatMoney(st.commission)}</div>
+                              <div className="text-xs sm:text-sm">{formatMoney(st.commission)}</div>
                               {(st.dfCommission > 0 || st.salesCommission > 0) && (
-                                <div className="text-[10px] text-slate-400 font-data font-normal mt-0.5 whitespace-nowrap">
+                                <div className="text-[9px] sm:text-[10px] text-slate-400 font-data font-normal mt-0.5 whitespace-nowrap">
                                   DF: {formatMoney(st.dfCommission)} | ขาย: {formatMoney(st.salesCommission)}
                                 </div>
                               )}
@@ -1539,42 +1548,50 @@ const ExecutiveDashboard = ({
           </div>
 
           {/* Top Selling Products */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-7 flex flex-col min-h-[380px] sm:min-h-[410px] min-w-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2 truncate">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-6 lg:p-7 flex flex-col min-h-[340px] sm:min-h-[380px] lg:min-h-[410px] min-w-0 overflow-hidden">
+            <div className="flex flex-col min-[480px]:flex-row min-[480px]:items-center justify-between gap-2.5 sm:gap-3 mb-4">
+              <div className="flex items-center gap-2 min-w-0">
                 <ShoppingBag className="text-emerald-500 w-5 h-5 shrink-0" />
-                <span>สินค้าและบริการขายดี</span>
-                <span className="text-xs font-normal text-slate-400 kanit-text">
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text truncate">
+                  สินค้าและบริการขายดี
+                </h3>
+                <span className="text-[11px] sm:text-xs font-normal text-slate-400 kanit-text shrink-0 hidden sm:inline">
                   ({allTopProducts.length > 0 ? `อันดับ ${topProductsPage * TOP_PRODUCTS_PER_PAGE + 1}-${Math.min((topProductsPage + 1) * TOP_PRODUCTS_PER_PAGE, allTopProducts.length)} จาก ${allTopProducts.length}` : '0 รายการ'})
                 </span>
-              </h3>
+              </div>
 
-              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => setTopProductsPage(prev => Math.max(0, prev - 1))}
-                  disabled={topProductsPage === 0}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-                  title="อันดับก่อนหน้า"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-xs font-bold text-slate-600 font-data px-1.5 min-w-[36px] text-center">
-                  {topProductsTotalPages > 0 ? `${topProductsPage + 1}/${topProductsTotalPages}` : '1/1'}
+              <div className="flex items-center justify-between min-[480px]:justify-end gap-2">
+                <span className="text-[11px] font-normal text-slate-400 kanit-text shrink-0 sm:hidden">
+                  {allTopProducts.length > 0 ? `${topProductsPage * TOP_PRODUCTS_PER_PAGE + 1}-${Math.min((topProductsPage + 1) * TOP_PRODUCTS_PER_PAGE, allTopProducts.length)} จาก ${allTopProducts.length}` : '0 รายการ'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setTopProductsPage(prev => Math.min(topProductsTotalPages - 1, prev + 1))}
-                  disabled={topProductsPage >= topProductsTotalPages - 1}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-                  title="อันดับถัดไป"
-                >
-                  <ChevronRight size={16} />
-                </button>
+
+                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 shrink-0 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTopProductsPage(prev => Math.max(0, prev - 1))}
+                    disabled={topProductsPage === 0}
+                    className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                    title="อันดับก่อนหน้า"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-600 font-data px-1.5 min-w-[32px] sm:min-w-[36px] text-center">
+                    {topProductsTotalPages > 0 ? `${topProductsPage + 1}/${topProductsTotalPages}` : '1/1'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setTopProductsPage(prev => Math.min(topProductsTotalPages - 1, prev + 1))}
+                    disabled={topProductsPage >= topProductsTotalPages - 1}
+                    className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                    title="อันดับถัดไป"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-4 flex-1 flex flex-col justify-start min-h-[290px]">
+            <div className="space-y-3 sm:space-y-4 flex-1 flex flex-col justify-start min-h-[260px] sm:min-h-[290px]">
               {paginatedTopProducts.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center text-slate-400 kanit-text text-sm italic py-10">
                   ไม่มีประวัติการจำหน่ายสินค้า/บริการในช่วงเวลานี้
@@ -1583,9 +1600,9 @@ const ExecutiveDashboard = ({
                 paginatedTopProducts.map((p, idx) => {
                   const rankNumber = topProductsPage * TOP_PRODUCTS_PER_PAGE + idx + 1;
                   return (
-                    <div key={idx} className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className={`w-8 h-8 rounded-xl font-bold text-xs flex items-center justify-center shrink-0 shadow-inner ${
+                    <div key={idx} className="flex items-center justify-between border-b border-slate-50 pb-2.5 sm:pb-3 last:border-0 last:pb-0 gap-2">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl font-bold text-xs flex items-center justify-center shrink-0 shadow-inner ${
                           rankNumber === 1 ? 'bg-amber-100 text-amber-700 font-black' :
                           rankNumber === 2 ? 'bg-slate-200 text-slate-700 font-bold' :
                           rankNumber === 3 ? 'bg-amber-50 text-amber-800 font-bold' :
@@ -1593,9 +1610,9 @@ const ExecutiveDashboard = ({
                         }`}>
                           {rankNumber}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="font-bold text-slate-700 text-xs sm:text-sm kanit-text truncate" title={p.name}>{p.name}</p>
-                          <p className="text-[10px] text-slate-400 font-data mt-0.5">จำนวนที่ขาย: {p.quantity} ชิ้น/ครั้ง</p>
+                          <p className="text-[10px] sm:text-[11px] text-slate-400 font-data mt-0.5">จำนวนที่ขาย: {p.quantity} ชิ้น/ครั้ง</p>
                         </div>
                       </div>
                       <div className="text-right font-bold text-slate-700 font-data text-xs sm:text-sm pl-2 shrink-0">

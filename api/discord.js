@@ -114,6 +114,241 @@ function getTodayAndTomorrowThaiYMD() {
   return { todayIso, tomorrowIso };
 }
 
+const THAI_MONTH_NAMES = [
+  '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+const THAI_MONTH_ABBRS = [
+  '', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+];
+
+function getBangkokNow() {
+  const now = new Date();
+  return new Date(now.getTime() + (7 * 60 * 60 * 1000));
+}
+
+function formatDateDisplay(ymd) {
+  if (!ymd) return '';
+  const [y, m, d] = ymd.split('-');
+  const yDisp = parseInt(y, 10) > 2400 ? y : parseInt(y, 10) + 543;
+  return `${d}/${m}/${yDisp}`;
+}
+
+function getDaysInMonth(year, month1Indexed) {
+  return new Date(Date.UTC(year, month1Indexed, 0)).getUTCDate();
+}
+
+function parseSalesPeriod(rawStr) {
+  const thaiNow = getBangkokNow();
+  const currentYear = thaiNow.getUTCFullYear();
+  const currentMonth = thaiNow.getUTCMonth() + 1; // 1-12
+  const currentDay = thaiNow.getUTCDate();
+
+  const str = String(rawStr || '').trim().toLowerCase();
+  const toYMD = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+  // 1. วันนี้ (Today) / ค่าว่าง
+  if (!str || str === 'วันนี้' || str === 'today') {
+    const todayYMD = toYMD(currentYear, currentMonth, currentDay);
+    return {
+      type: 'day',
+      title: `ประจำวันนี้: ${formatDateDisplay(todayYMD)}`,
+      periodLabel: formatDateDisplay(todayYMD),
+      startYMD: todayYMD,
+      endYMD: todayYMD
+    };
+  }
+
+  // 2. เมื่อวาน (Yesterday)
+  if (str.includes('เมื่อวาน') || str === 'yesterday') {
+    const yestDate = new Date(thaiNow.getTime() - (24 * 60 * 60 * 1000));
+    const yestYMD = toYMD(yestDate.getUTCFullYear(), yestDate.getUTCMonth() + 1, yestDate.getUTCDate());
+    return {
+      type: 'day',
+      title: `ประจำเมื่อวานนี้: ${formatDateDisplay(yestYMD)}`,
+      periodLabel: formatDateDisplay(yestYMD),
+      startYMD: yestYMD,
+      endYMD: yestYMD
+    };
+  }
+
+  // 3. อาทิตย์นี้ / สัปดาห์นี้ / วีคนี้ (This week: Monday to Sunday)
+  if (str.includes('อาทิตย์นี้') || str.includes('สัปดาห์นี้') || str.includes('วีคนี้') || str === 'this week') {
+    const dayOfWeek = thaiNow.getUTCDay();
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(thaiNow.getTime() - (diffToMonday * 24 * 60 * 60 * 1000));
+    const sunday = new Date(monday.getTime() + (6 * 24 * 60 * 60 * 1000));
+
+    const startYMD = toYMD(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate());
+    const endYMD = toYMD(sunday.getUTCFullYear(), sunday.getUTCMonth() + 1, sunday.getUTCDate());
+    return {
+      type: 'week',
+      title: `ประจำสัปดาห์นี้ (${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)})`,
+      periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+      startYMD,
+      endYMD
+    };
+  }
+
+  // 4. อาทิตย์ก่อน / อาทิตย์ที่แล้ว / สัปดาห์ก่อน / สัปดาห์ที่แล้ว (Last week: Monday to Sunday)
+  if (str.includes('อาทิตย์ก่อน') || str.includes('อาทิตย์ที่แล้ว') || str.includes('สัปดาห์ก่อน') || str.includes('สัปดาห์ที่แล้ว') || str === 'last week') {
+    const dayOfWeek = thaiNow.getUTCDay();
+    const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + 7;
+    const lastMonday = new Date(thaiNow.getTime() - (diffToMonday * 24 * 60 * 60 * 1000));
+    const lastSunday = new Date(lastMonday.getTime() + (6 * 24 * 60 * 60 * 1000));
+
+    const startYMD = toYMD(lastMonday.getUTCFullYear(), lastMonday.getUTCMonth() + 1, lastMonday.getUTCDate());
+    const endYMD = toYMD(lastSunday.getUTCFullYear(), lastSunday.getUTCMonth() + 1, lastSunday.getUTCDate());
+    return {
+      type: 'week',
+      title: `ประจำสัปดาห์ก่อน (${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)})`,
+      periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+      startYMD,
+      endYMD
+    };
+  }
+
+  // 5. เดือนนี้ (This month)
+  if (str === 'เดือนนี้' || str === 'this month') {
+    const daysInM = getDaysInMonth(currentYear, currentMonth);
+    const startYMD = toYMD(currentYear, currentMonth, 1);
+    const endYMD = toYMD(currentYear, currentMonth, daysInM);
+    const mName = THAI_MONTH_NAMES[currentMonth];
+    const yDisp = currentYear + 543;
+    return {
+      type: 'month',
+      title: `ประจำเดือน${mName} ${yDisp} (เดือนนี้)`,
+      periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+      startYMD,
+      endYMD
+    };
+  }
+
+  // 6. เดือนก่อน / เดือนที่แล้ว (Last month)
+  if (str === 'เดือนก่อน' || str === 'เดือนที่แล้ว' || str === 'last month') {
+    let targetYear = currentYear;
+    let targetMonth = currentMonth - 1;
+    if (targetMonth < 1) {
+      targetMonth = 12;
+      targetYear -= 1;
+    }
+    const daysInM = getDaysInMonth(targetYear, targetMonth);
+    const startYMD = toYMD(targetYear, targetMonth, 1);
+    const endYMD = toYMD(targetYear, targetMonth, daysInM);
+    const mName = THAI_MONTH_NAMES[targetMonth];
+    const yDisp = targetYear + 543;
+    return {
+      type: 'month',
+      title: `ประจำเดือน${mName} ${yDisp} (เดือนก่อน)`,
+      periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+      startYMD,
+      endYMD
+    };
+  }
+
+  let specifiedYear = currentYear;
+  const yearMatch = str.match(/(25\d{2}|20\d{2})/);
+  if (yearMatch) {
+    let yVal = parseInt(yearMatch[1], 10);
+    if (yVal > 2400) yVal -= 543;
+    specifiedYear = yVal;
+  }
+
+  // 7. เดือนระบุด้วยตัวเลข: "เดือน5", "เดือน 5", "เดือน 12", "เดือน12"
+  const monthNumMatch = str.match(/เดือน\s*(\d{1,2})/);
+  if (monthNumMatch) {
+    const mVal = parseInt(monthNumMatch[1], 10);
+    if (mVal >= 1 && mVal <= 12) {
+      const daysInM = getDaysInMonth(specifiedYear, mVal);
+      const startYMD = toYMD(specifiedYear, mVal, 1);
+      const endYMD = toYMD(specifiedYear, mVal, daysInM);
+      const mName = THAI_MONTH_NAMES[mVal];
+      const yDisp = specifiedYear + 543;
+      return {
+        type: 'month',
+        title: `ประจำเดือน${mName} ${yDisp}`,
+        periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+        startYMD,
+        endYMD
+      };
+    }
+  }
+
+  // 8. รูปแบบ MM/YYYY หรือ MM-YYYY (เช่น 08/2569, 08/2026)
+  const myMatch = str.match(/^(\d{1,2})[\/\-](\d{2,4})$/);
+  if (myMatch) {
+    const mVal = parseInt(myMatch[1], 10);
+    let yVal = parseInt(myMatch[2], 10);
+    if (yVal < 100) yVal += 2000;
+    else if (yVal > 2400) yVal -= 543;
+    if (mVal >= 1 && mVal <= 12) {
+      const daysInM = getDaysInMonth(yVal, mVal);
+      const startYMD = toYMD(yVal, mVal, 1);
+      const endYMD = toYMD(yVal, mVal, daysInM);
+      const mName = THAI_MONTH_NAMES[mVal];
+      const yDisp = yVal + 543;
+      return {
+        type: 'month',
+        title: `ประจำเดือน${mName} ${yDisp}`,
+        periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+        startYMD,
+        endYMD
+      };
+    }
+  }
+
+  // 9. ชื่อเดือนภาษาไทย (เช่น มกราคม, ม.ค., เดือนม.ค., เดือนพฤษภาคม)
+  for (let m = 1; m <= 12; m++) {
+    const fullName = THAI_MONTH_NAMES[m];
+    const abbr = THAI_MONTH_ABBRS[m].replace(/\./g, '');
+    const cleanS = str.replace(/\./g, '').replace(/\s+/g, '');
+    if (cleanS.includes(fullName) || cleanS.includes(abbr) || str.includes(THAI_MONTH_ABBRS[m])) {
+      const daysInM = getDaysInMonth(specifiedYear, m);
+      const startYMD = toYMD(specifiedYear, m, 1);
+      const endYMD = toYMD(specifiedYear, m, daysInM);
+      const mName = THAI_MONTH_NAMES[m];
+      const yDisp = specifiedYear + 543;
+      return {
+        type: 'month',
+        title: `ประจำเดือน${mName} ${yDisp}`,
+        periodLabel: `${formatDateDisplay(startYMD)} – ${formatDateDisplay(endYMD)}`,
+        startYMD,
+        endYMD
+      };
+    }
+  }
+
+  // 10. วันที่เจาะจง เช่น 12/09/2569, 12-09-2026, 2026-09-12
+  const dmyMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (dmyMatch) {
+    const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const month = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
+    let year = parseInt(dmyMatch[3], 10);
+    if (year < 100) year += 2000;
+    else if (year > 2400) year -= 543;
+    const ymd = `${year}-${month}-${day}`;
+    return {
+      type: 'day',
+      title: `ประจำวันที่ ${day}/${month}/${year > 2400 ? year : year + 543}`,
+      periodLabel: `${day}/${month}/${year > 2400 ? year : year + 543}`,
+      startYMD: ymd,
+      endYMD: ymd
+    };
+  }
+
+  // Fallback: Default to today
+  const todayYMD = toYMD(currentYear, currentMonth, currentDay);
+  return {
+    type: 'day',
+    title: `ประจำวันที่: ${formatDateDisplay(todayYMD)}`,
+    periodLabel: formatDateDisplay(todayYMD),
+    startYMD: todayYMD,
+    endYMD: todayYMD
+  };
+}
+
 function formatThaiPhone(phoneStr) {
   if (!phoneStr || phoneStr === '-') return '-';
   const clean = String(phoneStr).replace(/\D/g, '');
@@ -717,13 +952,16 @@ function buildPosEmbed(tx, botAvatarUrl = '') {
 }
 
 function buildSalesSummaryEmbed(summary, botAvatarUrl = '') {
+  const avgPerBill = summary.billsCount > 0 ? (summary.totalAmount / summary.billsCount) : 0;
   return {
     author: {
       name: '🏥 คลินิกอันผิง • สรุปยอดขายและการเงิน (SALES & FINANCE)',
       icon_url: (botAvatarUrl && botAvatarUrl.startsWith('http')) ? botAvatarUrl : undefined
     },
-    title: `📊 รายงานสรุปยอดขายประจำวัน: ${summary.date}`,
-    description: `>>> **ยอดขายรวมทั้งสิ้น:** **\`฿${summary.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\`**\n**จำนวนบิลทั้งหมด:** \`${summary.billsCount} บิล\`  •  **จำนวนผู้รับบริการ:** \`${summary.patientsCount} ท่าน\``,
+    title: `📊 รายงานสรุปยอดขาย: ${summary.periodTitle || summary.date}`,
+    description: summary.billsCount === 0
+      ? `>>> **ยอดขายรวมทั้งสิ้น:** **\`฿0.00 บาท\`**\n**ช่วงเวลา:** \`${summary.periodLabel || summary.date}\`\nℹ️ ไม่พบรายการชำระเงินหรือบิล POS ในช่วงเวลาดังกล่าว`
+      : `>>> **ยอดขายรวมทั้งสิ้น:** **\`฿${summary.totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\`**\n**ช่วงเวลา:** \`${summary.periodLabel || summary.date}\`\n**จำนวนบิลทั้งหมด:** \`${summary.billsCount} บิล\`  •  **ผู้รับบริการ:** \`${summary.patientsCount} ท่าน\`\n**เฉลี่ยต่อบิล:** \`฿${avgPerBill.toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท\``,
     color: 0xf59e0b, // Golden Amber
     fields: [
       {
@@ -834,8 +1072,8 @@ function buildHelpEmbed(botAvatarUrl = '') {
         inline: false
       },
       {
-        name: '📊 /sales [date]',
-        value: '• สรุปยอดขายประจำวัน (ระบุ `วันนี้`, `เมื่อวาน` หรือระบุวันที่ เช่น `12/09/2569`)',
+        name: '📊 /sales [period]',
+        value: '• สรุปยอดขาย (ระบุ `วันนี้`, `เมื่อวาน`, `อาทิตย์นี้`, `อาทิตย์ก่อน`, `เดือนนี้`, `เดือนก่อน`, `เดือน5`, `ส.ค.`)',
         inline: false
       },
       {
@@ -916,12 +1154,18 @@ const COMMAND_DEFINITIONS = [
   },
   {
     name: 'sales',
-    description: '📊 สรุปยอดขายประจำวัน (เงินสด, โอน, บัตรเครดิต)',
+    description: '📊 สรุปยอดขาย (รายวัน, รายสัปดาห์, รายเดือน เช่น อาทิตย์นี้, เดือนนี้, เดือน5)',
     options: [
       {
         type: 3,
+        name: 'period',
+        description: 'ระบุ เช่น วันนี้, เมื่อวาน, อาทิตย์นี้, อาทิตย์ก่อน, เดือนนี้, เดือนก่อน, เดือน5, ส.ค.',
+        required: false
+      },
+      {
+        type: 3,
         name: 'date',
-        description: 'ระบุ เช่น วันนี้, เมื่อวาน, 12/09/2569 (เว้นว่างเพื่อดูวันนี้)',
+        description: 'ระบุช่วงเวลาหรือวันที่ (เว้นว่างเพื่อดูยอดวันนี้)',
         required: false
       }
     ]
@@ -1098,21 +1342,8 @@ export default async function handler(req, res) {
         });
       }
 
-      const { todayIso } = getTodayAndTomorrowThaiYMD();
-      let targetYMD = todayIso;
-      const dateArg = (options.date || '').trim();
-
-      if (dateArg.includes('เมื่อวาน')) {
-        const now = new Date();
-        const thaiYest = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (24 * 60 * 60 * 1000));
-        const yYear = thaiYest.getUTCFullYear();
-        const yMonth = String(thaiYest.getUTCMonth() + 1).padStart(2, '0');
-        const yDay = String(thaiYest.getUTCDate()).padStart(2, '0');
-        targetYMD = `${yYear}-${yMonth}-${yDay}`;
-      } else if (dateArg) {
-        const parsed = parseQueueDateToThaiYMD(dateArg);
-        if (parsed) targetYMD = parsed;
-      }
+      const periodArg = (options.period || options.date || options.keyword || options.filter || '').trim();
+      const period = parseSalesPeriod(periodArg);
 
       const { data: posRaw } = await supabase.from('pos_transactions').select('*');
       const validTxns = (posRaw || []).filter(tx => {
@@ -1123,7 +1354,8 @@ export default async function handler(req, res) {
           const d = new Date(rawTime);
           if (isNaN(d.getTime())) return false;
           const txThai = new Date(d.getTime() + (7 * 60 * 60 * 1000));
-          return txThai.toISOString().split('T')[0] === targetYMD;
+          const txYMD = txThai.toISOString().split('T')[0];
+          return txYMD >= period.startYMD && txYMD <= period.endYMD;
         } catch (e) {
           return false;
         }
@@ -1156,12 +1388,9 @@ export default async function handler(req, res) {
         if (pName) uniquePatients.add(pName);
       }
 
-      const [tYear, tMonth, tDay] = targetYMD.split('-');
-      const thaiYearDisplay = parseInt(tYear, 10) > 2400 ? tYear : String(parseInt(tYear, 10) + 543);
-      const dateStrThai = `${tDay}/${tMonth}/${thaiYearDisplay}`;
-
       const summary = {
-        date: dateStrThai,
+        periodTitle: period.title,
+        periodLabel: period.periodLabel,
         totalAmount,
         billsCount: validTxns.length,
         patientsCount: uniquePatients.size,
@@ -1471,30 +1700,11 @@ export default async function handler(req, res) {
 
       // 🌟 SMART INTENT DETECTION (สำหรับคำสั่ง /search)
       if (cmdName === 'search') {
-        // 1. ตรวจสอบว่าเป็นการถามหายอดขายหรือไม่ (เช่น "สรุปยอดเมื่อวาน", "ยอดขาย", "รายได้", "sales")
+        // 1. ตรวจสอบว่าเป็นการถามหายอดขายหรือไม่ (เช่น "สรุปยอดเมื่อวาน", "ยอดขาย", "รายได้", "sales", "สรุปยอดเดือน5")
         const isSalesQuery = /^(สรุป)?(ยอด|ยอดขาย|รายได้|ขาย)/i.test(cleanKw) || cleanKw.includes('ยอดขาย') || cleanKw.includes('สรุปยอด') || cleanKw.includes('sales');
         if (isSalesQuery) {
-          let salesDateArg = '';
-          if (cleanKw.includes('เมื่อวาน')) salesDateArg = 'เมื่อวาน';
-          else if (cleanKw.includes('วันนี้')) salesDateArg = 'วันนี้';
-          else {
-            const dateMatch = cleanKw.match(/\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?/);
-            if (dateMatch) salesDateArg = dateMatch[0];
-          }
-
-          const { todayIso } = getTodayAndTomorrowThaiYMD();
-          let targetYMD = todayIso;
-          if (salesDateArg.includes('เมื่อวาน')) {
-            const now = new Date();
-            const thaiYest = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (24 * 60 * 60 * 1000));
-            const yYear = thaiYest.getUTCFullYear();
-            const yMonth = String(thaiYest.getUTCMonth() + 1).padStart(2, '0');
-            const yDay = String(thaiYest.getUTCDate()).padStart(2, '0');
-            targetYMD = `${yYear}-${yMonth}-${yDay}`;
-          } else if (salesDateArg && salesDateArg !== 'วันนี้') {
-            const parsed = parseQueueDateToThaiYMD(salesDateArg);
-            if (parsed) targetYMD = parsed;
-          }
+          const periodKw = cleanKw.replace(/^(สรุป)?(ยอด|ยอดขาย|รายได้|ขาย|sales)\s*/i, '').trim();
+          const period = parseSalesPeriod(periodKw);
 
           const { data: posRaw } = await supabase.from('pos_transactions').select('*');
           const validTxns = (posRaw || []).filter(tx => {
@@ -1505,7 +1715,8 @@ export default async function handler(req, res) {
               const d = new Date(rawTime);
               if (isNaN(d.getTime())) return false;
               const txThai = new Date(d.getTime() + (7 * 60 * 60 * 1000));
-              return txThai.toISOString().split('T')[0] === targetYMD;
+              const txYMD = txThai.toISOString().split('T')[0];
+              return txYMD >= period.startYMD && txYMD <= period.endYMD;
             } catch (e) {
               return false;
             }
@@ -1538,12 +1749,9 @@ export default async function handler(req, res) {
             if (pName) uniquePatients.add(pName);
           }
 
-          const [tYear, tMonth, tDay] = targetYMD.split('-');
-          const thaiYearDisplay = parseInt(tYear, 10) > 2400 ? tYear : String(parseInt(tYear, 10) + 543);
-          const dateStrThai = `${tDay}/${tMonth}/${thaiYearDisplay}`;
-
           const summary = {
-            date: dateStrThai,
+            periodTitle: period.title,
+            periodLabel: period.periodLabel,
             totalAmount,
             billsCount: validTxns.length,
             patientsCount: uniquePatients.size,
