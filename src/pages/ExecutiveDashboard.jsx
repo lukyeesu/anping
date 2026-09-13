@@ -39,6 +39,26 @@ const formatExecDisplayRange = (startStr, endStr) => {
   return 'เลือกช่วงเวลา';
 };
 
+// Helper to generate SVG path for annular sector (donut chart slice)
+const getPieSectorPath = (cx, cy, rIn, rOut, startAngle, endAngle) => {
+  const isFull = (endAngle - startAngle) >= 2 * Math.PI - 0.001;
+  const actualEndAngle = isFull ? startAngle + 2 * Math.PI - 0.001 : endAngle;
+
+  const x1 = cx + rOut * Math.cos(startAngle);
+  const y1 = cy + rOut * Math.sin(startAngle);
+  const x2 = cx + rOut * Math.cos(actualEndAngle);
+  const y2 = cy + rOut * Math.sin(actualEndAngle);
+
+  const x3 = cx + rIn * Math.cos(actualEndAngle);
+  const y3 = cy + rIn * Math.sin(actualEndAngle);
+  const x4 = cx + rIn * Math.cos(startAngle);
+  const y4 = cy + rIn * Math.sin(startAngle);
+
+  const largeArc = (actualEndAngle - startAngle) > Math.PI ? 1 : 0;
+
+  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${x3.toFixed(1)} ${y3.toFixed(1)} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x4.toFixed(1)} ${y4.toFixed(1)} Z`;
+};
+
 const ExecutiveDashboard = ({ 
   queueData = [], 
   patientsData = [], 
@@ -87,6 +107,7 @@ const ExecutiveDashboard = ({
     compareIncome: false,
     compareExpense: false,
   });
+  const [hoveredPayChannel, setHoveredPayChannel] = useState(null);
 
   const handleSelectSeriesFilter = useCallback((mode) => {
     if (chartSeriesFilter === mode && mode !== 'all') {
@@ -264,6 +285,18 @@ const ExecutiveDashboard = ({
   const thaiMonthsFull = thaiMonths;
   const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
+  // Helper to get week range starting Sunday (อา.) and ending Saturday (ส.)
+  const getWeekRange = useCallback((baseDate) => {
+    const ref = new Date(baseDate || new Date());
+    const start = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+    start.setDate(start.getDate() - start.getDay());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, []);
+
   const buildDateRange = useCallback(() => {
     const now = new Date();
     const formatDate = (d) => {
@@ -280,9 +313,7 @@ const ExecutiveDashboard = ({
       startDate = formatDate(now);
       endDate = formatDate(now);
     } else if (timeRange === 'week') {
-      const end = new Date(selectedWeekDate);
-      const start = new Date(selectedWeekDate);
-      start.setDate(start.getDate() - 6);
+      const { start, end } = getWeekRange(selectedWeekDate);
       startDate = formatDate(start);
       endDate = formatDate(end);
     } else if (timeRange === 'month') {
@@ -305,7 +336,7 @@ const ExecutiveDashboard = ({
       endDate = customEndDate;
     }
     return { startDate, endDate };
-  }, [timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate]);
+  }, [timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate, getWeekRange]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -450,11 +481,9 @@ const ExecutiveDashboard = ({
       s = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       e = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     } else if (timeRange === 'week') {
-      e = new Date(selectedWeekDate);
-      e.setHours(23, 59, 59, 999);
-      s = new Date(selectedWeekDate);
-      s.setDate(s.getDate() - 6);
-      s.setHours(0, 0, 0, 0);
+      const { start, end } = getWeekRange(selectedWeekDate);
+      s = start;
+      e = end;
     } else if (timeRange === 'month') {
       s = new Date(selectedYear, selectedMonth, 1, 0, 0, 0, 0);
       e = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
@@ -477,15 +506,13 @@ const ExecutiveDashboard = ({
       }
     }
     return { startDateTime: s, endDateTime: e };
-  }, [timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate]);
+  }, [timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate, getWeekRange]);
 
   // Primary period human-readable label
   const primaryPeriodLabel = useMemo(() => {
     if (timeRange === 'today') return 'วันนี้';
     if (timeRange === 'week') {
-      const end = new Date(selectedWeekDate);
-      const start = new Date(selectedWeekDate);
-      start.setDate(start.getDate() - 6);
+      const { start, end } = getWeekRange(selectedWeekDate);
       return `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
     }
     if (timeRange === 'month') return `${thaiMonthsShort[selectedMonth]} ${selectedYear + 543}`;
@@ -495,7 +522,7 @@ const ExecutiveDashboard = ({
       return formatExecDisplayRange(customStartDate, customEndDate);
     }
     return 'ทั้งหมด';
-  }, [timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate, thaiMonthsShort]);
+  }, [timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate, thaiMonthsShort, getWeekRange]);
 
   // Comparison Date Range Calculation
   const compDateRange = useMemo(() => {
@@ -545,10 +572,10 @@ const ExecutiveDashboard = ({
         endDate = formatDate(e);
         label = `ไตรมาส ${prevQ} (Q${prevQ}) ${year + 543}`;
       } else if (comparePreset === 'prev_week') {
-        const end = new Date(selectedWeekDate);
-        end.setDate(end.getDate() - 7);
-        const start = new Date(end);
-        start.setDate(start.getDate() - 6);
+        const { start: curWeekStart } = getWeekRange(selectedWeekDate);
+        const prevWeekRef = new Date(curWeekStart);
+        prevWeekRef.setDate(prevWeekRef.getDate() - 7);
+        const { start, end } = getWeekRange(prevWeekRef);
         startDate = formatDate(start);
         endDate = formatDate(end);
         label = `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
@@ -584,10 +611,10 @@ const ExecutiveDashboard = ({
           endDate = `${year}-12-31`;
           label = `ปี ${year + 543}`;
         } else if (timeRange === 'week') {
-          const end = new Date(selectedWeekDate);
-          end.setDate(end.getDate() - 7);
-          const start = new Date(end);
-          start.setDate(start.getDate() - 6);
+          const { start: curWeekStart } = getWeekRange(selectedWeekDate);
+          const prevWeekRef = new Date(curWeekStart);
+          prevWeekRef.setDate(prevWeekRef.getDate() - 7);
+          const { start, end } = getWeekRange(prevWeekRef);
           startDate = formatDate(start);
           endDate = formatDate(end);
           label = `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
@@ -629,10 +656,7 @@ const ExecutiveDashboard = ({
       endDate = formatDate(e);
       label = `ไตรมาส ${q} (Q${q}) ${year + 543}`;
     } else if (compareMode === 'week') {
-      const end = new Date(compareWeekDate || selectedWeekDate);
-      end.setDate(end.getDate() - 7);
-      const start = new Date(end);
-      start.setDate(start.getDate() - 6);
+      const { start, end } = getWeekRange(compareWeekDate || selectedWeekDate);
       startDate = formatDate(start);
       endDate = formatDate(end);
       label = `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
@@ -648,7 +672,7 @@ const ExecutiveDashboard = ({
     }
 
     return { startDate, endDate, label, year, month, quarter };
-  }, [compareMode, comparePreset, compareYear, compareMonth, compareQuarter, compareCustomStart, compareCustomEnd, selectedYear, selectedMonth, selectedQuarter, selectedWeekDate, timeRange, customStartDate, customEndDate, thaiMonthsShort]);
+  }, [compareMode, comparePreset, compareYear, compareMonth, compareQuarter, compareCustomStart, compareCustomEnd, selectedYear, selectedMonth, selectedQuarter, selectedWeekDate, timeRange, customStartDate, customEndDate, thaiMonthsShort, getWeekRange]);
 
   // Fetch Comparison Data from Supabase RPC
   useEffect(() => {
@@ -1013,6 +1037,9 @@ const ExecutiveDashboard = ({
     let card = 0;
     let qr = 0;
     let posCount = 0;
+    let cashCount = 0;
+    let transferCount = 0;
+    let cardCount = 0;
 
     (filteredTx || []).forEach(tx => {
       const amt = Number(tx.amount || 0);
@@ -1024,15 +1051,20 @@ const ExecutiveDashboard = ({
 
         if (m.includes('cash') || m.includes('เงินสด')) {
           cash += amt;
+          cashCount++;
         } else if (m.includes('transfer') || m.includes('โอน') || m.includes('bank')) {
           transfer += amt;
+          transferCount++;
         } else if (m.includes('card') || m.includes('credit') || m.includes('บัตร')) {
           card += amt;
+          cardCount++;
         } else if (m.includes('qr') || m.includes('พร้อมเพย์') || m.includes('promptpay')) {
           qr += amt;
+          transferCount++;
         } else {
           // Default to cash if unknown
           cash += amt;
+          cashCount++;
         }
       } else if (tx.type === 'expense') {
         expense += amt;
@@ -1051,7 +1083,10 @@ const ExecutiveDashboard = ({
       transfer,
       card,
       qr,
-      checkoutsCount: posCount
+      checkoutsCount: posCount,
+      cashCount,
+      transferCount,
+      cardCount
     };
   }, [filteredTx]);
 
@@ -1396,9 +1431,7 @@ const ExecutiveDashboard = ({
     if (granularity === 'daily') {
       if (timeRange === 'today' || timeRange === 'week') {
         const refDate = timeRange === 'today' ? new Date() : new Date(selectedWeekDate);
-        const startOfWeek = new Date(refDate);
-        startOfWeek.setDate(startOfWeek.getDate() - 6);
-        startOfWeek.setHours(0, 0, 0, 0);
+        const { start: startOfWeek } = getWeekRange(refDate);
 
         for (let i = 0; i < 7; i++) {
           const d = new Date(startOfWeek);
@@ -1594,7 +1627,7 @@ const ExecutiveDashboard = ({
     }
 
     return trends;
-  }, [execSummary, timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate]);
+  }, [execSummary, timeRange, selectedMonth, selectedYear, selectedQuarter, selectedWeekDate, customStartDate, customEndDate, getWeekRange]);
 
   // Comparison trends data aligned to the primary points
   const compareTrends = useMemo(() => {
@@ -2280,7 +2313,8 @@ const ExecutiveDashboard = ({
                       type="button"
                       onClick={() => {
                         setTimeRange(r.id);
-                        if (r.id === 'month' && timeRange === 'month') handleOpenMonthPicker();
+                        if (r.id === 'week') setSelectedWeekDate(new Date());
+                        else if (r.id === 'month' && timeRange === 'month') handleOpenMonthPicker();
                         else if (r.id === 'year' && timeRange === 'year') handleOpenYearPicker();
                         else if (r.id === 'custom') handleOpenExecRange();
                       }}
@@ -3959,10 +3993,10 @@ const ExecutiveDashboard = ({
           </div>
 
           {/* Payment Methods & Branch Revenue */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-6 lg:p-7 flex flex-col justify-between min-w-0 overflow-hidden h-full">
-            <div className="flex flex-col h-full justify-between space-y-5 sm:space-y-6">
-              {/* Payment Methods Section */}
-              <div className="space-y-3.5 sm:space-y-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-6 lg:p-7 flex flex-col min-w-0 overflow-hidden h-full">
+            <div className="flex flex-col h-full justify-between space-y-3 sm:space-y-3.5">
+              {/* Top Payment Methods Section */}
+              <div className="space-y-2.5 sm:space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 kanit-text flex items-center gap-2.5">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shadow-xs shrink-0">
@@ -3992,21 +4026,21 @@ const ExecutiveDashboard = ({
                         {pTransfer > 0 && (
                           <div 
                             style={{ width: `${pTransfer}%` }} 
-                            className="h-full bg-gradient-to-r from-sky-400 to-sky-500 rounded-full transition-all duration-500" 
+                            className={`h-full bg-gradient-to-r from-sky-400 to-sky-500 rounded-full transition-all duration-500 ${hoveredPayChannel === 'transfer' ? 'brightness-125 ring-2 ring-sky-300' : ''}`}
                             title={`โอน/สแกน QR: ${pTransfer.toFixed(1)}%`} 
                           />
                         )}
                         {pCash > 0 && (
                           <div 
                             style={{ width: `${pCash}%` }} 
-                            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500" 
+                            className={`h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500 ${hoveredPayChannel === 'cash' ? 'brightness-125 ring-2 ring-emerald-300' : ''}`}
                             title={`เงินสด: ${pCash.toFixed(1)}%`} 
                           />
                         )}
                         {pCard > 0 && (
                           <div 
                             style={{ width: `${pCard}%` }} 
-                            className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-full transition-all duration-500" 
+                            className={`h-full bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-full transition-all duration-500 ${hoveredPayChannel === 'card' ? 'brightness-125 ring-2 ring-indigo-300' : ''}`}
                             title={`บัตรเครดิต: ${pCard.toFixed(1)}%`} 
                           />
                         )}
@@ -4015,13 +4049,13 @@ const ExecutiveDashboard = ({
                         )}
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-slate-400 font-data px-0.5">
-                        <span className="flex items-center gap-1">
+                        <span className={`flex items-center gap-1 transition-colors ${hoveredPayChannel === 'transfer' ? 'text-sky-600 font-bold' : ''}`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span> โอน/QR {pTransfer.toFixed(0)}%
                         </span>
-                        <span className="flex items-center gap-1">
+                        <span className={`flex items-center gap-1 transition-colors ${hoveredPayChannel === 'cash' ? 'text-emerald-600 font-bold' : ''}`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> เงินสด {pCash.toFixed(0)}%
                         </span>
-                        <span className="flex items-center gap-1">
+                        <span className={`flex items-center gap-1 transition-colors ${hoveredPayChannel === 'card' ? 'text-indigo-600 font-bold' : ''}`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> บัตร {pCard.toFixed(0)}%
                         </span>
                       </div>
@@ -4029,301 +4063,522 @@ const ExecutiveDashboard = ({
                   );
                 })()}
 
-                {/* Individual Channel Cards */}
-                <div className="space-y-2 pt-1">
-                  {/* Channel 1: Transfer & QR */}
-                  {(() => {
-                    const amt = (summary.transfer || 0) + (summary.qr || 0);
-                    const totalPay = (summary.cash || 0) + amt + (summary.card || 0);
-                    const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 1);
-                    const pct = totalPay > 0 ? (amt / base) * 100 : 0;
-                    return (
-                      <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-sky-50/50 to-transparent border border-sky-100/80 hover:border-sky-200 transition-all">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-                              <QrCode size={16} />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-slate-800 kanit-text truncate">โอนเงิน / สแกนจ่าย</div>
-                              <div className="text-[10px] text-slate-400 truncate">พร้อมเพย์ & ธนาคาร</div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-xs sm:text-sm font-black font-data text-slate-800">{formatMoney(amt)} <span className="text-[10px] font-normal text-slate-400">฿</span></div>
-                            <span className="inline-block text-[10px] font-bold font-data text-sky-700 bg-sky-100/90 px-1.5 py-0.2 rounded-full">
-                              {pct.toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-sky-100/70 h-1 rounded-full mt-2 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-sky-400 to-sky-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Channel 2: Cash */}
-                  {(() => {
-                    const amt = summary.cash || 0;
-                    const transferAmt = (summary.transfer || 0) + (summary.qr || 0);
-                    const totalPay = amt + transferAmt + (summary.card || 0);
-                    const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 1);
-                    const pct = totalPay > 0 ? (amt / base) * 100 : 0;
-                    return (
-                      <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-emerald-50/50 to-transparent border border-emerald-100/80 hover:border-emerald-200 transition-all">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                              <Banknote size={16} />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-slate-800 kanit-text truncate">เงินสดหน้าร้าน</div>
-                              <div className="text-[10px] text-slate-400 truncate">จุดแคชเชียร์คลินิก</div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-xs sm:text-sm font-black font-data text-slate-800">{formatMoney(amt)} <span className="text-[10px] font-normal text-slate-400">฿</span></div>
-                            <span className="inline-block text-[10px] font-bold font-data text-emerald-700 bg-emerald-100/90 px-1.5 py-0.2 rounded-full">
-                              {pct.toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-emerald-100/70 h-1 rounded-full mt-2 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Channel 3: Card */}
-                  {(() => {
-                    const amt = summary.card || 0;
-                    const transferAmt = (summary.transfer || 0) + (summary.qr || 0);
-                    const totalPay = (summary.cash || 0) + transferAmt + amt;
-                    const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 1);
-                    const pct = totalPay > 0 ? (amt / base) * 100 : 0;
-                    return (
-                      <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-r from-indigo-50/50 to-transparent border border-indigo-100/80 hover:border-indigo-200 transition-all">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-                              <CreditCard size={16} />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-slate-800 kanit-text truncate">บัตรเครดิต / เดบิต</div>
-                              <div className="text-[10px] text-slate-400 truncate">EDC, Visa, Mastercard</div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-xs sm:text-sm font-black font-data text-slate-800">{formatMoney(amt)} <span className="text-[10px] font-normal text-slate-400">฿</span></div>
-                            <span className="inline-block text-[10px] font-bold font-data text-indigo-700 bg-indigo-100/90 px-1.5 py-0.2 rounded-full">
-                              {pct.toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-indigo-100/70 h-1 rounded-full mt-2 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Circular / Donut Chart Summary Card for Payment Methods */}
+                {/* Infographic Donut Chart ("เสร็จแล้ว! Pie Chart อย่างโปร" style) */}
                 {(() => {
                   const transferAmt = (summary.transfer || 0) + (summary.qr || 0);
                   const cashAmt = summary.cash || 0;
                   const cardAmt = summary.card || 0;
                   const totalPay = cashAmt + transferAmt + cardAmt;
-                  const base = totalPay > 0 ? totalPay : 1;
-                  const pTransfer = totalPay > 0 ? (transferAmt / base) * 100 : 0;
-                  const pCash = totalPay > 0 ? (cashAmt / base) * 100 : 0;
-                  const pCard = totalPay > 0 ? (cardAmt / base) * 100 : 0;
+                  const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 0);
 
-                  // Donut SVG parameters
-                  const radius = 36;
-                  const circ = 2 * Math.PI * radius;
-                  const strokeW = 9;
+                  const pTransfer = base > 0 ? (transferAmt / base) * 100 : 0;
+                  const pCash = base > 0 ? (cashAmt / base) * 100 : 0;
+                  const pCard = base > 0 ? (cardAmt / base) * 100 : 0;
 
-                  const dashTransfer = (pTransfer / 100) * circ;
-                  const dashCash = (pCash / 100) * circ;
-                  const dashCard = (pCard / 100) * circ;
-
-                  const offsetTransfer = 0;
-                  const offsetCash = -dashTransfer;
-                  const offsetCard = -(dashTransfer + dashCash);
-
-                  const methods = [
-                    { name: 'โอนเงิน/QR', amt: transferAmt, pct: pTransfer, color: 'text-sky-600' },
-                    { name: 'เงินสด', amt: cashAmt, pct: pCash, color: 'text-emerald-600' },
-                    { name: 'บัตรเครดิต', amt: cardAmt, pct: pCard, color: 'text-indigo-600' },
+                  const rawChannels = [
+                    { 
+                      id: 'transfer', 
+                      name: 'โอนเงิน / QR', 
+                      fullName: 'โอนเงิน / สแกนจ่าย',
+                      subtitle: 'พร้อมเพย์ & ธนาคาร', 
+                      amt: transferAmt, 
+                      pct: pTransfer, 
+                      count: summary.transferCount || 0,
+                      color: '#0284c7', 
+                      gradId: 'pieGradTransfer', 
+                      icon: QrCode
+                    },
+                    { 
+                      id: 'cash', 
+                      name: 'เงินสด', 
+                      fullName: 'เงินสดหน้าร้าน',
+                      subtitle: 'ชำระที่เคาน์เตอร์', 
+                      amt: cashAmt, 
+                      pct: pCash, 
+                      count: summary.cashCount || 0,
+                      color: '#059669', 
+                      gradId: 'pieGradCash', 
+                      icon: Banknote
+                    },
+                    { 
+                      id: 'card', 
+                      name: 'บัตรเครดิต', 
+                      fullName: 'บัตรเครดิต / เดบิต',
+                      subtitle: 'เครื่องรูดบัตร EDC', 
+                      amt: cardAmt, 
+                      pct: pCard, 
+                      count: summary.cardCount || 0,
+                      color: '#4f46e5', 
+                      gradId: 'pieGradCard', 
+                      icon: CreditCard
+                    }
                   ];
-                  methods.sort((a, b) => b.amt - a.amt);
-                  const topMethod = methods[0];
-                  const avgPerBill = summary.checkoutsCount > 0 ? (totalPay / summary.checkoutsCount) : 0;
+
+                  const activeChannels = rawChannels.filter(c => c.amt > 0);
+                  const sortedChannels = [...activeChannels].sort((a, b) => b.amt - a.amt);
+                  const topMethod = sortedChannels[0] || { name: 'ไม่มีข้อมูล', fullName: '-', amt: 0, pct: 0, color: '#94a3b8' };
+                  const avgPerBill = summary.checkoutsCount > 0 ? (base / summary.checkoutsCount) : 0;
+
+                  // Enlarged & Balanced SVG Geometry (Hero Donut with Leader Lines)
+                  const cx = 285;
+                  const cy = 130;
+                  const rIn = 52;
+
+                  let curAngle = -Math.PI / 2;
+                  const slices = sortedChannels.map((c, idx) => {
+                    const span = (c.pct / 100) * 2 * Math.PI;
+                    const start = curAngle;
+                    const end = curAngle + span;
+                    const mid = (start + end) / 2;
+                    curAngle = end;
+
+                    // Keep enlarged variable outer radius (identical hero donut size)
+                    const rOut = sortedChannels.length === 1 ? 104 : Math.max(86, 106 - idx * 10);
+
+                    const cosMid = Math.cos(mid);
+                    const sinMid = Math.sin(mid);
+                    const isRight = cosMid >= 0;
+
+                    const xArc = cx + rOut * cosMid;
+                    const yArc = cy + rOut * sinMid;
+
+                    const rLabel = (rIn + rOut) / 2;
+                    const xLabel = cx + rLabel * cosMid;
+                    const yLabel = cy + rLabel * sinMid;
+
+                    return {
+                      ...c,
+                      start,
+                      end,
+                      mid,
+                      rIn,
+                      rOut,
+                      cosMid,
+                      sinMid,
+                      isRight,
+                      xArc,
+                      yArc,
+                      xLabel,
+                      yLabel
+                    };
+                  });
+
+                  const right = slices.filter(s => s.isRight).sort((a, b) => a.sinMid - b.sinMid);
+                  const left = slices.filter(s => !s.isRight).sort((a, b) => a.sinMid - b.sinMid);
+
+                  const assignTargets = (list, isRight) => {
+                    const targetX = isRight ? 425 : 145;
+                    if (list.length === 1) {
+                      list[0].targetX = targetX;
+                      list[0].targetY = sortedChannels.length === 1 ? 130 : Math.max(78, Math.min(182, list[0].yArc));
+                    } else if (list.length === 2) {
+                      list[0].targetX = targetX;
+                      list[0].targetY = 78;
+                      list[1].targetX = targetX;
+                      list[1].targetY = 182;
+                    } else if (list.length >= 3) {
+                      list[0].targetX = targetX;
+                      list[0].targetY = 65;
+                      list[1].targetX = targetX;
+                      list[1].targetY = 130;
+                      list[2].targetX = targetX;
+                      list[2].targetY = 195;
+                    }
+                  };
+
+                  assignTargets(right, true);
+                  assignTargets(left, false);
 
                   return (
-                    <div className="mt-2.5 p-3 rounded-2xl bg-gradient-to-br from-slate-50/90 via-indigo-50/20 to-slate-50/60 border border-slate-200/60 shadow-xs flex items-center justify-between gap-3">
-                      {/* SVG Donut Chart with Center Label */}
-                      <div className="relative w-22 h-22 sm:w-24 sm:h-24 shrink-0 flex items-center justify-center">
-                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 transform">
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r={radius}
-                            fill="transparent"
-                            stroke="#f1f5f9"
-                            strokeWidth={strokeW}
-                          />
-                          {totalPay > 0 ? (
-                            <>
-                              {pTransfer > 0 && (
-                                <circle
-                                  cx="50"
-                                  cy="50"
-                                  r={radius}
-                                  fill="transparent"
-                                  stroke="#0ea5e9"
-                                  strokeWidth={strokeW}
-                                  strokeDasharray={`${dashTransfer} ${circ - dashTransfer}`}
-                                  strokeDashoffset={offsetTransfer}
-                                  strokeLinecap="round"
-                                  className="transition-all duration-700 ease-out"
-                                />
-                              )}
-                              {pCash > 0 && (
-                                <circle
-                                  cx="50"
-                                  cy="50"
-                                  r={radius}
-                                  fill="transparent"
-                                  stroke="#10b981"
-                                  strokeWidth={strokeW}
-                                  strokeDasharray={`${dashCash} ${circ - dashCash}`}
-                                  strokeDashoffset={offsetCash}
-                                  strokeLinecap="round"
-                                  className="transition-all duration-700 ease-out"
-                                />
-                              )}
-                              {pCard > 0 && (
-                                <circle
-                                  cx="50"
-                                  cy="50"
-                                  r={radius}
-                                  fill="transparent"
-                                  stroke="#6366f1"
-                                  strokeWidth={strokeW}
-                                  strokeDasharray={`${dashCard} ${circ - dashCard}`}
-                                  strokeDashoffset={offsetCard}
-                                  strokeLinecap="round"
-                                  className="transition-all duration-700 ease-out"
-                                />
-                              )}
-                            </>
-                          ) : (
-                            <circle
-                              cx="50"
-                              cy="50"
-                              r={radius}
-                              fill="transparent"
-                              stroke="#e2e8f0"
-                              strokeWidth={strokeW}
-                              strokeDasharray="4 4"
-                            />
-                          )}
-                        </svg>
-
-                        {/* Center content */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                          <span className="text-[9px] font-bold text-slate-400 kanit-text leading-tight">สัดส่วน</span>
-                          <span className="text-xs sm:text-sm font-black font-data text-slate-800 leading-none mt-0.5">
-                            {totalPay > 0 ? `${topMethod.pct.toFixed(0)}%` : '0%'}
-                          </span>
-                          <span className="text-[8px] font-medium text-slate-400 font-data truncate max-w-[48px] leading-tight mt-0.5">
-                            {topMethod.amt > 0 ? topMethod.name : 'ไม่มีข้อมูล'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Info Breakdown alongside the Donut */}
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        {/* Top Channel Badge */}
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[11px] font-bold text-slate-700 kanit-text flex items-center gap-1 truncate">
-                            <span>🏆 นิยมสูงสุด:</span>
-                            <span className={`font-black ${topMethod.color}`}>{topMethod.amt > 0 ? topMethod.name : '-'}</span>
-                          </span>
+                    <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-slate-50/90 via-indigo-50/20 to-slate-50/60 border border-slate-200/70 shadow-xs relative">
+                      {/* Top micro header / highlight bar */}
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60 mb-0.5 text-xs">
+                        <span className="font-bold text-slate-700 kanit-text flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[11px] sm:text-xs">สัดส่วนการชำระเงิน</span>
                           {topMethod.amt > 0 && (
-                            <span className="text-[10px] font-bold font-data text-indigo-700 bg-indigo-50 border border-indigo-100/80 px-1.5 py-0.2 rounded-full shrink-0">
-                              {topMethod.pct.toFixed(1)}%
+                            <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/90 px-1.5 py-0.2 rounded-full font-data">
+                              🏆 นิยมสูงสุด: {topMethod.fullName || topMethod.name} ({topMethod.pct.toFixed(0)}%)
                             </span>
                           )}
-                        </div>
+                        </span>
+                        {summary.checkoutsCount > 0 && (
+                          <span className="text-[9.5px] sm:text-[10px] text-slate-400 font-data shrink-0">
+                            เฉลี่ย {formatMoney(avgPerBill)} ฿/บิล
+                          </span>
+                        )}
+                      </div>
 
-                        {/* Mini Percentage Legend Chips */}
-                        <div className="flex flex-wrap items-center gap-1 text-[10px] font-data font-bold">
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-100/70">
-                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                            <span>โอน {pTransfer.toFixed(0)}%</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100/70">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>เงินสด {pCash.toFixed(0)}%</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100/70">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                            <span>บัตร {pCard.toFixed(0)}%</span>
-                          </span>
-                        </div>
+                      {/* SVG Infographic Donut Chart with Hero Circle & Leader Lines */}
+                      <div className="relative w-full overflow-hidden flex items-center justify-center">
+                        <svg viewBox="0 0 570 260" className="w-full h-auto max-h-[235px] sm:max-h-[260px] select-none">
+                          <defs>
+                            <linearGradient id="pieGradTransfer" x1="0" y1="0" x2="1" y2="1">
+                              <stop offset="0%" stopColor="#38bdf8" />
+                              <stop offset="100%" stopColor="#0284c7" />
+                            </linearGradient>
+                            <linearGradient id="pieGradCash" x1="0" y1="0" x2="1" y2="1">
+                              <stop offset="0%" stopColor="#34d399" />
+                              <stop offset="100%" stopColor="#059669" />
+                            </linearGradient>
+                            <linearGradient id="pieGradCard" x1="0" y1="0" x2="1" y2="1">
+                              <stop offset="0%" stopColor="#818cf8" />
+                              <stop offset="100%" stopColor="#4f46e5" />
+                            </linearGradient>
+                            <filter id="pieSliceShadow" x="-10%" y="-10%" width="120%" height="120%">
+                              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.14" />
+                            </filter>
+                            <filter id="pieSliceGlow" x="-20%" y="-20%" width="140%" height="140%">
+                              <feDropShadow dx="0" dy="3" stdDeviation="5" floodOpacity="0.32" />
+                            </filter>
+                          </defs>
 
-                        {/* Average Ticket Size / Count */}
-                        <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 kanit-text">
-                          <span className="truncate">ยอดเฉลี่ยต่อบิล:</span>
-                          <span className="font-bold font-data text-slate-800 shrink-0">
-                            {formatMoney(avgPerBill)} <span className="text-[9px] font-normal text-slate-400">฿</span>
-                          </span>
+                          {base > 0 && slices.length > 0 ? (
+                            <>
+                              {/* Render Slices with Enlarged Radius & White Separator */}
+                              {slices.map((s) => {
+                                const isHovered = hoveredPayChannel === s.id;
+                                const pathD = getPieSectorPath(cx, cy, s.rIn, s.rOut + (isHovered ? 4.5 : 0), s.start, s.end);
+                                return (
+                                  <path
+                                    key={s.id}
+                                    d={pathD}
+                                    fill={`url(#${s.gradId})`}
+                                    stroke="#ffffff"
+                                    strokeWidth={isHovered ? '3.5' : '2.5'}
+                                    strokeLinejoin="round"
+                                    filter={isHovered ? 'url(#pieSliceGlow)' : 'url(#pieSliceShadow)'}
+                                    className="cursor-pointer transition-all duration-300"
+                                    style={{
+                                      opacity: hoveredPayChannel && !isHovered ? 0.4 : 1
+                                    }}
+                                    onMouseEnter={() => setHoveredPayChannel(s.id)}
+                                    onMouseLeave={() => setHoveredPayChannel(null)}
+                                  />
+                                );
+                              })}
+
+                              {/* Render Slice Percentage Labels directly on the slices */}
+                              {slices.map((s) => {
+                                if (s.pct < 5) return null;
+                                const isHovered = hoveredPayChannel === s.id;
+                                return (
+                                  <text
+                                    key={`lbl-${s.id}`}
+                                    x={s.xLabel}
+                                    y={s.yLabel}
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    fill="#ffffff"
+                                    fontSize={isHovered ? '13.5' : '12'}
+                                    fontWeight="800"
+                                    fontFamily="Inter, Kanit, sans-serif"
+                                    className="pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] select-none transition-all duration-300"
+                                    style={{
+                                      opacity: hoveredPayChannel && !isHovered ? 0.35 : 1
+                                    }}
+                                  >
+                                    {s.pct.toFixed(1)}%
+                                  </text>
+                                );
+                              })}
+
+                              {/* Render Clean Elbow Leader Lines */}
+                              {slices.map((s) => {
+                                const isHovered = hoveredPayChannel === s.id;
+                                const elbowX = s.isRight 
+                                  ? Math.min(s.targetX - 16, Math.max(s.xArc + 12, cx + s.rOut + 10))
+                                  : Math.max(s.targetX + 16, Math.min(s.xArc - 12, cx - s.rOut - 10));
+                                const lineD = `M ${s.xArc.toFixed(1)} ${s.yArc.toFixed(1)} L ${elbowX.toFixed(1)} ${s.targetY.toFixed(1)} L ${s.targetX.toFixed(1)} ${s.targetY.toFixed(1)}`;
+                                return (
+                                  <path
+                                    key={`line-${s.id}`}
+                                    d={lineD}
+                                    fill="none"
+                                    stroke={s.color}
+                                    strokeWidth={isHovered ? '2.4' : '1.4'}
+                                    className="transition-all duration-300 pointer-events-none"
+                                    style={{
+                                      opacity: hoveredPayChannel && !isHovered ? 0.25 : 0.95
+                                    }}
+                                  />
+                                );
+                              })}
+
+                              {/* Render Terminal Dots */}
+                              {slices.map((s) => {
+                                const isHovered = hoveredPayChannel === s.id;
+                                return (
+                                  <circle
+                                    key={`dot-${s.id}`}
+                                    cx={s.targetX}
+                                    cy={s.targetY}
+                                    r={isHovered ? '4.8' : '3.4'}
+                                    fill={s.color}
+                                    stroke="#ffffff"
+                                    strokeWidth="1.5"
+                                    className="transition-all duration-300 cursor-pointer"
+                                    onMouseEnter={() => setHoveredPayChannel(s.id)}
+                                    onMouseLeave={() => setHoveredPayChannel(null)}
+                                  />
+                                );
+                              })}
+
+                              {/* Render Descriptive Labels */}
+                              {slices.map((s) => {
+                                const isHovered = hoveredPayChannel === s.id;
+                                const textX = s.isRight ? s.targetX + 8 : s.targetX - 8;
+                                const textAnchor = s.isRight ? 'start' : 'end';
+                                return (
+                                  <g
+                                    key={`text-${s.id}`}
+                                    className="cursor-pointer transition-all duration-300"
+                                    style={{
+                                      opacity: hoveredPayChannel && !isHovered ? 0.35 : 1
+                                    }}
+                                    onMouseEnter={() => setHoveredPayChannel(s.id)}
+                                    onMouseLeave={() => setHoveredPayChannel(null)}
+                                  >
+                                    <text
+                                      x={textX}
+                                      y={s.targetY - 9}
+                                      fontSize="11"
+                                      fontWeight="800"
+                                      fill={isHovered ? s.color : '#1e293b'}
+                                      fontFamily="Kanit, sans-serif"
+                                      textAnchor={textAnchor}
+                                      className="transition-all duration-200"
+                                    >
+                                      {s.fullName || s.name}
+                                    </text>
+                                    <text
+                                      x={textX}
+                                      y={s.targetY + 4}
+                                      fontSize="10.5"
+                                      fontWeight="700"
+                                      fill={s.color}
+                                      fontFamily="Inter, Kanit, sans-serif"
+                                      textAnchor={textAnchor}
+                                    >
+                                      {s.isRight ? (
+                                        <>
+                                          {formatMoney(s.amt)} ฿ <tspan fill="#64748b" fontWeight="600" fontSize="9.5">({s.pct.toFixed(1)}%)</tspan>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <tspan fill="#64748b" fontWeight="600" fontSize="9.5">({s.pct.toFixed(1)}%) </tspan>{formatMoney(s.amt)} ฿
+                                        </>
+                                      )}
+                                    </text>
+                                    <text
+                                      x={textX}
+                                      y={s.targetY + 16}
+                                      fontSize="9"
+                                      fontWeight="500"
+                                      fill="#94a3b8"
+                                      fontFamily="Kanit, sans-serif"
+                                      textAnchor={textAnchor}
+                                    >
+                                      {s.subtitle}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+                            </>
+                          ) : (
+                            /* Empty State */
+                            <>
+                              <circle cx={cx} cy={cy} r={65} fill="transparent" stroke="#cbd5e1" strokeWidth="15" strokeDasharray="6 6" />
+                              <text x={cx} y={cy + 88} textAnchor="middle" fontSize="12" fontWeight="600" fill="#94a3b8" fontFamily="Kanit, sans-serif">
+                                ยังไม่มีข้อมูลการชำระเงินในช่วงเวลานี้
+                              </text>
+                            </>
+                          )}
+
+                          {/* SVG Center Badge Background Rings */}
+                          <circle cx={cx} cy={cy} r="44" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1.5" filter="url(#pieSliceShadow)" />
+                          <circle cx={cx} cy={cy} r="36" fill="#f8fafc" stroke="#ede9fe" strokeWidth="1" />
+                        </svg>
+
+                        {/* Center Circular Icon Badge (Overlay exactly at 50% 50%) */}
+                        <div 
+                          className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none"
+                          style={{ left: '50%', top: '50%' }}
+                        >
+                          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white shadow-sm border border-indigo-100 flex items-center justify-center text-indigo-600">
+                            <CreditCard className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-indigo-600" />
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
                 })()}
+
               </div>
 
-              {/* Branch Breakdown Section */}
-              <div className="border-t border-slate-100 pt-4 space-y-2.5">
+              {/* 3-Column Rich Interactive Channel Summary Cards */}
+              {(() => {
+                const transferAmt = (summary.transfer || 0) + (summary.qr || 0);
+                const cashAmt = summary.cash || 0;
+                const cardAmt = summary.card || 0;
+                const totalPay = cashAmt + transferAmt + cardAmt;
+                const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 1);
+                const pTransfer = (transferAmt / base) * 100;
+                const pCash = (cashAmt / base) * 100;
+                const pCard = (cardAmt / base) * 100;
+                const transferCount = summary.transferCount || 0;
+                const cashCount = summary.cashCount || 0;
+                const cardCount = summary.cardCount || 0;
+
+                return (
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                    {/* Card 1: Transfer & QR */}
+                    <div 
+                      onMouseEnter={() => setHoveredPayChannel('transfer')}
+                      onMouseLeave={() => setHoveredPayChannel(null)}
+                      className={`p-2 sm:p-2.5 rounded-xl transition-all cursor-pointer ${
+                        hoveredPayChannel === 'transfer' 
+                          ? 'bg-sky-50 border border-sky-300 ring-2 ring-sky-300 shadow-xs scale-[1.01]' 
+                          : 'bg-slate-50/80 border border-slate-100 hover:bg-sky-50/50 hover:border-sky-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-5 h-5 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                          <QrCode size={12} />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-800 kanit-text truncate">โอน/QR</span>
+                      </div>
+                      <div className="text-xs sm:text-[13px] font-black font-data text-slate-800 truncate">
+                        {formatMoney(transferAmt)} <span className="text-[9px] font-normal text-slate-400">฿</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[9.5px] font-data text-slate-400 mt-0.5">
+                        <span>สัดส่วน</span>
+                        <span className="font-bold text-sky-700">{pTransfer.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-sky-100/70 h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-sky-500 rounded-full transition-all duration-500" style={{ width: `${pTransfer}%` }}></div>
+                      </div>
+                      <div className="pt-1 mt-1 border-t border-slate-200/50 flex items-center justify-between text-[9px] font-data text-slate-400">
+                        <span>{transferCount} บิล</span>
+                        <span className="font-semibold text-slate-600">เฉลี่ย {formatMoney(transferCount > 0 ? transferAmt / transferCount : 0)} ฿</span>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Cash */}
+                    <div 
+                      onMouseEnter={() => setHoveredPayChannel('cash')}
+                      onMouseLeave={() => setHoveredPayChannel(null)}
+                      className={`p-2 sm:p-2.5 rounded-xl transition-all cursor-pointer ${
+                        hoveredPayChannel === 'cash' 
+                          ? 'bg-emerald-50 border border-emerald-300 ring-2 ring-emerald-300 shadow-xs scale-[1.01]' 
+                          : 'bg-slate-50/80 border border-slate-100 hover:bg-emerald-50/50 hover:border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-5 h-5 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                          <Banknote size={12} />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-800 kanit-text truncate">เงินสด</span>
+                      </div>
+                      <div className="text-xs sm:text-[13px] font-black font-data text-slate-800 truncate">
+                        {formatMoney(cashAmt)} <span className="text-[9px] font-normal text-slate-400">฿</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[9.5px] font-data text-slate-400 mt-0.5">
+                        <span>สัดส่วน</span>
+                        <span className="font-bold text-emerald-700">{pCash.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-emerald-100/70 h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pCash}%` }}></div>
+                      </div>
+                      <div className="pt-1 mt-1 border-t border-slate-200/50 flex items-center justify-between text-[9px] font-data text-slate-400">
+                        <span>{cashCount} บิล</span>
+                        <span className="font-semibold text-slate-600">เฉลี่ย {formatMoney(cashCount > 0 ? cashAmt / cashCount : 0)} ฿</span>
+                      </div>
+                    </div>
+
+                    {/* Card 3: Card */}
+                    <div 
+                      onMouseEnter={() => setHoveredPayChannel('card')}
+                      onMouseLeave={() => setHoveredPayChannel(null)}
+                      className={`p-2 sm:p-2.5 rounded-xl transition-all cursor-pointer ${
+                        hoveredPayChannel === 'card' 
+                          ? 'bg-indigo-50 border border-indigo-300 ring-2 ring-indigo-300 shadow-xs scale-[1.01]' 
+                          : 'bg-slate-50/80 border border-slate-100 hover:bg-indigo-50/50 hover:border-indigo-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-5 h-5 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                          <CreditCard size={12} />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-800 kanit-text truncate">บัตร</span>
+                      </div>
+                      <div className="text-xs sm:text-[13px] font-black font-data text-slate-800 truncate">
+                        {formatMoney(cardAmt)} <span className="text-[9px] font-normal text-slate-400">฿</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[9.5px] font-data text-slate-400 mt-0.5">
+                        <span>สัดส่วน</span>
+                        <span className="font-bold text-indigo-700">{pCard.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-indigo-100/70 h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${pCard}%` }}></div>
+                      </div>
+                      <div className="pt-1 mt-1 border-t border-slate-200/50 flex items-center justify-between text-[9px] font-data text-slate-400">
+                        <span>{cardCount} บิล</span>
+                        <span className="font-semibold text-slate-600">เฉลี่ย {formatMoney(cardCount > 0 ? cardAmt / cardCount : 0)} ฿</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Branch Breakdown Section (Comprehensive & Balanced) */}
+              <div className="border-t border-slate-100 pt-2.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-600 kanit-text flex items-center gap-1.5">
-                    <Building2 size={14} className="text-slate-400" />
-                    <span>สรุปยอดแบ่งตามสาขา</span>
+                  <h4 className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5">
+                    <Building2 size={14} className="text-indigo-600" />
+                    <span>สรุปผลการดำเนินงานแบ่งตามสาขา</span>
                   </h4>
-                  <span className="text-[10px] text-slate-400 font-data">
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-data">
                     {branchRevenue.length} สาขา
                   </span>
                 </div>
 
-                <div className="space-y-2 max-h-48 xl:max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-1.5 max-h-36 sm:max-h-44 overflow-y-auto custom-scrollbar pr-1">
                   {(() => {
                     const totalBranchInc = branchRevenue.reduce((acc, br) => acc + (br.income || 0), 0) || 1;
                     return branchRevenue.map((br, idx) => {
                       const sharePct = ((br.income / totalBranchInc) * 100).toFixed(0);
                       const netBranchProfit = br.income - br.expense;
+                      const branchMargin = br.income > 0 ? ((netBranchProfit / br.income) * 100) : 0;
                       return (
-                        <div key={idx} className="p-2 sm:p-2.5 rounded-xl bg-slate-50/70 hover:bg-slate-50 border border-slate-100 transition-all">
-                          <div className="flex justify-between items-center text-xs mb-1">
-                            <span className="font-bold text-slate-800 kanit-text truncate max-w-[150px]">{br.name}</span>
-                            <div className="text-right shrink-0 flex items-center gap-2">
-                              <span className="font-bold text-emerald-600 font-data">+{formatMoney(br.income)}</span>
-                              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full font-data ${netBranchProfit >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                กำไร {formatMoney(netBranchProfit)}
+                        <div key={idx} className="p-2 sm:p-2.5 rounded-xl bg-slate-50/80 hover:bg-slate-50 border border-slate-100 transition-all">
+                          <div className="flex justify-between items-center text-xs mb-1.5">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
+                              <span className="font-bold text-slate-800 kanit-text truncate max-w-[150px]">{br.name}</span>
+                              <span className="text-[9.5px] font-medium text-slate-400 font-data">({sharePct}%)</span>
+                            </div>
+                            <div className="text-right shrink-0 flex items-center gap-1.5">
+                              <span className="font-bold text-emerald-600 font-data text-xs">+{formatMoney(br.income)} ฿</span>
+                              <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-full font-data ${netBranchProfit >= 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                                {netBranchProfit >= 0 ? 'กำไร' : 'ขาดทุน'} {formatMoney(netBranchProfit)}
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1 font-data">
-                            <span>สัดส่วนรายรับ: {sharePct}%</span>
-                            <span>รายจ่าย: -{formatMoney(br.expense)} ฿</span>
+
+                          <div className="grid grid-cols-2 gap-2 text-[9.5px] text-slate-500 mb-1.5 font-data bg-white/70 p-1.5 rounded-lg border border-slate-100">
+                            <div>
+                              <span className="text-slate-400">รายจ่ายสาขา: </span>
+                              <span className="font-bold text-rose-600">-{formatMoney(br.expense)} ฿</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-slate-400">อัตรากำไร (Margin): </span>
+                              <span className={`font-bold ${branchMargin >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                                {branchMargin.toFixed(1)}%
+                              </span>
+                            </div>
                           </div>
-                          <div className="w-full bg-slate-200/60 h-1 rounded-full overflow-hidden">
+
+                          <div className="w-full bg-slate-200/60 h-1.5 rounded-full overflow-hidden">
                             <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${sharePct}%` }}></div>
                           </div>
                         </div>
@@ -4598,10 +4853,7 @@ const ExecutiveDashboard = ({
                         <span className="text-xs sm:text-sm font-black font-data">
                           {execCalendarMode === 'compare_week' ? (
                             (() => {
-                              const end = new Date(compareWeekDate || selectedWeekDate);
-                              end.setDate(end.getDate() - 7);
-                              const start = new Date(end);
-                              start.setDate(start.getDate() - 6);
+                              const { start, end } = getWeekRange(compareWeekDate || selectedWeekDate);
                               return `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
                             })()
                           ) : primaryPeriodLabel}
@@ -4641,22 +4893,12 @@ const ExecutiveDashboard = ({
                       let isInRange = false;
 
                       if (execCalendarMode === 'week') {
-                        const weekEnd = new Date(selectedWeekDate);
-                        weekEnd.setHours(23, 59, 59, 999);
-                        const weekStart = new Date(selectedWeekDate);
-                        weekStart.setDate(weekStart.getDate() - 6);
-                        weekStart.setHours(0, 0, 0, 0);
-
+                        const { start: weekStart, end: weekEnd } = getWeekRange(selectedWeekDate);
                         isSelectedStart = selectedDate.toDateString() === weekStart.toDateString();
                         isSelectedEnd = selectedDate.toDateString() === weekEnd.toDateString();
                         isInRange = selectedDate >= weekStart && selectedDate <= weekEnd;
                       } else if (execCalendarMode === 'compare_week') {
-                        const weekEnd = new Date(compareWeekDate || selectedWeekDate);
-                        weekEnd.setHours(23, 59, 59, 999);
-                        const weekStart = new Date(compareWeekDate || selectedWeekDate);
-                        weekStart.setDate(weekStart.getDate() - 6);
-                        weekStart.setHours(0, 0, 0, 0);
-
+                        const { start: weekStart, end: weekEnd } = getWeekRange(compareWeekDate || selectedWeekDate);
                         isSelectedStart = selectedDate.toDateString() === weekStart.toDateString();
                         isSelectedEnd = selectedDate.toDateString() === weekEnd.toDateString();
                         isInRange = selectedDate >= weekStart && selectedDate <= weekEnd;
@@ -5263,10 +5505,7 @@ const ExecutiveDashboard = ({
                       <div className="text-[11px] font-bold text-slate-400 kanit-text">สัปดาห์ที่เลือกเปรียบเทียบ:</div>
                       <div className="text-xs sm:text-sm font-black text-slate-800 font-data truncate mt-0.5">
                         {(() => {
-                          const end = new Date(compareWeekDate || selectedWeekDate);
-                          end.setDate(end.getDate() - 7);
-                          const start = new Date(end);
-                          start.setDate(start.getDate() - 6);
+                          const { start, end } = getWeekRange(compareWeekDate || selectedWeekDate);
                           return `${start.getDate()} ${thaiMonthsShort[start.getMonth()]} - ${end.getDate()} ${thaiMonthsShort[end.getMonth()]} ${end.getFullYear() + 543}`;
                         })()}
                       </div>
