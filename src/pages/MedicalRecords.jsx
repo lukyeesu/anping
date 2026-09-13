@@ -1832,7 +1832,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             { name: '👨‍⚕️ แพทย์ผู้ตรวจ', value: opdDoctor, inline: true },
             { name: '🩺 ผลการวินิจฉัย', value: opdDiagnosis, inline: true },
             { name: '💊 แผนการรักษา', value: opdTreatment, inline: true },
-            { name: '💰 ค่ารักษา', value: recordToSave.cost ? `${Number(recordToSave.cost).toLocaleString()} บาท` : '-', inline: true },
             { name: '🌡️ ความดัน (BP)', value: recordToSave.bp || recordToSave.vitalSigns?.bp || '-', inline: true },
             ...(opdPhone ? [{ name: '📞 เบอร์ติดต่อ', value: opdPhone, inline: true }] : [])
           ],
@@ -1843,7 +1842,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             doctor: opdDoctor,
             diagnosis: opdDiagnosis,
             treatment: opdTreatment,
-            cost: recordToSave.cost,
             branch: currentBranch?.name || 'สาขาหลัก',
             date: recordToSave.date || new Date().toLocaleDateString('th-TH'),
             datetime: recordToSave.datetime || new Date().toISOString()

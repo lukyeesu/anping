@@ -724,10 +724,11 @@ function buildPatientEmbed(patient, queueList = [], treatmentList = [], courseLi
 
   // คอร์สคงเหลือที่ยังไม่หมดอายุและยังมีสิทธิ์คงเหลือ (แสดงครบถ้วนและตัดต่อลงด้านล่างเนียนๆ)
   const activeCourses = courseList.filter(c => {
-    if (c.is_deleted) return false;
-    const st = String(c.status || '').toLowerCase();
-    if (st === 'expired' || st === 'หมดอายุ' || st === 'completed' || st === 'เสร็จสิ้น' || st === 'cancelled' || st === 'ยกเลิก') return false;
-    const rem = Number(c.remaining_sessions ?? c.remaining ?? c.data?.remaining_sessions ?? 0);
+    if (!c) return false;
+    if (c.is_deleted || c.isDeleted) return false;
+    const st = String(c.status || c.data?.status || '').toLowerCase().trim();
+    if (['expired', 'หมดอายุ', 'completed', 'เสร็จสิ้น', 'cancelled', 'ยกเลิก', 'inactive', 'closed'].includes(st)) return false;
+    const rem = Number(c.remaining_sessions ?? c.remainingSessions ?? c.remaining ?? c.data?.remaining_sessions ?? c.data?.remainingSessions ?? 0);
     if (rem <= 0) return false;
     const exp = c.expire_date || c.expireDate || c.data?.expire_date || c.data?.expireDate;
     if (isCourseExpired(exp)) return false;

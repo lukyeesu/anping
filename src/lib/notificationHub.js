@@ -892,7 +892,6 @@ export function buildLineFlexMessage({
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
     const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
     const treatment = rawPayload.treatment || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('ยา'))))?.value || '-';
-    const cost = rawPayload.cost || (fields.find(f => f.name && f.name.includes('ค่ารักษา'))?.value) || '';
     const visitDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
 
     return {
@@ -978,14 +977,6 @@ export function buildLineFlexMessage({
                     { type: "text", text: doctor, size: "sm", color: "#334155", flex: 6, wrap: true }
                   ]
                 },
-                ...(cost ? [{
-                  type: "box",
-                  layout: "horizontal",
-                  contents: [
-                    { type: "text", text: "ค่ารักษา", size: "sm", color: "#64748b", flex: 4 },
-                    { type: "text", text: `฿${Number(cost).toLocaleString()}`, size: "sm", color: "#7c3aed", weight: "bold", flex: 6 }
-                  ]
-                }] : []),
                 ...(phone && phone !== '-' ? [{
                   type: "box",
                   layout: "horizontal",

@@ -99,6 +99,26 @@ function getTodayAndTomorrowThaiYMD() {
   return { todayIso, tomorrowIso };
 }
 
+function isCourseExpired(expDateStr) {
+  if (!expDateStr || expDateStr === '-' || expDateStr === 'null') return false;
+
+  const ymd = parseQueueDateToThaiYMD(expDateStr);
+  const { todayIso } = getTodayAndTomorrowThaiYMD();
+  if (ymd) {
+    return ymd < todayIso;
+  }
+
+  try {
+    const d = new Date(expDateStr);
+    if (!isNaN(d.getTime())) {
+      const now = new Date();
+      return d.getTime() < now.getTime();
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 function normalizeQueueRow(q) {
   if (!q) return null;
   const data = q.data || {};
@@ -369,14 +389,24 @@ function createPatientFlex(patient, queueList = [], treatmentList = [], courseLi
 
   const lastVisitFormatted = formatThaiVisitDate(lastVisitRaw);
 
-  // คอร์สคงเหลือของคนไข้
+  // คอร์สคงเหลือของคนไข้ (เฉพาะคอร์สที่ยังไม่หมดอายุและยังมีสิทธิ์คงเหลือ)
   let remainingCoursesText = '';
   if (courseList && courseList.length > 0) {
-    const activeCourses = courseList.filter(c => !c.is_deleted && Number(c.remaining_sessions ?? c.remainingSessions ?? 0) > 0);
+    const activeCourses = courseList.filter(c => {
+      if (!c) return false;
+      if (c.is_deleted || c.isDeleted) return false;
+      const st = String(c.status || c.data?.status || '').toLowerCase().trim();
+      if (['expired', 'หมดอายุ', 'completed', 'เสร็จสิ้น', 'cancelled', 'ยกเลิก', 'inactive', 'closed'].includes(st)) return false;
+      const rem = Number(c.remaining_sessions ?? c.remainingSessions ?? c.remaining ?? c.data?.remaining_sessions ?? c.data?.remainingSessions ?? 0);
+      if (rem <= 0) return false;
+      const exp = c.expire_date || c.expireDate || c.data?.expire_date || c.data?.expireDate;
+      if (isCourseExpired(exp)) return false;
+      return true;
+    });
     if (activeCourses.length > 0) {
       remainingCoursesText = activeCourses.map(c => {
-        const cName = c.course_name || c.courseName || 'คอร์ส';
-        const rem = c.remaining_sessions ?? c.remainingSessions ?? 0;
+        const cName = c.course_name || c.courseName || c.name || c.data?.course_name || 'คอร์ส';
+        const rem = Number(c.remaining_sessions ?? c.remainingSessions ?? c.remaining ?? c.data?.remaining_sessions ?? c.data?.remainingSessions ?? 0);
         return `${cName} (${rem} ครั้ง)`;
       }).join(', ');
     }
