@@ -59,6 +59,474 @@ const getPieSectorPath = (cx, cy, rIn, rOut, startAngle, endAngle) => {
   return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${x3.toFixed(1)} ${y3.toFixed(1)} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x4.toFixed(1)} ${y4.toFixed(1)} Z`;
 };
 
+const PAYMENT_CHANNELS_META = [
+  { 
+    id: 'transfer', 
+    name: 'โอนเงิน / QR', 
+    fullName: 'โอนเงิน / สแกนจ่าย',
+    subtitle: 'พร้อมเพย์ & ธนาคาร', 
+    color: '#0284c7', 
+    gradId: 'pieGradTransfer', 
+    icon: QrCode
+  },
+  { 
+    id: 'cash', 
+    name: 'เงินสด', 
+    fullName: 'เงินสดหน้าร้าน',
+    subtitle: 'ชำระที่เคาน์เตอร์', 
+    color: '#059669', 
+    gradId: 'pieGradCash', 
+    icon: Banknote
+  },
+  { 
+    id: 'card', 
+    name: 'บัตรเครดิต', 
+    fullName: 'บัตรเครดิต / เดบิต',
+    subtitle: 'เครื่องรูดบัตร EDC', 
+    color: '#4f46e5', 
+    gradId: 'pieGradCard', 
+    icon: CreditCard
+  }
+];
+
+// Interactive SVG Donut Chart with Continuous Dynamic Arc Angle Tweening
+const PaymentChannelsDonut = ({
+  summary = {},
+  timeRange,
+  hoveredPayChannel,
+  setHoveredPayChannel,
+  formatMoney = (n) => Number(n || 0).toLocaleString('th-TH')
+}) => {
+  const transferAmt = (summary.transfer || 0) + (summary.qr || 0);
+  const cashAmt = summary.cash || 0;
+  const cardAmt = summary.card || 0;
+  const totalPay = cashAmt + transferAmt + cardAmt;
+  const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 0);
+
+  const targetPct = useMemo(() => {
+    if (base <= 0) return { transfer: 0, cash: 0, card: 0 };
+    return {
+      transfer: (transferAmt / base) * 100,
+      cash: (cashAmt / base) * 100,
+      card: (cardAmt / base) * 100
+    };
+  }, [base, transferAmt, cashAmt, cardAmt]);
+
+  const rawAmounts = useMemo(() => ({
+    transfer: transferAmt,
+    cash: cashAmt,
+    card: cardAmt
+  }), [transferAmt, cashAmt, cardAmt]);
+
+  // Animated percentages & amounts for silky smooth continuous angle tweening
+  const [displayPcts, setDisplayPcts] = useState(() => ({
+    transfer: targetPct.transfer,
+    cash: targetPct.cash,
+    card: targetPct.card
+  }));
+  const [displayAmts, setDisplayAmts] = useState(() => ({
+    transfer: transferAmt,
+    cash: cashAmt,
+    card: cardAmt
+  }));
+
+  const currentPctsRef = useRef(displayPcts);
+  const currentAmtsRef = useRef(displayAmts);
+  const animRef = useRef(null);
+
+  useEffect(() => {
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+    }
+
+    const startPcts = { ...currentPctsRef.current };
+    const startAmts = { ...currentAmtsRef.current };
+
+    const endPcts = targetPct;
+    const endAmts = rawAmounts;
+
+    const diffPct = Math.abs(startPcts.transfer - endPcts.transfer) +
+                    Math.abs(startPcts.cash - endPcts.cash) +
+                    Math.abs(startPcts.card - endPcts.card);
+    const diffAmt = Math.abs(startAmts.transfer - endAmts.transfer) +
+                    Math.abs(startAmts.cash - endAmts.cash) +
+                    Math.abs(startAmts.card - endAmts.card);
+
+    if (diffPct < 0.05 && diffAmt < 1) {
+      return;
+    }
+
+    const duration = 520;
+    const startTime = performance.now();
+
+    const step = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // Ease-out cubic curve: responsive start, graceful deceleration
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      const nextPcts = {
+        transfer: startPcts.transfer + (endPcts.transfer - startPcts.transfer) * ease,
+        cash: startPcts.cash + (endPcts.cash - startPcts.cash) * ease,
+        card: startPcts.card + (endPcts.card - startPcts.card) * ease
+      };
+      const nextAmts = {
+        transfer: startAmts.transfer + (endAmts.transfer - startAmts.transfer) * ease,
+        cash: startAmts.cash + (endAmts.cash - startAmts.cash) * ease,
+        card: startAmts.card + (endAmts.card - startAmts.card) * ease
+      };
+
+      currentPctsRef.current = nextPcts;
+      currentAmtsRef.current = nextAmts;
+      setDisplayPcts(nextPcts);
+      setDisplayAmts(nextAmts);
+
+      if (progress < 1) {
+        animRef.current = requestAnimationFrame(step);
+      } else {
+        animRef.current = null;
+      }
+    };
+
+    animRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+      }
+    };
+  }, [targetPct, rawAmounts]);
+
+  const topMethod = useMemo(() => {
+    const active = PAYMENT_CHANNELS_META.map(c => ({
+      ...c,
+      amt: rawAmounts[c.id] || 0,
+      pct: targetPct[c.id] || 0
+    })).filter(c => c.amt > 0).sort((a, b) => b.amt - a.amt);
+    return active[0] || { name: 'ไม่มีข้อมูล', fullName: '-', amt: 0, pct: 0, color: '#94a3b8' };
+  }, [rawAmounts, targetPct]);
+
+  const avgPerBill = summary.checkoutsCount > 0 ? (base / summary.checkoutsCount) : 0;
+
+  // Geometry
+  const cx = 285;
+  const cy = 130;
+  const rIn = 52;
+  const rOut = 98; // Uniform outer radius guarantees smooth circle
+
+  let curAngle = -Math.PI / 2; // Always starts at 12 o'clock
+
+  const slices = PAYMENT_CHANNELS_META.map(c => {
+    const pct = Math.max(0, displayPcts[c.id] || 0);
+    const targetP = targetPct[c.id] || 0;
+    const currentA = displayAmts[c.id] || 0;
+
+    const span = (pct / 100) * 2 * Math.PI;
+    const start = curAngle;
+    const end = curAngle + span;
+    const mid = (start + end) / 2;
+    curAngle = end;
+
+    const cosMid = Math.cos(mid);
+    const sinMid = Math.sin(mid);
+    const isRight = cosMid >= 0;
+
+    const xArc = cx + rOut * cosMid;
+    const yArc = cy + rOut * sinMid;
+
+    const rLabel = (rIn + rOut) / 2;
+    const xLabel = cx + rLabel * cosMid;
+    const yLabel = cy + rLabel * sinMid;
+
+    return {
+      ...c,
+      pct,
+      targetPct: targetP,
+      amt: currentA,
+      start,
+      end,
+      mid,
+      rIn,
+      rOut,
+      cosMid,
+      sinMid,
+      isRight,
+      xArc,
+      yArc,
+      xLabel,
+      yLabel,
+      isVisible: pct > 0.4 || targetP > 0.4
+    };
+  });
+
+  const activeSlices = slices.filter(s => s.isVisible);
+  const right = activeSlices.filter(s => s.isRight).sort((a, b) => a.sinMid - b.sinMid);
+  const left = activeSlices.filter(s => !s.isRight).sort((a, b) => a.sinMid - b.sinMid);
+
+  const assignTargets = (list, isRight) => {
+    const targetX = isRight ? 425 : 145;
+    if (list.length === 1) {
+      list[0].targetX = targetX;
+      list[0].targetY = list[0].sinMid > 0.1 ? 172 : (activeSlices.length === 1 ? 130 : 78);
+    } else if (list.length === 2) {
+      list[0].targetX = targetX;
+      list[0].targetY = 78;
+      list[1].targetX = targetX;
+      list[1].targetY = 182;
+    } else if (list.length >= 3) {
+      list[0].targetX = targetX;
+      list[0].targetY = 65;
+      list[1].targetX = targetX;
+      list[1].targetY = 130;
+      list[2].targetX = targetX;
+      list[2].targetY = 195;
+    }
+  };
+
+  assignTargets(right, true);
+  assignTargets(left, false);
+
+  return (
+    <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-slate-50/90 via-indigo-50/20 to-slate-50/60 border border-slate-200/70 shadow-xs relative">
+      {/* Top micro header / highlight bar */}
+      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60 mb-0.5 text-xs">
+        <span className="font-bold text-slate-700 kanit-text flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] sm:text-xs">สัดส่วนการชำระเงิน</span>
+          {topMethod.amt > 0 && (
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/90 px-1.5 py-0.2 rounded-full font-data">
+              🏆 นิยมสูงสุด: {topMethod.fullName || topMethod.name} ({topMethod.pct.toFixed(0)}%)
+            </span>
+          )}
+        </span>
+        {summary.checkoutsCount > 0 && (
+          <span className="text-[9.5px] sm:text-[10px] text-slate-400 font-data shrink-0">
+            เฉลี่ย {formatMoney(avgPerBill)} ฿/บิล
+          </span>
+        )}
+      </div>
+
+      {/* SVG Infographic Donut Chart with Continuous Circular Geometry & Dynamic Arc Tweening */}
+      <div className="relative w-full overflow-hidden flex items-center justify-center">
+        <svg viewBox="0 0 570 260" className="w-full h-auto max-h-[235px] sm:max-h-[260px] select-none">
+          <defs>
+            <linearGradient id="pieGradTransfer" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#0284c7" />
+            </linearGradient>
+            <linearGradient id="pieGradCash" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#34d399" />
+              <stop offset="100%" stopColor="#059669" />
+            </linearGradient>
+            <linearGradient id="pieGradCard" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#818cf8" />
+              <stop offset="100%" stopColor="#4f46e5" />
+            </linearGradient>
+            <filter id="pieSliceShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.14" />
+            </filter>
+            <filter id="pieSliceGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="3" stdDeviation="5" floodOpacity="0.32" />
+            </filter>
+          </defs>
+
+          {base > 0 && activeSlices.length > 0 ? (
+            <>
+              {/* Perfectly round Donut Slices (Mathematically exact circular arcs at every single animation frame) */}
+              <g>
+                {slices.map((s) => {
+                  if (s.pct <= 0.3) return null;
+                  const isHovered = hoveredPayChannel === s.id;
+                  const pathD = getPieSectorPath(cx, cy, s.rIn, s.rOut + (isHovered ? 4.5 : 0), s.start, s.end);
+                  return (
+                    <path
+                      key={s.id}
+                      d={pathD}
+                      fill={`url(#${s.gradId})`}
+                      stroke="#ffffff"
+                      strokeWidth={isHovered ? '3.5' : '2.5'}
+                      strokeLinejoin="round"
+                      filter={isHovered ? 'url(#pieSliceGlow)' : 'url(#pieSliceShadow)'}
+                      className="cursor-pointer"
+                      style={{
+                        transition: 'opacity 0.25s ease, filter 0.25s ease, stroke-width 0.2s ease',
+                        opacity: hoveredPayChannel && !isHovered ? 0.4 : 1
+                      }}
+                      onMouseEnter={() => setHoveredPayChannel(s.id)}
+                      onMouseLeave={() => setHoveredPayChannel(null)}
+                    />
+                  );
+                })}
+              </g>
+
+              {/* Dynamic Callouts & Labels that follow the slice arcs smoothly */}
+              <g>
+                {/* Render Slice Percentage Labels directly on the slices */}
+                {slices.map((s) => {
+                  if (s.pct < 5.5) return null;
+                  const isHovered = hoveredPayChannel === s.id;
+                  return (
+                    <text
+                      key={`lbl-${s.id}`}
+                      x={s.xLabel}
+                      y={s.yLabel}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill="#ffffff"
+                      fontSize={isHovered ? '13.5' : '12'}
+                      fontWeight="800"
+                      fontFamily="Inter, Kanit, sans-serif"
+                      className="pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] select-none"
+                      style={{
+                        transition: 'opacity 0.25s ease, font-size 0.2s ease',
+                        opacity: hoveredPayChannel && !isHovered ? 0.35 : 1
+                      }}
+                    >
+                      {s.pct.toFixed(1)}%
+                    </text>
+                  );
+                })}
+
+                {/* Render Clean Elbow Leader Lines */}
+                {activeSlices.map((s) => {
+                  if (s.pct < 1) return null;
+                  const isHovered = hoveredPayChannel === s.id;
+                  const elbowX = s.isRight 
+                    ? Math.min(s.targetX - 16, Math.max(s.xArc + 12, cx + s.rOut + 10))
+                    : Math.max(s.targetX + 16, Math.min(s.xArc - 12, cx - s.rOut - 10));
+                  const lineD = `M ${s.xArc.toFixed(1)} ${s.yArc.toFixed(1)} L ${elbowX.toFixed(1)} ${s.targetY.toFixed(1)} L ${s.targetX.toFixed(1)} ${s.targetY.toFixed(1)}`;
+                  return (
+                    <path
+                      key={`line-${s.id}`}
+                      d={lineD}
+                      fill="none"
+                      stroke={s.color}
+                      strokeWidth={isHovered ? '2.4' : '1.4'}
+                      className="pointer-events-none"
+                      style={{
+                        transition: 'opacity 0.25s ease, stroke-width 0.2s ease',
+                        opacity: hoveredPayChannel && !isHovered ? 0.25 : 0.95
+                      }}
+                    />
+                  );
+                })}
+
+                {/* Render Terminal Dots */}
+                {activeSlices.map((s) => {
+                  if (s.pct < 1) return null;
+                  const isHovered = hoveredPayChannel === s.id;
+                  return (
+                    <circle
+                      key={`dot-${s.id}`}
+                      cx={s.targetX}
+                      cy={s.targetY}
+                      r={isHovered ? '4.8' : '3.4'}
+                      fill={s.color}
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                      className="cursor-pointer"
+                      style={{
+                        transition: 'r 0.2s ease, opacity 0.25s ease',
+                        opacity: hoveredPayChannel && !isHovered ? 0.4 : 1
+                      }}
+                      onMouseEnter={() => setHoveredPayChannel(s.id)}
+                      onMouseLeave={() => setHoveredPayChannel(null)}
+                    />
+                  );
+                })}
+
+                {/* Render Descriptive Labels */}
+                {activeSlices.map((s) => {
+                  if (s.pct < 1) return null;
+                  const isHovered = hoveredPayChannel === s.id;
+                  const textX = s.isRight ? s.targetX + 8 : s.targetX - 8;
+                  const textAnchor = s.isRight ? 'start' : 'end';
+                  return (
+                    <g
+                      key={`text-${s.id}`}
+                      className="cursor-pointer"
+                      style={{
+                        transition: 'opacity 0.25s ease',
+                        opacity: hoveredPayChannel && !isHovered ? 0.35 : 1
+                      }}
+                      onMouseEnter={() => setHoveredPayChannel(s.id)}
+                      onMouseLeave={() => setHoveredPayChannel(null)}
+                    >
+                      <text
+                        x={textX}
+                        y={s.targetY - 9}
+                        fontSize="11"
+                        fontWeight="800"
+                        fill={isHovered ? s.color : '#1e293b'}
+                        fontFamily="Kanit, sans-serif"
+                        textAnchor={textAnchor}
+                        style={{ transition: 'fill 0.2s ease' }}
+                      >
+                        {s.fullName || s.name}
+                      </text>
+                      <text
+                        x={textX}
+                        y={s.targetY + 4}
+                        fontSize="10.5"
+                        fontWeight="700"
+                        fill={s.color}
+                        fontFamily="Inter, Kanit, sans-serif"
+                        textAnchor={textAnchor}
+                      >
+                        {s.isRight ? (
+                          <>
+                            {formatMoney(Math.round(s.amt))} ฿ <tspan fill="#64748b" fontWeight="600" fontSize="9.5">({s.pct.toFixed(1)}%)</tspan>
+                          </>
+                        ) : (
+                          <>
+                            <tspan fill="#64748b" fontWeight="600" fontSize="9.5">({s.pct.toFixed(1)}%) </tspan>{formatMoney(Math.round(s.amt))} ฿
+                          </>
+                        )}
+                      </text>
+                      <text
+                        x={textX}
+                        y={s.targetY + 16}
+                        fontSize="9"
+                        fontWeight="500"
+                        fill="#94a3b8"
+                        fontFamily="Kanit, sans-serif"
+                        textAnchor={textAnchor}
+                      >
+                        {s.subtitle}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            </>
+          ) : (
+            /* Empty State */
+            <>
+              <circle cx={cx} cy={cy} r={65} fill="transparent" stroke="#cbd5e1" strokeWidth="15" strokeDasharray="6 6" />
+              <text x={cx} y={cy + 88} textAnchor="middle" fontSize="12" fontWeight="600" fill="#94a3b8" fontFamily="Kanit, sans-serif">
+                ยังไม่มีข้อมูลการชำระเงินในช่วงเวลานี้
+              </text>
+            </>
+          )}
+
+          {/* SVG Center Badge Background Rings */}
+          <circle cx={cx} cy={cy} r="44" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1.5" filter="url(#pieSliceShadow)" />
+          <circle cx={cx} cy={cy} r="36" fill="#f8fafc" stroke="#ede9fe" strokeWidth="1" />
+        </svg>
+
+        {/* Center Circular Icon Badge (Overlay exactly at 50% 50%) */}
+        <div 
+          className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none"
+          style={{ left: '50%', top: '50%' }}
+        >
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white shadow-sm border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <CreditCard className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-indigo-600" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ExecutiveDashboard = ({ 
   queueData = [], 
   patientsData = [], 
@@ -4063,355 +4531,14 @@ const ExecutiveDashboard = ({
                   );
                 })()}
 
-                {/* Infographic Donut Chart ("เสร็จแล้ว! Pie Chart อย่างโปร" style) */}
-                {(() => {
-                  const transferAmt = (summary.transfer || 0) + (summary.qr || 0);
-                  const cashAmt = summary.cash || 0;
-                  const cardAmt = summary.card || 0;
-                  const totalPay = cashAmt + transferAmt + cardAmt;
-                  const base = totalPay > 0 ? totalPay : (summary.income > 0 ? summary.income : 0);
-
-                  const pTransfer = base > 0 ? (transferAmt / base) * 100 : 0;
-                  const pCash = base > 0 ? (cashAmt / base) * 100 : 0;
-                  const pCard = base > 0 ? (cardAmt / base) * 100 : 0;
-
-                  const rawChannels = [
-                    { 
-                      id: 'transfer', 
-                      name: 'โอนเงิน / QR', 
-                      fullName: 'โอนเงิน / สแกนจ่าย',
-                      subtitle: 'พร้อมเพย์ & ธนาคาร', 
-                      amt: transferAmt, 
-                      pct: pTransfer, 
-                      count: summary.transferCount || 0,
-                      color: '#0284c7', 
-                      gradId: 'pieGradTransfer', 
-                      icon: QrCode
-                    },
-                    { 
-                      id: 'cash', 
-                      name: 'เงินสด', 
-                      fullName: 'เงินสดหน้าร้าน',
-                      subtitle: 'ชำระที่เคาน์เตอร์', 
-                      amt: cashAmt, 
-                      pct: pCash, 
-                      count: summary.cashCount || 0,
-                      color: '#059669', 
-                      gradId: 'pieGradCash', 
-                      icon: Banknote
-                    },
-                    { 
-                      id: 'card', 
-                      name: 'บัตรเครดิต', 
-                      fullName: 'บัตรเครดิต / เดบิต',
-                      subtitle: 'เครื่องรูดบัตร EDC', 
-                      amt: cardAmt, 
-                      pct: pCard, 
-                      count: summary.cardCount || 0,
-                      color: '#4f46e5', 
-                      gradId: 'pieGradCard', 
-                      icon: CreditCard
-                    }
-                  ];
-
-                  const activeChannels = rawChannels.filter(c => c.amt > 0);
-                  const sortedChannels = [...activeChannels].sort((a, b) => b.amt - a.amt);
-                  const topMethod = sortedChannels[0] || { name: 'ไม่มีข้อมูล', fullName: '-', amt: 0, pct: 0, color: '#94a3b8' };
-                  const avgPerBill = summary.checkoutsCount > 0 ? (base / summary.checkoutsCount) : 0;
-
-                  // Enlarged & Balanced SVG Geometry (Hero Donut with Leader Lines)
-                  const cx = 285;
-                  const cy = 130;
-                  const rIn = 52;
-
-                  let curAngle = -Math.PI / 2;
-                  const slices = sortedChannels.map((c, idx) => {
-                    const span = (c.pct / 100) * 2 * Math.PI;
-                    const start = curAngle;
-                    const end = curAngle + span;
-                    const mid = (start + end) / 2;
-                    curAngle = end;
-
-                    // Keep enlarged variable outer radius (identical hero donut size)
-                    const rOut = sortedChannels.length === 1 ? 104 : Math.max(86, 106 - idx * 10);
-
-                    const cosMid = Math.cos(mid);
-                    const sinMid = Math.sin(mid);
-                    const isRight = cosMid >= 0;
-
-                    const xArc = cx + rOut * cosMid;
-                    const yArc = cy + rOut * sinMid;
-
-                    const rLabel = (rIn + rOut) / 2;
-                    const xLabel = cx + rLabel * cosMid;
-                    const yLabel = cy + rLabel * sinMid;
-
-                    return {
-                      ...c,
-                      start,
-                      end,
-                      mid,
-                      rIn,
-                      rOut,
-                      cosMid,
-                      sinMid,
-                      isRight,
-                      xArc,
-                      yArc,
-                      xLabel,
-                      yLabel
-                    };
-                  });
-
-                  const right = slices.filter(s => s.isRight).sort((a, b) => a.sinMid - b.sinMid);
-                  const left = slices.filter(s => !s.isRight).sort((a, b) => a.sinMid - b.sinMid);
-
-                  const assignTargets = (list, isRight) => {
-                    const targetX = isRight ? 425 : 145;
-                    if (list.length === 1) {
-                      list[0].targetX = targetX;
-                      list[0].targetY = sortedChannels.length === 1 ? 130 : Math.max(78, Math.min(182, list[0].yArc));
-                    } else if (list.length === 2) {
-                      list[0].targetX = targetX;
-                      list[0].targetY = 78;
-                      list[1].targetX = targetX;
-                      list[1].targetY = 182;
-                    } else if (list.length >= 3) {
-                      list[0].targetX = targetX;
-                      list[0].targetY = 65;
-                      list[1].targetX = targetX;
-                      list[1].targetY = 130;
-                      list[2].targetX = targetX;
-                      list[2].targetY = 195;
-                    }
-                  };
-
-                  assignTargets(right, true);
-                  assignTargets(left, false);
-
-                  return (
-                    <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-slate-50/90 via-indigo-50/20 to-slate-50/60 border border-slate-200/70 shadow-xs relative">
-                      {/* Top micro header / highlight bar */}
-                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60 mb-0.5 text-xs">
-                        <span className="font-bold text-slate-700 kanit-text flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[11px] sm:text-xs">สัดส่วนการชำระเงิน</span>
-                          {topMethod.amt > 0 && (
-                            <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/90 px-1.5 py-0.2 rounded-full font-data">
-                              🏆 นิยมสูงสุด: {topMethod.fullName || topMethod.name} ({topMethod.pct.toFixed(0)}%)
-                            </span>
-                          )}
-                        </span>
-                        {summary.checkoutsCount > 0 && (
-                          <span className="text-[9.5px] sm:text-[10px] text-slate-400 font-data shrink-0">
-                            เฉลี่ย {formatMoney(avgPerBill)} ฿/บิล
-                          </span>
-                        )}
-                      </div>
-
-                      {/* SVG Infographic Donut Chart with Hero Circle & Leader Lines */}
-                      <div className="relative w-full overflow-hidden flex items-center justify-center">
-                        <svg viewBox="0 0 570 260" className="w-full h-auto max-h-[235px] sm:max-h-[260px] select-none">
-                          <defs>
-                            <linearGradient id="pieGradTransfer" x1="0" y1="0" x2="1" y2="1">
-                              <stop offset="0%" stopColor="#38bdf8" />
-                              <stop offset="100%" stopColor="#0284c7" />
-                            </linearGradient>
-                            <linearGradient id="pieGradCash" x1="0" y1="0" x2="1" y2="1">
-                              <stop offset="0%" stopColor="#34d399" />
-                              <stop offset="100%" stopColor="#059669" />
-                            </linearGradient>
-                            <linearGradient id="pieGradCard" x1="0" y1="0" x2="1" y2="1">
-                              <stop offset="0%" stopColor="#818cf8" />
-                              <stop offset="100%" stopColor="#4f46e5" />
-                            </linearGradient>
-                            <filter id="pieSliceShadow" x="-10%" y="-10%" width="120%" height="120%">
-                              <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.14" />
-                            </filter>
-                            <filter id="pieSliceGlow" x="-20%" y="-20%" width="140%" height="140%">
-                              <feDropShadow dx="0" dy="3" stdDeviation="5" floodOpacity="0.32" />
-                            </filter>
-                          </defs>
-
-                          {base > 0 && slices.length > 0 ? (
-                            <>
-                              {/* Render Slices with Enlarged Radius & White Separator */}
-                              {slices.map((s) => {
-                                const isHovered = hoveredPayChannel === s.id;
-                                const pathD = getPieSectorPath(cx, cy, s.rIn, s.rOut + (isHovered ? 4.5 : 0), s.start, s.end);
-                                return (
-                                  <path
-                                    key={s.id}
-                                    d={pathD}
-                                    fill={`url(#${s.gradId})`}
-                                    stroke="#ffffff"
-                                    strokeWidth={isHovered ? '3.5' : '2.5'}
-                                    strokeLinejoin="round"
-                                    filter={isHovered ? 'url(#pieSliceGlow)' : 'url(#pieSliceShadow)'}
-                                    className="cursor-pointer transition-all duration-300"
-                                    style={{
-                                      opacity: hoveredPayChannel && !isHovered ? 0.4 : 1
-                                    }}
-                                    onMouseEnter={() => setHoveredPayChannel(s.id)}
-                                    onMouseLeave={() => setHoveredPayChannel(null)}
-                                  />
-                                );
-                              })}
-
-                              {/* Render Slice Percentage Labels directly on the slices */}
-                              {slices.map((s) => {
-                                if (s.pct < 5) return null;
-                                const isHovered = hoveredPayChannel === s.id;
-                                return (
-                                  <text
-                                    key={`lbl-${s.id}`}
-                                    x={s.xLabel}
-                                    y={s.yLabel}
-                                    textAnchor="middle"
-                                    dominantBaseline="central"
-                                    fill="#ffffff"
-                                    fontSize={isHovered ? '13.5' : '12'}
-                                    fontWeight="800"
-                                    fontFamily="Inter, Kanit, sans-serif"
-                                    className="pointer-events-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] select-none transition-all duration-300"
-                                    style={{
-                                      opacity: hoveredPayChannel && !isHovered ? 0.35 : 1
-                                    }}
-                                  >
-                                    {s.pct.toFixed(1)}%
-                                  </text>
-                                );
-                              })}
-
-                              {/* Render Clean Elbow Leader Lines */}
-                              {slices.map((s) => {
-                                const isHovered = hoveredPayChannel === s.id;
-                                const elbowX = s.isRight 
-                                  ? Math.min(s.targetX - 16, Math.max(s.xArc + 12, cx + s.rOut + 10))
-                                  : Math.max(s.targetX + 16, Math.min(s.xArc - 12, cx - s.rOut - 10));
-                                const lineD = `M ${s.xArc.toFixed(1)} ${s.yArc.toFixed(1)} L ${elbowX.toFixed(1)} ${s.targetY.toFixed(1)} L ${s.targetX.toFixed(1)} ${s.targetY.toFixed(1)}`;
-                                return (
-                                  <path
-                                    key={`line-${s.id}`}
-                                    d={lineD}
-                                    fill="none"
-                                    stroke={s.color}
-                                    strokeWidth={isHovered ? '2.4' : '1.4'}
-                                    className="transition-all duration-300 pointer-events-none"
-                                    style={{
-                                      opacity: hoveredPayChannel && !isHovered ? 0.25 : 0.95
-                                    }}
-                                  />
-                                );
-                              })}
-
-                              {/* Render Terminal Dots */}
-                              {slices.map((s) => {
-                                const isHovered = hoveredPayChannel === s.id;
-                                return (
-                                  <circle
-                                    key={`dot-${s.id}`}
-                                    cx={s.targetX}
-                                    cy={s.targetY}
-                                    r={isHovered ? '4.8' : '3.4'}
-                                    fill={s.color}
-                                    stroke="#ffffff"
-                                    strokeWidth="1.5"
-                                    className="transition-all duration-300 cursor-pointer"
-                                    onMouseEnter={() => setHoveredPayChannel(s.id)}
-                                    onMouseLeave={() => setHoveredPayChannel(null)}
-                                  />
-                                );
-                              })}
-
-                              {/* Render Descriptive Labels */}
-                              {slices.map((s) => {
-                                const isHovered = hoveredPayChannel === s.id;
-                                const textX = s.isRight ? s.targetX + 8 : s.targetX - 8;
-                                const textAnchor = s.isRight ? 'start' : 'end';
-                                return (
-                                  <g
-                                    key={`text-${s.id}`}
-                                    className="cursor-pointer transition-all duration-300"
-                                    style={{
-                                      opacity: hoveredPayChannel && !isHovered ? 0.35 : 1
-                                    }}
-                                    onMouseEnter={() => setHoveredPayChannel(s.id)}
-                                    onMouseLeave={() => setHoveredPayChannel(null)}
-                                  >
-                                    <text
-                                      x={textX}
-                                      y={s.targetY - 9}
-                                      fontSize="11"
-                                      fontWeight="800"
-                                      fill={isHovered ? s.color : '#1e293b'}
-                                      fontFamily="Kanit, sans-serif"
-                                      textAnchor={textAnchor}
-                                      className="transition-all duration-200"
-                                    >
-                                      {s.fullName || s.name}
-                                    </text>
-                                    <text
-                                      x={textX}
-                                      y={s.targetY + 4}
-                                      fontSize="10.5"
-                                      fontWeight="700"
-                                      fill={s.color}
-                                      fontFamily="Inter, Kanit, sans-serif"
-                                      textAnchor={textAnchor}
-                                    >
-                                      {s.isRight ? (
-                                        <>
-                                          {formatMoney(s.amt)} ฿ <tspan fill="#64748b" fontWeight="600" fontSize="9.5">({s.pct.toFixed(1)}%)</tspan>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <tspan fill="#64748b" fontWeight="600" fontSize="9.5">({s.pct.toFixed(1)}%) </tspan>{formatMoney(s.amt)} ฿
-                                        </>
-                                      )}
-                                    </text>
-                                    <text
-                                      x={textX}
-                                      y={s.targetY + 16}
-                                      fontSize="9"
-                                      fontWeight="500"
-                                      fill="#94a3b8"
-                                      fontFamily="Kanit, sans-serif"
-                                      textAnchor={textAnchor}
-                                    >
-                                      {s.subtitle}
-                                    </text>
-                                  </g>
-                                );
-                              })}
-                            </>
-                          ) : (
-                            /* Empty State */
-                            <>
-                              <circle cx={cx} cy={cy} r={65} fill="transparent" stroke="#cbd5e1" strokeWidth="15" strokeDasharray="6 6" />
-                              <text x={cx} y={cy + 88} textAnchor="middle" fontSize="12" fontWeight="600" fill="#94a3b8" fontFamily="Kanit, sans-serif">
-                                ยังไม่มีข้อมูลการชำระเงินในช่วงเวลานี้
-                              </text>
-                            </>
-                          )}
-
-                          {/* SVG Center Badge Background Rings */}
-                          <circle cx={cx} cy={cy} r="44" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1.5" filter="url(#pieSliceShadow)" />
-                          <circle cx={cx} cy={cy} r="36" fill="#f8fafc" stroke="#ede9fe" strokeWidth="1" />
-                        </svg>
-
-                        {/* Center Circular Icon Badge (Overlay exactly at 50% 50%) */}
-                        <div 
-                          className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none"
-                          style={{ left: '50%', top: '50%' }}
-                        >
-                          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white shadow-sm border border-indigo-100 flex items-center justify-center text-indigo-600">
-                            <CreditCard className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-indigo-600" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Infographic Donut Chart with Continuous Dynamic Arc Angle Tweening */}
+                <PaymentChannelsDonut
+                  summary={summary}
+                  timeRange={timeRange}
+                  hoveredPayChannel={hoveredPayChannel}
+                  setHoveredPayChannel={setHoveredPayChannel}
+                  formatMoney={formatMoney}
+                />
 
               </div>
 
