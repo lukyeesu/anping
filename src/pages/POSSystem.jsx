@@ -1130,116 +1130,155 @@ const POSSystem = ({
         // --- เริ่มปรับปรุง: รวบรวม API Calls สำหรับสต็อกและคอร์สไว้ยิงพร้อมกัน (Promise.all) ---
         const backgroundTasks = [];
         
-        // --- ระบบตัดสต็อกอัตโนมัติ (Automatic Stock Deduction - FEFO: First Expired First Out) ---
+        // --- ระบบตัดสต็อกอัตโนมัติ (Automatic Stock Deduction - Atomic RPC / Client FEFO Fallback) ---
         const targetBranch = currentBranch === 'all' ? 'b1' : currentBranch;
         let localInvData = [...inventoryData];
         let localLogs = [];
-        
-        for (const item of cart) {
-            if (isStockManaged(item.product)) {
-                const cleanTarget = String(item.product.id).replace(/^INV_/, '').trim().toLowerCase();
-                const cleanTargetName = String(item.product.name || '').trim().toLowerCase();
+        let rpcDeductedSuccess = false;
+        const stockItemsInCart = cart.filter(item => isStockManaged(item.product));
 
-                // ดึงรายการสต็อกทั้งหมดของสินค้านี้ในสาขานี้ และเรียงลำดับตามวันหมดอายุ (FEFO)
-                const productStocks = localInvData
-                    .filter(inv => {
-                        if (!inv || inv.isDeleted || inv.is_deleted) return false;
-                        const cleanId = String(inv.id || '').replace(/^INV_/, '').trim().toLowerCase();
-                        const cleanPId = String(inv.productId || inv.product_id || '').replace(/^INV_/, '').trim().toLowerCase();
-                        const cleanCode = String(inv.code || '').replace(/^INV_/, '').trim().toLowerCase();
-                        const invName = String(inv.name || inv.itemName || inv.productName || '').trim().toLowerCase();
+        if (stockItemsInCart.length > 0 && supabase) {
+            try {
+                const rpcPayload = stockItemsInCart.map(i => ({
+                    product: { id: i.product.id, name: i.product.name },
+                    quantity: i.quantity
+                }));
+                const { data: rpcRes, error: rpcErr } = await supabase.rpc('deduct_pos_stock', {
+                    p_items: rpcPayload,
+                    p_branch_id: targetBranch,
+                    p_receipt_id: receiptId
+                });
 
-                        const isMatch = cleanId === cleanTarget || 
-                                        cleanPId === cleanTarget || 
-                                        cleanCode === cleanTarget ||
-                                        (cleanTargetName && invName && cleanTargetName === invName);
-                        if (!isMatch) return false;
-
-                        const bId = inv.branchId || inv.branch_id;
-                        if (targetBranch) {
-                            if (bId === targetBranch) return true;
-                            if (!bId && (targetBranch === 'b1' || branchesData.length <= 1)) return true;
-                            return false;
-                        }
-                        return true;
-                    })
-                    .sort((a, b) => {
-                        const aDate = a.expireDate || a.expire_date;
-                        const bDate = b.expireDate || b.expire_date;
-                        if (!aDate) return 1;
-                        if (!bDate) return -1;
-                        const parseDate = (d) => {
-                            if (typeof d === 'string' && d.includes('/')) {
-                                const parts = d.split('/').map(Number);
-                                const yr = parts[2] > 2400 ? parts[2] - 543 : parts[2];
-                                return new Date(yr, parts[1] - 1, parts[0]);
+                if (!rpcErr && rpcRes && rpcRes.status === 'success') {
+                    rpcDeductedSuccess = true;
+                    // อัปเดตสต็อกคงเหลือใน Local State ทันทีตามผลลัพธ์จาก RPC
+                    if (Array.isArray(rpcRes.deductions)) {
+                        rpcRes.deductions.forEach(d => {
+                            const sIdx = localInvData.findIndex(s => s.id === d.stock_id);
+                            if (sIdx !== -1) {
+                                localInvData[sIdx] = {
+                                    ...localInvData[sIdx],
+                                    quantity: Number(d.new_quantity),
+                                    stockQuantity: Number(d.new_quantity),
+                                    stock_quantity: Number(d.new_quantity)
+                                };
                             }
-                            return new Date(d);
-                        };
-                        return parseDate(aDate) - parseDate(bDate);
-                    });
-
-                let remainingToDeduct = item.quantity;
-
-                for (const stockItem of productStocks) {
-                    if (remainingToDeduct <= 0) break;
-
-                    const currentStockQty = Number(stockItem.quantity ?? stockItem.stockQuantity ?? stockItem.stock_quantity ?? 0);
-                    const deductAmount = Math.min(currentStockQty, remainingToDeduct);
-                    if (deductAmount <= 0) continue;
-
-                    const newQty = currentStockQty - deductAmount;
-                    remainingToDeduct -= deductAmount;
-
-                    const updatedStock = { 
-                        ...stockItem, 
-                        quantity: newQty,
-                        stockQuantity: newQty,
-                        stock_quantity: newQty,
-                        branchId: stockItem.branchId || stockItem.branch_id || targetBranch,
-                        branch_id: stockItem.branchId || stockItem.branch_id || targetBranch
-                    };
-                    
-                    // เพิ่มคิวเข้า Background Tasks
-                    backgroundTasks.push(callAppScript('SAVE_DATA', 'Inventory', updatedStock));
-                    
-                    // สร้าง Log การตัดสต็อกรายล็อต
-                    const branchName = branchesData.find(b => b.id === targetBranch)?.name || targetBranch;
-                    const logPayload = {
-                        id: `LOG${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                        productId: item.product.id,
-                        product_id: item.product.id,
-                        itemId: item.product.id,
-                        item_id: item.product.id,
-                        productName: item.product.name,
-                        item_name: item.product.name,
-                        branchId: targetBranch,
-                        branch_id: targetBranch,
-                        type: 'SALE',
-                        change_type: 'SALE',
-                        amount: deductAmount,
-                        quantity: deductAmount,
-                        balance: newQty,
-                        reason: `ขายสินค้า (บิล: ${receiptId})`,
-                        notes: `ล็อต: ${stockItem.lotNo || stockItem.lot_no || 'N/A'}, สาขา: ${branchName}`,
-                        lotNo: stockItem.lotNo || stockItem.lot_no || '',
-                        lot_no: stockItem.lotNo || stockItem.lot_no || '',
-                        expireDate: stockItem.expireDate || stockItem.expire_date || '',
-                        expire_date: stockItem.expireDate || stockItem.expire_date || '',
-                        timestamp: new Date().toISOString(),
-                        created_at: new Date().toISOString()
-                    };
-                    backgroundTasks.push(callAppScript('SAVE_DATA', 'InventoryLogs', logPayload));
-
-                    // อัปเดต Local State สต็อกและ Log ทันที
-                    const idx = localInvData.findIndex(s => s.id === stockItem.id);
-                    if (idx !== -1) localInvData[idx] = updatedStock;
-                    localLogs.push(logPayload);
+                        });
+                    }
                 }
+            } catch (rpcEx) {
+                console.warn('[POS] deduct_pos_stock RPC failed, falling back to client deduction:', rpcEx);
+            }
+        }
 
-                // กรณีสต็อกไม่พอ (หักจนติดลบในล็อตสุดท้าย หรือแจ้งเตือน)
-                if (remainingToDeduct > 0) {
-                    console.warn(`Stock insufficient for ${item.product.name}. Remaining to deduct: ${remainingToDeduct}`);
+        // Client-side Fallback (ทำงานเมื่อ RPC ไม่สำเร็จ หรือยังไม่ได้รัน SQL ฟังก์ชัน)
+        if (!rpcDeductedSuccess) {
+            for (const item of cart) {
+                if (isStockManaged(item.product)) {
+                    const cleanTarget = String(item.product.id).replace(/^INV_/, '').trim().toLowerCase();
+                    const cleanTargetName = String(item.product.name || '').trim().toLowerCase();
+
+                    // ดึงรายการสต็อกทั้งหมดของสินค้านี้ในสาขานี้ และเรียงลำดับตามวันหมดอายุ (FEFO)
+                    const productStocks = localInvData
+                        .filter(inv => {
+                            if (!inv || inv.isDeleted || inv.is_deleted) return false;
+                            const cleanId = String(inv.id || '').replace(/^INV_/, '').trim().toLowerCase();
+                            const cleanPId = String(inv.productId || inv.product_id || '').replace(/^INV_/, '').trim().toLowerCase();
+                            const cleanCode = String(inv.code || '').replace(/^INV_/, '').trim().toLowerCase();
+                            const invName = String(inv.name || inv.itemName || inv.productName || '').trim().toLowerCase();
+
+                            const isMatch = cleanId === cleanTarget || 
+                                            cleanPId === cleanTarget || 
+                                            cleanCode === cleanTarget ||
+                                            (cleanTargetName && invName && cleanTargetName === invName);
+                            if (!isMatch) return false;
+
+                            const bId = inv.branchId || inv.branch_id;
+                            if (targetBranch) {
+                                if (bId === targetBranch) return true;
+                                if (!bId && (targetBranch === 'b1' || branchesData.length <= 1)) return true;
+                                return false;
+                            }
+                            return true;
+                        })
+                        .sort((a, b) => {
+                            const aDate = a.expireDate || a.expire_date;
+                            const bDate = b.expireDate || b.expire_date;
+                            if (!aDate) return 1;
+                            if (!bDate) return -1;
+                            const parseDate = (d) => {
+                                if (typeof d === 'string' && d.includes('/')) {
+                                    const parts = d.split('/').map(Number);
+                                    const yr = parts[2] > 2400 ? parts[2] - 543 : parts[2];
+                                    return new Date(yr, parts[1] - 1, parts[0]);
+                                }
+                                return new Date(d);
+                            };
+                            return parseDate(aDate) - parseDate(bDate);
+                        });
+
+                    let remainingToDeduct = item.quantity;
+
+                    for (const stockItem of productStocks) {
+                        if (remainingToDeduct <= 0) break;
+
+                        const currentStockQty = Number(stockItem.quantity ?? stockItem.stockQuantity ?? stockItem.stock_quantity ?? 0);
+                        const deductAmount = Math.min(currentStockQty, remainingToDeduct);
+                        if (deductAmount <= 0) continue;
+
+                        const newQty = currentStockQty - deductAmount;
+                        remainingToDeduct -= deductAmount;
+
+                        const updatedStock = { 
+                            ...stockItem, 
+                            quantity: newQty,
+                            stockQuantity: newQty,
+                            stock_quantity: newQty,
+                            branchId: stockItem.branchId || stockItem.branch_id || targetBranch,
+                            branch_id: stockItem.branchId || stockItem.branch_id || targetBranch
+                        };
+                        
+                        // เพิ่มคิวเข้า Background Tasks
+                        backgroundTasks.push(callAppScript('SAVE_DATA', 'Inventory', updatedStock));
+                        
+                        // สร้าง Log การตัดสต็อกรายล็อต
+                        const branchName = branchesData.find(b => b.id === targetBranch)?.name || targetBranch;
+                        const logPayload = {
+                            id: `LOG${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            productId: item.product.id,
+                            product_id: item.product.id,
+                            itemId: item.product.id,
+                            item_id: item.product.id,
+                            productName: item.product.name,
+                            item_name: item.product.name,
+                            branchId: targetBranch,
+                            branch_id: targetBranch,
+                            type: 'SALE',
+                            change_type: 'SALE',
+                            amount: deductAmount,
+                            quantity: deductAmount,
+                            balance: newQty,
+                            reason: `ขายสินค้า (บิล: ${receiptId})`,
+                            notes: `ล็อต: ${stockItem.lotNo || stockItem.lot_no || 'N/A'}, สาขา: ${branchName}`,
+                            lotNo: stockItem.lotNo || stockItem.lot_no || '',
+                            lot_no: stockItem.lotNo || stockItem.lot_no || '',
+                            expireDate: stockItem.expireDate || stockItem.expire_date || '',
+                            expire_date: stockItem.expireDate || stockItem.expire_date || '',
+                            timestamp: new Date().toISOString(),
+                            created_at: new Date().toISOString()
+                        };
+                        backgroundTasks.push(callAppScript('SAVE_DATA', 'InventoryLogs', logPayload));
+
+                        // อัปเดต Local State สต็อกและ Log ทันที
+                        const idx = localInvData.findIndex(s => s.id === stockItem.id);
+                        if (idx !== -1) localInvData[idx] = updatedStock;
+                        localLogs.push(logPayload);
+                    }
+
+                    // กรณีสต็อกไม่พอ (หักจนติดลบในล็อตสุดท้าย หรือแจ้งเตือน)
+                    if (remainingToDeduct > 0) {
+                        console.warn(`Stock insufficient for ${item.product.name}. Remaining to deduct: ${remainingToDeduct}`);
+                    }
                 }
             }
         }
@@ -1326,9 +1365,11 @@ const POSSystem = ({
         }
 
         // อัปเดต React States รวดเดียว
-        if (localLogs.length > 0) {
+        if (localLogs.length > 0 || rpcDeductedSuccess) {
             setInventoryData(localInvData);
-            setInventoryLogsData(prev => [...localLogs, ...prev]);
+            if (localLogs.length > 0) {
+                setInventoryLogsData(prev => [...localLogs, ...prev]);
+            }
         }
         if (setPatientCoursesData && (newCoursesToSave.length > 0 || updatedCoursesToSave.length > 0)) {
             setPatientCoursesData(prev => {

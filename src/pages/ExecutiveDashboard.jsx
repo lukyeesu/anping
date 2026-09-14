@@ -545,6 +545,7 @@ const ExecutiveDashboard = ({
   const headerRef = useRef(null);
   const [execSummary, setExecSummary] = useState(null);
   const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+  const [isRpcAvailable, setIsRpcAvailable] = useState(true);
   const [customStartDate, setCustomStartDate] = useState(() => {
     const d = new Date();
     const year = d.getFullYear();
@@ -847,10 +848,14 @@ const ExecutiveDashboard = ({
               dailyTrend: dbData.daily_trend || [],
               queueStats: dbData.queue_stats || {}
             });
+            setIsRpcAvailable(true);
             dataFetched = true;
+          } else {
+            setIsRpcAvailable(false);
           }
         } catch (rpcErr) {
           console.warn('RPC get_executive_dashboard_data error, trying fallback:', rpcErr);
+          setIsRpcAvailable(false);
         }
 
         // 2. Fallback: ถ้ายังไม่ได้รัน SQL หรือออฟไลน์ ให้เรียก GET_EXECUTIVE_SUMMARY
@@ -1387,23 +1392,47 @@ const ExecutiveDashboard = ({
     return parseAnyDate(dStr);
   };
 
-  // Server-side Date-Based Fetching State
+  // Server-side Date-Based Fetching State (Fallback เฉพาะกรณีที่ไม่มี RPC จาก Supabase)
   const [localPosHistory, setLocalPosHistory] = useState([]);
   const [localFinanceData, setLocalFinanceData] = useState([]);
 
   useEffect(() => {
+    // หากเซิร์ฟเวอร์รัน RPC (get_executive_dashboard_data) สำเร็จ หรือกำลังรอโหลดจาก RPC
+    // ให้ข้ามการ Query แถวข้อมูลดิบทั้งหมดทันที เพื่อตัด Egress แบนด์วิดท์ลงเหลือ 0 bytes
+    if (isRpcAvailable || execSummary || isDashboardLoading) return;
+
     const fetchRangeSpecificData = async () => {
       if (!startDateTime || !endDateTime) return;
       try {
         const startIso = startDateTime.toISOString();
         const endIso = endDateTime.toISOString();
 
-        // Fetch only the data in the selected date range
-        const [posRes, revRes, expRes] = await Promise.all([
-           supabase.from('pos_transactions').select('*').gte('created_at', startIso).lte('created_at', endIso),
-           supabase.from('finance_revenue').select('*').gte('created_at', startIso).lte('created_at', endIso),
-           supabase.from('finance_expenses').select('*').gte('created_at', startIso).lte('created_at', endIso)
-        ]);
+        // Fetch only specific columns needed for dashboard charts, avoiding heavy JSON blobs
+        let posQ = supabase.from('pos_transactions')
+           .select('id, created_at, net_amount, total_amount, discount, payment_method, patient_name, status, branch_id, is_deleted')
+           .gte('created_at', startIso)
+           .lte('created_at', endIso)
+           .or('is_deleted.is.null,is_deleted.eq.false');
+
+        let revQ = supabase.from('finance_revenue')
+           .select('id, date, created_at, amount, method, type, category, branch_id, is_auto, status, is_deleted')
+           .gte('created_at', startIso)
+           .lte('created_at', endIso)
+           .or('is_deleted.is.null,is_deleted.eq.false');
+
+        let expQ = supabase.from('finance_expenses')
+           .select('id, date, created_at, amount, method, type, category, branch_id, is_auto, status, is_deleted')
+           .gte('created_at', startIso)
+           .lte('created_at', endIso)
+           .or('is_deleted.is.null,is_deleted.eq.false');
+
+        if (selectedBranch && selectedBranch !== 'all') {
+           posQ = posQ.eq('branch_id', selectedBranch);
+           revQ = revQ.eq('branch_id', selectedBranch);
+           expQ = expQ.eq('branch_id', selectedBranch);
+        }
+
+        const [posRes, revRes, expRes] = await Promise.all([posQ, revQ, expQ]);
 
         if (posRes.data) setLocalPosHistory(posRes.data);
         
@@ -1417,7 +1446,7 @@ const ExecutiveDashboard = ({
     };
 
     fetchRangeSpecificData();
-  }, [startDateTime, endDateTime]);
+  }, [startDateTime, endDateTime, selectedBranch, isRpcAvailable, execSummary, isDashboardLoading]);
 
   // Consolidate POS history as income and finance as income/expenses
   const allTransactions = useMemo(() => {
@@ -1496,8 +1525,27 @@ const ExecutiveDashboard = ({
     });
   }, [allTransactions, selectedBranch, startDateTime, endDateTime]);
 
-  // Calculate Financial Summary (จาก filteredTx ที่ซิงค์บิล POS และการเงินแบบ Realtime)
+  // Calculate Financial Summary (จาก execSummary ที่คำนวณบน Supabase หรือ fallback จาก filteredTx)
   const summary = useMemo(() => {
+    // 1. ถ้ามีข้อมูลสรุปที่คำนวณจาก Supabase RPC (get_executive_dashboard_data) ให้ใช้ทันทีโดยตรง (Zero-Egress)
+    if (execSummary) {
+      return {
+        income: Number(execSummary.totalIncome) || 0,
+        expense: Number(execSummary.totalExpense) || 0,
+        netProfit: Number(execSummary.netProfit) || 0,
+        profitMargin: Number(execSummary.profitMargin) || 0,
+        cash: Number(execSummary.paymentMethods?.cash) || 0,
+        transfer: Number(execSummary.paymentMethods?.transfer) || 0,
+        card: Number(execSummary.paymentMethods?.card) || 0,
+        qr: Number(execSummary.paymentMethods?.qr) || 0,
+        checkoutsCount: Number(execSummary.posCount) || 0,
+        cashCount: 0,
+        transferCount: 0,
+        cardCount: 0
+      };
+    }
+
+    // 2. Fallback: คำนวณจาก filteredTx ในกรณีที่ยังไม่มี execSummary
     let income = 0;
     let expense = 0;
     let cash = 0;
@@ -1556,7 +1604,7 @@ const ExecutiveDashboard = ({
       transferCount,
       cardCount
     };
-  }, [filteredTx]);
+  }, [execSummary, filteredTx]);
 
   // Calculate Staff Performance Rank (sales & commissions) - คำนวณตามประวัติบิล POS และอัตราค่าคอมมิชชั่น/DF ของพนักงาน
   const staffStats = useMemo(() => {
@@ -1747,6 +1795,18 @@ const ExecutiveDashboard = ({
 
   // Calculate All Selling Products/Services - คำนวณยอดขายสุทธิของสินค้า/บริการแต่ละตัวหลังหักส่วนลดท้ายบิล
   const allTopProducts = useMemo(() => {
+    // 1. ถ้ามีข้อมูลสินค้าขายดีจาก execSummary (คำนวณผ่าน RPC จาก Supabase แล้ว) ให้ใช้ทันที
+    if (execSummary?.topProducts && Array.isArray(execSummary.topProducts) && execSummary.topProducts.length > 0) {
+      return execSummary.topProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        quantity: Number(p.quantity || 0),
+        revenue: Number(p.revenue || 0),
+        category: p.category || ''
+      }));
+    }
+
+    // 2. Fallback: คำนวณจาก posHistoryData / localPosHistory
     const productsMap = {};
     const startDate = startDateTime;
     const endDate = endDateTime;
@@ -1832,7 +1892,7 @@ const ExecutiveDashboard = ({
     return Object.values(productsMap)
       .filter(p => p.quantity > 0 || p.revenue > 0)
       .sort((a, b) => b.revenue - a.revenue || b.quantity - a.quantity);
-  }, [posHistoryData, localPosHistory, selectedBranch, startDateTime, endDateTime]);
+  }, [execSummary, posHistoryData, localPosHistory, selectedBranch, startDateTime, endDateTime]);
 
   const topProductsTotalPages = Math.max(1, Math.ceil(allTopProducts.length / TOP_PRODUCTS_PER_PAGE));
   const paginatedTopProducts = useMemo(() => {

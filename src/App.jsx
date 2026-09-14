@@ -547,7 +547,6 @@ export default function App() {
         resPatients,
         resPos,
         resInventory,
-        resInvLogs,
         resPosItems,
         resBranches,
         resStaff,
@@ -558,7 +557,6 @@ export default function App() {
         callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset: 0, limit: 20 }).catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'POS_Transactions').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Inventory').catch(err => ({ status: 'error', data: [], message: err?.message })),
-        callAppScript('GET_DATA', 'InventoryLogs').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'setting_pos').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Branches').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Staff').catch(err => ({ status: 'error', data: [], message: err?.message })),
@@ -628,9 +626,6 @@ export default function App() {
       }
       if (resInventory?.status === 'success') {
         setInventoryData(Array.isArray(resInventory.data) ? resInventory.data : []);
-      }
-      if (resInvLogs?.status === 'success') {
-        setInventoryLogsData(Array.isArray(resInvLogs.data) && resInvLogs.data.length > 0 ? [...resInvLogs.data].reverse() : []);
       }
       if (resPosItems?.status === 'success') {
         const rawPosItems = Array.isArray(resPosItems.data) ? resPosItems.data : [];
@@ -2038,6 +2033,9 @@ export default function App() {
     } else if (sheetName === 'PatientCourses' || sheetName === 'patient_courses' || sheetName === 'Patient_Courses') {
       // Pure Realtime State: ไม่เก็บลง IndexedDB ตามคำสั่งเพื่อความถูกต้องของข้อมูลข้ามอุปกรณ์ 100%
       setPatientCoursesData(prev => {
+        if (payload.is_deleted || payload.isDeleted) {
+          return prev.filter(c => String(c.id).trim() !== targetId);
+        }
         const idx = prev.findIndex(c => String(c.id).trim() === targetId);
         if (idx >= 0) {
           const next = [...prev];
@@ -2367,98 +2365,8 @@ export default function App() {
       )
       .subscribe();
 
-    // Dedicated Realtime Channel สำหรับ patient_courses โดยเฉพาะ เพื่อให้ทุกเครื่องอัปเดตทันทีแบบไม่มีดีเลย์
-    const coursesChannel = supabase
-      .channel('realtime-patient-courses')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'patient_courses' },
-        (payload) => {
-          const { eventType, new: newRow, old: oldRow } = payload;
-          console.log(
-            `%c⚡ [Pure Realtime: patient_courses]%c 📡 ${eventType} received!`,
-            'color: #059669; font-weight: bold; background: #ecfdf5; padding: 2px 6px; border-radius: 4px;',
-            'color: #047857; font-weight: 600;',
-            newRow || oldRow
-          );
-
-          if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            if (newRow) {
-              const jsRow = rowToJS(newRow);
-              if (jsRow.is_deleted || jsRow.isDeleted) {
-                setPatientCoursesData(prev => prev.filter(c => String(c.id).trim() !== String(jsRow.id).trim()));
-              } else {
-                setPatientCoursesData(prev => {
-                  const cId = String(jsRow.id).trim();
-                  const idx = prev.findIndex(c => String(c.id).trim() === cId);
-                  if (idx >= 0) {
-                    const next = [...prev];
-                    next[idx] = { ...next[idx], ...jsRow };
-                    return next;
-                  }
-                  return [jsRow, ...prev];
-                });
-              }
-            }
-          } else if (eventType === 'DELETE') {
-            if (oldRow && oldRow.id) {
-              const cId = String(oldRow.id).trim();
-              setPatientCoursesData(prev => prev.filter(c => String(c.id).trim() !== cId));
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    // Dedicated Realtime Channel สำหรับ inventory และ setting_pos เพื่อให้สต็อกสินค้าของทุกเครื่อง (POS/Inventory) ซิงค์แบบเรียลไทม์ 100% ทันที
-    const inventoryChannel = supabase
-      .channel('realtime-inventory-sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'inventory' },
-        (payload) => {
-          const { eventType, new: newRow, old: oldRow } = payload;
-          console.log(
-            `%c⚡ [Pure Realtime: inventory]%c 📦 ${eventType} received!`,
-            'color: #0284c7; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;',
-            'color: #0369a1; font-weight: 600;',
-            newRow || oldRow
-          );
-          if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            if (newRow) {
-              const jsRow = rowToJS(newRow);
-              syncLocalStateOnSave('Inventory', jsRow);
-            }
-          } else if (eventType === 'DELETE') {
-            if (oldRow && oldRow.id) {
-              syncLocalStateOnDelete('Inventory', { id: oldRow.id });
-            }
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'setting_pos' },
-        (payload) => {
-          const { eventType, new: newRow, old: oldRow } = payload;
-          if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            if (newRow) {
-              const jsRow = rowToJS(newRow);
-              syncLocalStateOnSave('setting_pos', jsRow);
-            }
-          } else if (eventType === 'DELETE') {
-            if (oldRow && oldRow.id) {
-              syncLocalStateOnDelete('setting_pos', { id: oldRow.id });
-            }
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
-      supabase.removeChannel(coursesChannel);
-      supabase.removeChannel(inventoryChannel);
     };
   }, []);
 

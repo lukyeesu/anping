@@ -49,6 +49,12 @@ const InventoryManager = ({
   const [isLogClosing, setIsLogClosing] = useState(false);
   const [selectedProductLogs, setSelectedProductLogs] = useState([]);
   const [logProductInfo, setLogProductInfo] = useState(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsLoadingMore, setLogsLoadingMore] = useState(false);
+  const [logsHasMore, setLogsHasMore] = useState(true);
+  const [currentLogItem, setCurrentLogItem] = useState(null);
+  const logsPageRef = useRef(0);
+  const LOGS_PAGE_SIZE = 20;
 
   // Lot Modal States
   const [isLotModalOpen, setIsLotModalOpen] = useState(false);
@@ -613,14 +619,15 @@ const InventoryManager = ({
     setIsLotModalOpen(true);
   };
 
-  // ฟังก์ชันเปิดดูประวัติ (Log) ดึงจากตาราง inventory_logs บน DB โดยตรง
-  const handleOpenLogs = async (item) => {
+  // ฟังก์ชันดึงประวัติสต็อกแบบแบ่งหน้าทีละ 20 รายการ เพื่อประหยัด Egress
+  const fetchLogsPage = async (item, pageNum, append = false) => {
+    if (!item) return;
     const rawTargetId = item.productId || item.product?.id || item.code || item.id || '';
     const cleanTargetId = String(rawTargetId).replace(/^INV_/, '').trim();
     const productName = item.product?.name || item.name || '';
 
-    setLogProductInfo(item.product || { name: productName || 'สินค้า' });
-    setIsLogModalOpen(true);
+    const start = pageNum * LOGS_PAGE_SIZE;
+    const end = start + LOGS_PAGE_SIZE - 1;
 
     try {
       let fetchedLogs = [];
@@ -633,43 +640,65 @@ const InventoryManager = ({
         } else if (productName) {
           query = query.eq('item_name', productName);
         }
-        query = query.order('created_at', { ascending: false }).limit(100);
+        query = query.order('created_at', { ascending: false }).range(start, end);
 
         const { data, error } = await query;
-        if (!error && Array.isArray(data) && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           fetchedLogs = data.map(rowToJS);
         }
       }
 
-      // Fallback กรองจากข้อมูลที่มีในเครื่อง
-      const fallbackLogs = inventoryLogsData.filter(l => {
-        const lProductId = String(l.productId || l.product_id || l.itemId || l.item_id || l.code || '').trim();
-        const lProductName = String(l.productName || l.product_name || l.itemName || l.item_name || '').trim();
-        
-        const matchId = cleanTargetId && (
-          lProductId.toLowerCase() === cleanTargetId.toLowerCase() ||
-          lProductId.toLowerCase().replace(/^inv_/, '') === cleanTargetId.toLowerCase()
-        );
-        const matchName = productName && lProductName && lProductName.toLowerCase() === productName.toLowerCase();
+      if (fetchedLogs.length < LOGS_PAGE_SIZE) {
+        setLogsHasMore(false);
+      } else {
+        setLogsHasMore(true);
+      }
 
-        return matchId || matchName;
-      });
-
-      const combinedLogs = [...fetchedLogs, ...fallbackLogs];
-
-      // กรองเอาเฉพาะรายการที่ไม่ซ้ำกัน
-      const seenIds = new Set();
-      const uniqueLogs = combinedLogs.filter(l => {
-        const idKey = l.id || `${l.productId || l.product_id}_${l.timestamp || l.created_at}_${l.amount || l.quantity}`;
-        if (seenIds.has(idKey)) return false;
-        seenIds.add(idKey);
-        return true;
-      });
-
-      setSelectedProductLogs(uniqueLogs);
+      if (append) {
+        setSelectedProductLogs(prev => {
+          const seen = new Set(prev.map(l => l.id || `${l.productId || l.product_id}_${l.timestamp || l.created_at}`));
+          const next = [...prev];
+          fetchedLogs.forEach(l => {
+            const k = l.id || `${l.productId || l.product_id}_${l.timestamp || l.created_at}`;
+            if (!seen.has(k)) {
+              seen.add(k);
+              next.push(l);
+            }
+          });
+          return next;
+        });
+      } else {
+        setSelectedProductLogs(fetchedLogs);
+      }
     } catch (e) {
       console.error('Error fetching inventory logs:', e);
+    } finally {
+      setLogsLoading(false);
+      setLogsLoadingMore(false);
     }
+  };
+
+  // ฟังก์ชันเปิดดูประวัติ (Log) ดึงจาก DB ครั้งละ 20 รายการ
+  const handleOpenLogs = async (item) => {
+    const productName = item.product?.name || item.name || '';
+    setLogProductInfo(item.product || { name: productName || 'สินค้า' });
+    setCurrentLogItem(item);
+    setSelectedProductLogs([]);
+    setLogsHasMore(true);
+    setLogsLoading(true);
+    setIsLogModalOpen(true);
+    logsPageRef.current = 0;
+
+    await fetchLogsPage(item, 0, false);
+  };
+
+  // ฟังก์ชันดึงประวัติเพิ่มเมื่อ Scroll ลงมาถึงด้านล่าง (Infinite Scroll)
+  const handleLoadMoreLogs = async () => {
+    if (logsLoading || logsLoadingMore || !logsHasMore || !currentLogItem) return;
+    setLogsLoadingMore(true);
+    const nextPage = logsPageRef.current + 1;
+    logsPageRef.current = nextPage;
+    await fetchLogsPage(currentLogItem, nextPage, true);
   };
 
   const handleSaveItem = async (e) => {
@@ -2222,8 +2251,21 @@ const InventoryManager = ({
               <button onClick={closeLogModal} className="text-slate-400 hover:text-slate-600 p-2"><X size={20} /></button>
             </div>
             
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30">
-              {selectedProductLogs.length > 0 ? (
+            <div 
+              onScroll={(e) => {
+                const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+                if (scrollHeight - scrollTop - clientHeight < 60) {
+                  handleLoadMoreLogs();
+                }
+              }}
+              className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-50/30"
+            >
+              {logsLoading && selectedProductLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                  <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="kanit-text text-sm font-bold text-slate-500">กำลังโหลดประวัติ...</p>
+                </div>
+              ) : selectedProductLogs.length > 0 ? (
                 <div className="space-y-3">
                   {selectedProductLogs.map((logItem, idx) => {
                     const logAmount = Number(logItem.amount ?? logItem.quantity ?? 0);
@@ -2303,6 +2345,19 @@ const InventoryManager = ({
                     </div>
                     );
                   })}
+
+                  {logsLoadingMore && (
+                    <div className="py-3 text-center text-xs text-indigo-500 font-bold kanit-text flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      <span>กำลังโหลดประวัติเพิ่มเติม...</span>
+                    </div>
+                  )}
+
+                  {!logsHasMore && selectedProductLogs.length >= LOGS_PAGE_SIZE && (
+                    <div className="py-3 text-center text-xs text-slate-400 font-medium kanit-text">
+                      ✓ แสดงประวัติครบทั้งหมดแล้ว
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-300">

@@ -19,6 +19,11 @@ DECLARE
     v_card numeric := 0;
     v_qr numeric := 0;
     v_other numeric := 0;
+    v_m_cash numeric := 0;
+    v_m_transfer numeric := 0;
+    v_m_card numeric := 0;
+    v_m_qr numeric := 0;
+    v_m_other numeric := 0;
     v_queue_total int := 0;
     v_queue_completed int := 0;
     v_queue_pending int := 0;
@@ -63,7 +68,7 @@ BEGIN
         COALESCE(SUM(CASE WHEN LOWER(method) LIKE '%card%' OR LOWER(method) LIKE '%เครดิต%' THEN COALESCE(amount, 0) ELSE 0 END), 0),
         COALESCE(SUM(CASE WHEN LOWER(method) LIKE '%qr%' THEN COALESCE(amount, 0) ELSE 0 END), 0),
         COALESCE(SUM(CASE WHEN (LOWER(method) NOT LIKE '%cash%' AND LOWER(method) NOT LIKE '%สด%' AND LOWER(method) NOT LIKE '%transfer%' AND LOWER(method) NOT LIKE '%โอน%' AND LOWER(method) NOT LIKE '%promptpay%' AND LOWER(method) NOT LIKE '%card%' AND LOWER(method) NOT LIKE '%เครดิต%' AND LOWER(method) NOT LIKE '%qr%') THEN COALESCE(amount, 0) ELSE 0 END), 0)
-    INTO v_manual_income, v_cash, v_transfer, v_card, v_qr, v_other
+    INTO v_manual_income, v_m_cash, v_m_transfer, v_m_card, v_m_qr, v_m_other
     FROM public.finance_revenue
     WHERE (status IS NULL OR status != 'cancelled')
       AND (is_deleted IS NULL OR is_deleted = false)
@@ -71,6 +76,12 @@ BEGIN
       AND (branch_filter = 'all' OR branch_id = branch_filter)
       AND TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') >= v_start_day
       AND TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') <= v_end_day;
+
+    v_cash := v_cash + v_m_cash;
+    v_transfer := v_transfer + v_m_transfer;
+    v_card := v_card + v_m_card;
+    v_qr := v_qr + v_m_qr;
+    v_other := v_other + v_m_other;
 
     v_total_income := v_pos_income + v_manual_income;
 

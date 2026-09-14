@@ -1300,8 +1300,26 @@ const FinancePage = ({
     const storeName = table === 'finance_revenue' ? 'finance_revenue' : (table === 'finance_expenses' ? 'finance_expenses' : 'pos_transactions');
     upsertLocalStore(storeName, [jsRow], { broadcast: false }).catch(() => {});
 
-    fetchStatsAndData(0, true);
+    debouncedFetchStatsAndData();
+  }, [debouncedFetchStatsAndData]);
+
+  const fetchDebounceTimerRef = useRef(null);
+  const debouncedFetchStatsAndData = useCallback(() => {
+    if (fetchDebounceTimerRef.current) {
+      clearTimeout(fetchDebounceTimerRef.current);
+    }
+    fetchDebounceTimerRef.current = setTimeout(() => {
+      fetchStatsAndData(0, true);
+    }, 350);
   }, [fetchStatsAndData]);
+
+  useEffect(() => {
+    return () => {
+      if (fetchDebounceTimerRef.current) {
+        clearTimeout(fetchDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase) return;
@@ -1329,12 +1347,12 @@ const FinancePage = ({
       if (eventData && (eventData.type === 'STORE_UPDATED' || eventData.action === 'NETWORK_RECONNECTED')) {
         const storeName = eventData.storeName;
         if (storeName === 'pos_transactions' || storeName === 'finance_revenue' || storeName === 'finance_expenses' || storeName === '*') {
-          fetchStatsAndData(0, true);
+          debouncedFetchStatsAndData();
         }
       }
     });
     return () => unsubscribe();
-  }, [search, filterType, filterCategory, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
+  }, [debouncedFetchStatsAndData]);
 
   useEffect(() => {
     if (Array.isArray(posHistoryData) && posHistoryData.length > 0) {
