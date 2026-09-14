@@ -134,3 +134,20 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql;
+
+-- 3. สร้างฟังก์ชันดึงรายชื่อหมวดหมู่ทั้งหมดแบบตัดรายการซ้ำ (DISTINCT) โดยตรงจากฐานข้อมูล Supabase
+CREATE OR REPLACE FUNCTION get_finance_categories()
+RETURNS TABLE (category text) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT DISTINCT f.category::text
+    FROM public.finance_all_transactions f
+    WHERE f.category IS NOT NULL 
+      AND TRIM(f.category) != ''
+      AND (f.is_deleted IS NULL OR f.is_deleted = false)
+      AND (f.status IS NULL OR f.status != 'cancelled')
+    ORDER BY 1 ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION get_finance_categories() TO anon, authenticated, service_role;

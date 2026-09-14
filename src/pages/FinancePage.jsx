@@ -109,10 +109,13 @@ const FinancePage = ({
   // Master list ของทุกหมวดหมู่ที่มีอยู่ในระบบ (เพื่อไม่ให้หมวดไม่อื่นหายไปเวลากดเลือกตัวกรอง)
   const [masterCategories, setMasterCategories] = useState([]);
 
-  // ดึงหมวดหมู่ทั้งหมดจาก IndexedDB เมื่อเริ่มเปิดหน้า
+  // ดึงหมวดหมู่ทั้งหมดจาก IndexedDB และ Supabase ทันทีเมื่อเริ่มเปิดหน้า (เพื่อไม่ต้องรอเลื่อนดูบิลเก่า)
   useEffect(() => {
     let isMounted = true;
     const loadAllCategoriesFromStore = async () => {
+      const catSet = new Set();
+
+      // 1. โหลดจาก LocalStore ทันที (เร็วสุดสำหรับ Offline)
       try {
         const [revs, exps, pos] = await Promise.all([
           getLocalStore('finance_revenue').catch(() => []),
@@ -121,18 +124,56 @@ const FinancePage = ({
         ]);
         if (!isMounted) return;
 
-        const catSet = new Set();
         (revs || []).forEach(r => { if (r.category && !r.is_deleted) catSet.add(String(r.category).trim()); });
         (exps || []).forEach(e => { if (e.category && !e.is_deleted) catSet.add(String(e.category).trim()); });
         if ((pos || []).length > 0) catSet.add('รายได้จาก POS');
 
-        if (catSet.size > 0) {
+        if (catSet.size > 0 && isMounted) {
           setMasterCategories(prev => {
             const combined = new Set([...prev, ...catSet]);
             return Array.from(combined).sort((a, b) => a.localeCompare(b, 'th'));
           });
         }
       } catch (e) {}
+
+      // 2. ให้ Supabase คำนวณและกรองหมวดหมู่ที่ไม่ซ้ำ (DISTINCT) จากฐานข้อมูลโดยตรงผ่าน RPC
+      try {
+        const { data: rpcCategories, error: rpcErr } = await supabase.rpc('get_finance_categories');
+        if (!isMounted) return;
+
+        if (!rpcErr && Array.isArray(rpcCategories) && rpcCategories.length > 0) {
+          rpcCategories.forEach(item => {
+            const c = String(item?.category || (typeof item === 'string' ? item : '')).trim();
+            if (c && c !== 'null' && c !== 'undefined') {
+              catSet.add(c);
+            }
+          });
+        } else {
+          // Fallback กรณีที่ฟังก์ชัน RPC ยังไม่ได้รันบนฐานข้อมูล
+          const { data: txList } = await supabase
+            .from('finance_all_transactions')
+            .select('category')
+            .not('category', 'is', null)
+            .limit(1000);
+          if (Array.isArray(txList)) {
+            txList.forEach(r => {
+              const c = String(r?.category || '').trim();
+              if (c && c !== 'null' && c !== 'undefined') catSet.add(c);
+            });
+          }
+        }
+
+        catSet.add('รายได้จาก POS');
+
+        if (catSet.size > 0 && isMounted) {
+          setMasterCategories(prev => {
+            const combined = new Set([...prev, ...catSet]);
+            return Array.from(combined).sort((a, b) => a.localeCompare(b, 'th'));
+          });
+        }
+      } catch (e) {
+        console.warn("Prefetch categories error:", e);
+      }
     };
 
     loadAllCategoriesFromStore();
@@ -1412,6 +1453,66 @@ const FinancePage = ({
   }, [filterBranch, filterType, filterCategory, search, timeFilterMode, filterMonth, filterYear, dateRange]);
 
   const [showCatSuggestions, setShowCatSuggestions] = useState(false);
+  const [isCatSearching, setIsCatSearching] = useState(false);
+  const catContainerRef = useRef(null);
+  const catDropdownRef = useRef(null);
+  const [catDropdownStyle, setCatDropdownStyle] = useState({});
+
+  const updateCatPosition = useCallback(() => {
+    if (!catContainerRef.current) return;
+    const rect = catContainerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldDropUp = spaceBelow < 250 && spaceAbove > spaceBelow;
+    const maxH = Math.min(250, Math.max(160, (shouldDropUp ? spaceAbove : spaceBelow) - 16));
+
+    setCatDropdownStyle({
+      position: 'fixed',
+      top: shouldDropUp ? 'auto' : `${rect.bottom + 6}px`,
+      bottom: shouldDropUp ? `${window.innerHeight - rect.top + 6}px` : 'auto',
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      maxHeight: `${maxH}px`,
+      zIndex: 99999
+    });
+  }, []);
+
+  // ปิดคำแนะนำหมวดหมู่เมื่อคลิกหรือสัมผัสนอกคอนเทนเนอร์ และอัปเดตตำแหน่งเมื่อเลื่อนหน้าจอ
+  useEffect(() => {
+    if (!showCatSuggestions) return;
+
+    updateCatPosition();
+
+    const handleOutsideClick = (e) => {
+      if (catContainerRef.current && catContainerRef.current.contains(e.target)) {
+        return;
+      }
+      if (catDropdownRef.current && catDropdownRef.current.contains(e.target)) {
+        return;
+      }
+      setShowCatSuggestions(false);
+      setIsCatSearching(false);
+    };
+
+    const handleScrollOrResize = (e) => {
+      if (catDropdownRef.current && catDropdownRef.current.contains(e.target)) {
+        return;
+      }
+      updateCatPosition();
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick, { passive: true });
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [showCatSuggestions, updateCatPosition]);
 
   // สะสมหมวดหมู่ที่ตรวจพบเข้าสู่ masterCategories เพื่อป้องกันตัวเลือกหมวดหมู่อื่นหายเมื่อกดกรอง
   useEffect(() => {
@@ -1449,10 +1550,18 @@ const FinancePage = ({
   }, [uniqueCategories]);
 
   const filteredCatSuggestions = useMemo(() => {
+    // ถ้าไม่ได้กำลังพิมพ์ค้นหา ให้แสดงทุกหมวดหมู่เสมอ
+    if (!isCatSearching) {
+      return uniqueCategories;
+    }
     const q = String(formData.category || '').trim().toLowerCase();
     if (!q) return uniqueCategories;
+    // หากข้อความตรงกับหมวดหมู่ที่มีอยู่แล้ว ให้แสดงทุกตัวเลือกเพื่อให้ผู้ใช้เลื่อนหรือเปลี่ยนได้ง่าย
+    if (uniqueCategories.some(c => c.toLowerCase() === q)) {
+      return uniqueCategories;
+    }
     return uniqueCategories.filter(c => c.toLowerCase().includes(q));
-  }, [uniqueCategories, formData.category]);
+  }, [uniqueCategories, formData.category, isCatSearching]);
 
   const visibleTransactions = useMemo(() => {
     const list = (financeTransactions || []).filter(isTxMatchingFilters);
@@ -2736,42 +2845,106 @@ const FinancePage = ({
                              />
                           </div>
                           <div>
-                             <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมวดหมู่ <span className="text-rose-500">*</span></label>
-                             <div className="relative group">
-                                <input 
-                                   required 
-                                   type="text" 
-                                   placeholder="พิมพ์หรือเลือกหมวดหมู่..." 
-                                   value={formData.category} 
-                                   onChange={e => {
-                                      setFormData({...formData, category: e.target.value});
-                                      setShowCatSuggestions(true);
-                                   }} 
-                                   onFocus={() => setShowCatSuggestions(true)}
-                                   onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
-                                   className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all" 
-                                />
-                                {showCatSuggestions && filteredCatSuggestions.length > 0 && (
-                                   <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-xl border border-slate-100 z-[220] overflow-hidden modal-animate-in max-h-[180px] overflow-y-auto custom-scrollbar">
-                                      <div className="p-1">
-                                         {filteredCatSuggestions.map((cat, idx) => (
-                                            <div
-                                               key={idx}
-                                               onMouseDown={(e) => {
-                                                  e.preventDefault();
-                                                  setFormData({...formData, category: cat});
-                                                  setShowCatSuggestions(false);
-                                               }}
-                                               className="px-3.5 py-2 rounded-xl hover:bg-sky-50 hover:text-sky-600 cursor-pointer text-xs font-bold font-data text-slate-700 transition-colors flex items-center justify-between"
-                                            >
-                                               <span>{cat}</span>
-                                               <Tag size={12} className="text-slate-400 opacity-60" />
-                                            </div>
-                                         ))}
-                                      </div>
-                                   </div>
-                                )}
-                             </div>
+                              <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">หมวดหมู่ <span className="text-rose-500">*</span></label>
+                              <div ref={catContainerRef} className="relative group">
+                                 <input 
+                                    required 
+                                    type="text" 
+                                    placeholder="พิมพ์หรือเลือกหมวดหมู่..." 
+                                    value={formData.category} 
+                                    onChange={e => {
+                                       setFormData({...formData, category: e.target.value});
+                                       setIsCatSearching(true);
+                                       setShowCatSuggestions(true);
+                                    }} 
+                                    onFocus={(e) => {
+                                       setIsCatSearching(false);
+                                       setShowCatSuggestions(true);
+                                       e.target.select?.();
+                                    }} 
+                                    className="w-full px-4 py-3 pr-10 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all" 
+                                 />
+                                 <button
+                                    type="button"
+                                    onClick={() => {
+                                       setIsCatSearching(false);
+                                       setShowCatSuggestions(prev => !prev);
+                                    }}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-sky-600 rounded-xl transition-colors cursor-pointer"
+                                    title="เลือกหมวดหมู่"
+                                 >
+                                    <ChevronDown size={18} className={`transition-transform duration-200 ${showCatSuggestions ? 'rotate-180 text-sky-500' : ''}`} />
+                                 </button>
+                                 {showCatSuggestions && createPortal(
+                                    <div 
+                                       ref={catDropdownRef}
+                                       style={{
+                                          ...catDropdownStyle,
+                                          scrollbarWidth: 'thin',
+                                          scrollbarColor: '#94a3b8 #f1f5f9',
+                                          WebkitOverflowScrolling: 'touch'
+                                       }}
+                                       className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-y-auto overscroll-contain touch-pan-y cat-dropdown-scroll animate-in fade-in zoom-in-95 duration-150 select-none"
+                                    >
+                                       <style>{`
+                                          .cat-dropdown-scroll::-webkit-scrollbar {
+                                             width: 6px;
+                                          }
+                                          .cat-dropdown-scroll::-webkit-scrollbar-track {
+                                             background: #f1f5f9;
+                                             border-radius: 9999px;
+                                             margin: 6px 0;
+                                          }
+                                          .cat-dropdown-scroll::-webkit-scrollbar-thumb {
+                                             background: #94a3b8;
+                                             border-radius: 9999px;
+                                          }
+                                          .cat-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+                                             background: #64748b;
+                                          }
+                                       `}</style>
+                                       <div className="p-1.5 pr-2">
+                                          {filteredCatSuggestions.length > 0 ? (
+                                             filteredCatSuggestions.map((cat, idx) => {
+                                                const isSelected = String(formData.category || '').trim().toLowerCase() === cat.toLowerCase();
+                                                return (
+                                                   <div
+                                                      key={idx}
+                                                      onClick={() => {
+                                                         setFormData({...formData, category: cat});
+                                                         setShowCatSuggestions(false);
+                                                         setIsCatSearching(false);
+                                                      }}
+                                                      className={`px-3.5 py-2.5 rounded-xl cursor-pointer text-xs font-bold font-data transition-colors flex items-center justify-between select-none ${
+                                                         isSelected 
+                                                            ? 'bg-sky-50 text-sky-600 font-black' 
+                                                            : 'text-slate-700 hover:bg-sky-50 hover:text-sky-600 active:bg-sky-100'
+                                                      }`}
+                                                   >
+                                                      <span className="flex items-center gap-2">
+                                                         {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />}
+                                                         <span>{cat}</span>
+                                                      </span>
+                                                      <Tag size={12} className={isSelected ? 'text-sky-500 shrink-0' : 'text-slate-400 opacity-60 shrink-0'} />
+                                                   </div>
+                                                );
+                                             })
+                                          ) : (
+                                             <div 
+                                                onClick={() => {
+                                                   setShowCatSuggestions(false);
+                                                   setIsCatSearching(false);
+                                                }}
+                                                className="px-3.5 py-2.5 text-xs text-sky-600 bg-sky-50/60 rounded-xl cursor-pointer hover:bg-sky-100 kanit-text font-bold text-center"
+                                             >
+                                                ✓ ใช้หมวดหมู่ใหม่ "{formData.category}"
+                                             </div>
+                                          )}
+                                       </div>
+                                    </div>,
+                                    document.body
+                                 )}
+                              </div>
                           </div>
                        </div>
 
