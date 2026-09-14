@@ -3073,7 +3073,7 @@ export default function App() {
 
             {currentTab === 'catalog' && (
                 <div className="w-full">
-                    <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
+                    <CatalogManager products={posProducts} setProducts={setPosProducts} posHistoryData={posHistoryData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setInventoryData={setInventoryData} />
                 </div>
             )}
 

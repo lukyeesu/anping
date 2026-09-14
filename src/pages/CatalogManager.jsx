@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, posHistoryData = [] }) => {
+const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, isGlobalLoading, showGlobalAlert, globalAlert, posHistoryData = [], setInventoryData = null }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all'); // เพิ่ม State สำหรับจัดการการกรอง
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);

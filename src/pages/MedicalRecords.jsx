@@ -83,6 +83,32 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     }
   }, [recentTreatments]);
 
+  // --- รายชื่อแพทย์ทั้งหมดสำหรับค้นหา/เลือกในใบ OPD ---
+  const allDocs = useMemo(() => {
+    const map = new Map();
+    (staffData || []).forEach(s => {
+      if (!s || !s.name) return;
+      const isDoc = s.role === 'doctor' || s.category === 'doctor' || s.position?.includes('แพทย์') || s.employmentType === 'doctor';
+      if (isDoc) {
+        map.set(s.name.trim(), { id: s.id || s.name, name: s.name.trim() });
+      }
+    });
+
+    // ถ้าผู้ใช้ปัจจุบันเป็นแพทย์ ให้ใส่ชื่อลงในรายการด้วยเสมอ
+    if (currentUser?.name && (currentUser.role === 'doctor' || currentUser.category === 'doctor' || currentUser.position?.includes('แพทย์'))) {
+      map.set(currentUser.name.trim(), { id: currentUser.id || currentUser.name, name: currentUser.name.trim() });
+    }
+
+    // Fallback: หากยังไม่ได้ระบุตำแหน่งแพทย์ในระบบ ให้แสดงรายชื่อพนักงานทั้งหมดเพื่อไม่ให้ dropdown ว่าง
+    if (map.size === 0 && Array.isArray(staffData) && staffData.length > 0) {
+      staffData.forEach(s => {
+        if (s?.name) map.set(s.name.trim(), { id: s.id || s.name, name: s.name.trim() });
+      });
+    }
+
+    return Array.from(map.values());
+  }, [staffData, currentUser]);
+
   // ฟังก์ชันจัดการเมื่อเลือกแพทย์
   const handleSelectDoctor = (doctorName) => {
     setNewOpdRecord({...newOpdRecord, doctor: doctorName});
@@ -1693,14 +1719,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     else { 
       setEditingOpdIndex(null); 
       // ดึงข้อมูลแพทย์ผู้รักษาอัตโนมัติหากคนล็อกอินเป็นแพทย์
-      const isDoctor = currentUser.role === 'doctor' || currentUser.category === 'doctor';
+      const isDoctor = Boolean(currentUser && (currentUser.role === 'doctor' || currentUser.category === 'doctor' || currentUser.position?.includes('แพทย์')));
       setNewOpdRecord({ 
           ...initialOpdState, 
           datetime: formatDateTime(new Date().toISOString()), 
           tx: [''],
           prescription: [''],
           branchId: currentBranch !== 'all' ? currentBranch : '',
-          doctor: isDoctor ? currentUser.name : ''
+          doctor: isDoctor ? (currentUser.name || '') : ''
       }); 
     }
     setShowOpdForm(true);
@@ -3137,26 +3163,26 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                             <div className="relative">
                                 <input 
                                     type="text" 
-                                    className={`${theme.input} bg-white py-2 text-sm font-data ${currentUser.role === 'doctor' || currentUser.category === 'doctor' ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' : 'pr-8 cursor-pointer'}`} 
-                                    value={newOpdRecord.doctor} 
+                                    className={`${theme.input} bg-white py-2 text-sm font-data ${currentUser?.role === 'doctor' || currentUser?.category === 'doctor' ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' : 'pr-8 cursor-pointer'}`} 
+                                    value={newOpdRecord.doctor || ''} 
                                     onChange={(e) => {
-                                        if (currentUser.role !== 'doctor' && currentUser.category !== 'doctor') setNewOpdRecord({...newOpdRecord, doctor: e.target.value});
+                                        if (currentUser?.role !== 'doctor' && currentUser?.category !== 'doctor') setNewOpdRecord({...newOpdRecord, doctor: e.target.value});
                                     }} 
                                     onFocus={() => {
-                                        if (currentUser.role !== 'doctor' && currentUser.category !== 'doctor') setShowDoctorSuggest(true);
+                                        if (currentUser?.role !== 'doctor' && currentUser?.category !== 'doctor') setShowDoctorSuggest(true);
                                     }}
                                     onBlur={() => setTimeout(() => setShowDoctorSuggest(false), 200)}
                                     placeholder="ค้นหา หรือ ระบุชื่อแพทย์" 
-                                    readOnly={currentUser.role === 'doctor' || currentUser.category === 'doctor'}
+                                    readOnly={currentUser?.role === 'doctor' || currentUser?.category === 'doctor'}
                                 />
-                                {(currentUser.role !== 'doctor' && currentUser.category !== 'doctor') && (
+                                {(currentUser?.role !== 'doctor' && currentUser?.category !== 'doctor') && (
                                     <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                                         <ChevronDown size={16} className={`transition-transform duration-200 ${showDoctorSuggest ? 'rotate-180' : ''}`} />
                                     </div>
                                 )}
                             </div>
                             
-                            {showDoctorSuggest && (currentUser.role !== 'doctor' && currentUser.category !== 'doctor') && (
+                            {showDoctorSuggest && (currentUser?.role !== 'doctor' && currentUser?.category !== 'doctor') && (
                                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top flex flex-col">
                                     
                                     {/* ส่วนที่ 1: แพทย์ที่เลือกล่าสุด (แสดงเฉพาะตอนที่ยังไม่ได้พิมพ์ค้นหา) */}
@@ -3187,7 +3213,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                     </div>
                                     {(() => {
                                         const dQuery = String(newOpdRecord.doctor || '').trim().toLowerCase();
-                                        const filteredDocs = allDocs.filter(d => {
+                                        const filteredDocs = (allDocs || []).filter(d => {
                                           if (!dQuery) return true;
                                           const dName = typeof d?.name === 'string' ? d.name.toLowerCase() : String(d?.name || '').toLowerCase();
                                           return dName.includes(dQuery);
@@ -3246,7 +3272,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1 ml-1 kanit-text">การรักษาที่ให้</label>
                           <div className="flex flex-col gap-2">
-                            {newOpdRecord.tx.map((treatment, txIndex) => {
+                            {(newOpdRecord.tx || ['']).map((treatment, txIndex) => {
                               const treatmentStr = typeof treatment === 'string' 
                                 ? treatment 
                                 : (treatment && typeof treatment === 'object' 
@@ -3264,7 +3290,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                         className={`${theme.input} bg-white py-2 text-sm font-data ${hasTreatment ? 'pr-14' : 'pr-10'}`}
                                         value={treatmentStr} 
                                         onChange={(e) => {
-                                            const updatedTx = [...newOpdRecord.tx];
+                                            const updatedTx = [...(newOpdRecord.tx || [''])];
                                             updatedTx[txIndex] = e.target.value;
                                             setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                         }} 
@@ -3278,7 +3304,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                           type="button"
                                           onMouseDown={(e) => {
                                             e.preventDefault();
-                                            const updatedTx = [...newOpdRecord.tx];
+                                            const updatedTx = [...(newOpdRecord.tx || [''])];
                                             updatedTx[txIndex] = '';
                                             setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                           }}
@@ -3364,9 +3390,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                       </div>
                                     )}
                                   </div>
-                                  {newOpdRecord.tx.length > 1 && (
+                                  {(newOpdRecord.tx || []).length > 1 && (
                                     <button type="button" onClick={() => {
-                                        const updatedTx = newOpdRecord.tx.filter((_, i) => i !== txIndex);
+                                        const updatedTx = (newOpdRecord.tx || []).filter((_, i) => i !== txIndex);
                                         setNewOpdRecord({...newOpdRecord, tx: updatedTx, prescription: updatedTx});
                                     }} className="px-3 bg-white text-rose-500 border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors flex items-center justify-center shrink-0">
                                       <Trash2 size={16} />
@@ -3375,7 +3401,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                 </div>
                               );
                             })}
-                            <button type="button" onClick={() => setNewOpdRecord({...newOpdRecord, tx: [...newOpdRecord.tx, ''], prescription: [...newOpdRecord.tx, '']})} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
+                            <button type="button" onClick={() => {
+                              const currentTx = newOpdRecord.tx || [''];
+                              setNewOpdRecord({...newOpdRecord, tx: [...currentTx, ''], prescription: [...currentTx, '']});
+                            }} className="px-4 py-2 mt-1 bg-sky-50 text-sky-600 border border-sky-100 rounded-2xl text-sm font-semibold hover:bg-sky-100 whitespace-nowrap transition-colors flex items-center gap-1 self-start kanit-text">
                               <Plus size={16} /> เพิ่มรายการรักษา
                             </button>
                           </div>
