@@ -59,6 +59,105 @@ const getPieSectorPath = (cx, cy, rIn, rOut, startAngle, endAngle) => {
   return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} L ${x3.toFixed(1)} ${y3.toFixed(1)} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x4.toFixed(1)} ${y4.toFixed(1)} Z`;
 };
 
+// Number Ticker / Counting Animation Component for Executive Dashboard KPI Cards
+const NumberTicker = ({ 
+  value = 0, 
+  duration = 900, 
+  isLoading = false,
+  className = '',
+  prefix = '',
+  suffix = '',
+  decimals = null
+}) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const currentValRef = useRef(0);
+  const startTimeRef = useRef(null);
+  const animFrameRef = useRef(null);
+
+  const targetVal = Number(value) || 0;
+
+  useEffect(() => {
+    if (isLoading) {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      return;
+    }
+
+    const startVal = currentValRef.current;
+    const endVal = targetVal;
+
+    // Negligible difference - snap directly
+    if (Math.abs(startVal - endVal) < 0.01) {
+      currentValRef.current = endVal;
+      setDisplayValue(endVal);
+      setIsAnimating(false);
+      return;
+    }
+
+    setIsAnimating(true);
+    startTimeRef.current = null;
+
+    // Smooth Expo Out easing for a snappy ticker feel (fast start -> gentle deceleration)
+    const easeOutExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
+
+    const step = (timestamp) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const elapsed = timestamp - startTimeRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = easeOutExpo(progress);
+      const current = startVal + (endVal - startVal) * easedProgress;
+
+      currentValRef.current = current;
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        animFrameRef.current = requestAnimationFrame(step);
+      } else {
+        currentValRef.current = endVal;
+        setDisplayValue(endVal);
+        setIsAnimating(false);
+        animFrameRef.current = null;
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+    };
+  }, [targetVal, duration, isLoading]);
+
+  if (isLoading) {
+    return <span className="inline-block font-data opacity-60 animate-pulse">...</span>;
+  }
+
+  // Determine decimal formatting
+  const targetHasDecimals = Math.abs(targetVal % 1) > 0.001;
+  const decPlaces = decimals !== null ? decimals : (targetHasDecimals ? 2 : 0);
+
+  const formattedStr = isAnimating
+    ? (decPlaces > 0
+        ? displayValue.toLocaleString('th-TH', { minimumFractionDigits: decPlaces, maximumFractionDigits: decPlaces })
+        : Math.round(displayValue).toLocaleString('th-TH'))
+    : targetVal.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+  return (
+    <span 
+      className={`inline-block font-data font-black tabular-nums transition-all duration-150 ${className}`}
+      style={{ fontVariantNumeric: 'tabular-nums' }}
+      title={targetVal.toLocaleString('th-TH')}
+    >
+      {prefix}{formattedStr}{suffix}
+    </span>
+  );
+};
+
 const PAYMENT_CHANNELS_META = [
   { 
     id: 'transfer', 
@@ -3041,7 +3140,9 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-emerald-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">รายรับรวมทั้งหมด</p>
-                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.income)}</h3>
+                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">
+                  <NumberTicker value={summary.income} isLoading={isGlobalLoading || isDashboardLoading} />
+                </h3>
                 {isCompareActive && compareDiffStats && (
                   <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/20 backdrop-blur-md">
                     <span className={compareDiffStats.incDiff >= 0 ? 'text-emerald-200' : 'text-rose-200'}>
@@ -3056,7 +3157,7 @@ const ExecutiveDashboard = ({
               </div>
             </div>
             <div className="mt-4 sm:mt-6 lg:mt-8 border-t border-white/10 pt-2.5 sm:pt-3 lg:pt-4 z-10 flex justify-between items-center text-[10px] sm:text-[11px] lg:text-xs text-emerald-100 gap-2">
-              <span className="kanit-text truncate">ยอดผ่าน POS: {summary.checkoutsCount} บิล</span>
+              <span className="kanit-text truncate">ยอดผ่าน POS: <NumberTicker value={summary.checkoutsCount} duration={600} isLoading={isGlobalLoading || isDashboardLoading} /> บิล</span>
               <span className="font-data font-bold shrink-0">โอนเงิน {((summary.transfer / (summary.income || 1)) * 100).toFixed(0)}%</span>
             </div>
             <div className="absolute -bottom-6 -right-6 w-24 h-24 lg:w-28 lg:h-28 bg-white/5 rounded-full opacity-50 pointer-events-none transform scale-150"></div>
@@ -3067,7 +3168,9 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-rose-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">รายจ่ายรวมทั้งหมด</p>
-                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.expense)}</h3>
+                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">
+                  <NumberTicker value={summary.expense} isLoading={isGlobalLoading || isDashboardLoading} />
+                </h3>
                 {isCompareActive && compareDiffStats && (
                   <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/20 backdrop-blur-md">
                     <span className={compareDiffStats.expDiff <= 0 ? 'text-emerald-200' : 'text-rose-200'}>
@@ -3093,7 +3196,9 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-indigo-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">กำไรสุทธิ (Net Profit)</p>
-                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">{(isGlobalLoading || isDashboardLoading) ? '...' : formatMoney(summary.netProfit)}</h3>
+                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">
+                  <NumberTicker value={summary.netProfit} isLoading={isGlobalLoading || isDashboardLoading} />
+                </h3>
                 {isCompareActive && compareDiffStats && (
                   <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/20 backdrop-blur-md">
                     <span className={compareDiffStats.profitDiff >= 0 ? 'text-emerald-200' : 'text-rose-200'}>
