@@ -1210,6 +1210,24 @@ const FinancePage = ({
       fetchStatsAndData(0, true);
   }, [search, filterType, filterCategory, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
+  const fetchDebounceTimerRef = useRef(null);
+  const debouncedFetchStatsAndData = useCallback(() => {
+    if (fetchDebounceTimerRef.current) {
+      clearTimeout(fetchDebounceTimerRef.current);
+    }
+    fetchDebounceTimerRef.current = setTimeout(() => {
+      fetchStatsAndData(0, true);
+    }, 350);
+  }, [fetchStatsAndData]);
+
+  useEffect(() => {
+    return () => {
+      if (fetchDebounceTimerRef.current) {
+        clearTimeout(fetchDebounceTimerRef.current);
+      }
+    };
+  }, []);
+
   // --- Realtime Delta Sync Listener for Finance Page (0ms UI Update when other devices add/edit/delete) ---
   const handleRealtimeFinanceChange = useCallback((table, payload) => {
     if (!payload) return;
@@ -1220,7 +1238,7 @@ const FinancePage = ({
       if (targetId) {
         setFinanceTransactions(prev => prev.filter(t => String(t.id).trim() !== targetId));
       }
-      fetchStatsAndData(0, true);
+      debouncedFetchStatsAndData();
       return;
     }
 
@@ -1232,7 +1250,7 @@ const FinancePage = ({
       if (targetId) {
         setFinanceTransactions(prev => prev.filter(t => String(t.id).trim() !== targetId));
       }
-      fetchStatsAndData(0, true);
+      debouncedFetchStatsAndData();
       return;
     }
 
@@ -1302,24 +1320,6 @@ const FinancePage = ({
 
     debouncedFetchStatsAndData();
   }, [debouncedFetchStatsAndData]);
-
-  const fetchDebounceTimerRef = useRef(null);
-  const debouncedFetchStatsAndData = useCallback(() => {
-    if (fetchDebounceTimerRef.current) {
-      clearTimeout(fetchDebounceTimerRef.current);
-    }
-    fetchDebounceTimerRef.current = setTimeout(() => {
-      fetchStatsAndData(0, true);
-    }, 350);
-  }, [fetchStatsAndData]);
-
-  useEffect(() => {
-    return () => {
-      if (fetchDebounceTimerRef.current) {
-        clearTimeout(fetchDebounceTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!supabase) return;
