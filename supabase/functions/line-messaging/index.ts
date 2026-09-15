@@ -264,8 +264,10 @@ function buildQueueNotificationFlex(payload: any, titleText: string, headerColor
   const hn = payload.hn || payload.patient_id || payload.patientId || "-";
   const patientName = payload.patientName || payload.patient_name || payload.name || "ไม่ระบุชื่อ";
   const doctor = payload.doctor || payload.doctorName || payload.doctor_name || payload.artist || "-";
-  const reason = payload.reason || payload.category || payload.service || "-";
-  const serviceType = payload.serviceType || payload.service_type || payload.category || payload.service || "-";
+  const rawService = payload.serviceType || payload.service_type || payload.category || payload.service || "";
+  const rawReason = payload.reason || payload.symptoms || payload.symptom || "";
+  const serviceType = (rawService && rawService !== '-') ? rawService : (rawReason && rawReason !== '-' ? rawReason : '-');
+  const reason = (rawService && rawService !== '-' && rawReason && rawReason !== rawService) ? rawReason : (rawReason && rawReason !== serviceType ? rawReason : '');
   const firstPhone = extractFirstPhone(payload.phone);
 
   const contentsArray: any[] = [];
@@ -314,14 +316,6 @@ function buildQueueNotificationFlex(payload: any, titleText: string, headerColor
           { "type": "text", "text": "เวลา", "size": "sm", "color": "#64748b", "flex": 4 },
           { "type": "text", "text": timeStr, "size": "sm", "color": "#0f172a", "weight": "bold", "flex": 6 }
         ]
-      },
-      {
-        "type": "box",
-        "layout": "horizontal",
-        "contents": [
-          { "type": "text", "text": "ประเภทบริการ", "size": "sm", "color": "#64748b", "flex": 4 },
-          { "type": "text", "text": serviceType, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
-        ]
       }
     );
   }
@@ -331,10 +325,18 @@ function buildQueueNotificationFlex(payload: any, titleText: string, headerColor
       "type": "box",
       "layout": "horizontal",
       "contents": [
+        { "type": "text", "text": "ประเภทบริการ", "size": "sm", "color": "#64748b", "flex": 4 },
+        { "type": "text", "text": serviceType, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
+      ]
+    },
+    ...(reason && reason !== '-' ? [{
+      "type": "box",
+      "layout": "horizontal",
+      "contents": [
         { "type": "text", "text": "อาการ", "size": "sm", "color": "#64748b", "flex": 4 },
         { "type": "text", "text": reason, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
       ]
-    },
+    }] : []),
     {
       "type": "box",
       "layout": "horizontal",
@@ -1369,8 +1371,10 @@ function createAppointmentCarouselFlex(appts: any[], titleStr: string, settings:
     const hn = appt.hn || appt.patient_id || appt.patientId || "-";
     const patientName = appt.patientName || appt.patient_name || appt.firstName || appt.first_name || appt.name || "ไม่ระบุชื่อ";
     const doctor = appt.doctor || appt.doctorName || appt.doctor_name || appt.artist || "-";
-    const reason = appt.reason || appt.service || appt.serviceType || appt.symptoms || appt.symptom || "-";
-    const serviceType = appt.serviceType || appt.service_type || "-";
+    const rawService = appt.serviceType || appt.service_type || appt.service || "-";
+    const rawReason = appt.reason || appt.symptoms || appt.symptom || "-";
+    const serviceType = (rawService && rawService !== '-') ? rawService : (rawReason && rawReason !== '-' ? rawReason : '-');
+    const reason = (rawService && rawService !== '-' && rawReason && rawReason !== rawService) ? rawReason : (rawReason && rawReason !== serviceType ? rawReason : '');
     const phone = appt.phone || "-";
     const firstPhone = extractFirstPhone(phone);
 
@@ -1446,14 +1450,14 @@ function createAppointmentCarouselFlex(appts: any[], titleStr: string, settings:
                   { "type": "text", "text": serviceType, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
                 ]
               },
-              {
+              ...(reason && reason !== '-' ? [{
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
                   { "type": "text", "text": "อาการ", "size": "sm", "color": "#64748b", "flex": 4 },
                   { "type": "text", "text": reason, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
                 ]
-              },
+              }] : []),
               {
                 "type": "box",
                 "layout": "horizontal",
@@ -1587,10 +1591,12 @@ function createPosFlex(pos: any) {
   const rawItems = pos.items || data.items || [];
   let itemContents: any[] = [];
   if (Array.isArray(rawItems) && rawItems.length > 0) {
-    itemContents = rawItems.slice(0, 5).map((it: any) => {
-      const itName = it.name || it.courseName || it.product_name || 'รายการสินค้า/บริการ';
-      const itQty = it.quantity || it.qty || 1;
-      const itPrice = it.total || it.price || 0;
+    itemContents = rawItems.slice(0, 10).map((it: any) => {
+      const p = it.product || it;
+      const itName = p.name || p.courseName || p.product_name || p.productName || it.name || 'รายการสินค้า/บริการ';
+      const itQty = Number(it.quantity ?? it.qty ?? 1);
+      const unitPrice = Number(p.price ?? p.sellingPrice ?? it.price ?? 0);
+      const itPrice = Number(it.total ?? (unitPrice * itQty));
       return {
         "type": "box",
         "layout": "horizontal",

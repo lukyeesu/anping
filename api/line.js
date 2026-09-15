@@ -682,8 +682,10 @@ function createAppointmentCarouselFlex(appts, titleStr, settings = []) {
     const hn = appt.hn || appt.patient_id || appt.patientId || "-";
     const patientName = appt.patientName || appt.patient_name || appt.firstName || appt.first_name || appt.name || "ไม่ระบุชื่อ";
     const doctor = appt.doctor || appt.doctorName || appt.doctor_name || appt.artist || "-";
-    const reason = appt.reason || appt.service || appt.serviceType || appt.symptoms || appt.symptom || "-";
-    const serviceType = appt.serviceType || appt.service_type || "-";
+    const rawService = appt.serviceType || appt.service_type || appt.service || "-";
+    const rawReason = appt.reason || appt.symptoms || appt.symptom || "-";
+    const serviceType = (rawService && rawService !== '-') ? rawService : (rawReason && rawReason !== '-' ? rawReason : '-');
+    const reason = (rawService && rawService !== '-' && rawReason && rawReason !== rawService) ? rawReason : (rawReason && rawReason !== serviceType ? rawReason : '');
     const phone = appt.phone || "-";
     const firstPhone = extractFirstPhone(phone);
 
@@ -759,14 +761,14 @@ function createAppointmentCarouselFlex(appts, titleStr, settings = []) {
                   { "type": "text", "text": serviceType, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
                 ]
               },
-              {
+              ...(reason && reason !== '-' ? [{
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
                   { "type": "text", "text": "อาการ", "size": "sm", "color": "#64748b", "flex": 4 },
                   { "type": "text", "text": reason, "size": "sm", "color": "#334155", "flex": 6, "wrap": true }
                 ]
-              },
+              }] : []),
               {
                 "type": "box",
                 "layout": "horizontal",
@@ -1220,10 +1222,12 @@ function createPosFlex(pos) {
   const rawItems = pos.items || data.items || [];
   let itemContents = [];
   if (Array.isArray(rawItems) && rawItems.length > 0) {
-    itemContents = rawItems.slice(0, 5).map((it) => {
-      const itName = it.name || it.courseName || it.product_name || 'รายการสินค้า/บริการ';
-      const itQty = it.quantity || it.qty || 1;
-      const itPrice = it.total || it.price || 0;
+    itemContents = rawItems.slice(0, 10).map((it) => {
+      const p = it.product || it;
+      const itName = p.name || p.courseName || p.product_name || p.productName || it.name || 'รายการสินค้า/บริการ';
+      const itQty = Number(it.quantity ?? it.qty ?? 1);
+      const unitPrice = Number(p.price ?? p.sellingPrice ?? it.price ?? 0);
+      const itPrice = Number(it.total ?? (unitPrice * itQty));
       return {
         "type": "box",
         "layout": "horizontal",

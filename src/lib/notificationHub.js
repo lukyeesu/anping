@@ -323,7 +323,11 @@ export function buildLineFlexMessage({
   rawPayload = {},
   webappUrl = 'https://anpingclinic.vercel.app'
 }) {
-  const patientName = rawPayload.patientName || rawPayload.name || rawPayload.customerName || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.split('(')[0]?.trim()) || 'คนไข้';
+  let patientName = rawPayload.patientName || rawPayload.name || rawPayload.customerName || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.split('(')[0]?.trim()) || 'คนไข้';
+  const prefix = (rawPayload.prefix || '').trim();
+  if (prefix && !patientName.startsWith(prefix)) {
+    patientName = `${prefix}${patientName}`;
+  }
   const hn = rawPayload.hn || rawPayload.patientId || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.match(/\(([^)]+)\)/)?.[1]?.replace('HN:', '')?.trim()) || '';
   const phone = rawPayload.phone || (fields.find(f => f.name && f.name.includes('เบอร์'))?.value) || '';
   const cleanPhone = cleanDigitsPhone(phone);
@@ -352,8 +356,10 @@ export function buildLineFlexMessage({
 
     const { date: dateStr, time: timeStr } = splitDateTime(rawPayload.datetime || (fields.find(f => f.name && f.name.includes('วัน'))?.value), rawPayload.time);
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
-    const serviceType = rawPayload.serviceType || '-';
-    const reason = rawPayload.reason || (fields.find(f => f.name && (f.name.includes('บริการ') || f.name.includes('สาเหตุ') || f.name.includes('อาการ'))))?.value || '-';
+    const rawService = rawPayload.serviceType || rawPayload.service || (fields.find(f => f.name && (f.name.includes('ประเภทบริการ') || f.name.includes('บริการ')) && !f.name.includes('สาเหตุ'))?.value) || '';
+    const rawReason = rawPayload.reason || (fields.find(f => f.name && (f.name.includes('อาการ') || f.name.includes('สาเหตุ')) && !f.name.includes('ประเภทบริการ'))?.value) || '';
+    const serviceType = (rawService && rawService !== '-') ? rawService : (rawReason && rawReason !== '-' ? rawReason : '-');
+    const reason = (rawService && rawService !== '-' && rawReason && rawReason !== rawService) ? rawReason : (rawReason && rawReason !== serviceType ? rawReason : '');
 
     const infoContents = [
       {
@@ -376,18 +382,18 @@ export function buildLineFlexMessage({
         type: "box",
         layout: "horizontal",
         contents: [
-          { type: "text", text: "ประเภทบริ...", size: "sm", color: "#64748b", flex: 4 },
+          { type: "text", text: "ประเภทบริการ", size: "sm", color: "#64748b", flex: 4 },
           { type: "text", text: serviceType, size: "sm", color: "#334155", flex: 6, wrap: true }
         ]
       },
-      {
+      ...(reason && reason !== '-' ? [{
         type: "box",
         layout: "horizontal",
         contents: [
           { type: "text", text: "อาการ", size: "sm", color: "#64748b", flex: 4 },
           { type: "text", text: reason, size: "sm", color: "#334155", flex: 6, wrap: true }
         ]
-      },
+      }] : []),
       {
         type: "box",
         layout: "horizontal",
@@ -572,10 +578,12 @@ export function buildLineFlexMessage({
     const rawItems = rawPayload.items || [];
     let itemContents = [];
     if (Array.isArray(rawItems) && rawItems.length > 0) {
-      itemContents = rawItems.slice(0, 5).map((it) => {
-        const itName = it.name || it.courseName || it.product_name || 'รายการสินค้า/บริการ';
-        const itQty = it.quantity || it.qty || 1;
-        const itPrice = it.total || it.price || 0;
+      itemContents = rawItems.slice(0, 10).map((it) => {
+        const p = it.product || it;
+        const itName = p.name || p.courseName || p.product_name || p.productName || it.name || 'รายการสินค้า/บริการ';
+        const itQty = Number(it.quantity ?? it.qty ?? 1);
+        const unitPrice = Number(p.price ?? p.sellingPrice ?? it.price ?? 0);
+        const itPrice = Number(it.total ?? (unitPrice * itQty));
         return {
           type: "box",
           layout: "horizontal",
@@ -890,7 +898,9 @@ export function buildLineFlexMessage({
   // 4. OPD / TREATMENT FLEX
   if (eventType === 'opd') {
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
-    const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
+    const diagnosis = (rawPayload.diagnosis && rawPayload.diagnosis !== '-') 
+      ? rawPayload.diagnosis 
+      : (rawPayload.chiefComplaint || rawPayload.cc || (fields.find(f => f.name && (f.name.includes('วินิจฉัย') || f.name.includes('อาการสำคัญ') || f.name.includes('อาการ')))?.value) || '-');
     const treatment = rawPayload.treatment || rawPayload.treatments || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('รักษา') || f.name.includes('หัตถการ') || f.name.includes('ยา'))))?.value || '-';
     const visitDate = rawPayload.date || rawPayload.datetime || (fields.find(f => f.name && (f.name.includes('วัน') || f.name.includes('เวลา'))))?.value || new Date().toLocaleDateString('th-TH');
 
@@ -1474,7 +1484,11 @@ export function buildDiscordFlexPayload({
   botName = '',
   botAvatarUrl = ''
 }) {
-  const patientName = rawPayload.patientName || rawPayload.name || rawPayload.customerName || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.split('(')[0]?.trim()) || 'คนไข้ทั่วไป';
+  let patientName = rawPayload.patientName || rawPayload.name || rawPayload.customerName || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.split('(')[0]?.trim()) || 'คนไข้ทั่วไป';
+  const prefix = (rawPayload.prefix || '').trim();
+  if (prefix && !patientName.startsWith(prefix)) {
+    patientName = `${prefix}${patientName}`;
+  }
   const rawHn = rawPayload.hn || rawPayload.patientId || (fields.find(f => f.name && f.name.includes('คนไข้'))?.value?.match(/HN[^\s)]+/)?.[0]) || '';
   const phone = rawPayload.phone || (fields.find(f => f.name && f.name.includes('เบอร์'))?.value) || '';
   const cleanPhone = cleanDigitsPhone(phone);
@@ -1512,20 +1526,23 @@ export function buildDiscordFlexPayload({
 
     const { date: dateStr, time: timeStr } = splitDateTime(rawPayload.datetime || (fields.find(f => f.name && f.name.includes('วัน'))?.value), rawPayload.time);
     const doctor = rawPayload.doctor || (fields.find(f => f.name && f.name.includes('แพทย์'))?.value) || '-';
-    const serviceType = rawPayload.serviceType || '-';
-    const reason = rawPayload.reason || (fields.find(f => f.name && (f.name.includes('บริการ') || f.name.includes('สาเหตุ') || f.name.includes('อาการ'))))?.value || '-';
+    const rawService = rawPayload.serviceType || rawPayload.service || (fields.find(f => f.name && (f.name.includes('ประเภทบริการ') || f.name.includes('บริการ')) && !f.name.includes('สาเหตุ'))?.value) || '';
+    const rawReason = rawPayload.reason || (fields.find(f => f.name && (f.name.includes('อาการ') || f.name.includes('สาเหตุ')) && !f.name.includes('ประเภทบริการ'))?.value) || '';
+    const serviceType = (rawService && rawService !== '-') ? rawService : (rawReason && rawReason !== '-' ? rawReason : '-');
+    const reason = (rawService && rawService !== '-' && rawReason && rawReason !== rawService) ? rawReason : (rawReason && rawReason !== serviceType ? rawReason : '');
 
-    const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
+    const hasTitle = patientName.startsWith('คุณ') || patientName.startsWith('นาย') || patientName.startsWith('นาง') || patientName.startsWith('ด.ช.') || patientName.startsWith('ด.ญ.');
+    const displayName = hasTitle ? patientName : `คุณ${patientName}`;
     const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
     const patientLine = hnDisplay ? `👤 **${displayName}** (${hnDisplay})` : `👤 **${displayName}**`;
 
     let serviceOrReason = '-';
     if (serviceType && serviceType !== '-' && reason && reason !== '-') {
       serviceOrReason = serviceType === reason ? serviceType : `${serviceType} / ${reason}`;
-    } else if (reason && reason !== '-') {
-      serviceOrReason = reason;
     } else if (serviceType && serviceType !== '-') {
       serviceOrReason = serviceType;
+    } else if (reason && reason !== '-') {
+      serviceOrReason = reason;
     }
 
     const phoneDisplay = cleanPhone 
@@ -1534,24 +1551,23 @@ export function buildDiscordFlexPayload({
 
     desc = `${patientLine}\n` +
            `📅 **วันเวลานัด:** ${dateStr} ${timeStr}\n` +
-           `👨‍⚕️ **แพทย์ผู้ตรวจ:** ${doctor}\n` +
-           `📋 **บริการ / อาการ:** ${serviceOrReason}\n` +
-           `📞 **เบอร์ติดต่อ:** ${phoneDisplay}\n` +
-           `🏷️ **สถานะ:** ${formattedStatus}` +
-           (rawPayload.postponedCount ? `\n🔄 **เลื่อนแล้ว:** ${rawPayload.postponedCount} ครั้ง` : '');
+           `👩‍⚕️ **แพทย์:** ${doctor}\n` +
+           `📋 **บริการ:** ${serviceOrReason}\n` +
+           `📞 **เบอร์ติดต่อ:** ${phoneDisplay}`;
   } else if (eventType === 'pos') {
-    color = 0x0284c7; // Matches Blue
-    const totalAmount = rawPayload.grandTotal || (fields.find(f => f.name && f.name.includes('ยอดชำระ'))?.value?.replace(/[^\d.]/g, '')) || 0;
-    const receiptNo = rawPayload.receiptId || (fields.find(f => f.name && f.name.includes('เลขที่บิล'))?.value) || '-';
+    color = 0x0284c7; // Sky Blue
+    const receiptNo = rawPayload.receiptId || rawPayload.receiptNo || (fields.find(f => f.name && f.name.includes('เลขที่'))?.value) || '-';
+    const totalAmount = rawPayload.grandTotal || rawPayload.total || (fields.find(f => f.name && f.name.includes('ยอดชำระ'))?.value?.replace(/[^\d.]/g, '')) || 0;
+    const dateStr = rawPayload.datetime || rawPayload.date || (fields.find(f => f.name && f.name.includes('วัน'))?.value) || new Date().toLocaleDateString('th-TH');
     const payMethod = rawPayload.paymentMethod || (fields.find(f => f.name && f.name.includes('ช่องทาง'))?.value) || 'เงินสด';
     const staff = rawPayload.staff || (fields.find(f => f.name && f.name.includes('ผู้ทำรายการ'))?.value) || 'เจ้าหน้าที่';
-    const dateStr = rawPayload.datetime || new Date().toLocaleDateString('th-TH');
-    const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
+    const hasTitle = patientName.startsWith('คุณ') || patientName.startsWith('นาย') || patientName.startsWith('นาง') || patientName.startsWith('ด.ช.') || patientName.startsWith('ด.ญ.');
+    const displayName = hasTitle ? patientName : `คุณ${patientName}`;
     const phoneDisplay = cleanPhone 
       ? `[${phone}](${webappUrl}/api/call?tel=${cleanPhone})` 
       : (phone || '-');
 
-    embedTitle = `💳 รับชำระเงิน POS • [ ฿${Number(totalAmount).toLocaleString()} ]`;
+    embedTitle = `💵 ชำระเงิน POS • [ ${receiptNo} ]`;
 
     desc = `👤 **${displayName}**${receiptNo && receiptNo !== '-' ? ` (${receiptNo})` : ''}\n` +
            `📅 **วันที่:** ${dateStr}\n` +
@@ -1568,10 +1584,13 @@ export function buildDiscordFlexPayload({
           ? rawDoctor 
           : (rawDoctor.includes('หมอ') ? rawDoctor : `หมอ${rawDoctor}`));
     const dateStr = rawPayload.date || (fields.find(f => f.name && f.name.includes('วัน'))?.value) || new Date().toLocaleDateString('th-TH');
-    const diagnosis = rawPayload.diagnosis || (fields.find(f => f.name && f.name.includes('วินิจฉัย'))?.value) || '-';
+    const diagnosis = (rawPayload.diagnosis && rawPayload.diagnosis !== '-') 
+      ? rawPayload.diagnosis 
+      : (rawPayload.chiefComplaint || rawPayload.cc || (fields.find(f => f.name && (f.name.includes('วินิจฉัย') || f.name.includes('อาการสำคัญ') || f.name.includes('อาการ')))?.value) || '-');
     const treatments = rawPayload.treatment || rawPayload.treatments || rawPayload.prescription || (fields.find(f => f.name && (f.name.includes('หัตถการ') || f.name.includes('รักษา'))))?.value || '-';
     const medications = rawPayload.medications || (fields.find(f => f.name && f.name.includes('ยา') && !f.name.includes('รักษา'))?.value) || '';
-    const displayName = patientName.startsWith('คุณ') ? patientName : `คุณ${patientName}`;
+    const hasTitle = patientName.startsWith('คุณ') || patientName.startsWith('นาย') || patientName.startsWith('นาง') || patientName.startsWith('ด.ช.') || patientName.startsWith('ด.ญ.');
+    const displayName = hasTitle ? patientName : `คุณ${patientName}`;
     const hnDisplay = rawHn ? (rawHn.startsWith('HN') ? rawHn : `HN${rawHn}`) : '';
     const phoneDisplay = cleanPhone 
       ? `[${phone}](${webappUrl}/api/call?tel=${cleanPhone})` 

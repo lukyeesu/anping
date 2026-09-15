@@ -1418,7 +1418,18 @@ const POSSystem = ({
                 paymentMethod: payMethodStr,
                 staff: currentUser?.name || currentUser?.username || 'เจ้าหน้าที่',
                 itemsCount: `${cart.length} รายการ`,
-                items: cart.map(it => ({ name: it.name || it.productName || 'สินค้า', quantity: it.quantity || 1, price: it.price || it.sellingPrice || 0 })),
+                items: cart.map(it => {
+                    const p = it.product || it;
+                    const qty = Number(it.quantity) || 1;
+                    const unitPrice = Number(p.price ?? p.sellingPrice ?? 0);
+                    return {
+                        id: p.id || '',
+                        name: p.name || p.productName || p.courseName || 'สินค้า/บริการ',
+                        quantity: qty,
+                        price: unitPrice,
+                        total: unitPrice * qty
+                    };
+                }),
                 branch: currentBranch?.name || 'สาขาหลัก',
                 date: new Date().toLocaleDateString('th-TH'),
                 datetime: new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.'

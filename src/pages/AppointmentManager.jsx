@@ -514,7 +514,8 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                 { name: '📅 วันเวลานัด', value: payload.datetime || '-', inline: true },
                 { name: '👨‍⚕️ แพทย์', value: payload.doctor || '-', inline: true },
                 { name: '🏷️ สถานะ', value: apptStatusThai, inline: true },
-                { name: '📋 บริการ / สาเหตุ', value: payload.reason || payload.serviceType || '-', inline: true },
+                { name: '🏷️ ประเภทบริการ', value: payload.serviceType || payload.service || '-', inline: true },
+                ...(payload.reason ? [{ name: '📋 อาการ', value: payload.reason, inline: true }] : []),
                 { name: '📞 เบอร์ติดต่อ', value: Array.isArray(cleanPhones) ? cleanPhones.join(', ') : (phonePayload || '-'), inline: true }
             ],
             rawPayload: {
@@ -524,7 +525,9 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                 datetime: payload.datetime,
                 doctor: payload.doctor,
                 status: apptStatusThai,
-                reason: payload.reason || payload.serviceType,
+                serviceType: payload.serviceType || payload.service || '',
+                service: payload.serviceType || payload.service || '',
+                reason: payload.reason || '',
                 branch: currentBranch?.name || 'สาขาหลัก'
             },
             discordColor: 0x0ea5e9,

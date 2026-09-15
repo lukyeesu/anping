@@ -1839,10 +1839,14 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         await callAppScript('SAVE_DATA', 'Treatments', treatmentRow).catch(console.error);
 
         // 📢 ส่งการแจ้งเตือนบันทึกการรักษา (OPD) - Dual Broadcast
-        const opdPatientName = `${combinedData.firstName || ''} ${combinedData.lastName || ''}`.trim() || combinedData.name || 'คนไข้';
+        const pPrefix = (combinedData.prefix || updatedFormData.prefix || '').trim();
+        let opdPatientName = combinedData.name?.trim() || `${combinedData.firstName || ''} ${combinedData.lastName || ''}`.trim() || 'คนไข้';
+        if (pPrefix && !opdPatientName.startsWith(pPrefix)) {
+          opdPatientName = `${pPrefix}${opdPatientName}`;
+        }
         const opdHn = combinedData.hn || combinedData.id || '-';
         const opdPhone = combinedData.phone || updatedFormData.phone || (updatedFormData.phones && updatedFormData.phones[0]) || '';
-        const opdDiagnosis = recordToSave.diagnosis || recordToSave.dx || '-';
+        const opdDiagnosis = recordToSave.diagnosis || recordToSave.dx || recordToSave.chiefComplaint || recordToSave.chief_complaint || recordToSave.cc || '-';
         const opdTreatment = (Array.isArray(validTx) && validTx.length > 0)
           ? validTx.join(', ')
           : (recordToSave.treatmentDetail || recordToSave.note || recordToSave.treatment || '-');
@@ -1867,6 +1871,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             phone: opdPhone,
             doctor: opdDoctor,
             diagnosis: opdDiagnosis,
+            chiefComplaint: recordToSave.chiefComplaint || recordToSave.chief_complaint || recordToSave.cc || '',
             treatment: opdTreatment,
             treatments: opdTreatment,
             branch: currentBranch?.name || 'สาขาหลัก',
