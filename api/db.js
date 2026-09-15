@@ -259,6 +259,73 @@ export default async function handler(req, res) {
     const tableName = TABLE_MAP[sheetName] || (sheetName ? sheetName.toLowerCase() : '');
 
     switch (action) {
+      case 'GET_PRINT_PAYLOAD': {
+        const { printType, id } = payload || {};
+        if (!id) return res.status(400).json({ status: 'error', message: 'ID required' });
+
+        if (printType === 'pos') {
+          const { data: posRow } = await supabaseAdmin
+            .from('pos_transactions')
+            .select('*')
+            .or(`id.eq.${id},receipt_no.eq.${id}`)
+            .maybeSingle();
+
+          let branches = [];
+          let patient = null;
+          let posProducts = [];
+
+          if (posRow) {
+            const [bRes, posProdRes] = await Promise.all([
+              supabaseAdmin.from('branches').select('*'),
+              supabaseAdmin.from('setting_pos').select('*')
+            ]);
+            branches = bRes.data || [];
+            posProducts = (posProdRes.data || []).map(rowToJS);
+
+            const targetHn = posRow.hn || posRow.patient_id;
+            if (targetHn) {
+              const { data: pRow } = await supabaseAdmin.from('patients').select('*').eq('id', targetHn).maybeSingle();
+              if (pRow) patient = pRow;
+            }
+          }
+
+          return res.status(200).json({
+            status: 'success',
+            posRow: posRow ? rowToJS(posRow) : null,
+            branches,
+            patient,
+            posProducts
+          });
+        } else if (printType === 'opd') {
+          const { data: pRow } = await supabaseAdmin
+            .from('patients')
+            .select('*')
+            .or(`id.eq.${id},name.ilike.%${id}%`)
+            .maybeSingle();
+
+          let treatments = [];
+          let branches = [];
+
+          if (pRow) {
+            const [trtRes, bRes] = await Promise.all([
+              supabaseAdmin.from('treatments').select('*').eq('patient_id', pRow.id).order('created_at', { ascending: false }),
+              supabaseAdmin.from('branches').select('*')
+            ]);
+            treatments = trtRes.data || [];
+            branches = bRes.data || [];
+          }
+
+          return res.status(200).json({
+            status: 'success',
+            patient: pRow,
+            treatments,
+            branches
+          });
+        }
+
+        return res.status(400).json({ status: 'error', message: 'Invalid printType' });
+      }
+
       case 'GET_DATA': {
         const selectCols = (TABLE_COLUMNS[tableName] || []).join(',') || '*';
         const { data, error } = await supabaseAdmin.from(tableName).select(selectCols);

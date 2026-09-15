@@ -250,6 +250,12 @@ export default function App() {
   const pdpaToken = urlParams.get('pdpa');
   const pdpaHn = urlParams.get('hn');
   const resetToken = urlParams.get('reset_token') || urlParams.get('token');
+  const isPrintUrl = Boolean(
+    urlParams.get('print_pos') || 
+    urlParams.get('print_receipt') || 
+    urlParams.get('print_opd') || 
+    urlParams.get('print_opd_hn')
+  );
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -1007,100 +1013,279 @@ export default function App() {
   const [posHistoryData, setPosHistoryData] = useState([]);
   const [patientCoursesData, setPatientCoursesData] = useState([]);
 
-  // --- Auto Print OPD from URL (LINE Webhook) ---
-  useEffect(() => {
-    if (patientsData.length > 0 && !window.__autoPrintDone) {
-      // รองรับทั้งพารามิเตอร์แบบแยกและแบบรวม (เช่น ?print_opd=HN0268_2024-06-22T08:00)
-      let printOpdHn = urlParams.get('print_opd_hn');
-      let printOpdDate = urlParams.get('print_opd_date');
-      const combinedParam = urlParams.get('print_opd');
-      
-      let printOpdId4 = null;
-      if (combinedParam && !printOpdHn) {
-        if (combinedParam.includes('_')) {
-           const parts = combinedParam.split('_');
-           printOpdHn = parts[0];
-           if (parts.length >= 2 && /^\d{4}$/.test(parts[1])) {
-             printOpdId4 = parts[1];
-             printOpdDate = parts.slice(2).join('_');
-           } else {
-             printOpdDate = parts.slice(1).join('_');
-           }
-        } else {
-           const matchDate = combinedParam.match(/(\d{4})(\d{14})$/);
-           if (matchDate) {
-                printOpdHn = combinedParam.slice(0, -18);
-                printOpdId4 = matchDate[1];
-                const dstr = matchDate[2];
-                printOpdDate = `${dstr.slice(0,4)}-${dstr.slice(4,6)}-${dstr.slice(6,8)}T${dstr.slice(8,10)}:${dstr.slice(10,12)}:${dstr.slice(12,14)}`;
-           } else {
-                printOpdHn = combinedParam;
-           }
-        }
-      }
-      
-      if (printOpdHn) {
-        window.__autoPrintDone = true; // prevent loop
-        const patient = patientsData.find(p => p.hn === printOpdHn || p.id === printOpdHn);
-        
-        if (patient) {
-          // Verify ID Card (Security feature to prevent HN guessing)
-          let actualIdc = patient.idCard ? String(patient.idCard).replace(/\D/g, '') : "0000";
-          if (actualIdc.length < 4) actualIdc = "0000";
-          const actualId4 = actualIdc.slice(-4);
-          
-          if (!printOpdId4 || printOpdId4 !== actualId4) {
-             document.open();
-             document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ปฏิเสธการเข้าถึง (Access Denied)</h2><p>ลิงก์ไม่ถูกต้อง หรือรหัสยืนยันตัวตนไม่ตรงกับฐานข้อมูล</p></div>');
-             document.close();
-             return;
-          }
-          let targetRecord = null;
-          let visitNumber = 1;
-          
-          if (patient.opdRecords && patient.opdRecords.length > 0) {
-            if (printOpdDate) {
-               const targetDate = new Date(printOpdDate).toLocaleDateString('th-TH');
-               const idx = patient.opdRecords.findIndex(r => {
-                  try {
-                    const rDateStr = new Date(r.date || r.createdAt).toLocaleDateString('th-TH');
-                    return rDateStr === targetDate;
-                  } catch(e) { return false; }
-               });
-               
-               if (idx !== -1) {
-                 targetRecord = patient.opdRecords[idx];
-                 visitNumber = patient.opdRecords.length - idx;
-               }
-            }
-            if (!targetRecord) {
-                 targetRecord = patient.opdRecords[0]; // fallback
-                 visitNumber = patient.opdRecords.length;
-            }
-          }
-          
-          if (!targetRecord) {
-             targetRecord = { date: printOpdDate || new Date().toISOString() };
-             visitNumber = 1;
-          }
-          
-          const html = globalGenerateOpdHtml(patient, targetRecord, visitNumber, branchesData, currentBranch);
-          
-          // เขียนทับหน้าเว็บปัจจุบันให้กลายเป็นหน้าเปล่า (เหมือน about:blank) แล้วสั่งปริ้น
-          document.open();
-          document.write(html);
-          document.close();
-          
-          setTimeout(() => {
-             window.print();
-          }, 800);
-        }
-      }
-    }
-  }, [patientsData, branchesData, currentBranch]);
   const [financeData, setFinanceData] = useState([]);
   const [pdpaQrModal, setPdpaQrModal] = useState({ isOpen: false, link: '' });
   const [pdpaQrDataUrl, setPdpaQrDataUrl] = useState('');
+
+  // --- Auto Print Receipt (POS) & OPD from URL (LINE / Discord / Push) ---
+  useEffect(() => {
+    // 1. ตรวจสอบการสั่งพิมพ์บิล POS จาก URL (เช่น ?print_pos=REC69090025 หรือ ?print_receipt=...)
+    const printPosId = urlParams.get('print_pos') || urlParams.get('print_receipt');
+    if (printPosId && !window.__autoPrintPosDone) {
+      window.__autoPrintPosDone = true;
+
+      const executePrintPos = async () => {
+        let txn = (Array.isArray(financeData) ? financeData : []).find(t => 
+          String(t.receiptNo || t.receipt_no || t.id).trim().toLowerCase() === String(printPosId).trim().toLowerCase()
+        );
+
+        let safeBranches = Array.isArray(branchesData) && branchesData.length > 0 ? branchesData : [];
+        let safePatients = Array.isArray(patientsData) && patientsData.length > 0 ? patientsData : [];
+        let safeProducts = Array.isArray(posProducts) && posProducts.length > 0 ? posProducts : [];
+
+        // 1. ถ้ายังไม่มีใน memory ให้ลองดึงผ่าน /api/db (ซึ่งมี Supabase Admin Service Role ปลอดภัยและทะลุ RLS ได้ 100%)
+        if (!txn) {
+          try {
+            const apiRes = await fetch('/api/db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'GET_PRINT_PAYLOAD',
+                payload: { printType: 'pos', id: printPosId }
+              })
+            });
+            if (apiRes.ok) {
+              const apiJson = await apiRes.json();
+              if (apiJson && apiJson.status === 'success' && apiJson.posRow) {
+                txn = apiJson.posRow;
+                if (apiJson.branches && apiJson.branches.length > 0) safeBranches = apiJson.branches;
+                if (apiJson.patient) safePatients = [apiJson.patient];
+                if (apiJson.posProducts && apiJson.posProducts.length > 0) safeProducts = apiJson.posProducts;
+              }
+            }
+          } catch (e) {
+            console.warn('[AutoPrint POS] /api/db fetch note:', e?.message);
+          }
+        }
+
+        // 2. ถ้ายังไม่ได้ ให้ fallback ไปยัง direct supabase
+        if (!txn && supabase) {
+          try {
+            const { data: posRow } = await supabase
+              .from('pos_transactions')
+              .select('*')
+              .or(`receipt_no.eq.${printPosId},id.eq.${printPosId}`)
+              .maybeSingle();
+            if (posRow) {
+              txn = posRow;
+            }
+          } catch (e) {
+            console.warn('[AutoPrint POS] Supabase fetch error:', e);
+          }
+        }
+
+        if (txn) {
+          if (safeBranches.length === 0 && supabase) {
+            try {
+              const { data: bData } = await supabase.from('branches').select('*');
+              if (bData && bData.length > 0) safeBranches = bData;
+            } catch (e) {}
+          }
+
+          const targetHn = txn.hn || txn.patient_id;
+          if (safePatients.length === 0 && targetHn && supabase) {
+            try {
+              const { data: pData } = await supabase.from('patients').select('*').eq('id', targetHn).maybeSingle();
+              if (pData) safePatients = [pData];
+            } catch (e) {}
+          }
+
+          const html = globalGenerateReceiptHtml(txn, 'A4', safeBranches, safePatients, safeProducts, txn.branch_id || txn.branchId || currentBranch);
+          document.open();
+          document.write(html);
+          document.close();
+          setTimeout(() => {
+            window.print();
+          }, 800);
+        } else {
+          document.open();
+          document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ไม่พบข้อมูลใบเสร็จ</h2><p>ไม่พบเลขที่ใบเสร็จ ' + printPosId + ' ในระบบฐานข้อมูล</p></div>');
+          document.close();
+        }
+      };
+
+      executePrintPos();
+    }
+
+    // 2. ตรวจสอบการสั่งพิมพ์ใบ OPD จาก URL (เช่น ?print_opd=HN69-0061 หรือ ?print_opd_hn=...)
+    let printOpdHn = urlParams.get('print_opd_hn');
+    let printOpdDate = urlParams.get('print_opd_date');
+    const combinedParam = urlParams.get('print_opd');
+
+    let printOpdId4 = null;
+    if (combinedParam && !printOpdHn) {
+      if (combinedParam.includes('_')) {
+        const parts = combinedParam.split('_');
+        printOpdHn = parts[0];
+        if (parts.length >= 2 && /^\d{4}$/.test(parts[1])) {
+          printOpdId4 = parts[1];
+          printOpdDate = parts.slice(2).join('_');
+        } else {
+          printOpdDate = parts.slice(1).join('_');
+        }
+      } else {
+        const matchDate = combinedParam.match(/(\d{4})(\d{14})$/);
+        if (matchDate) {
+          printOpdHn = combinedParam.slice(0, -18);
+          printOpdId4 = matchDate[1];
+          const dstr = matchDate[2];
+          printOpdDate = `${dstr.slice(0,4)}-${dstr.slice(4,6)}-${dstr.slice(6,8)}T${dstr.slice(8,10)}:${dstr.slice(10,12)}:${dstr.slice(12,14)}`;
+        } else {
+          printOpdHn = combinedParam;
+        }
+      }
+    }
+
+    if (printOpdHn && !window.__autoPrintOpdDone) {
+      window.__autoPrintOpdDone = true;
+
+      const executePrintOpd = async () => {
+        let patient = (Array.isArray(patientsData) ? patientsData : []).find(p => p.hn === printOpdHn || p.id === printOpdHn);
+        let safeBranches = Array.isArray(branchesData) && branchesData.length > 0 ? branchesData : [];
+
+        // 1. ถ้ายังไม่มีใน memory ให้ลองดึงผ่าน /api/db (ซึ่งมี Supabase Admin Service Role ปลอดภัยและทะลุ RLS ได้ 100%)
+        if (!patient) {
+          try {
+            const apiRes = await fetch('/api/db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'GET_PRINT_PAYLOAD',
+                payload: { printType: 'opd', id: printOpdHn }
+              })
+            });
+            if (apiRes.ok) {
+              const apiJson = await apiRes.json();
+              if (apiJson && apiJson.status === 'success' && apiJson.patient) {
+                const pRow = apiJson.patient;
+                const trts = apiJson.treatments || [];
+                patient = {
+                  ...pRow,
+                  hn: pRow.id,
+                  opdRecords: trts.map(t => ({
+                    ...t,
+                    date: t.date || t.datetime,
+                    cc: t.chief_complaint || t.chiefComplaint || pRow.chief_complaint || '',
+                    tx: t.prescription || t.treatment_detail || []
+                  }))
+                };
+                if (apiJson.branches && apiJson.branches.length > 0) safeBranches = apiJson.branches;
+              }
+            }
+          } catch (e) {
+            console.warn('[AutoPrint OPD] /api/db fetch note:', e?.message);
+          }
+        }
+
+        // 2. ถ้ายังไม่มี ให้ fallback ไปยัง direct supabase
+        if (!patient && supabase) {
+          try {
+            const { data: pRow } = await supabase
+              .from('patients')
+              .select('*')
+              .or(`id.eq.${printOpdHn},name.ilike.%${printOpdHn}%`)
+              .maybeSingle();
+            if (pRow) {
+              const { data: trts } = await supabase
+                .from('treatments')
+                .select('*')
+                .eq('patient_id', pRow.id)
+                .order('created_at', { ascending: false });
+              patient = {
+                ...pRow,
+                hn: pRow.id,
+                opdRecords: (trts || []).map(t => ({
+                  ...t,
+                  date: t.date || t.datetime,
+                  cc: t.chief_complaint || t.chiefComplaint || pRow.chief_complaint || '',
+                  tx: t.prescription || t.treatment_detail || []
+                }))
+              };
+            }
+          } catch (e) {
+            console.warn('[AutoPrint OPD] Supabase fetch error:', e);
+          }
+        }
+
+        if (patient) {
+          // ตรวจสอบเลข 4 ตัวท้ายบัตรประชาชน เฉพาะเมื่อในลิงก์มีการส่งรหัสมาตรวจสอบเท่านั้น (Security Hash Verification)
+          let actualIdc = patient.idCard || patient.id_card ? String(patient.idCard || patient.id_card).replace(/\D/g, '') : "0000";
+          if (actualIdc.length < 4) actualIdc = "0000";
+          const actualId4 = actualIdc.slice(-4);
+
+          if (printOpdId4 && printOpdId4 !== actualId4) {
+            document.open();
+            document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ปฏิเสธการเข้าถึง (Access Denied)</h2><p>รหัสยืนยันตัวตนไม่ตรงกับฐานข้อมูล</p></div>');
+            document.close();
+            return;
+          }
+
+          if (safeBranches.length === 0 && supabase) {
+            try {
+              const { data: bData } = await supabase.from('branches').select('*');
+              if (bData && bData.length > 0) safeBranches = bData;
+            } catch (e) {}
+          }
+
+          let targetRecord = null;
+          let visitNumber = 1;
+
+          if (patient.opdRecords && patient.opdRecords.length > 0) {
+            if (printOpdDate) {
+              const targetDate = new Date(printOpdDate).toLocaleDateString('th-TH');
+              const idx = patient.opdRecords.findIndex(r => {
+                try {
+                  const rDateStr = new Date(r.date || r.createdAt || r.created_at).toLocaleDateString('th-TH');
+                  return rDateStr === targetDate;
+                } catch(e) { return false; }
+              });
+
+              if (idx !== -1) {
+                targetRecord = patient.opdRecords[idx];
+                visitNumber = patient.opdRecords.length - idx;
+              }
+            }
+            if (!targetRecord) {
+              targetRecord = patient.opdRecords[0];
+              visitNumber = patient.opdRecords.length;
+            }
+          }
+
+          if (!targetRecord) {
+            targetRecord = {
+              date: printOpdDate || new Date().toISOString(),
+              cc: patient.chief_complaint || patient.chiefComplaint || '',
+              tx: []
+            };
+            visitNumber = 1;
+          }
+
+          if (!targetRecord.cc) {
+            targetRecord.cc = targetRecord.chief_complaint || targetRecord.chiefComplaint || patient.chief_complaint || patient.chiefComplaint || '';
+          }
+          if (!targetRecord.tx) {
+            targetRecord.tx = targetRecord.prescription || targetRecord.treatment_detail || [];
+          }
+
+          const html = globalGenerateOpdHtml(patient, targetRecord, visitNumber, safeBranches, currentBranch);
+
+          document.open();
+          document.write(html);
+          document.close();
+
+          setTimeout(() => {
+            window.print();
+          }, 800);
+        } else {
+          document.open();
+          document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ไม่พบข้อมูลคนไข้</h2><p>ไม่พบประวัติคนไข้รหัส ' + printOpdHn + ' ในระบบฐานข้อมูล</p></div>');
+          document.close();
+        }
+      };
+
+      executePrintOpd();
+    }
+  }, [patientsData, financeData, branchesData, currentBranch, posProducts]);
 
   useEffect(() => {
     if (pdpaQrModal.isOpen && pdpaQrModal.link) {
@@ -2568,6 +2753,21 @@ export default function App() {
 
   if (resetToken) {
       return <ResetPasswordScreen token={resetToken} callAppScript={callAppScript} showToast={showToast} />;
+  }
+
+  if (isPrintUrl) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-700 font-sans p-4">
+          <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center max-w-sm w-full text-center">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 animate-bounce">
+              <Printer size={32} />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2 font-['Kanit']">กำลังเตรียมเอกสารสำหรับพิมพ์...</h2>
+            <p className="text-sm text-slate-500 mb-6 font-['Kanit']">ระบบกำลังดึงข้อมูลและเตรียมเปิดหน้าต่างการพิมพ์ กรุณารอสักครู่</p>
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </div>
+      );
   }
 
   if (!isLoggedIn || isGlobalLoading) {

@@ -941,7 +941,9 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
     const { clinicName, clinicAddress, clinicPhone, logoUrl } = bInfo;
 
     const dateStr = record.datetime ? record.datetime.split(' ')[0] : '-';
-    const txText = Array.isArray(record.tx) ? record.tx.filter(t => t).join(', ') : (record.tx || '-');
+    const txText = Array.isArray(record.tx) 
+        ? record.tx.filter(t => t).join(', ') 
+        : (record.tx || (Array.isArray(record.prescription) ? record.prescription.filter(t => t).join(', ') : (record.prescription || record.treatment_detail || '-')));
 
     let doctorNameDisplay = (record && (record.doctor || record.doctor_name || record.doctorName) || '').trim();
     if (!doctorNameDisplay || doctorNameDisplay === '-') {
@@ -1000,10 +1002,20 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
             @media print {
                body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
                .value, .val-box { border-image: repeating-linear-gradient(to right, black 0, black 1px, transparent 1px, transparent 4px) 1 !important; }
+               .no-print { display: none !important; }
             }
+            .no-print-bar { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 99999; }
+            .no-print-btn { background: #0284c7; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: background 0.2s; }
+            .no-print-btn:hover { background: #0369a1; }
+            .no-print-btn.close { background: #64748b; }
+            .no-print-btn.close:hover { background: #475569; }
         </style>
     </head>
     <body>
+        <div class="no-print no-print-bar">
+            <button class="no-print-btn" onclick="window.print()">🖨️ พิมพ์เอกสาร</button>
+            <button class="no-print-btn close" onclick="window.close()">✕ ปิด</button>
+        </div>
         <div class="container">
             <div class="header">
                 <div style="display: flex; gap: 15px; align-items: center;">
@@ -1055,7 +1067,7 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
                 <div class="left-column">
                     <div class="cc-section">
                         <div class="cc-title">อาการสำคัญ:</div>
-                        <div class="cc-content">${(record.cc || '').replace(/\n/g, '<br/>')}</div>
+                        <div class="cc-content">${(record.cc || record.chief_complaint || record.chiefComplaint || pInfo.chiefComplaint || '').replace(/\n/g, '<br/>')}</div>
                     </div>
                     <div class="tx-section">
                         <div class="tx-title">การรักษาที่ให้:</div>
@@ -1423,10 +1435,19 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                 .footer-label { font-weight: 600; width: 85px; display: flex; align-items: center; gap: 6px; }
                 .signature-area { margin-top: 60px; display: flex; justify-content: space-around; }
                 .signature-box { text-align: center; width: 250px; }
-                @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+                @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } }
+                .no-print-bar { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 99999; }
+                .no-print-btn { background: #0ea5e9; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: background 0.2s; }
+                .no-print-btn:hover { background: #0284c7; }
+                .no-print-btn.close { background: #64748b; }
+                .no-print-btn.close:hover { background: #475569; }
             </style>
         </head>
         <body>
+            <div class="no-print no-print-bar">
+                <button class="no-print-btn" onclick="window.print()">🖨️ พิมพ์ใบเสร็จ</button>
+                <button class="no-print-btn close" onclick="window.close()">✕ ปิด</button>
+            </div>
             ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
             <div class="container">
                 <div style="display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 15px;">
@@ -1569,9 +1590,17 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                 .divider-thick { border-bottom: 2px solid #000; margin: 10px 0; }
                 .summary-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
                 .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
+                @media print { .no-print { display: none !important; } }
+                .no-print-bar { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 99999; }
+                .no-print-btn { background: #0ea5e9; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+                .no-print-btn.close { background: #64748b; }
             </style>
         </head>
         <body>
+            <div class="no-print no-print-bar">
+                <button class="no-print-btn" onclick="window.print()">🖨️ พิมพ์สลิป</button>
+                <button class="no-print-btn close" onclick="window.close()">✕ ปิด</button>
+            </div>
             <div class="slip-container">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
                     ${logoUrl ? `<img src="${logoUrl}" style="width: 45px; height: 45px; flex-shrink: 0; object-fit: contain; border-radius: 50%;" />` : ''}
