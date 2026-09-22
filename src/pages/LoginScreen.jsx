@@ -18,7 +18,7 @@ import { theme } from '../global/theme';
 
 import { supabase } from '../lib/supabase';
 
-const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
+const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading, isPrintUrl }) => {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
@@ -160,6 +160,18 @@ const LoginScreen = ({ onLogin, callAppScript, isGlobalLoading }) => {
                 <h1 className="text-2xl font-black text-slate-800 kanit-text mb-2">อันผิงคลินิก (Anping Clinic)</h1>
                 <p className="text-sm font-medium text-slate-500 kanit-text">ระบบจัดการคลินิกอัจฉริยะ</p>
             </div>
+
+            {isPrintUrl && (
+                <div className="mb-6 p-3.5 bg-amber-50 border border-amber-300/80 rounded-xl flex items-start sm:items-center gap-3 text-amber-900 text-xs sm:text-sm kanit-text font-medium shadow-sm animate-fade-in">
+                    <div className="p-1.5 bg-amber-100 rounded-lg text-amber-700 shrink-0 mt-0.5 sm:mt-0">
+                        <Lock size={18} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-amber-950">เข้าสู่ระบบเพื่อพิมพ์เอกสาร</div>
+                        <p className="text-amber-800/90 text-xs mt-0.5">ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA) กรุณาเข้าสู่ระบบก่อน จึงจะสามารถเปิดดูและพิมพ์เอกสารนี้ได้</p>
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <div className="mb-6 p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-rose-600 text-sm kanit-text font-medium animate-shake">

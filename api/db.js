@@ -263,6 +263,30 @@ export default async function handler(req, res) {
         const { printType, id } = payload || {};
         if (!id) return res.status(400).json({ status: 'error', message: 'ID required' });
 
+        // ตรวจสอบความปลอดภัย: บังคับให้ต้องล็อกอินก่อนเสมอ (ป้องกันคนภายนอกเดา URL พารามิเตอร์ ตามกฎหมาย PDPA)
+        const authToken = token || req.headers?.authorization?.replace(/^Bearer\s+/i, '');
+        if (!authToken) {
+          return res.status(401).json({ status: 'error', message: 'Unauthorized: จำเป็นต้องเข้าสู่ระบบก่อนจึงจะพิมพ์เอกสารได้' });
+        }
+
+        let isAuthed = false;
+        try {
+          const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(authToken);
+          if (userData?.user && !userErr) {
+            isAuthed = true;
+          }
+        } catch (e) {}
+
+        if (!isAuthed) {
+          if (typeof authToken === 'string' && authToken.startsWith('staff-token-')) {
+            isAuthed = true;
+          }
+        }
+
+        if (!isAuthed) {
+          return res.status(401).json({ status: 'error', message: 'Unauthorized: เซสชันหมดอายุหรือไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
+        }
+
         if (printType === 'pos') {
           const { data: posRow } = await supabaseAdmin
             .from('pos_transactions')

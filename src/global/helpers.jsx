@@ -1014,7 +1014,7 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
     <body>
         <div class="no-print no-print-bar">
             <button class="no-print-btn" onclick="window.print()">🖨️ พิมพ์เอกสาร</button>
-            <button class="no-print-btn close" onclick="window.close()">✕ ปิด</button>
+            <button class="no-print-btn close" onclick="if(window.opener){window.close();}else{window.location.href='/';}">✕ ปิด</button>
         </div>
         <div class="container">
             <div class="header">
@@ -1446,7 +1446,7 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
         <body>
             <div class="no-print no-print-bar">
                 <button class="no-print-btn" onclick="window.print()">🖨️ พิมพ์ใบเสร็จ</button>
-                <button class="no-print-btn close" onclick="window.close()">✕ ปิด</button>
+                <button class="no-print-btn close" onclick="if(window.opener){window.close();}else{window.location.href='/';}">✕ ปิด</button>
             </div>
             ${['(ต้นฉบับ)', '(สำเนา)'].map(docType => `
             <div class="container">
@@ -1599,7 +1599,7 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
         <body>
             <div class="no-print no-print-bar">
                 <button class="no-print-btn" onclick="window.print()">🖨️ พิมพ์สลิป</button>
-                <button class="no-print-btn close" onclick="window.close()">✕ ปิด</button>
+                <button class="no-print-btn close" onclick="if(window.opener){window.close();}else{window.location.href='/';}">✕ ปิด</button>
             </div>
             <div class="slip-container">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">

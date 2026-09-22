@@ -254,7 +254,9 @@ export default function App() {
     urlParams.get('print_pos') || 
     urlParams.get('print_receipt') || 
     urlParams.get('print_opd') || 
-    urlParams.get('print_opd_hn')
+    urlParams.get('print_opd_hn') ||
+    urlParams.get('print_cert') ||
+    urlParams.get('print_bill')
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -1019,12 +1021,20 @@ export default function App() {
 
   // --- Auto Print Receipt (POS) & OPD from URL (LINE / Discord / Push) ---
   useEffect(() => {
+    // 🔒 PDPA Security Check: ต้องผ่านการยืนยันตัวตน (เข้าสู่ระบบ) ก่อนเสมอ
+    // หากยังไม่ได้เข้าสู่ระบบ ห้ามดึงข้อมูลหรือสั่งพิมพ์เด็ดขาด เพื่อป้องกันการเดา URL หรือรั่วไหลของข้อมูลเวชระเบียน
+    if (!isLoggedIn) {
+      return;
+    }
+
     // 1. ตรวจสอบการสั่งพิมพ์บิล POS จาก URL (เช่น ?print_pos=REC69090025 หรือ ?print_receipt=...)
     const printPosId = urlParams.get('print_pos') || urlParams.get('print_receipt');
     if (printPosId && !window.__autoPrintPosDone) {
       window.__autoPrintPosDone = true;
 
       const executePrintPos = async () => {
+        const sessionToken = localStorage.getItem('clinic_session_token') || '';
+
         let txn = (Array.isArray(financeData) ? financeData : []).find(t => 
           String(t.receiptNo || t.receipt_no || t.id).trim().toLowerCase() === String(printPosId).trim().toLowerCase()
         );
@@ -1038,12 +1048,26 @@ export default function App() {
           try {
             const apiRes = await fetch('/api/db', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+              },
               body: JSON.stringify({
                 action: 'GET_PRINT_PAYLOAD',
-                payload: { printType: 'pos', id: printPosId }
+                payload: { printType: 'pos', id: printPosId },
+                token: sessionToken
               })
             });
+
+            if (apiRes.status === 401) {
+              console.warn('[AutoPrint POS] Session unauthorized. Redirecting to login.');
+              window.__autoPrintPosDone = false;
+              localStorage.removeItem('clinic_isLoggedIn');
+              localStorage.removeItem('clinic_session_token');
+              setIsLoggedIn(false);
+              return;
+            }
+
             if (apiRes.ok) {
               const apiJson = await apiRes.json();
               if (apiJson && apiJson.status === 'success' && apiJson.posRow) {
@@ -1058,7 +1082,7 @@ export default function App() {
           }
         }
 
-        // 2. ถ้ายังไม่ได้ ให้ fallback ไปยัง direct supabase
+        // 2. ถ้ายังไม่ได้ ให้ fallback ไปยัง direct supabase (สำหรับกรณีออนไลน์ที่มีเซสชัน)
         if (!txn && supabase) {
           try {
             const { data: posRow } = await supabase
@@ -1099,7 +1123,14 @@ export default function App() {
           }, 800);
         } else {
           document.open();
-          document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ไม่พบข้อมูลใบเสร็จ</h2><p>ไม่พบเลขที่ใบเสร็จ ' + printPosId + ' ในระบบฐานข้อมูล</p></div>');
+          document.write(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif; text-align: center; margin-top: 15%; color: #334155; padding: 24px;">
+              <div style="font-size: 52px; margin-bottom: 16px;">⚠️</div>
+              <h2 style="color: #ef4444; font-size: 22px; margin-bottom: 8px;">ไม่พบข้อมูลใบเสร็จ</h2>
+              <p style="color: #64748b; font-size: 15px; margin-bottom: 24px;">ไม่พบข้อมูลใบเสร็จในระบบ หรือสิทธิ์การเข้าถึงข้อมูลไม่เพียงพอ</p>
+              <a href="/" style="display: inline-block; background: #0ea5e9; color: white; padding: 10px 24px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(14,165,233,0.25);">กลับสู่หน้าหลัก</a>
+            </div>
+          `);
           document.close();
         }
       };
@@ -1140,6 +1171,7 @@ export default function App() {
       window.__autoPrintOpdDone = true;
 
       const executePrintOpd = async () => {
+        const sessionToken = localStorage.getItem('clinic_session_token') || '';
         let patient = (Array.isArray(patientsData) ? patientsData : []).find(p => p.hn === printOpdHn || p.id === printOpdHn);
         let safeBranches = Array.isArray(branchesData) && branchesData.length > 0 ? branchesData : [];
 
@@ -1148,12 +1180,26 @@ export default function App() {
           try {
             const apiRes = await fetch('/api/db', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+              },
               body: JSON.stringify({
                 action: 'GET_PRINT_PAYLOAD',
-                payload: { printType: 'opd', id: printOpdHn }
+                payload: { printType: 'opd', id: printOpdHn },
+                token: sessionToken
               })
             });
+
+            if (apiRes.status === 401) {
+              console.warn('[AutoPrint OPD] Session unauthorized. Redirecting to login.');
+              window.__autoPrintOpdDone = false;
+              localStorage.removeItem('clinic_isLoggedIn');
+              localStorage.removeItem('clinic_session_token');
+              setIsLoggedIn(false);
+              return;
+            }
+
             if (apiRes.ok) {
               const apiJson = await apiRes.json();
               if (apiJson && apiJson.status === 'success' && apiJson.patient) {
@@ -1177,7 +1223,7 @@ export default function App() {
           }
         }
 
-        // 2. ถ้ายังไม่มี ให้ fallback ไปยัง direct supabase
+        // 2. ถ้ายังไม่มี ให้ fallback ไปยัง direct supabase (สำหรับกรณีออนไลน์ที่มีเซสชัน)
         if (!patient && supabase) {
           try {
             const { data: pRow } = await supabase
@@ -1215,7 +1261,14 @@ export default function App() {
 
           if (printOpdId4 && printOpdId4 !== actualId4) {
             document.open();
-            document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ปฏิเสธการเข้าถึง (Access Denied)</h2><p>รหัสยืนยันตัวตนไม่ตรงกับฐานข้อมูล</p></div>');
+            document.write(`
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif; text-align: center; margin-top: 15%; color: #334155; padding: 24px;">
+                <div style="font-size: 52px; margin-bottom: 16px;">🚫</div>
+                <h2 style="color: #ef4444; font-size: 22px; margin-bottom: 8px;">ปฏิเสธการเข้าถึง (Access Denied)</h2>
+                <p style="color: #64748b; font-size: 15px; margin-bottom: 24px;">รหัสยืนยันตัวตนไม่ตรงกับฐานข้อมูล เพื่อความปลอดภัยตาม PDPA</p>
+                <a href="/" style="display: inline-block; background: #0ea5e9; color: white; padding: 10px 24px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(14,165,233,0.25);">กลับสู่หน้าหลัก</a>
+              </div>
+            `);
             document.close();
             return;
           }
@@ -1278,14 +1331,21 @@ export default function App() {
           }, 800);
         } else {
           document.open();
-          document.write('<div style="font-family:sans-serif;text-align:center;margin-top:20%;color:#ef4444;"><h2>⚠️ ไม่พบข้อมูลคนไข้</h2><p>ไม่พบประวัติคนไข้รหัส ' + printOpdHn + ' ในระบบฐานข้อมูล</p></div>');
+          document.write(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif; text-align: center; margin-top: 15%; color: #334155; padding: 24px;">
+              <div style="font-size: 52px; margin-bottom: 16px;">⚠️</div>
+              <h2 style="color: #ef4444; font-size: 22px; margin-bottom: 8px;">ไม่พบข้อมูลคนไข้</h2>
+              <p style="color: #64748b; font-size: 15px; margin-bottom: 24px;">ไม่พบประวัติคนไข้ในระบบฐานข้อมูล หรือสิทธิ์การเข้าถึงข้อมูลไม่เพียงพอ</p>
+              <a href="/" style="display: inline-block; background: #0ea5e9; color: white; padding: 10px 24px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(14,165,233,0.25);">กลับสู่หน้าหลัก</a>
+            </div>
+          `);
           document.close();
         }
       };
 
       executePrintOpd();
     }
-  }, [patientsData, financeData, branchesData, currentBranch, posProducts]);
+  }, [isLoggedIn, patientsData, financeData, branchesData, currentBranch, posProducts]);
 
   useEffect(() => {
     if (pdpaQrModal.isOpen && pdpaQrModal.link) {
@@ -2755,22 +2815,8 @@ export default function App() {
       return <ResetPasswordScreen token={resetToken} callAppScript={callAppScript} showToast={showToast} />;
   }
 
-  if (isPrintUrl) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-700 font-sans p-4">
-          <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center max-w-sm w-full text-center">
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 animate-bounce">
-              <Printer size={32} />
-            </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2 font-['Kanit']">กำลังเตรียมเอกสารสำหรับพิมพ์...</h2>
-            <p className="text-sm text-slate-500 mb-6 font-['Kanit']">ระบบกำลังดึงข้อมูลและเตรียมเปิดหน้าต่างการพิมพ์ กรุณารอสักครู่</p>
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        </div>
-      );
-  }
-
-  if (!isLoggedIn || isGlobalLoading) {
+  // 🔒 PDPA Compliance: หากยังไม่ได้เข้าสู่ระบบ ต้องให้เข้าสู่ระบบก่อนเสมอ แม้จะเป็นการกดลิงก์พิมพ์เอกสาร
+  if (!isLoggedIn || (isGlobalLoading && !isPrintUrl)) {
       return (
         <>
           <style dangerouslySetInnerHTML={{__html: `
@@ -2827,15 +2873,31 @@ export default function App() {
 
             @keyframes shake {
               0%, 100% { transform: translateX(0); }
-              10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+              100%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
               20%, 40%, 60%, 80% { transform: translateX(5px); }
             }
             .animate-shake {
               animation: shake 0.6s ease-in-out;
             }
           `}} />
-          <LoginScreen onLogin={handleLogin} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} />
+          <LoginScreen onLogin={handleLogin} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} isPrintUrl={isPrintUrl} />
         </>
+      );
+  }
+
+  // หากล็อกอินเรียบร้อยแล้ว และเปิดมาจากลิงก์พิมพ์ ให้แสดงหน้าจอเตรียมพิมพ์
+  if (isPrintUrl) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-700 font-sans p-4">
+          <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center max-w-sm w-full text-center">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 animate-bounce">
+              <Printer size={32} />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2 font-['Kanit']">กำลังเตรียมเอกสารสำหรับพิมพ์...</h2>
+            <p className="text-sm text-slate-500 mb-6 font-['Kanit']">ระบบกำลังดึงข้อมูลและเตรียมเปิดหน้าต่างการพิมพ์ กรุณารอสักครู่</p>
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </div>
       );
   }
 
