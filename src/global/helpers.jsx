@@ -197,12 +197,15 @@ export const generateNextHN = (patients) => {
   if (!activePatients || activePatients.length === 0) return `HN${yearSuffix}-0001`;
   
   let maxNum = 0;
+  // กรองเฉพาะคนไข้ที่มีรหัสขึ้นต้นด้วยปีปัจจุบัน (เช่น HN70-0001, HN70/0001, 70-0001) เพื่อรีเซ็ตเป็น 0001 ทุกปีใหม่
+  const currentYearHnRegex = new RegExp(`^(?:HN)?${yearSuffix}\\s*[-_/]?\\s*(\\d+)`, 'i');
+
   activePatients.forEach(p => {
-     const hnString = p.hn || p.id || '';
-     const numMatch = hnString.match(/(\d+)$/);
-     if (numMatch) {
-         const num = parseInt(numMatch[1], 10);
-         if (num > maxNum) maxNum = num;
+     const hnString = String(p.hn || p.id || '').trim();
+     const match = hnString.match(currentYearHnRegex);
+     if (match) {
+         const num = parseInt(match[1], 10);
+         if (!isNaN(num) && num > maxNum) maxNum = num;
      }
   });
   

@@ -505,7 +505,7 @@ const POSSystem = ({
             .order('created_at', { ascending: false })
             .limit(10);
 
-          if (pId.startsWith('HN69-')) {
+          if (/^HN\d{2}-/i.test(pId)) {
             query = query.or(`patient_id.eq.${pId},patient_id.ilike.%${digitsOnly}`);
           } else if (digitsOnly) {
             query = query.or(`patient_id.eq.${pId},patient_id.ilike.%${digitsOnly}%`);
