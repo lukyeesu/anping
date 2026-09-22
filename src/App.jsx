@@ -246,17 +246,29 @@ const mockPatients = [
 
 export default function App() {
 
+  const getUrlParam = (key) => {
+    if (typeof window === 'undefined') return null;
+    const searchParams = new URLSearchParams(window.location.search);
+    const searchVal = searchParams.get(key);
+    if (searchVal) return searchVal;
+    if (window.location.hash && window.location.hash.includes('?')) {
+      const hashParams = new URLSearchParams(window.location.hash.slice(window.location.hash.indexOf('?') + 1));
+      return hashParams.get(key);
+    }
+    return null;
+  };
+
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const pdpaToken = urlParams.get('pdpa');
-  const pdpaHn = urlParams.get('hn');
-  const resetToken = urlParams.get('reset_token') || urlParams.get('token');
+  const pdpaToken = getUrlParam('pdpa');
+  const pdpaHn = getUrlParam('hn');
+  const resetToken = getUrlParam('reset_token') || getUrlParam('token');
   const isPrintUrl = Boolean(
-    urlParams.get('print_pos') || 
-    urlParams.get('print_receipt') || 
-    urlParams.get('print_opd') || 
-    urlParams.get('print_opd_hn') ||
-    urlParams.get('print_cert') ||
-    urlParams.get('print_bill')
+    getUrlParam('print_pos') || 
+    getUrlParam('print_receipt') || 
+    getUrlParam('print_opd') || 
+    getUrlParam('print_opd_hn') ||
+    getUrlParam('print_cert') ||
+    getUrlParam('print_bill')
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {

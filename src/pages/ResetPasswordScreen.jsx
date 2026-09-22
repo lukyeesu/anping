@@ -21,7 +21,16 @@ const ResetPasswordScreen = ({ token, callAppScript, showToast }) => {
     let isMounted = true;
     const verifyToken = async () => {
       try {
-        const res = await callAppScript('VERIFY_RESET_TOKEN', 'Staff', { token });
+        const cleanToken = String(token || '').trim();
+        if (!cleanToken) {
+          if (!isMounted) return;
+          setIsTokenValid(false);
+          setError('ไม่พบรหัสโทเค็นในลิงก์');
+          setIsVerifying(false);
+          return;
+        }
+
+        const res = await callAppScript('VERIFY_RESET_TOKEN', 'Staff', { token: cleanToken });
         if (!isMounted) return;
 
         if (res && res.status === 'success') {
@@ -99,7 +108,11 @@ const ResetPasswordScreen = ({ token, callAppScript, showToast }) => {
     setError('');
 
     try {
-      const res = await callAppScript('CONFIRM_RESET_PASSWORD', 'Staff', { token, newPassword });
+      const cleanToken = String(token || '').trim();
+      const res = await callAppScript('CONFIRM_RESET_PASSWORD', 'Staff', { 
+        token: cleanToken, 
+        newPassword: String(newPassword).trim() 
+      });
       if (res && res.status === 'success') {
         setIsSuccess(true);
         if (showToast) showToast('เปลี่ยนรหัสผ่านใหม่สำเร็จเรียบร้อยแล้ว', 'success');
