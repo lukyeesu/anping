@@ -931,13 +931,32 @@ export async function callSupabase(action, sheetName, payload = null) {
         return { status: 'success', data: [] };
       }
 
-      const scopeFn = t => String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase() === patientId.toLowerCase();
+      const idCandidates = Array.from(new Set([
+        patientId,
+        ...(Array.isArray(payload?.patientIds) ? payload.patientIds : []),
+        payload?.id ? String(payload.id).trim() : null,
+        payload?.hn ? String(payload.hn).trim() : null,
+        payload?.patient_id ? String(payload.patient_id).trim() : null
+      ].filter(Boolean)));
+
+      const normIds = idCandidates.map(x => x.toLowerCase());
+
+      const scopeFn = t => {
+        const tPid = String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase();
+        return normIds.includes(tPid);
+      };
 
       return await differentialSyncTable('treatments', '*', {
         scopeFilterFn: scopeFn,
         scopeCol: 'patient_id',
         scopeVal: patientId,
-        customManifestQuery: query => query.select('id,updated_at,is_deleted').ilike('patient_id', patientId)
+        scopeVals: idCandidates,
+        customManifestQuery: query => {
+          if (idCandidates.length > 1) {
+            return query.select('id,updated_at,is_deleted,patient_id').in('patient_id', idCandidates);
+          }
+          return query.select('id,updated_at,is_deleted').ilike('patient_id', patientId);
+        }
       });
     }
 

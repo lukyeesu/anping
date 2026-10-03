@@ -1952,48 +1952,45 @@ export default function App() {
   }, []);
 
   // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
-  const fetchPatientTreatments = async (patientId) => {
+  // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
+  const fetchPatientTreatments = async (patientId, candidateIds = []) => {
     if (!patientId) return [];
     try {
-      const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { patientId });
+      const pIdStr = String(patientId).trim();
+      const allIds = Array.from(new Set([pIdStr, ...(Array.isArray(candidateIds) ? candidateIds : [])].filter(Boolean)));
+      const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { 
+        patientId: pIdStr,
+        patientIds: allIds,
+        id: allIds[0] || pIdStr
+      });
       if (res?.status === 'success' && Array.isArray(res.data)) {
-        const formattedTreatments = res.data.map(t => {
-          const vs = typeof t.vital_signs === 'object' && t.vital_signs ? t.vital_signs : (typeof t.vital_signs === 'string' ? (JSON.parse(t.vital_signs || '{}')) : (t.vitalSigns || {}));
-          const txArr = Array.isArray(t.prescription) ? t.prescription : (Array.isArray(t.tx) ? t.tx : (typeof t.prescription === 'string' ? (JSON.parse(t.prescription || '[]')) : []));
-          return {
-            ...t,
-            id: t.id,
-            datetime: t.datetime || `${t.date || ''} ${t.time || ''}`.trim(),
-            date: t.date,
-            time: t.time,
-            doctor: t.doctor,
-            chiefComplaint: t.chief_complaint || t.chiefComplaint || t.cc || '',
-            cc: t.chief_complaint || t.chiefComplaint || t.cc || '',
-            diagnosis: t.diagnosis || t.dx || '',
-            dx: t.diagnosis || t.dx || '',
-            treatmentDetail: t.treatment_detail || t.treatmentDetail || t.note || '',
-            note: t.treatment_detail || t.treatmentDetail || t.note || '',
-            prescription: txArr,
-            tx: txArr,
-            vitalSigns: vs,
-            bp: t.bp || vs.bp || '',
-            pulse: t.pulse || vs.pulse || '',
-            temp: t.temp || vs.temp || '',
-            weight: t.weight || vs.weight || '',
-            height: t.height || vs.height || '',
-            attachments: Array.isArray(t.attachments) ? t.attachments : [],
-            cost: Number(t.cost || 0),
-            branchId: t.branch_id || t.branchId,
-            medCertNumber: t.med_cert_number || t.medCertNumber || t.med_cert_no || ''
-          };
+        const formattedTreatments = res.data.map(formatTreatmentRecord);
+        formattedTreatments.sort((a, b) => {
+          const tA = parseAnyDate(a.created_at || a.datetime || a.date)?.getTime() || 0;
+          const tB = parseAnyDate(b.created_at || b.datetime || b.date)?.getTime() || 0;
+          return tB - tA;
         });
         
-        setPatientsData(prev => prev.map(p => {
-          if (String(p.id || p.hn).trim().toLowerCase() === String(patientId).trim().toLowerCase()) {
-            return { ...p, opdRecords: formattedTreatments };
+        const idSet = new Set(allIds.map(x => x.toLowerCase()));
+        setPatientsData(prev => {
+          const exists = prev.some(p => p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase())));
+          if (!exists) {
+            getLocalStore('patients').then(allLocal => {
+              const matched = (allLocal || []).find(p => p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase())));
+              if (matched) {
+                const newP = { ...matched, opdRecords: formattedTreatments };
+                setPatientsData(curr => [newP, ...curr.filter(p => !idSet.has(String(p.id || '').trim().toLowerCase()) && !idSet.has(String(p.hn || '').trim().toLowerCase()))]);
+              }
+            }).catch(() => {});
+            return prev;
           }
-          return p;
-        }));
+          return prev.map(p => {
+            if (p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase()))) {
+              return { ...p, opdRecords: formattedTreatments };
+            }
+            return p;
+          });
+        });
 
         try {
           if (typeof window !== 'undefined' && window.localStorage) {
@@ -2261,7 +2258,31 @@ export default function App() {
       const patientId = String(payload.patient_id || payload.patientId || payload.hn || '').trim();
       if (patientId) {
         upsertLocalStore('treatments', [payload]).catch(() => {});
+        const formattedTrt = formatTreatmentRecord(payload);
         setPatientsData(prev => {
+          const patientExists = prev.some(p => p && String(p.id || p.hn).trim().toLowerCase() === patientId.toLowerCase());
+          if (!patientExists) {
+            getLocalStore('patients').then(localPatients => {
+              const matchedP = (localPatients || []).find(p => p && String(p.id || p.hn).trim().toLowerCase() === patientId.toLowerCase());
+              if (matchedP) {
+                const updatedP = {
+                  ...matchedP,
+                  opdRecords: [formattedTrt, ...(matchedP.opdRecords || [])]
+                };
+                setPatientsData(curr => [updatedP, ...curr.filter(p => String(p.id || p.hn).trim().toLowerCase() !== patientId.toLowerCase())]);
+              } else if (supabase) {
+                supabase.from('patients').select('*').or(`id.eq.${patientId},hn.eq.${patientId}`).then(({ data: pData }) => {
+                  if (pData && pData[0]) {
+                    const jsP = rowToJS(pData[0]);
+                    jsP.opdRecords = [formattedTrt];
+                    setPatientsData(curr => [jsP, ...curr.filter(p => String(p.id || p.hn).trim().toLowerCase() !== patientId.toLowerCase())]);
+                  }
+                }).catch(() => {});
+              }
+            }).catch(() => {});
+            return prev;
+          }
+
           return prev.map(p => {
             if (String(p.id || p.hn).trim().toLowerCase() === patientId.toLowerCase()) {
               const existingOpd = p.opdRecords || [];
@@ -2272,7 +2293,6 @@ export default function App() {
                 (targetTrtId && String(t.id || '').trim() === targetTrtId) ||
                 (targetDatetime && t.datetime === targetDatetime && t.doctor === payload.doctor)
               );
-              const formattedTrt = formatTreatmentRecord(payload);
               let updatedOpd;
               if (idx >= 0) {
                 updatedOpd = [...existingOpd];
@@ -2280,7 +2300,11 @@ export default function App() {
               } else {
                 updatedOpd = [formattedTrt, ...existingOpd];
               }
-              updatedOpd.sort((a, b) => new Date(b.datetime || b.date || 0) - new Date(a.datetime || a.date || 0));
+              updatedOpd.sort((a, b) => {
+                const tA = parseAnyDate(a.created_at || a.datetime || a.date)?.getTime() || 0;
+                const tB = parseAnyDate(b.created_at || b.datetime || b.date)?.getTime() || 0;
+                return tB - tA;
+              });
               return { ...p, opdRecords: updatedOpd };
             }
             return p;
@@ -3685,6 +3709,7 @@ export default function App() {
         .fade-in-up { animation: fadeInUp 0.25s ease-out forwards; }
         .fade-out-up { animation: fadeOutUp 0.25s ease-out forwards; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

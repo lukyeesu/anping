@@ -5,7 +5,8 @@ import CustomSelect from './CustomSelect';
 import CatalogManager from './CatalogManager';
 import CalendarDay from './CalendarDay';
 import { POS_ICONS } from '../global/constants';
-import { supabase } from '../lib/supabase';
+import { supabase, rowToJS } from '../lib/supabase';
+import { getLocalStore } from '../lib/offlineStore';
 import { rAFThrottle, parseBool, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, generateNextReceiptId, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, syncCourseSessionsOnStatusChange } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -481,10 +482,22 @@ const POSSystem = ({
     try {
       let fetchedTreatments = [];
 
+      const pIdStr = String(patientId).trim();
+      const patientObj = (patientsData || []).find(p => p && (
+        (p.id && String(p.id).trim().toLowerCase() === pIdStr.toLowerCase()) || 
+        (p.hn && String(p.hn).trim().toLowerCase() === pIdStr.toLowerCase())
+      ));
+
+      const idCandidates = Array.from(new Set([
+        pIdStr,
+        patientObj?.id ? String(patientObj.id).trim() : null,
+        patientObj?.hn ? String(patientObj.hn).trim() : null
+      ].filter(Boolean)));
+
       // 1. ดึงผ่านฟังก์ชัน fetchPatientTreatments (ถ้ามีส่งมาจาก App.jsx)
       if (typeof fetchPatientTreatments === 'function') {
         try {
-          const res = await fetchPatientTreatments(patientId);
+          const res = await fetchPatientTreatments(pIdStr, idCandidates);
           if (Array.isArray(res) && res.length > 0) {
             fetchedTreatments = res;
           }
@@ -493,29 +506,37 @@ const POSSystem = ({
         }
       }
 
-      // 2. ถ้ายังไม่ได้ข้อมูล ให้ดึงตรงจาก Supabase ตาราง treatments
+      // 2. ถ้ายังไม่ได้ข้อมูล ให้ดึงตรงจาก Supabase ตาราง treatments โดยค้นหาครอบคลุมทุกรหัส (id, hn, เลขท้าย)
       if (fetchedTreatments.length === 0 && supabase) {
         try {
-          const pId = String(patientId).trim();
-          const digitsOnly = pId.replace(/\D/g, '');
-          let query = supabase
-            .from('treatments')
-            .select('*')
-            .or('is_deleted.is.null,is_deleted.eq.false')
-            .order('created_at', { ascending: false })
-            .limit(10);
+          const queryTreatments = async () => {
+            let query = supabase
+              .from('treatments')
+              .select('*')
+              .or('is_deleted.is.null,is_deleted.eq.false')
+              .order('created_at', { ascending: false })
+              .limit(15);
 
-          if (/^HN\d{2}-/i.test(pId)) {
-            query = query.or(`patient_id.eq.${pId},patient_id.ilike.%${digitsOnly}`);
-          } else if (digitsOnly) {
-            query = query.or(`patient_id.eq.${pId},patient_id.ilike.%${digitsOnly}%`);
-          } else {
-            query = query.eq('patient_id', pId);
-          }
+            const orClauses = idCandidates.map(cid => `patient_id.eq.${cid}`);
+            const digitsOnly = pIdStr.replace(/\D/g, '');
+            if (digitsOnly && digitsOnly.length >= 2) {
+              orClauses.push(`patient_id.ilike.%${digitsOnly}%`);
+            }
+            query = query.or(orClauses.join(','));
 
-          const { data: dbTrts, error: dbErr } = await query;
-          if (!dbErr && Array.isArray(dbTrts) && dbTrts.length > 0) {
-            fetchedTreatments = dbTrts;
+            const { data: dbTrts, error: dbErr } = await query;
+            if (!dbErr && Array.isArray(dbTrts) && dbTrts.length > 0) {
+              return dbTrts;
+            }
+            return [];
+          };
+
+          fetchedTreatments = await queryTreatments();
+
+          // เผื่อหมอเพิ่งกดเซฟเสร็จในเสี้ยววินาทีเดียว (Race condition) ให้ retry ซ้ำอีก 1 รอบสั้นๆ
+          if (fetchedTreatments.length === 0) {
+            await new Promise(r => setTimeout(r, 750));
+            fetchedTreatments = await queryTreatments();
           }
         } catch (err) {
           console.warn('[POS] Supabase treatments query warning:', err);
@@ -525,7 +546,10 @@ const POSSystem = ({
       // 3. Fallback ผ่าน callAppScript
       if (fetchedTreatments.length === 0 && typeof callAppScript === 'function') {
         try {
-          const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { patientId });
+          const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { 
+            patientId: pIdStr,
+            patientIds: idCandidates 
+          });
           if (res?.status === 'success' && Array.isArray(res.data) && res.data.length > 0) {
             fetchedTreatments = res.data;
           }
@@ -536,26 +560,41 @@ const POSSystem = ({
 
       // 4. Fallback จากแคชใน patientsData
       if (fetchedTreatments.length === 0) {
-        const pNorm = String(patientId).trim().toLowerCase();
-        const patient = (patientsData || []).find(p => p && ((p.id && String(p.id).trim().toLowerCase() === pNorm) || (p.hn && String(p.hn).trim().toLowerCase() === pNorm)));
-        if (Array.isArray(patient?.opdRecords) && patient.opdRecords.length > 0) {
-          fetchedTreatments = patient.opdRecords;
+        if (Array.isArray(patientObj?.opdRecords) && patientObj.opdRecords.length > 0) {
+          fetchedTreatments = patientObj.opdRecords;
         }
       }
 
       if (fetchedTreatments.length > 0) {
-        // เรียงลำดับเอาใบล่าสุด (index 0)
+        // เรียงลำดับเอาใบล่าสุด (index 0) โดยใช้ parseAnyDate รองรับทั้ง ISO, พ.ศ., DD/MM/YYYY
+        const getRecordTimestamp = (record) => {
+          if (!record) return 0;
+          const candidates = [
+            record.created_at,
+            record.datetime,
+            record.date,
+            record.updated_at
+          ];
+          for (const cand of candidates) {
+            if (!cand) continue;
+            const parsed = parseAnyDate(cand);
+            if (parsed && !isNaN(parsed.getTime())) {
+              return parsed.getTime();
+            }
+          }
+          return 0;
+        };
+
         const sortedTreatments = [...fetchedTreatments].sort((a, b) => {
-          const dateA = new Date(a.created_at || a.datetime || a.date || 0).getTime();
-          const dateB = new Date(b.created_at || b.datetime || b.date || 0).getTime();
-          return dateB - dateA;
+          return getRecordTimestamp(b) - getRecordTimestamp(a);
         });
         const latestOpd = sortedTreatments[0];
 
         // อัปเดตแคช opdRecords ใน patientsData เพื่อให้ส่วนอื่นๆ ในแอพใช้งานได้ทันที
         if (typeof setPatientsData === 'function') {
+          const idSet = new Set(idCandidates.map(x => x.toLowerCase()));
           setPatientsData(prev => (prev || []).map(p => {
-            if (p && ((p.id && String(p.id).trim().toLowerCase() === String(patientId).trim().toLowerCase()) || (p.hn && String(p.hn).trim().toLowerCase() === String(patientId).trim().toLowerCase()))) {
+            if (p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase()))) {
               return { ...p, opdRecords: sortedTreatments };
             }
             return p;
@@ -591,6 +630,10 @@ const POSSystem = ({
           }
           if (typeof raw === 'object') {
             if (raw.name) return [String(raw.name).trim()];
+            if (raw.title) return [String(raw.title).trim()];
+            if (raw.label) return [String(raw.label).trim()];
+            if (raw.itemName) return [String(raw.itemName).trim()];
+            if (raw.text) return [String(raw.text).trim()];
             return [];
           }
           if (typeof raw === 'string') {
@@ -685,20 +728,23 @@ const POSSystem = ({
           });
         });
 
-        // 4. กรณีที่ไม่มีชื่อหัตถการใน prescription แต่มี cost ใน OPD
-        if (treatmentNames.length === 0 && Number(latestOpd.cost) > 0) {
-          const itemTitle = latestOpd.treatment_detail?.trim() || latestOpd.diagnosis?.trim() || 'ค่าบริการทางการแพทย์ (OPD)';
-          newCartItems.push({
-            product: {
-              id: `TEMP_TX_${Date.now()}_cost`,
-              name: itemTitle,
-              price: Number(latestOpd.cost),
-              type: 'รายการจากแพทย์ (OPD)',
-              icon: 'Stethoscope',
-              isTemp: true
-            },
-            quantity: 1
-          });
+        // 4. กรณีที่ไม่มีชื่อหัตถการใน prescription แต่มี cost ใน OPD หรือมี treatment_detail/diagnosis
+        if (treatmentNames.length === 0) {
+          const detailTitle = latestOpd.treatment_detail?.trim() || latestOpd.treatmentDetail?.trim() || latestOpd.diagnosis?.trim();
+          if (detailTitle || Number(latestOpd.cost) > 0) {
+            const itemTitle = detailTitle || 'ค่าบริการทางการแพทย์ (OPD)';
+            newCartItems.push({
+              product: {
+                id: `TEMP_TX_${Date.now()}_cost`,
+                name: itemTitle,
+                price: Number(latestOpd.cost || 0),
+                type: 'รายการจากแพทย์ (OPD)',
+                icon: 'Stethoscope',
+                isTemp: true
+              },
+              quantity: 1
+            });
+          }
         }
 
         // 5. นำหมายเหตุ (Note) มาใส่ตะกร้าด้วยในฐานะข้อความแจ้งเตือน (ราคา 0 บาท)
@@ -1726,25 +1772,260 @@ const POSSystem = ({
       });
         };
 
+  // --- โหลดประวัติการรักษา OPD ของวันนี้จาก Supabase / IndexedDB แบบ Real-time เพื่อให้ POS แสดงคนไข้ที่รอชำระเงินได้ทันที ---
+  const [todayTreatments, setTodayTreatments] = useState([]);
+
+  const fetchTodayTreatments = useCallback(async () => {
+    try {
+      let trts = [];
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('treatments')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        if (!error && Array.isArray(data)) {
+          trts = data;
+        }
+      }
+      
+      const localTrts = await getLocalStore('treatments').catch(() => []);
+      const mergedMap = new Map();
+      [...trts, ...(localTrts || [])].forEach(t => {
+        if (!t || t.is_deleted || t.isDeleted) return;
+        const id = String(t.id || '').trim();
+        if (id && !mergedMap.has(id)) {
+          mergedMap.set(id, t);
+        }
+      });
+
+      const todayList = Array.from(mergedMap.values()).filter(t => {
+        const d = t.created_at || t.datetime || t.date;
+        return d && isSameDay(d, new Date());
+      }).sort((a, b) => {
+        const tA = parseAnyDate(a.created_at || a.datetime || a.date)?.getTime() || 0;
+        const tB = parseAnyDate(b.created_at || b.datetime || b.date)?.getTime() || 0;
+        return tB - tA;
+      });
+
+      setTodayTreatments(todayList);
+
+      // โหลดข้อมูลคนไข้ที่มาตรวจวันนี้เข้าสู่ patientsData หากยังไม่มีอยู่ใน state
+      if (todayList.length > 0 && supabase) {
+        const missingIds = [];
+        todayList.forEach(t => {
+          const pid = String(t.patient_id || t.patientId || t.hn || '').trim();
+          if (!pid) return;
+          const exists = (patientsData || []).some(p => 
+            p && (String(p.id || '').trim().toLowerCase() === pid.toLowerCase() || String(p.hn || '').trim().toLowerCase() === pid.toLowerCase())
+          );
+          if (!exists && !missingIds.includes(pid)) {
+            missingIds.push(pid);
+          }
+        });
+
+        if (missingIds.length > 0) {
+          const { data: missingPatients } = await supabase
+            .from('patients')
+            .select('*')
+            .in('id', missingIds);
+          
+          let moreP = [];
+          if (missingPatients && missingPatients.length > 0) {
+            moreP = missingPatients.map(rowToJS);
+          }
+          const stillMissing = missingIds.filter(id => !moreP.some(p => String(p.id) === String(id) || String(p.hn) === String(id)));
+          if (stillMissing.length > 0) {
+            const { data: byHn } = await supabase
+              .from('patients')
+              .select('*')
+              .in('hn', stillMissing);
+            if (byHn && byHn.length > 0) {
+              moreP = [...moreP, ...byHn.map(rowToJS)];
+            }
+          }
+
+          if (moreP.length > 0) {
+            setPatientsData(prev => {
+              const existingIds = new Set(prev.map(p => String(p.id || p.hn).toLowerCase()));
+              const newUnique = moreP.filter(p => !existingIds.has(String(p.id || p.hn).toLowerCase()));
+              return newUnique.length > 0 ? [...newUnique, ...prev] : prev;
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[POS Today Treatments Error]:', err);
+    }
+  }, [patientsData, setPatientsData]);
+
+  // ดึงรายการตรวจวันนี้ทันทีที่เปิดหน้า POS และคอยฟัง Realtime เมื่อมีแพทย์บันทึก OPD ใหม่
+  useEffect(() => {
+    fetchTodayTreatments();
+
+    if (!supabase) return;
+    const channel = supabase
+      .channel('pos-treatments-live-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'treatments' }, () => {
+        fetchTodayTreatments();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchTodayTreatments]);
+
+  // ตรวจสอบสถานะการตรวจ OPD และการชำระเงินของคนไข้ในวันนี้
+  const todayPatientsStatus = useMemo(() => {
+    const statusMap = new Map();
+
+    // 1. นำข้อมูลจาก todayTreatments เข้ามาลง statusMap ก่อน
+    todayTreatments.forEach(t => {
+      const pid = String(t.patient_id || t.patientId || t.hn || '').trim().toLowerCase();
+      if (!pid) return;
+      const parsed = parseAnyDate(t.created_at || t.datetime || t.date);
+      const tTime = parsed ? parsed.getTime() : 0;
+      
+      const existing = statusMap.get(pid);
+      if (!existing || tTime > (existing.latestOpdTime || 0)) {
+        statusMap.set(pid, {
+          hasOpd: true,
+          latestOpdTime: tTime,
+          isPaid: false
+        });
+      }
+    });
+
+    // 2. นำข้อมูลจาก patientsData (opdRecords) เข้ามาเสริม
+    (patientsData || []).forEach(p => {
+      if (!p) return;
+      const opds = Array.isArray(p.opdRecords) ? p.opdRecords : [];
+      const todayOpds = opds.filter(o => {
+        const d = o.datetime || o.date || o.created_at;
+        return d && isSameDay(d, new Date());
+      });
+
+      if (todayOpds.length > 0) {
+        let maxTime = 0;
+        todayOpds.forEach(o => {
+          const parsed = parseAnyDate(o.created_at || o.datetime || o.date);
+          if (parsed && parsed.getTime() > maxTime) {
+            maxTime = parsed.getTime();
+          }
+        });
+
+        const pIdStr = String(p.id || '').trim().toLowerCase();
+        const pHnStr = String(p.hn || '').trim().toLowerCase();
+
+        [pIdStr, pHnStr].filter(Boolean).forEach(key => {
+          const existing = statusMap.get(key);
+          if (!existing || maxTime > (existing.latestOpdTime || 0)) {
+            statusMap.set(key, {
+              hasOpd: true,
+              latestOpdTime: maxTime,
+              isPaid: false
+            });
+          }
+        });
+      }
+    });
+
+    // 3. ตรวจสอบการชำระเงินกับ posHistoryData
+    (patientsData || []).forEach(p => {
+      if (!p) return;
+      const pIdStr = String(p.id || '').trim().toLowerCase();
+      const pHnStr = String(p.hn || '').trim().toLowerCase();
+      const pDigits = (pHnStr || pIdStr).replace(/\D/g, '');
+
+      const stat = (pIdStr && statusMap.get(pIdStr)) || (pHnStr && statusMap.get(pHnStr));
+      if (!stat || !stat.hasOpd) return;
+
+      const todayTxns = (posHistoryData || []).filter(tx => {
+        if (!tx || tx.status === 'cancelled') return false;
+        const isTxToday = isSameDay(tx.createdAt || tx.date, new Date());
+        if (!isTxToday) return false;
+
+        const txPid = String(tx.patientId || tx.patient_id || tx.hn || '').trim().toLowerCase();
+        const txDigits = txPid.replace(/\D/g, '');
+
+        return (
+          (pIdStr && txPid === pIdStr) ||
+          (pHnStr && txPid === pHnStr) ||
+          (pDigits && txDigits && pDigits === txDigits)
+        );
+      });
+
+      let latestTxTime = 0;
+      todayTxns.forEach(tx => {
+        const parsed = parseAnyDate(tx.createdAt || tx.date);
+        if (parsed && parsed.getTime() > latestTxTime) {
+          latestTxTime = parsed.getTime();
+        }
+      });
+
+      const isPaid = todayTxns.length > 0 && (latestTxTime >= stat.latestOpdTime - 60000);
+      stat.isPaid = isPaid;
+
+      if (pIdStr) statusMap.set(pIdStr, stat);
+      if (pHnStr) statusMap.set(pHnStr, stat);
+    });
+
+    return statusMap;
+  }, [patientsData, todayTreatments, posHistoryData]);
+
   const patientOptions = useMemo(() => {
-    const sortedPatients = [...patientsData].sort((a, b) => {
-        const valA = getPatientLastVisitStr(a);
-        const valB = getPatientLastVisitStr(b);
-        if (valA < valB) return 1;
-        if (valA > valB) return -1;
-        return 0;
+    const sortedPatients = [...(patientsData || [])].sort((a, b) => {
+      const aId = String(a.id || '').trim().toLowerCase();
+      const aHn = String(a.hn || '').trim().toLowerCase();
+      const bId = String(b.id || '').trim().toLowerCase();
+      const bHn = String(b.hn || '').trim().toLowerCase();
+
+      const aStat = (aId && todayPatientsStatus.get(aId)) || (aHn && todayPatientsStatus.get(aHn));
+      const bStat = (bId && todayPatientsStatus.get(bId)) || (bHn && todayPatientsStatus.get(bHn));
+
+      const aWaiting = aStat?.hasOpd && !aStat?.isPaid;
+      const bWaiting = bStat?.hasOpd && !bStat?.isPaid;
+
+      // 1. คนที่รอชำระเงิน (มี OPD วันนี้ และยังไม่จ่ายเงิน) จะต้องอยู่บนสุดเสมอ
+      if (aWaiting && !bWaiting) return -1;
+      if (!aWaiting && bWaiting) return 1;
+
+      // 2. ถ้าทั้งคู่รอชำระเงิน ให้เรียงคนที่หมอเพิ่งเพิ่ม OPD ล่าสุดไว้ข้างบนไล่ลงมา!
+      if (aWaiting && bWaiting) {
+        return (bStat?.latestOpdTime || 0) - (aStat?.latestOpdTime || 0);
+      }
+
+      // 3. คนที่ชำระเงินแล้ว หรือคนไข้ทั่วไป ให้เรียงตามเวลาที่มารับบริการล่าสุด
+      const valA = getPatientLastVisitStr(a);
+      const valB = getPatientLastVisitStr(b);
+      if (valA < valB) return 1;
+      if (valA > valB) return -1;
+      return 0;
     });
     
     return [
-      { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)' },
-      ...sortedPatients.map(p => ({ 
-        value: p.id || p.hn, 
-        label: `${p.hn || p.id} - ${getPatientFullName(p)}`,
-        phone: p.phone || p.phone1 || '',
-        raw: p
-      }))
+      { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)', hn: '', name: 'ลูกค้าทั่วไป (ไม่ระบุ)' },
+      ...sortedPatients.map(p => {
+        const pId = String(p.id || '').trim().toLowerCase();
+        const pHn = String(p.hn || '').trim().toLowerCase();
+        const stat = (pId && todayPatientsStatus.get(pId)) || (pHn && todayPatientsStatus.get(pHn));
+        const isWaiting = !!(stat?.hasOpd && !stat?.isPaid);
+        const hnDisplay = p.hn || p.id || '-';
+        const nameDisplay = getPatientFullName(p);
+
+        return { 
+          value: p.id || p.hn, 
+          hn: hnDisplay,
+          name: nameDisplay,
+          label: `${hnDisplay} - ${nameDisplay}`,
+          phone: p.phone || p.phone1 || '',
+          isWaiting,
+          raw: p
+        };
+      })
     ];
-  }, [patientsData]);
+  }, [patientsData, todayPatientsStatus]);
 
   // รายการคนไข้ที่ผ่านการกรอง (หากไม่ค้นหา จะแสดงทั้งหมดเพื่อให้สามารถเลื่อนดู/scroll คนไข้ทุกคนได้ครบถ้วน)
   const filteredPatientOptions = useMemo(() => {
@@ -1802,15 +2083,15 @@ const POSSystem = ({
     }
   }, [fetchPatientsPaginated, posHasMore, patientsData.length, filteredPatientOptions.length, setPatientsData]);
 
-  // เมื่อพิมพ์ค้นหาใน POS หากพิมพ์ 2 ตัวอักษรขึ้นไป ให้ดึงข้อมูลที่ตรงกันจาก Server/IndexedDB มาเสริมใน Dropdown
+  // เมื่อพิมพ์ค้นหาใน POS ให้ debounce 200ms และดึงข้อมูลที่ตรงกันจาก Server/IndexedDB มาเสริมใน Dropdown
   useEffect(() => {
-    if (!patientSearchTerm || patientSearchTerm.trim().length < 2) return;
+    if (!patientSearchTerm || !patientSearchTerm.trim()) return;
     if (!isPatientDropdownOpen) return;
 
     clearTimeout(searchDebounceTimerRef.current);
     searchDebounceTimerRef.current = setTimeout(() => {
       loadMorePatients(patientSearchTerm, true);
-    }, 350);
+    }, 200);
 
     return () => clearTimeout(searchDebounceTimerRef.current);
   }, [patientSearchTerm, isPatientDropdownOpen, loadMorePatients]);
@@ -1845,6 +2126,14 @@ const POSSystem = ({
           .pos-summary-toggle { py: 0.25rem !important; }
           .pos-summary-content { padding: 0.5rem !important; }
           .pos-checkout-btn { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+        }
+        .pos-dropdown-scroll::-webkit-scrollbar { width: 5px; }
+        .pos-dropdown-scroll::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
+        .pos-dropdown-scroll::-webkit-scrollbar-track { background: transparent; margin: 6px 0; }
+        .pos-dropdown-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        .pos-dropdown-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @supports not selector(::-webkit-scrollbar) {
+          .pos-dropdown-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         }
       `}</style>
       {/* แก้ไข: เพิ่ม z-[70] เมื่อเปิดตะกร้าบนมือถือ เพื่อยกเลเยอร์ให้ลอยข้าม Header และ Navbar */}
@@ -2097,7 +2386,10 @@ const POSSystem = ({
                     setSelectedPatientId('');
                     setIsPatientDropdownOpen(true);
                   }}
-                  onFocus={() => setIsPatientDropdownOpen(true)}
+                  onFocus={() => {
+                    setIsPatientDropdownOpen(true);
+                    fetchTodayTreatments();
+                  }}
                   onBlur={() => setTimeout(() => setIsPatientDropdownOpen(false), 200)}
                 />
                 {selectedPatientId ? (
@@ -2130,17 +2422,21 @@ const POSSystem = ({
               
               {isPatientDropdownOpen && (
                 <div 
-                  onScroll={handleDropdownScroll}
-                  className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-72 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top"
+                  className="absolute z-50 left-0 right-0 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top"
                 >
+                  <div 
+                    onScroll={handleDropdownScroll}
+                    className="max-h-[calc(100dvh-270px)] md:max-h-[calc(100vh-390px)] overflow-y-auto pos-dropdown-scroll"
+                  >
                     <div 
                       onMouseDown={(e) => { e.preventDefault(); handleSelectPatient('', ''); }}
-                      className={`px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 font-data text-sm sm:text-base ${!selectedPatientId ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-500'}`}
+                      className={`px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 font-data text-xs sm:text-sm flex items-center gap-2 ${!selectedPatientId ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-500'}`}
                     >
-                       ลูกค้าทั่วไป (ไม่ระบุ)
+                       <User size={15} className="text-slate-400 shrink-0" />
+                       <span>ลูกค้าทั่วไป (ไม่ระบุ)</span>
                     </div>
                     {filteredPatientOptions.length === 0 && !posIsLoadingMore && patientSearchTerm && (
-                        <div className="px-4 py-3 text-slate-400 text-sm sm:text-base text-center font-data">
+                        <div className="px-4 py-3 text-slate-400 text-sm text-center font-data">
                             ไม่พบข้อมูลลูกค้า
                         </div>
                     )}
@@ -2154,9 +2450,31 @@ const POSSystem = ({
                                }
                                handleSelectPatient(opt.value, opt.label); 
                             }}
-                            className={`px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-colors text-sm sm:text-base ${selectedPatientId === opt.value ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
+                            className={`px-3.5 sm:px-4 py-2.5 sm:py-3 hover:bg-sky-50/80 cursor-pointer border-b border-slate-100 last:border-0 font-data transition-colors flex flex-col gap-1.5 ${selectedPatientId === opt.value ? 'bg-sky-50 text-sky-700 font-bold' : 'text-slate-700'} ${opt.isWaiting ? 'bg-amber-50/40' : ''}`}
                         >
-                            {opt.label}
+                            {/* แถวบน: รหัส HN เป็นข้อความธรรมดา (ไม่ใส่แท็ก เพื่อให้ขนาดฟอนต์เท่ากันทั้งบน PC และมือถือ) + แท็กสถานะ */}
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-bold text-sky-600 text-sm sm:text-base tracking-tight">
+                                        {opt.hn || 'HN-'}
+                                    </span>
+                                    {opt.phone && (
+                                        <span className="text-xs sm:text-sm text-slate-400 font-normal truncate">
+                                            • {opt.phone}
+                                        </span>
+                                    )}
+                                </div>
+                                {opt.isWaiting && (
+                                  <span className="text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded-full shrink-0 kanit-text border border-amber-300 shadow-xs flex items-center gap-1.5 whitespace-nowrap">
+                                    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" /> รอชำระเงิน
+                                  </span>
+                                )}
+                            </div>
+
+                            {/* แถวล่าง: ชื่อ-นามสกุล คนไข้ แสดงเต็มบรรทัด คมชัด ไม่โดนแท็กเบียดหรือตัดนามสกุล */}
+                            <div className="text-sm sm:text-base font-semibold text-slate-800 leading-snug break-words">
+                                {opt.name || opt.label}
+                            </div>
                         </div>
                     ))}
                     {posIsLoadingMore && (
@@ -2169,6 +2487,7 @@ const POSSystem = ({
                             แสดงรายชื่อทั้งหมดแล้ว ({patientsData.length} คน)
                         </div>
                     )}
+                  </div>
                 </div>
               )}
             </div>

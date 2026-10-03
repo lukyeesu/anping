@@ -1765,10 +1765,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       ? newOpdRecord.tx.map(t => typeof t === 'string' ? t.trim() : t).filter(Boolean)
       : (newOpdRecord.tx ? [String(newOpdRecord.tx).trim()] : []);
 
+    const nowIso = new Date().toISOString();
+    const pid = String(editingId || formData.hn || '').trim();
     const recordToSave = {
       ...newOpdRecord,
+      id: newOpdRecord.id || `TRT_${pid}_${Date.now()}`,
       tx: validTx,
-      prescription: validTx
+      prescription: validTx,
+      created_at: newOpdRecord.created_at || nowIso,
+      updated_at: nowIso
     };
 
     let newRecords = [...(formData.opdRecords || [])];
@@ -1779,7 +1784,6 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     
     const updatedFormData = { ...formData, opdRecords: newRecords };
     setFormData(updatedFormData);
-    const pid = String(editingId || updatedFormData.hn || '').trim();
     if (pid) {
       const cnt = newRecords.length;
       setTreatmentCounts(prev => {
@@ -1809,35 +1813,43 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     };
 
     try {
-      await callAppScript('SAVE_DATA', 'Patients', combinedData);
+      const nowIso = new Date().toISOString();
+      const patientId = String(editingId || updatedFormData.hn || '').trim();
+      const treatmentRow = recordToSave ? {
+        id: String(recordToSave.id || `TRT_${patientId}_${Date.now()}`),
+        patient_id: patientId,
+        datetime: String(recordToSave.datetime || nowIso),
+        date: String(recordToSave.date || (recordToSave.datetime ? recordToSave.datetime.split(' ')[0] : '')),
+        time: String(recordToSave.time || (recordToSave.datetime ? recordToSave.datetime.split(' ')[1] || '' : '')),
+        doctor: String(recordToSave.doctor || ''),
+        chief_complaint: String(recordToSave.chiefComplaint || recordToSave.cc || ''),
+        diagnosis: String(recordToSave.diagnosis || recordToSave.dx || ''),
+        treatment_detail: String(recordToSave.treatmentDetail || recordToSave.note || ''),
+        prescription: validTx,
+        vital_signs: {
+          bp: recordToSave.bp || recordToSave.vitalSigns?.bp || '',
+          pulse: recordToSave.pulse || recordToSave.vitalSigns?.pulse || '',
+          weight: recordToSave.weight || recordToSave.vitalSigns?.weight || '',
+          height: recordToSave.height || recordToSave.vitalSigns?.height || '',
+          temp: recordToSave.temp || recordToSave.vitalSigns?.temp || ''
+        },
+        attachments: recordToSave.attachments || [],
+        cost: Number(recordToSave.cost || 0),
+        branch_id: String(recordToSave.branchId || currentBranch?.id || ''),
+        created_at: recordToSave.created_at || nowIso,
+        updated_at: nowIso
+      } : null;
 
-      // 🌟 บันทึกลงตาราง treatments โดยตรง
+      // 🌟 บันทึกทั้งข้อมูลคนไข้และตาราง treatments พร้อมกันเพื่อลดเวลา Delay และลดปัญหา Race Condition
+      const savePromises = [
+        callAppScript('SAVE_DATA', 'Patients', combinedData)
+      ];
+      if (treatmentRow) {
+        savePromises.push(callAppScript('SAVE_DATA', 'Treatments', treatmentRow));
+      }
+      await Promise.all(savePromises);
+
       if (recordToSave) {
-        const patientId = String(editingId || updatedFormData.hn || '').trim();
-        const treatmentRow = {
-          id: String(recordToSave.id || `TRT_${patientId}_${Date.now()}`),
-          patient_id: patientId,
-          datetime: String(recordToSave.datetime || new Date().toISOString()),
-          date: String(recordToSave.date || (recordToSave.datetime ? recordToSave.datetime.split(' ')[0] : '')),
-          time: String(recordToSave.time || (recordToSave.datetime ? recordToSave.datetime.split(' ')[1] || '' : '')),
-          doctor: String(recordToSave.doctor || ''),
-          chief_complaint: String(recordToSave.chiefComplaint || recordToSave.cc || ''),
-          diagnosis: String(recordToSave.diagnosis || recordToSave.dx || ''),
-          treatment_detail: String(recordToSave.treatmentDetail || recordToSave.note || ''),
-          prescription: validTx,
-          vital_signs: {
-            bp: recordToSave.bp || recordToSave.vitalSigns?.bp || '',
-            pulse: recordToSave.pulse || recordToSave.vitalSigns?.pulse || '',
-            weight: recordToSave.weight || recordToSave.vitalSigns?.weight || '',
-            height: recordToSave.height || recordToSave.vitalSigns?.height || '',
-            temp: recordToSave.temp || recordToSave.vitalSigns?.temp || ''
-          },
-          attachments: recordToSave.attachments || [],
-          cost: Number(recordToSave.cost || 0),
-          branch_id: String(recordToSave.branchId || currentBranch?.id || '')
-        };
-        await callAppScript('SAVE_DATA', 'Treatments', treatmentRow).catch(console.error);
-
         // 📢 ส่งการแจ้งเตือนบันทึกการรักษา (OPD) - Dual Broadcast
         const pPrefix = (combinedData.prefix || updatedFormData.prefix || '').trim();
         let opdPatientName = combinedData.name?.trim() || `${combinedData.firstName || ''} ${combinedData.lastName || ''}`.trim() || 'คนไข้';
@@ -1883,7 +1895,26 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         }).catch((err) => console.error('[OPD Notification Error]:', err));
       }
 
-      setPatientsData(patientsData.map(p => p.id === combinedData.id ? combinedData : p));
+      setPatientsData(prev => {
+        const pId = String(combinedData.id || combinedData.hn || '').trim().toLowerCase();
+        const pHn = String(combinedData.hn || combinedData.id || '').trim().toLowerCase();
+        const exists = prev.some(p => {
+          const id = String(p.id || '').trim().toLowerCase();
+          const hn = String(p.hn || '').trim().toLowerCase();
+          return (pId && (id === pId || hn === pId)) || (pHn && (id === pHn || hn === pHn));
+        });
+        if (exists) {
+          return prev.map(p => {
+            const id = String(p.id || '').trim().toLowerCase();
+            const hn = String(p.hn || '').trim().toLowerCase();
+            if ((pId && (id === pId || hn === pId)) || (pHn && (id === pHn || hn === pHn))) {
+              return { ...p, ...combinedData, opdRecords: newRecords };
+            }
+            return p;
+          });
+        }
+        return [{ ...combinedData, opdRecords: newRecords }, ...prev];
+      });
       
       if (shouldCloseModal) {
           setShowOpdForm(false);
