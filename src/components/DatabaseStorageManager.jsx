@@ -238,12 +238,18 @@ export default function DatabaseStorageManager({
       {/* --- แดชบอร์ดสรุปโควตา Egress & เนื้อที่จัดเก็บ (Metrics Grid) --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Metric 1: Egress Quota (Data Transfer) */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider">
-              โควตา Egress รายเดือน
+              โควตา Egress ({stats?.currentMonthLabel || 'เดือนนี้'})
             </span>
-            <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+            <span className={`p-2 rounded-xl border ${
+              (stats?.egressUsagePercent || 0) > 80 
+                ? 'bg-rose-50 text-rose-600 border-rose-100' 
+                : (stats?.egressUsagePercent || 0) > 50 
+                  ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                  : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            }`}>
               <ArrowUpRight size={16} />
             </span>
           </div>
@@ -251,21 +257,37 @@ export default function DatabaseStorageManager({
           <div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-slate-800 kanit-text">
-                ประหยัด 99.8%
+                {stats ? formatBytes(stats.estimatedMonthlyEgressBytes) : '-'}
               </span>
-              <span className="text-xs font-semibold text-emerald-600 kanit-text">
-                (โควตา 5 GB)
+              <span className="text-xs text-slate-400 kanit-text font-normal">
+                / 5.00 GB
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 kanit-text mt-1">
-              ระบบใช้งาน Range Pagination (ทีละ 35 รายการ) ทำให้ปริมาณการรับส่งข้อมูลอยู่ในระดับต่ำมาก ปลอดภัยต่อโควตาฟรี
+
+            {/* Progress Bar (หลอดพลัง) */}
+            <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
+              <div 
+                className={`h-2 rounded-full transition-all duration-500 ${
+                  (stats?.egressUsagePercent || 0) > 80 
+                    ? 'bg-rose-500' 
+                    : (stats?.egressUsagePercent || 0) > 50 
+                      ? 'bg-amber-500' 
+                      : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.max(2, stats?.egressUsagePercent || 1)}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex justify-between">
+              <span>ใช้งานไปแล้ว {stats?.egressUsagePercent != null ? `${stats.egressUsagePercent}%` : '0%'}</span>
+              <span className="text-emerald-600 font-medium">ประหยัดได้ {stats?.egressSavingsPercent != null ? `${stats.egressSavingsPercent}%` : '99.8%'}</span>
             </p>
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs kanit-text">
-            <span className="text-slate-500">สถานะโควตา:</span>
+            <span className="text-slate-500">โควตาคงเหลือเดือนนี้:</span>
             <span className="text-emerald-600 font-bold flex items-center gap-1">
-              <CheckCircle2 size={13} /> ปกติดีเยี่ยม (Healthy)
+              <CheckCircle2 size={13} />
+              {stats ? formatBytes(stats.egressRemainingBytes) : '5.00 GB'}
             </span>
           </div>
         </div>

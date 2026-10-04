@@ -93,13 +93,39 @@ export async function getDatabaseAndStorageStats() {
       }
     } catch (sErr) {}
 
-    // 3. ประมาณการขนาด Database และ Egress
+    // 3. ประมาณการขนาด Database และ Egress รายเดือน
     // เฉลี่ยขนาดข้อมูลต่อแถว ~ 0.5 - 1.2 KB ขึ้นอยู่กับตาราง
     const estimatedDbBytes = totalRows * 850;
     
     // โควตาฟรีมาตรฐาน Supabase Free Tier = 5 GB ต่อเดือน
     const EGRESS_LIMIT_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
     const DB_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;  // 500 MB (Supabase Free Tier)
+
+    // คำนวณ Egress ประจำเดือนปัจจุบัน
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const currentDay = now.getDate();
+    const localTrackedBytes = (typeof localStorage !== 'undefined')
+      ? Number(localStorage.getItem(`anping_egress_${currentMonthKey}`) || 0)
+      : 0;
+
+    // คำนวณ Egress จากการเรียกใช้งาน API และ Storage 
+    // - ระบบใช้ IndexedDB Cache ทำให้ส่วนใหญ่ดึงเฉพาะข้อมูลส่วนต่าง และใช้ Pagination ทีละ 35 รายการ
+    // - คำนวณจากกิจกรรมการคิวรีฐานข้อมูล (เฉลี่ย ~120 Bytes ต่อแถวที่ถูกโหลดในแต่ละเซสชัน)
+    // - รวมกับการดาวน์โหลดไฟล์รูปภาพจาก Storage (~20% ของขนาดไฟล์ทั้งหมดในแต่ละเดือน)
+    const baseQueryEgress = totalRows * 120;
+    const baseStorageEgress = Math.round(totalStorageBytes * 0.2);
+    const dailyOperationalBytes = (Math.max(1, currentDay) * 0.8) * 1024 * 1024; // ~0.8 MB ต่อวันสำหรับ Sync/Auth
+
+    const estimatedMonthlyEgressBytes = Math.max(
+      localTrackedBytes,
+      Math.round(dailyOperationalBytes + baseQueryEgress + baseStorageEgress)
+    );
+
+    const egressUsagePercent = Math.min(100, Number(((estimatedMonthlyEgressBytes / EGRESS_LIMIT_BYTES) * 100).toFixed(2)));
+    const egressRemainingBytes = Math.max(0, EGRESS_LIMIT_BYTES - estimatedMonthlyEgressBytes);
+    const egressSavingsPercent = Math.max(0, Number((100 - egressUsagePercent).toFixed(2)));
+    const currentMonthLabel = now.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
 
     // สถิติที่ส่งกลับ
     return {
@@ -112,7 +138,12 @@ export async function getDatabaseAndStorageStats() {
       totalStorageBytes,
       totalFilesCount,
       bucketStats,
+      estimatedMonthlyEgressBytes,
       egressLimitBytes: EGRESS_LIMIT_BYTES,
+      egressUsagePercent,
+      egressRemainingBytes,
+      egressSavingsPercent,
+      currentMonthLabel,
       timestamp: new Date().toISOString()
     };
   } catch (err) {
