@@ -5,78 +5,84 @@ import { supabase } from './supabase';
  * คำนวณช่วงวันที่สำหรับ Clinic Statement
  * รองรับ: 1 อาทิตย์, 1 เดือน, 3 เดือน, 6 เดือน, 12 เดือน (1 ปี), 2 ปี, หรือกำหนดเอง
  */
-export function getStatementDateBounds(preset, customOptions = {}) {
+export function getStatementDateBounds(periodType = 'month', options = {}) {
   const now = new Date();
-  let startDate = new Date();
-  let endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-11
 
-  switch (preset) {
-    case '7d': {
-      // 1 อาทิตย์ (7 วันล่าสุด)
-      startDate.setDate(now.getDate() - 6);
-      startDate.setHours(0, 0, 0, 0);
+  let startDate, endDate;
+
+  switch (periodType) {
+    case 'month':
+    case '1m': {
+      // 1 เดือนเต็ม (วันที่ 1 ถึง วันสิ้นเดือนที่เลือก)
+      const y = options.year ? Number(options.year) : currentYear;
+      const m = options.month !== undefined ? Number(options.month) : currentMonth;
+      startDate = new Date(y, m, 1, 0, 0, 0, 0);
+      const lastDay = new Date(y, m + 1, 0).getDate();
+      endDate = new Date(y, m, lastDay, 23, 59, 59, 999);
       break;
     }
-    case '1m': {
-      // 1 เดือน (30 วันล่าสุด หรือ เดือนปัจจุบัน)
-      if (customOptions.month !== undefined && customOptions.year !== undefined) {
-        const y = Number(customOptions.year);
-        const m = Number(customOptions.month);
-        startDate = new Date(y, m, 1, 0, 0, 0, 0);
-        const lastDay = new Date(y, m + 1, 0).getDate();
-        endDate = new Date(y, m, lastDay, 23, 59, 59, 999);
+    case 'quarter':
+    case '3m': {
+      // ไตรมาส 3 เดือน (Q1: ม.ค.-มี.ค., Q2: เม.ย.-มิ.ย., Q3: ก.ค.-ก.ย., Q4: ต.ค.-ธ.ค.)
+      const y = options.year ? Number(options.year) : currentYear;
+      const q = options.quarter !== undefined ? Number(options.quarter) : Math.floor(currentMonth / 3);
+      const startMonth = q * 3;
+      const endMonth = startMonth + 2;
+      startDate = new Date(y, startMonth, 1, 0, 0, 0, 0);
+      const lastDay = new Date(y, endMonth + 1, 0).getDate();
+      endDate = new Date(y, endMonth, lastDay, 23, 59, 59, 999);
+      break;
+    }
+    case 'half_year':
+    case '6m': {
+      // ครึ่งปี 6 เดือน (ครึ่งแรก: 1 ม.ค. - 30 มิ.ย., ครึ่งหลัง: 1 ก.ค. - 31 ธ.ค.)
+      const y = options.year ? Number(options.year) : currentYear;
+      const half = options.half !== undefined ? Number(options.half) : (currentMonth < 6 ? 1 : 2);
+      if (half === 1) {
+        startDate = new Date(y, 0, 1, 0, 0, 0, 0);
+        endDate = new Date(y, 5, 30, 23, 59, 59, 999);
       } else {
-        startDate.setDate(now.getDate() - 29);
-        startDate.setHours(0, 0, 0, 0);
+        startDate = new Date(y, 6, 1, 0, 0, 0, 0);
+        endDate = new Date(y, 11, 31, 23, 59, 59, 999);
       }
       break;
     }
-    case '3m': {
-      // 3 เดือน (ไตรมาส)
-      startDate.setMonth(now.getMonth() - 3);
-      startDate.setHours(0, 0, 0, 0);
-      break;
-    }
-    case '6m': {
-      // 6 เดือน (ครึ่งปี)
-      startDate.setMonth(now.getMonth() - 6);
-      startDate.setHours(0, 0, 0, 0);
-      break;
-    }
+    case 'year':
     case '12m':
     case '1y': {
-      // 12 เดือน / 1 ปี
-      if (customOptions.year) {
-        const y = Number(customOptions.year);
-        startDate = new Date(y, 0, 1, 0, 0, 0, 0);
-        endDate = new Date(y, 11, 31, 23, 59, 59, 999);
-      } else {
-        startDate.setFullYear(now.getFullYear() - 1);
-        startDate.setHours(0, 0, 0, 0);
-      }
+      // 1 ปีเต็ม (1 ม.ค. - 31 ธ.ค. ของปีที่เลือก)
+      const y = options.year ? Number(options.year) : currentYear;
+      startDate = new Date(y, 0, 1, 0, 0, 0, 0);
+      endDate = new Date(y, 11, 31, 23, 59, 59, 999);
       break;
     }
-    case '24m':
-    case '2y': {
-      // 2 ปี (24 เดือน)
-      startDate.setFullYear(now.getFullYear() - 2);
-      startDate.setHours(0, 0, 0, 0);
+    case '7d': {
+      // 7 วันล่าสุด
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       break;
     }
     case 'custom': {
-      if (customOptions.startDate) {
-        const [sy, sm, sd] = String(customOptions.startDate).split('-').map(Number);
+      if (options.startDate) {
+        const [sy, sm, sd] = String(options.startDate).split('-').map(Number);
         startDate = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
+      } else {
+        startDate = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
       }
-      if (customOptions.endDate) {
-        const [ey, em, ed] = String(customOptions.endDate).split('-').map(Number);
+      if (options.endDate) {
+        const [ey, em, ed] = String(options.endDate).split('-').map(Number);
         endDate = new Date(ey, em - 1, ed, 23, 59, 59, 999);
+      } else {
+        endDate = new Date(currentYear, currentMonth, now.getDate(), 23, 59, 59, 999);
       }
       break;
     }
     default: {
-      startDate.setDate(now.getDate() - 29);
-      startDate.setHours(0, 0, 0, 0);
+      startDate = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+      endDate = new Date(currentYear, currentMonth, lastDay, 23, 59, 59, 999);
       break;
     }
   }
@@ -108,13 +114,14 @@ export function getStatementDateBounds(preset, customOptions = {}) {
 export async function fetchStatementData(rangeBounds, branchId = 'all', manualOpeningBalance = null) {
   if (!supabase) throw new Error('Supabase client is not connected');
 
-  const { startDate, endDate } = rangeBounds;
+  const queryStartDate = rangeBounds.dateOnlyStart || rangeBounds.startDate;
+  const queryEndDate = rangeBounds.dateOnlyEnd ? `${rangeBounds.dateOnlyEnd} 23:59:59.999` : rangeBounds.endDate;
 
   // 1. ดึงข้อมูลรายการจาก finance_all_transactions (ซึ่งรวม POS, Revenue, Expense ครบและตัดรายการซ้ำแล้ว)
   let query = supabase.from('finance_all_transactions')
     .select('*')
-    .gte('timestamp_date', startDate)
-    .lte('timestamp_date', endDate)
+    .gte('timestamp_date', queryStartDate)
+    .lte('timestamp_date', queryEndDate)
     .neq('status', 'cancelled');
 
   if (branchId && branchId !== 'all') {
@@ -134,7 +141,7 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
     try {
       let prevQuery = supabase.from('finance_all_transactions')
         .select('type, amount, id')
-        .lt('timestamp_date', startDate)
+        .lt('timestamp_date', queryStartDate)
         .neq('status', 'cancelled');
 
       if (branchId && branchId !== 'all') {
@@ -154,7 +161,7 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
             prevIncome += amt;
           }
         });
-        openingBalance = Math.max(0, prevIncome - prevExpense);
+        openingBalance = Math.round((prevIncome - prevExpense) * 100) / 100;
       }
     } catch (e) {
       console.warn('Cannot calculate prev opening balance:', e);
@@ -322,12 +329,25 @@ export function generateClinicStatementHtml({
     transactions = []
   } = statementData || {};
 
-  const clinicName = clinicInfo.name || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์';
+  const baseClinicName = clinicInfo.name || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์';
   const clinicEnName = clinicInfo.enName || 'ANPING APPLIED THAI TRADITIONAL MEDICINE CLINIC';
   const clinicTaxId = clinicInfo.taxId || '0-1055-66000-00-0';
-  const branchName = branchInfo?.name || 'สำนักงานใหญ่ / ทุกสาขา';
-  const branchAddress = branchInfo?.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110';
-  const branchPhone = branchInfo?.phone || '02-000-0000';
+
+  const isAllBranches = !branchInfo || 
+    branchInfo.id === 'all' || 
+    branchInfo.name === 'ทุกสาขา' || 
+    String(branchInfo.name || '').includes('ทุกสาขา') ||
+    String(branchInfo.name || '').includes('ภาพรวม');
+
+  const branchName = isAllBranches ? 'ทุกสาขา' : (branchInfo.name || 'สาขาหลัก');
+  const clinicDisplayTitle = isAllBranches 
+    ? `${baseClinicName} (ทุกสาขา)` 
+    : `${baseClinicName} (${branchName})`;
+
+  const branchAddress = isAllBranches 
+    ? (clinicInfo.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110')
+    : (branchInfo?.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110');
+  const branchPhone = branchInfo?.phone || clinicInfo.phone || '02-000-0000';
 
   const refNumber = `STM-${Date.now().toString().slice(-8)}`;
   const printedAt = new Date().toLocaleDateString('th-TH', {
@@ -364,7 +384,7 @@ export function generateClinicStatementHtml({
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>Clinic Statement - ${clinicName}</title>
+  <title>Clinic Statement - ${clinicDisplayTitle}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
     
@@ -501,15 +521,7 @@ export function generateClinicStatementHtml({
       font-size: 11px;
       font-weight: 700;
       color: #0f172a;
-      margin-bottom: 1px;
-    }
-
-    .barcode-area {
-      font-family: monospace;
-      letter-spacing: 2px;
-      font-size: 8px;
-      margin-top: 6px;
-      color: #64748b;
+      margin-bottom: 2px;
     }
 
     /* Summary Box (สไตล์ธนาคาร) */
@@ -657,7 +669,7 @@ export function generateClinicStatementHtml({
               <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">ที่เอกสาร: ${refNumber}</div>
             </td>
             <td class="logo-box" style="vertical-align: top;">
-              <div class="clinic-logo-text">${clinicName}</div>
+              <div class="clinic-logo-text">${clinicDisplayTitle}</div>
               <div class="clinic-sub-logo">${clinicEnName}</div>
               <div class="page-number">หน้าที่ (PAGE/OF) ${pageIdx + 1}/${totalPages}</div>
             </td>
@@ -667,11 +679,10 @@ export function generateClinicStatementHtml({
         <!-- ข้อมูลหน่วยงาน และ ตารางสรุปขวามือ (Summary Box สไตล์กสิกรไทย) -->
         <div class="meta-section">
           <div class="meta-left">
-            <div class="account-name">ชื่อสถานพยาบาล: ${clinicName}</div>
+            <div class="account-name">ชื่อสถานพยาบาล: ${clinicDisplayTitle}</div>
             <div>สาขา: <strong>${branchName}</strong></div>
             <div>ที่อยู่: ${branchAddress}</div>
             <div>โทรศัพท์: ${branchPhone} • เลขประจำตัวผู้เสียภาษี: ${clinicTaxId}</div>
-            <div class="barcode-area">|||||| | |||||||| ||||| | ||||||||||||||||||||||</div>
           </div>
 
           <table class="summary-box">
@@ -714,7 +725,7 @@ export function generateClinicStatementHtml({
               <div style="font-size: 8px; color: #64748b;">เลขที่อ้างอิง: ${refNumber} • สาขา: ${branchName} • รอบระหว่างวันที่: ${rangeBounds.label}</div>
             </td>
             <td class="logo-box" style="vertical-align: top;">
-              <div class="clinic-logo-text" style="font-size: 13px;">${clinicName}</div>
+              <div class="clinic-logo-text" style="font-size: 13px;">${clinicDisplayTitle}</div>
               <div class="page-number">หน้าที่ (PAGE/OF) ${pageIdx + 1}/${totalPages}</div>
             </td>
           </tr>
@@ -842,13 +853,22 @@ export function exportClinicStatementExcel({
     transactions = []
   } = statementData || {};
 
-  const clinicName = clinicInfo.name || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์';
-  const branchName = branchInfo?.name || 'สำนักงานใหญ่ / ทุกสาขา';
+  const baseClinicName = clinicInfo.name || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์';
+  const isAllBranches = !branchInfo || 
+    branchInfo.id === 'all' || 
+    branchInfo.name === 'ทุกสาขา' || 
+    String(branchInfo.name || '').includes('ทุกสาขา') ||
+    String(branchInfo.name || '').includes('ภาพรวม');
+
+  const branchName = isAllBranches ? 'ทุกสาขา' : (branchInfo.name || 'สาขาหลัก');
+  const clinicDisplayTitle = isAllBranches 
+    ? `${baseClinicName} (ทุกสาขา)` 
+    : `${baseClinicName} (${branchName})`;
 
   // หัวตาราง
   const sheetRows = [
     ['รายการเดินบัญชีรายรับ-รายจ่าย (Clinic Statement)'],
-    [`ชื่อสถานพยาบาล: ${clinicName}`, '', '', `สาขา: ${branchName}`],
+    [`ชื่อสถานพยาบาล: ${clinicDisplayTitle}`, '', '', `สาขา: ${branchName}`],
     [`รอบระหว่างวันที่: ${rangeBounds.label}`, '', '', `พิมพ์เมื่อ: ${new Date().toLocaleDateString('th-TH')}`],
     [''],
     ['ยอดยกมาเริ่มต้น (บาท)', openingBalance],

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileSpreadsheet, Printer, Download, Calendar, RefreshCw, 
   X, CheckCircle2, ArrowUpRight, ArrowDownRight, Building2, 
@@ -11,14 +12,31 @@ import {
   exportClinicStatementExcel 
 } from '../lib/statementGenerator';
 
-const PERIOD_PRESETS = [
-  { id: '7d', label: '1 อาทิตย์', desc: '7 วันล่าสุด' },
-  { id: '1m', label: '1 เดือน', desc: '30 วันล่าสุด' },
-  { id: '3m', label: '3 เดือน', desc: 'ไตรมาสล่าสุด' },
-  { id: '6m', label: '6 เดือน', desc: 'ครึ่งปี' },
-  { id: '12m', label: '12 เดือน (1 ปี)', desc: 'ย้อนหลัง 1 ปี' },
-  { id: '24m', label: '2 ปี (24 เดือน)', desc: 'ย้อนหลัง 2 ปี' },
-  { id: 'custom', label: 'กำหนดเอง', desc: 'ระบุวันเริ่มต้น - สิ้นสุด' },
+const MONTH_OPTIONS = [
+  { value: 0, label: 'มกราคม (01)' },
+  { value: 1, label: 'กุมภาพันธ์ (02)' },
+  { value: 2, label: 'มีนาคม (03)' },
+  { value: 3, label: 'เมษายน (04)' },
+  { value: 4, label: 'พฤษภาคม (05)' },
+  { value: 5, label: 'มิถุนายน (06)' },
+  { value: 6, label: 'กรกฎาคม (07)' },
+  { value: 7, label: 'สิงหาคม (08)' },
+  { value: 8, label: 'กันยายน (09)' },
+  { value: 9, label: 'ตุลาคม (10)' },
+  { value: 10, label: 'พฤศจิกายน (11)' },
+  { value: 11, label: 'ธันวาคม (12)' },
+];
+
+const QUARTER_OPTIONS = [
+  { value: 0, label: 'ไตรมาส 1 (1 ม.ค. - 31 มี.ค.)' },
+  { value: 1, label: 'ไตรมาส 2 (1 เม.ย. - 30 มิ.ย.)' },
+  { value: 2, label: 'ไตรมาส 3 (1 ก.ค. - 30 ก.ย.)' },
+  { value: 3, label: 'ไตรมาส 4 (1 ต.ค. - 31 ธ.ค.)' },
+];
+
+const HALF_OPTIONS = [
+  { value: 1, label: 'ครึ่งปีแรก (1 ม.ค. - 30 มิ.ย.)' },
+  { value: 2, label: 'ครึ่งปีหลัง (1 ก.ค. - 31 ธ.ค.)' },
 ];
 
 export default function ClinicStatementModal({
@@ -28,10 +46,32 @@ export default function ClinicStatementModal({
   currentBranch = 'all',
   showToast
 }) {
-  const [selectedPreset, setSelectedPreset] = useState('1m');
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  // ตัวเลือกปี (พ.ศ. / ค.ศ.)
+  const yearOptions = useMemo(() => {
+    return [
+      currentYear + 1,
+      currentYear,
+      currentYear - 1,
+      currentYear - 2,
+      currentYear - 3,
+      currentYear - 4
+    ];
+  }, [currentYear]);
+
+  // ตัวเลือกรูปแบบช่วงเวลา
+  const [periodType, setPeriodType] = useState('month'); // 'month' | 'quarter' | 'half_year' | 'year' | '7d' | 'custom'
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedQuarter, setSelectedQuarter] = useState(Math.floor(currentMonth / 3));
+  const [selectedHalf, setSelectedHalf] = useState(currentMonth < 6 ? 1 : 2);
+
   const [customStartDate, setCustomStartDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(1);
     return d.toISOString().split('T')[0];
   });
   const [customEndDate, setCustomEndDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -43,15 +83,19 @@ export default function ClinicStatementModal({
   const [statementData, setStatementData] = useState(null);
   const [filterSearch, setFilterSearch] = useState('');
 
-  // คำนวณช่วงวันที่
+  // คำนวณช่วงวันที่ตามโหมดที่เลือก
   const rangeBounds = useMemo(() => {
-    return getStatementDateBounds(selectedPreset, {
+    return getStatementDateBounds(periodType, {
+      year: selectedYear,
+      month: selectedMonth,
+      quarter: selectedQuarter,
+      half: selectedHalf,
       startDate: customStartDate,
       endDate: customEndDate
     });
-  }, [selectedPreset, customStartDate, customEndDate]);
+  }, [periodType, selectedYear, selectedMonth, selectedQuarter, selectedHalf, customStartDate, customEndDate]);
 
-  // ดึงข้อมูล Statement
+  // ดึงข้อมูล Statement จาก Supabase
   const loadStatement = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -103,17 +147,30 @@ export default function ClinicStatementModal({
   if (!isOpen) return null;
 
   // ข้อมูลสาขาที่เลือก
-  const activeBranchInfo = branchesData.find(b => b.id === selectedBranch) || {
-    name: selectedBranch === 'all' ? 'ทุกสาขา / ภาพรวมคลินิก' : 'สาขาคลินิก',
-    address: '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
-    phone: '02-000-0000'
-  };
+  const isAllBranchSelected = selectedBranch === 'all' || !selectedBranch;
+  const activeBranchInfo = isAllBranchSelected
+    ? {
+        id: 'all',
+        name: 'ทุกสาขา',
+        address: '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
+        phone: '02-000-0000'
+      }
+    : (branchesData.find(b => b.id === selectedBranch) || {
+        id: selectedBranch,
+        name: 'สาขาคลินิก',
+        address: '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
+        phone: '02-000-0000'
+      });
 
   const clinicInfo = {
     name: 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์',
     enName: 'ANPING APPLIED THAI TRADITIONAL MEDICINE CLINIC',
     taxId: '0-1055-66000-00-0'
   };
+
+  const clinicDisplayTitle = isAllBranchSelected 
+    ? `${clinicInfo.name} (ทุกสาขา)` 
+    : `${clinicInfo.name} (${activeBranchInfo.name})`;
 
   // ดำเนินการพิมพ์ / เซฟเป็น PDF
   const handlePrintPdf = () => {
@@ -140,7 +197,7 @@ export default function ClinicStatementModal({
   const handleExportExcel = () => {
     if (!statementData) return;
     try {
-      const filename = `anping_clinic_statement_${rangeBounds.dateOnlyStart}_${rangeBounds.dateOnlyEnd}.xlsx`;
+      const filename = `anping_statement_${rangeBounds.dateOnlyStart}_${rangeBounds.dateOnlyEnd}.xlsx`;
       exportClinicStatementExcel({
         statementData,
         rangeBounds,
@@ -160,15 +217,15 @@ export default function ClinicStatementModal({
     return Number(val).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  return (
+  const modalContent = (
     <div 
-      className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
         
         {/* Modal Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50/50 via-teal-50/30 to-white">
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50/60 via-teal-50/40 to-white">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
               <FileSpreadsheet size={24} />
@@ -178,12 +235,12 @@ export default function ClinicStatementModal({
                 <h2 className="text-lg font-bold text-slate-800 kanit-text tracking-tight">
                   รายการเดินบัญชีการเงินคลินิก (Clinic Statement)
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 kanit-text">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 kanit-text">
                   Bank Layout Style
                 </span>
               </div>
               <p className="text-xs text-slate-500 kanit-text mt-0.5">
-                พิมพ์และส่งออก Statement รายรับ-รายจ่าย คล้ายรูปแบบของธนาคารพาณิชย์
+                {clinicDisplayTitle} • ออก Statement ยอดรับ-จ่ายพร้อมยอดยกมาตามมาตรฐานธนาคาร
               </p>
             </div>
           </div>
@@ -198,106 +255,246 @@ export default function ClinicStatementModal({
         </div>
 
         {/* Modal Body (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 custom-scrollbar">
           
-          {/* Section 1: ตัวเลือกช่วงเวลา (Presets) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5">
-                <Calendar size={15} className="text-emerald-600" />
-                <span>1. เลือกช่วงเวลาที่ต้องการออก Statement:</span>
-              </label>
-              <span className="text-xs font-bold text-emerald-700 kanit-text bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-100">
-                {rangeBounds.label}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-              {PERIOD_PRESETS.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedPreset(p.id)}
-                  className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col justify-center items-center ${
-                    selectedPreset === p.id
-                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/25 scale-[1.02]'
-                      : 'bg-white border-slate-200/80 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="text-xs font-bold kanit-text">{p.label}</span>
-                  <span className={`text-[10px] kanit-text mt-0.5 ${
-                    selectedPreset === p.id ? 'text-emerald-100' : 'text-slate-400'
-                  }`}>
-                    {p.desc}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Custom Range Inputs */}
-            {selectedPreset === 'custom' && (
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex flex-wrap items-center gap-3 animate-fade-in">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-600 kanit-text font-medium">ตั้งแต่วันที่:</span>
-                  <input
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-600 kanit-text font-medium">ถึงวันที่:</span>
-                  <input
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Section 2: ตัวเลือกสาขา และยอดยกมา */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <div>
-              <label className="text-xs font-bold text-slate-700 kanit-text block mb-1.5">
-                เลือกสาขา:
-              </label>
-              <select
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
-              >
-                <option value="all">ทุกสาขา / สำนักงานใหญ่</option>
-                {branchesData.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-700 kanit-text">
-                  ยอดยกมาเริ่มต้น (บาท):
-                </label>
-                <span className="text-[10px] text-slate-400 kanit-text font-normal">
-                  (เว้นว่างไว้เพื่อให้ระบบคำนวณสะสมอัตโนมัติ)
+          {/* Section 1: เมนูเลือกช่วงเวลาและสาขาแบบ Dropdown (สะอาด ใช้งานง่าย ไม่รก) */}
+          <div className="bg-slate-50/90 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
+              <div className="flex items-center gap-2">
+                <Calendar size={17} className="text-emerald-600" />
+                <span className="text-xs font-bold text-slate-800 kanit-text">
+                  ตั้งค่าช่วงเวลาและเงื่อนไข Statement:
                 </span>
               </div>
-              <input
-                type="number"
-                step="0.01"
-                placeholder={`อัตโนมัติ (${formatCurrency(statementData?.openingBalance || 0)})`}
-                value={manualOpeningBalance}
-                onChange={(e) => setManualOpeningBalance(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
-              />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-emerald-800 kanit-text bg-emerald-100/70 border border-emerald-200/80 px-3 py-1 rounded-xl">
+                  📅 รอบวันที่: {rangeBounds.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={loadStatement}
+                  disabled={isLoading}
+                  title="รีเฟรชข้อมูล"
+                  className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw size={14} className={isLoading ? 'animate-spin text-emerald-600' : ''} />
+                </button>
+              </div>
+            </div>
+
+            {/* Dropdown Filters Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Dropdown 1: รูปแบบช่วงเวลา */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                  รูปแบบช่วงเวลา:
+                </label>
+                <select
+                  value={periodType}
+                  onChange={(e) => setPeriodType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                >
+                  <option value="month">รายเดือน (วันที่ 1 ถึง สิ้นเดือน)</option>
+                  <option value="quarter">ไตรมาส (3 เดือน)</option>
+                  <option value="half_year">ครึ่งปี (6 เดือน)</option>
+                  <option value="year">รายปี (1 ปีเต็ม)</option>
+                  <option value="7d">7 วันล่าสุด</option>
+                  <option value="custom">กำหนดช่วงวันที่เอง</option>
+                </select>
+              </div>
+
+              {/* Dropdown 2 & 3: ตัวเลือกย่อยตามโหมด */}
+              {periodType === 'month' && (
+                <>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      เลือกเดือน:
+                    </label>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    >
+                      {MONTH_OPTIONS.map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      เลือกปี:
+                    </label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    >
+                      {yearOptions.map(y => (
+                        <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {periodType === 'quarter' && (
+                <>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      เลือกไตรมาส:
+                    </label>
+                    <select
+                      value={selectedQuarter}
+                      onChange={(e) => setSelectedQuarter(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    >
+                      {QUARTER_OPTIONS.map(q => (
+                        <option key={q.value} value={q.value}>{q.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      เลือกปี:
+                    </label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    >
+                      {yearOptions.map(y => (
+                        <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {periodType === 'half_year' && (
+                <>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      เลือกครึ่งปี:
+                    </label>
+                    <select
+                      value={selectedHalf}
+                      onChange={(e) => setSelectedHalf(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    >
+                      {HALF_OPTIONS.map(h => (
+                        <option key={h.value} value={h.value}>{h.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      เลือกปี:
+                    </label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    >
+                      {yearOptions.map(y => (
+                        <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {periodType === 'year' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                    เลือกปี (ทั้งปี):
+                  </label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                  >
+                    {yearOptions.map(y => (
+                      <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {periodType === 'custom' && (
+                <>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      ตั้งแต่วันที่:
+                    </label>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                      ถึงวันที่:
+                    </label>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                    />
+                  </div>
+                </>
+              )}
+
+              {periodType === '7d' && (
+                <div className="flex items-center">
+                  <div className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold kanit-text w-full text-center">
+                    ย้อนหลัง 7 วันล่าสุดจากวันนี้
+                  </div>
+                </div>
+              )}
+
+              {/* สาขาคลินิก */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
+                  เลือกสาขาคลินิก:
+                </label>
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                >
+                  <option value="all">ทุกสาขา (ภาพรวมทั้งคลินิก)</option>
+                  {branchesData.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ยอดยกมาเริ่มต้น (Manual override) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-600 kanit-text">
+                    ยอดยกมาเริ่มต้น:
+                  </label>
+                  <span className="text-[9px] text-slate-400 kanit-text">
+                    (เว้นว่าง = อัตโนมัติ)
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder={`อัตโนมัติ (${formatCurrency(statementData?.openingBalance || 0)})`}
+                  value={manualOpeningBalance}
+                  onChange={(e) => setManualOpeningBalance(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Section 3: แดชบอร์ดสรุปสถิติสไตล์ Bank Statement */}
+          {/* Section 2: แดชบอร์ดสรุปสถิติสไตล์ Bank Statement */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
               <span className="text-[11px] font-bold text-slate-400 kanit-text uppercase">ยอดยกมาเริ่มต้น</span>
@@ -342,7 +539,7 @@ export default function ClinicStatementModal({
             </div>
           </div>
 
-          {/* Section 4: Preview Table */}
+          {/* Section 3: Preview Table */}
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -350,8 +547,8 @@ export default function ClinicStatementModal({
                   ตัวอย่างรายการเดินบัญชี ({filteredTransactions.length} รายการ):
                 </h4>
                 {isLoading && (
-                  <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 animate-pulse kanit-text">
-                    <RefreshCw size={12} className="animate-spin" /> กำลังคำนวณ...
+                  <span className="text-[10px] text-emerald-600 font-bold kanit-text animate-pulse">
+                    กำลังโหลดข้อมูล...
                   </span>
                 )}
               </div>
@@ -360,70 +557,75 @@ export default function ClinicStatementModal({
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="ค้นหาใน Statement..."
+                  placeholder="ค้นหาในตารางตัวอย่าง..."
                   value={filterSearch}
                   onChange={(e) => setFilterSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs kanit-text focus:outline-emerald-500 bg-slate-50/50"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs kanit-text focus:outline-emerald-500"
                 />
               </div>
             </div>
 
-            {/* Table Container */}
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-              <div className="max-h-72 overflow-y-auto custom-scrollbar">
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse text-xs kanit-text">
-                  <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10 text-[11px] font-bold border-b border-slate-200">
+                  <thead className="bg-slate-100/80 text-slate-700 font-bold sticky top-0 border-b border-slate-200 z-10">
                     <tr>
-                      <th className="py-2.5 px-3 w-24 text-center">วันที่ / เวลา</th>
+                      <th className="py-2.5 px-3 text-center w-24">วันที่</th>
+                      <th className="py-2.5 px-2 text-center w-16">เวลา</th>
                       <th className="py-2.5 px-3">รายการ</th>
-                      <th className="py-2.5 px-3 text-right text-rose-600">ถอนเงิน (ออก)</th>
-                      <th className="py-2.5 px-3 text-right text-emerald-600">ฝากเงิน (เข้า)</th>
-                      <th className="py-2.5 px-3 text-right">ยอดคงเหลือ (บาท)</th>
+                      <th className="py-2.5 px-3 text-right">ถอน (จ่าย)</th>
+                      <th className="py-2.5 px-3 text-right">ฝาก (รับ)</th>
+                      <th className="py-2.5 px-3 text-right font-bold">คงเหลือ</th>
                       <th className="py-2.5 px-3 text-center">ช่องทาง</th>
-                      <th className="py-2.5 px-3">รายละเอียด</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {/* ยอดยกมา */}
-                    <tr className="bg-slate-50/80 font-bold text-slate-700">
-                      <td className="py-2 px-3 text-center text-slate-500 text-[11px] font-mono">
-                        {rangeBounds.label?.split(' - ')[0] || rangeBounds.dateOnlyStart}
+                    {/* แถวยอดยกมาเริ่มต้น */}
+                    <tr className="bg-slate-50 font-bold text-slate-700">
+                      <td className="py-2 px-3 text-center text-slate-500">
+                        {rangeBounds.dateOnlyStart}
                       </td>
-                      <td className="py-2 px-3">ยอดยกมา (Opening Balance)</td>
+                      <td className="py-2 px-2 text-center text-slate-400">--:--</td>
+                      <td className="py-2 px-3">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 text-[10px]">
+                          ยอดยกมา
+                        </span>
+                      </td>
                       <td className="py-2 px-3 text-right text-slate-400">-</td>
                       <td className="py-2 px-3 text-right text-slate-400">-</td>
-                      <td className="py-2 px-3 text-right font-black text-slate-800">
+                      <td className="py-2 px-3 text-right text-slate-800 font-bold">
                         {formatCurrency(statementData?.openingBalance || 0)}
                       </td>
-                      <td className="py-2 px-3 text-center text-[11px] text-slate-400">SYSTEM</td>
-                      <td className="py-2 px-3 text-slate-400 text-[11px]">ยอดยกมาจากรอบก่อนหน้า</td>
+                      <td className="py-2 px-3 text-center text-slate-400 text-[10px]">SYSTEM</td>
                     </tr>
 
-                    {filteredTransactions.map((tx, idx) => (
-                      <tr key={tx.id || idx} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-2 px-3 text-center text-[11px]">
-                          <span className="font-semibold text-slate-700">{tx.dateFormatted}</span>
-                          <span className="text-[10px] text-slate-400 block">{tx.timeFormatted}</span>
+                    {filteredTransactions.map((t, idx) => (
+                      <tr key={t.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2 px-3 text-center text-slate-600 font-medium">
+                          {t.dateFormatted}
                         </td>
-                        <td className="py-2 px-3 font-semibold text-slate-800">
-                          {tx.type}
+                        <td className="py-2 px-2 text-center text-slate-400 text-[11px]">
+                          {t.timeFormatted}
                         </td>
-                        <td className="py-2 px-3 text-right font-bold text-rose-600 font-mono">
-                          {tx.debit > 0 ? formatCurrency(tx.debit) : '-'}
+                        <td className="py-2 px-3">
+                          <div className="font-semibold text-slate-800">{t.type}</div>
+                          <div className="text-[11px] text-slate-500 truncate max-w-[280px]" title={t.description}>
+                            {t.description}
+                          </div>
                         </td>
-                        <td className="py-2 px-3 text-right font-bold text-emerald-600 font-mono">
-                          {tx.credit > 0 ? formatCurrency(tx.credit) : '-'}
+                        <td className="py-2 px-3 text-right font-bold text-rose-600">
+                          {t.debit > 0 ? formatCurrency(t.debit) : '-'}
                         </td>
-                        <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">
-                          {formatCurrency(tx.balance)}
+                        <td className="py-2 px-3 text-right font-bold text-emerald-600">
+                          {t.credit > 0 ? formatCurrency(t.credit) : '-'}
                         </td>
-                        <td className="py-2 px-3 text-center text-[10px] text-slate-500">
-                          <span className="bg-slate-100 px-2 py-0.5 rounded-md">
-                            {tx.channel}
+                        <td className="py-2 px-3 text-right font-bold text-slate-800">
+                          {formatCurrency(t.balance)}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                            {t.channel}
                           </span>
-                        </td>
-                        <td className="py-2 px-3 text-[11px] text-slate-600 truncate max-w-xs" title={tx.description}>
-                          {tx.description}
                         </td>
                       </tr>
                     ))}
@@ -447,7 +649,7 @@ export default function ClinicStatementModal({
         <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-500 kanit-text flex items-center gap-1.5">
             <Info size={14} className="text-emerald-600 shrink-0" />
-            <span>รูปแบบเอกสาร A4 และตารางจัดเหมือน Statement ธนาคารกสิกรไทย</span>
+            <span>รูปแบบเอกสาร A4 ปรับสไตล์ธนาคารพาณิชย์ (ไม่รวมบาร์โค้ด และแสดงชื่อสาขาชัดเจน)</span>
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
@@ -484,4 +686,6 @@ export default function ClinicStatementModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }
