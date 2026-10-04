@@ -97,9 +97,17 @@ export async function getDatabaseAndStorageStats() {
     // เฉลี่ยขนาดข้อมูลต่อแถว ~ 0.5 - 1.2 KB ขึ้นอยู่กับตาราง
     const estimatedDbBytes = totalRows * 850;
     
-    // โควตาฟรีมาตรฐาน Supabase Free Tier = 5 GB ต่อเดือน
+    // โควตาฟรีมาตรฐาน Supabase Free Tier:
+    // - Egress: 5 GB ต่อเดือน
+    // - Database Size: 500 MB
+    // - File Storage: 1 GB (1,024 MB)
     const EGRESS_LIMIT_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
-    const DB_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;  // 500 MB (Supabase Free Tier)
+    const DB_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;  // 500 MB
+    const STORAGE_LIMIT_BYTES = 1 * 1024 * 1024 * 1024; // 1 GB (1,024 MB)
+
+    // คำนวณเปอร์เซ็นต์และพื้นที่คงเหลือของ File Storage
+    const storageUsagePercent = Math.min(100, Number(((totalStorageBytes / STORAGE_LIMIT_BYTES) * 100).toFixed(2)));
+    const storageRemainingBytes = Math.max(0, STORAGE_LIMIT_BYTES - totalStorageBytes);
 
     // คำนวณ Egress ประจำเดือนปัจจุบัน
     const now = new Date();
@@ -136,6 +144,9 @@ export async function getDatabaseAndStorageStats() {
       dbLimitBytes: DB_STORAGE_LIMIT_BYTES,
       dbUsagePercent: Math.min(100, Math.round((estimatedDbBytes / DB_STORAGE_LIMIT_BYTES) * 100)),
       totalStorageBytes,
+      storageLimitBytes: STORAGE_LIMIT_BYTES,
+      storageUsagePercent,
+      storageRemainingBytes,
       totalFilesCount,
       bucketStats,
       estimatedMonthlyEgressBytes,
@@ -177,6 +188,27 @@ export function getDateRangeBounds(type, options = {}) {
     };
   }
 
+  if (type === 'month') {
+    const year = Number(options.year) || now.getFullYear();
+    const month = options.month !== undefined ? Number(options.month) : now.getMonth();
+    const startDateObj = new Date(year, month, 1, 0, 0, 0, 0);
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    const endDateObj = new Date(year, month, lastDayOfMonth, 23, 59, 59, 999);
+    
+    const mStr = String(month + 1).padStart(2, '0');
+    const startStr = `${year}-${mStr}-01`;
+    const endStr = `${year}-${mStr}-${String(lastDayOfMonth).padStart(2, '0')}`;
+    const monthThai = startDateObj.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    
+    return {
+      startDate: startDateObj.toISOString(),
+      endDate: endDateObj.toISOString(),
+      dateOnlyStart: startStr,
+      dateOnlyEnd: endStr,
+      label: `ประจำเดือน ${monthThai}`
+    };
+  }
+
   if (type === 'custom') {
     const s = options.startDate ? new Date(options.startDate) : new Date(now.getFullYear(), 0, 1);
     const e = options.endDate ? new Date(options.endDate) : now;
@@ -212,27 +244,23 @@ export function getDateRangeBounds(type, options = {}) {
 }
 
 /**
- * ตรวจสอบจำนวนรายการที่จะได้รับผลกระทบตามช่วงเวลาและตาราง
+ * ตรวจสอบจำนวนแถวในแต่ละตารางตามช่วงเวลาที่เลือก (Query Head Count ไม่ดึงข้อมูลแถว ประหยัด Egress 100%)
  */
-export async function previewPurgeImpact(tableKeys, rangeBounds) {
+export async function getTableCountsByDateRange(tableKeys, rangeBounds) {
   if (!supabase || !Array.isArray(tableKeys) || tableKeys.length === 0) {
     return {};
   }
 
   const results = {};
-  const { startDate, endDate, dateOnlyStart, dateOnlyEnd } = rangeBounds;
+  const { startDate, endDate, dateOnlyStart, dateOnlyEnd } = rangeBounds || {};
 
-  for (const tableKey of tableKeys) {
-    // ป้องกันตารางต้องห้าม
-    if (PROTECTED_TABLES.some(p => p.key === tableKey)) continue;
-
+  await Promise.all(tableKeys.map(async (tableKey) => {
     try {
       let query = supabase.from(tableKey).select('*', { count: 'exact', head: true });
       
       const tableMeta = PURGEABLE_TABLES.find(t => t.key === tableKey);
       if (startDate && endDate) {
         if (tableMeta?.dateCol) {
-          // ใช้ or เพื่อรองรับทั้ง ISO timestamp created_at และ date
           query = query.or(`created_at.gte.${startDate},and(${tableMeta.dateCol}.gte.${dateOnlyStart},${tableMeta.dateCol}.lte.${dateOnlyEnd})`)
                        .lte('created_at', endDate);
         } else {
@@ -245,9 +273,18 @@ export async function previewPurgeImpact(tableKeys, rangeBounds) {
     } catch (err) {
       results[tableKey] = 0;
     }
-  }
+  }));
 
   return results;
+}
+
+/**
+ * ตรวจสอบจำนวนรายการที่จะได้รับผลกระทบตามช่วงเวลาและตาราง (สำหรับ Purge พร้อมคัดตารางต้องห้ามออก)
+ */
+export async function previewPurgeImpact(tableKeys, rangeBounds) {
+  if (!Array.isArray(tableKeys) || tableKeys.length === 0) return {};
+  const allowedKeys = tableKeys.filter(k => !PROTECTED_TABLES.some(p => p.key === k));
+  return getTableCountsByDateRange(allowedKeys, rangeBounds);
 }
 
 /**

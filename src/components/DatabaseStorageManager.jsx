@@ -10,12 +10,30 @@ import {
   PROTECTED_TABLES, 
   getDatabaseAndStorageStats, 
   getDateRangeBounds, 
+  getTableCountsByDateRange,
   previewPurgeImpact, 
   exportSupabaseToExcel, 
   purgeHistoricalData, 
   parseExcelForSimulation 
 } from '../lib/databaseManager';
 import { clearAllLocalStores } from '../lib/offlineStore';
+
+const THAI_MONTHS = [
+  { value: 0, label: 'มกราคม' },
+  { value: 1, label: 'กุมภาพันธ์' },
+  { value: 2, label: 'มีนาคม' },
+  { value: 3, label: 'เมษายน' },
+  { value: 4, label: 'พฤษภาคม' },
+  { value: 5, label: 'มิถุนายน' },
+  { value: 6, label: 'กรกฎาคม' },
+  { value: 7, label: 'สิงหาคม' },
+  { value: 8, label: 'กันยายน' },
+  { value: 9, label: 'ตุลาคม' },
+  { value: 10, label: 'พฤศจิกายน' },
+  { value: 11, label: 'ธันวาคม' }
+];
+
+const AVAILABLE_YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020];
 
 export default function DatabaseStorageManager({ 
   showToast, 
@@ -52,17 +70,21 @@ export default function DatabaseStorageManager({
   const [activeActionTab, setActiveActionTab] = useState('export'); // 'export', 'purge', 'simulation', 'cache'
 
   // --- 3. Export to Excel State ---
-  const [exportRangeType, setExportRangeType] = useState('year'); // 'all', 'year', 'custom', 'single'
+  const [exportRangeType, setExportRangeType] = useState('year'); // 'all', 'year', 'month', 'custom', 'single'
   const [exportYear, setExportYear] = useState(new Date().getFullYear());
+  const [exportMonth, setExportMonth] = useState(new Date().getMonth());
   const [exportStartDate, setExportStartDate] = useState(`${new Date().getFullYear()}-01-01`);
   const [exportEndDate, setExportEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [exportSingleDate, setExportSingleDate] = useState(new Date().toISOString().split('T')[0]);
   const [exportSelectedTables, setExportSelectedTables] = useState(PURGEABLE_TABLES.map(t => t.key));
+  const [exportCounts, setExportCounts] = useState({});
+  const [isLoadingExportCounts, setIsLoadingExportCounts] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   // --- 4. Purge Historical Data State ---
-  const [purgeRangeType, setPurgeRangeType] = useState('year'); // 'year', 'custom', 'single'
+  const [purgeRangeType, setPurgeRangeType] = useState('year'); // 'year', 'month', 'custom', 'single'
   const [purgeYear, setPurgeYear] = useState(new Date().getFullYear() - 1); // ค่าเริ่มต้นคือปีที่แล้ว
+  const [purgeMonth, setPurgeMonth] = useState(new Date().getMonth() === 0 ? 11 : new Date().getMonth() - 1);
   const [purgeStartDate, setPurgeStartDate] = useState(`${new Date().getFullYear() - 1}-01-01`);
   const [purgeEndDate, setPurgeEndDate] = useState(`${new Date().getFullYear() - 1}-12-31`);
   const [purgeSingleDate, setPurgeSingleDate] = useState(`${new Date().getFullYear() - 1}-01-01`);
@@ -82,21 +104,60 @@ export default function DatabaseStorageManager({
   const currentExportBounds = useMemo(() => {
     return getDateRangeBounds(exportRangeType, {
       year: exportYear,
+      month: exportMonth,
       startDate: exportStartDate,
       endDate: exportEndDate,
       singleDate: exportSingleDate
     });
-  }, [exportRangeType, exportYear, exportStartDate, exportEndDate, exportSingleDate]);
+  }, [exportRangeType, exportYear, exportMonth, exportStartDate, exportEndDate, exportSingleDate]);
 
   // คำนวณช่วงวันที่สำหรับ Purge
   const currentPurgeBounds = useMemo(() => {
     return getDateRangeBounds(purgeRangeType, {
       year: purgeYear,
+      month: purgeMonth,
       startDate: purgeStartDate,
       endDate: purgeEndDate,
       singleDate: purgeSingleDate
     });
-  }, [purgeRangeType, purgeYear, purgeStartDate, purgeEndDate, purgeSingleDate]);
+  }, [purgeRangeType, purgeYear, purgeMonth, purgeStartDate, purgeEndDate, purgeSingleDate]);
+
+  // ดึงจำนวนแถวตามช่วงเวลาที่เลือกในแท็บ Export อัตโนมัติ (Dynamic Head Count)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchExportCounts = async () => {
+      setIsLoadingExportCounts(true);
+      try {
+        const counts = await getTableCountsByDateRange(
+          PURGEABLE_TABLES.map(t => t.key),
+          currentExportBounds
+        );
+        if (isMounted) {
+          setExportCounts(counts);
+        }
+      } catch (err) {
+        console.error('fetchExportCounts error:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingExportCounts(false);
+        }
+      }
+    };
+
+    fetchExportCounts();
+    return () => { isMounted = false; };
+  }, [currentExportBounds]);
+
+  // ตรวจสอบจำนวนรายการที่จะถูกลบอัตโนมัติเมื่อเลือกตารางหรือช่วงเวลาในแท็บ Purge
+  useEffect(() => {
+    let isMounted = true;
+    if (activeActionTab === 'purge' && purgeSelectedTables.length > 0) {
+      previewPurgeImpact(purgeSelectedTables, currentPurgeBounds).then(counts => {
+        if (isMounted) setImpactCounts(counts);
+      }).catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [activeActionTab, currentPurgeBounds, purgeSelectedTables]);
 
   // ตรวจสอบจำนวนรายการที่จะถูกลบ
   const handleCheckImpact = async () => {
@@ -350,19 +411,34 @@ export default function DatabaseStorageManager({
               <span className="text-2xl font-black text-slate-800 kanit-text">
                 {stats ? formatBytes(stats.totalStorageBytes) : '-'}
               </span>
-              <span className="text-xs text-slate-500 kanit-text">
-                ({stats?.totalFilesCount || 0} ไฟล์)
+              <span className="text-xs text-slate-400 kanit-text font-normal">
+                / 1.00 GB
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 kanit-text mt-1">
-              เก็บรูปภาพ ลายเซ็นยินยอมการรักษา และเอกสารแนบใน Supabase Storage Buckets
+
+            {/* Progress Bar (หลอดพลัง) */}
+            <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
+              <div 
+                className={`h-2 rounded-full transition-all duration-500 ${
+                  (stats?.storageUsagePercent || 0) > 80 
+                    ? 'bg-rose-500' 
+                    : (stats?.storageUsagePercent || 0) > 50 
+                      ? 'bg-amber-500' 
+                      : 'bg-violet-500'
+                }`}
+                style={{ width: `${Math.max(2, stats?.storageUsagePercent || 1)}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex justify-between">
+              <span>ใช้งานไปแล้ว {stats?.storageUsagePercent != null ? `${stats.storageUsagePercent}%` : '0%'}</span>
+              <span>{stats?.totalFilesCount ? `${stats.totalFilesCount.toLocaleString()} ไฟล์` : '0 ไฟล์'} ({stats?.bucketStats?.length || 0} ถัง)</span>
             </p>
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs kanit-text">
-            <span className="text-slate-500">จำนวน Buckets:</span>
+            <span className="text-slate-500">พื้นที่คงเหลือ:</span>
             <span className="text-violet-600 font-bold">
-              {stats?.bucketStats?.length || 0} ถังเก็บข้อมูล
+              {stats ? formatBytes(stats.storageRemainingBytes) : '1.00 GB'}
             </span>
           </div>
         </div>
@@ -444,10 +520,11 @@ export default function DatabaseStorageManager({
                   1. เลือกช่วงเวลาที่ต้องการส่งออก:
                 </span>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   {[
-                    { id: 'all', label: 'ข้อมูลทั้งหมด (All Time)' },
+                    { id: 'all', label: 'ข้อมูลทั้งหมด' },
                     { id: 'year', label: 'เลือกทั้งปี' },
+                    { id: 'month', label: 'เลือกรายเดือน' },
                     { id: 'custom', label: 'กำหนดช่วงวันที่' },
                     { id: 'single', label: 'เฉพาะวันเดียว' },
                   ].map(tab => (
@@ -476,10 +553,39 @@ export default function DatabaseStorageManager({
                         onChange={(e) => setExportYear(Number(e.target.value))}
                         className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
                       >
-                        {[2026, 2025, 2024, 2023, 2022].map(y => (
+                        {AVAILABLE_YEARS.map(y => (
                           <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
                         ))}
                       </select>
+                    </div>
+                  )}
+
+                  {exportRangeType === 'month' && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs text-slate-600 kanit-text font-medium">ปี:</label>
+                        <select
+                          value={exportYear}
+                          onChange={(e) => setExportYear(Number(e.target.value))}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                        >
+                          {AVAILABLE_YEARS.map(y => (
+                            <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs text-slate-600 kanit-text font-medium">เดือน:</label>
+                        <select
+                          value={exportMonth}
+                          onChange={(e) => setExportMonth(Number(e.target.value))}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                        >
+                          {THAI_MONTHS.map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
 
@@ -545,10 +651,25 @@ export default function DatabaseStorageManager({
                   </div>
                 </div>
 
+                {/* แถบสรุปช่วงเวลาและจำนวนแถวจริงในช่วงเวลานี้ */}
+                <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs kanit-text">
+                  <div className="flex items-center gap-2 text-sky-800 font-medium">
+                    <Info size={14} className="text-sky-600 shrink-0" />
+                    <span>ช่วงเวลา: <strong className="text-sky-950 font-bold">{currentExportBounds.label}</strong></span>
+                  </div>
+                  <div className="text-sky-700 font-bold">
+                    รวมแถวที่เลือก: {isLoadingExportCounts ? (
+                      <span className="animate-pulse text-sky-500">กำลังคำนวณ...</span>
+                    ) : (
+                      `${exportSelectedTables.reduce((acc, k) => acc + (exportCounts[k] !== undefined ? exportCounts[k] : 0), 0).toLocaleString()} แถว`
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {PURGEABLE_TABLES.map(tbl => {
                     const isChecked = exportSelectedTables.includes(tbl.key);
-                    const count = stats?.tableCounts?.[tbl.key] || 0;
+                    const count = exportCounts[tbl.key] !== undefined ? exportCounts[tbl.key] : (stats?.tableCounts?.[tbl.key] || 0);
                     return (
                       <label
                         key={tbl.key}
@@ -570,8 +691,16 @@ export default function DatabaseStorageManager({
                           />
                           <span className="text-xs font-bold kanit-text truncate">{tbl.name}</span>
                         </div>
-                        <span className="text-[11px] font-semibold text-slate-400 kanit-text bg-white px-2 py-0.5 rounded-full border border-slate-100 shrink-0">
-                          {count.toLocaleString()} แถว
+                        <span className={`text-[11px] font-bold kanit-text px-2 py-0.5 rounded-lg border transition-all ${
+                          count > 0 
+                            ? 'bg-sky-100/70 border-sky-200 text-sky-800' 
+                            : 'bg-slate-50 border-slate-100 text-slate-400'
+                        }`}>
+                          {isLoadingExportCounts ? (
+                            <span className="animate-pulse text-sky-500">...</span>
+                          ) : (
+                            `${count.toLocaleString()} แถว`
+                          )}
                         </span>
                       </label>
                     );
@@ -619,9 +748,10 @@ export default function DatabaseStorageManager({
                   1. เลือกช่วงเวลาของเอกสารที่ต้องการลบ:
                 </span>
                 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { id: 'year', label: 'เลือกทั้งปี (เช่น ปีที่แล้ว)' },
+                    { id: 'year', label: 'เลือกทั้งปี' },
+                    { id: 'month', label: 'เลือกรายเดือน' },
                     { id: 'custom', label: 'กำหนดช่วงวันที่เอง' },
                     { id: 'single', label: 'เฉพาะวันเดียว' },
                   ].map(tab => (
@@ -650,10 +780,39 @@ export default function DatabaseStorageManager({
                         onChange={(e) => { setPurgeYear(Number(e.target.value)); setImpactCounts(null); }}
                         className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-rose-500"
                       >
-                        {[2025, 2024, 2023, 2022, 2021, 2020].map(y => (
+                        {AVAILABLE_YEARS.map(y => (
                           <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
                         ))}
                       </select>
+                    </div>
+                  )}
+
+                  {purgeRangeType === 'month' && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs text-slate-600 kanit-text font-medium">ปี:</label>
+                        <select
+                          value={purgeYear}
+                          onChange={(e) => { setPurgeYear(Number(e.target.value)); setImpactCounts(null); }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-rose-500"
+                        >
+                          {AVAILABLE_YEARS.map(y => (
+                            <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <label className="text-xs text-slate-600 kanit-text font-medium">เดือน:</label>
+                        <select
+                          value={purgeMonth}
+                          onChange={(e) => { setPurgeMonth(Number(e.target.value)); setImpactCounts(null); }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-rose-500"
+                        >
+                          {THAI_MONTHS.map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
 
