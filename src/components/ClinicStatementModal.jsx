@@ -13,18 +13,18 @@ import {
 } from '../lib/statementGenerator';
 
 const MONTH_OPTIONS = [
-  { value: 0, label: 'มกราคม (01)' },
-  { value: 1, label: 'กุมภาพันธ์ (02)' },
-  { value: 2, label: 'มีนาคม (03)' },
-  { value: 3, label: 'เมษายน (04)' },
-  { value: 4, label: 'พฤษภาคม (05)' },
-  { value: 5, label: 'มิถุนายน (06)' },
-  { value: 6, label: 'กรกฎาคม (07)' },
-  { value: 7, label: 'สิงหาคม (08)' },
-  { value: 8, label: 'กันยายน (09)' },
-  { value: 9, label: 'ตุลาคม (10)' },
-  { value: 10, label: 'พฤศจิกายน (11)' },
-  { value: 11, label: 'ธันวาคม (12)' },
+  { value: 0, label: 'มกราคม (เดือน 1)' },
+  { value: 1, label: 'กุมภาพันธ์ (เดือน 2)' },
+  { value: 2, label: 'มีนาคม (เดือน 3)' },
+  { value: 3, label: 'เมษายน (เดือน 4)' },
+  { value: 4, label: 'พฤษภาคม (เดือน 5)' },
+  { value: 5, label: 'มิถุนายน (เดือน 6)' },
+  { value: 6, label: 'กรกฎาคม (เดือน 7)' },
+  { value: 7, label: 'สิงหาคม (เดือน 8)' },
+  { value: 8, label: 'กันยายน (เดือน 9)' },
+  { value: 9, label: 'ตุลาคม (เดือน 10)' },
+  { value: 10, label: 'พฤศจิกายน (เดือน 11)' },
+  { value: 11, label: 'ธันวาคม (เดือน 12)' },
 ];
 
 const QUARTER_OPTIONS = [

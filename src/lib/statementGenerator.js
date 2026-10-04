@@ -87,8 +87,9 @@ export function getStatementDateBounds(periodType = 'month', options = {}) {
     }
   }
 
-  const sStr = startDate.toISOString().split('T')[0];
-  const eStr = endDate.toISOString().split('T')[0];
+  const pad = (n) => String(n).padStart(2, '0');
+  const sStr = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
+  const eStr = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}`;
 
   const formatDisplayDate = (d) => {
     const day = String(d.getDate()).padStart(2, '0');
@@ -98,8 +99,8 @@ export function getStatementDateBounds(periodType = 'month', options = {}) {
   };
 
   return {
-    startDate: startDate.toISOString(),
-    endDate: endDate.toISOString(),
+    startDate: `${sStr}T00:00:00`,
+    endDate: `${eStr}T23:59:59.999`,
     dateOnlyStart: sStr,
     dateOnlyEnd: eStr,
     label: `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`,
@@ -128,11 +129,30 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
     query = query.eq('branch_id', branchId);
   }
 
-  const { data: rawRows, error } = await query.order('timestamp_date', { ascending: true });
+  const { data: rawRows, error } = await query;
   if (error) {
     console.error('fetchStatementData query error:', error);
     throw new Error(error.message || 'ไม่สามารถดึงข้อมูลรายการเดินบัญชีได้');
   }
+
+  // เวลาเริ่มต้นและสิ้นสุดของรอบตามเขตเวลาท้องถิ่น
+  const startMs = new Date(rangeBounds.startDateObj || rangeBounds.startDate).getTime();
+  const endMs = new Date(rangeBounds.endDateObj || rangeBounds.endDate).getTime();
+
+  // กรองเฉพาะรายการที่ตกอยู่ในช่วงเวลาจริงของรอบนี้ (ตัดเศษวันก่อนหน้า/ถัดไปที่อาจติดมาจากการ query สตริง)
+  const validRows = (rawRows || []).filter(row => {
+    const raw = row.timestamp_date || row.created_at;
+    if (!raw) return false;
+    const ms = new Date(raw).getTime();
+    return ms >= startMs && ms <= endMs;
+  });
+
+  // เรียงลำดับตามเวลาจริงจากเก่าไปใหม่อย่างแม่นยำ (Chronological Ascending)
+  validRows.sort((a, b) => {
+    const tA = new Date(a.timestamp_date || a.created_at || 0).getTime();
+    const tB = new Date(b.timestamp_date || b.created_at || 0).getTime();
+    return tA - tB;
+  });
 
   // 2. คำนวณยอดยกมา (Opening Balance)
   let openingBalance = manualOpeningBalance !== null ? Number(manualOpeningBalance) : 0;
@@ -140,7 +160,7 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
   if (manualOpeningBalance === null) {
     try {
       let prevQuery = supabase.from('finance_all_transactions')
-        .select('type, amount, id')
+        .select('type, amount, id, timestamp_date, created_at')
         .lt('timestamp_date', queryStartDate)
         .neq('status', 'cancelled');
 
@@ -149,30 +169,38 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
       }
 
       const { data: prevData, error: prevErr } = await prevQuery;
-      if (!prevErr && prevData) {
-        let prevIncome = 0;
-        let prevExpense = 0;
-        prevData.forEach(row => {
-          const amt = Number(row.amount || 0);
-          const isExp = row.type === 'expense' || String(row.id || '').toUpperCase().startsWith('EXP');
-          if (isExp) {
-            prevExpense += amt;
-          } else {
-            prevIncome += amt;
-          }
-        });
-        openingBalance = Math.round((prevIncome - prevExpense) * 100) / 100;
-      }
+      
+      const allPrevRows = [...(prevData || [])];
+      // เก็บรายการที่ rawRows ดึงมาแต่ตกอยู่ในรอบก่อน startMs เข้ายอดยกมาด้วย
+      (rawRows || []).forEach(row => {
+        const raw = row.timestamp_date || row.created_at;
+        if (raw && new Date(raw).getTime() < startMs) {
+          allPrevRows.push(row);
+        }
+      });
+
+      let prevIncome = 0;
+      let prevExpense = 0;
+      allPrevRows.forEach(row => {
+        const amt = Number(row.amount || 0);
+        const isExp = row.type === 'expense' || String(row.id || '').toUpperCase().startsWith('EXP');
+        if (isExp) {
+          prevExpense += amt;
+        } else {
+          prevIncome += amt;
+        }
+      });
+      openingBalance = Math.round((prevIncome - prevExpense) * 100) / 100;
     } catch (e) {
       console.warn('Cannot calculate prev opening balance:', e);
       openingBalance = 0;
     }
   }
 
-  // 3. รวบรวมและแปลงเป็นโครงสร้างมาตรฐานของ Statement
+  // 3. รวบรวมและแปลงเป็นโครงสร้างมาตรฐานของ Statement จาก validRows
   const transactions = [];
 
-  (rawRows || []).forEach(row => {
+  validRows.forEach(row => {
     const dt = new Date(row.timestamp_date || row.created_at || Date.now());
     const isExp = row.type === 'expense' || String(row.id || '').toUpperCase().startsWith('EXP') || row.category === 'รายจ่าย';
     const amt = Number(row.amount || 0);
@@ -354,21 +382,53 @@ export function generateClinicStatementHtml({
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  // จำนวนแถวต่อหน้า A4 ตามสไตล์ Statement ธนาคารกสิกรไทย
-  // หน้าแรกมีกล่อง Summary Box -> จุได้ 22 รายการพอดีเป๊ะในหน้าเดียว
-  // หน้า 2 เป็นต้นไปมีมินิเฮดเดอร์ 2 บรรทัด -> จุได้ 35 รายการต่อหน้า
-  const ROWS_FIRST_PAGE = 22;
-  const ROWS_SUBSEQUENT_PAGE = 35;
+  // จัดหน้าอัจฉริยะ (Dynamic Smart Pagination)
+  // ให้หน้าแรกจุได้สูงสุด 32 รายการ (มี Summary Box)
+  // และหน้าต่อๆ ไปจุได้สูงสุด 40 รายการ
+  // พร้อมเกลี่ยจำนวนรายการให้สมดุลเพื่อไม่ให้หน้าสุดท้ายเหลือเศษเพียง 1-3 รายการโหวงเหวง
+  const MAX_PAGE_1 = 32;
+  const MAX_PAGE_SUB = 40;
 
   const pages = [];
-  if (transactions.length === 0) {
+  const total = transactions.length;
+
+  if (total === 0) {
     pages.push([]);
+  } else if (total <= MAX_PAGE_1) {
+    pages.push(transactions);
   } else {
-    pages.push(transactions.slice(0, ROWS_FIRST_PAGE));
-    let offset = ROWS_FIRST_PAGE;
-    while (offset < transactions.length) {
-      pages.push(transactions.slice(offset, offset + ROWS_SUBSEQUENT_PAGE));
-      offset += ROWS_SUBSEQUENT_PAGE;
+    const remaining = total - MAX_PAGE_1;
+    const totalPages = 1 + Math.ceil(remaining / MAX_PAGE_SUB);
+
+    if (totalPages === 2) {
+      // สำหรับ 2 หน้า: แบ่งจำนวนรายการให้ใกล้เคียงกัน (สมดุล)
+      const half = Math.ceil(total / 2);
+      const countP1 = Math.min(MAX_PAGE_1, Math.max(half, total - MAX_PAGE_SUB));
+      pages.push(transactions.slice(0, countP1));
+      pages.push(transactions.slice(countP1));
+    } else {
+      // สำหรับ 3 หน้าขึ้นไป: กระจายแถวให้สมดุล ไม่ให้หน้าสุดท้ายโหวง
+      let offset = 0;
+      for (let p = 0; p < totalPages; p++) {
+        const isFirst = p === 0;
+        const isLast = p === totalPages - 1;
+        const leftRows = total - offset;
+        const pagesLeft = totalPages - p;
+
+        if (isFirst) {
+          const targetP1 = Math.min(MAX_PAGE_1, Math.ceil(total / totalPages));
+          const count = Math.min(leftRows, Math.max(targetP1, total - (pagesLeft - 1) * MAX_PAGE_SUB));
+          pages.push(transactions.slice(offset, offset + count));
+          offset += count;
+        } else if (isLast) {
+          pages.push(transactions.slice(offset));
+          offset = total;
+        } else {
+          const target = Math.min(MAX_PAGE_SUB, Math.ceil(leftRows / pagesLeft));
+          pages.push(transactions.slice(offset, offset + target));
+          offset += target;
+        }
+      }
     }
   }
 
@@ -656,6 +716,12 @@ export function generateClinicStatementHtml({
       ? openingBalance 
       : (pages[pageIdx - 1]?.[pages[pageIdx - 1].length - 1]?.balance ?? openingBalance);
 
+    // วันที่ของแถวยอดยกมา: หน้าแรกใช้วันที่เริ่มต้นรอบบัญชี, หน้า 2 เป็นต้นไปใช้วันที่ของรายการสุดท้ายจากหน้าก่อน
+    const prevPageLastRow = pages[pageIdx - 1]?.[pages[pageIdx - 1].length - 1];
+    const pageOpeningDate = isFirstPage 
+      ? formatStatementDate(rangeBounds.startDateObj)
+      : (prevPageLastRow?.dateFormatted || formatStatementDate(rangeBounds.startDateObj));
+
     return `
     <div class="page">
       <div>
@@ -759,7 +825,7 @@ export function generateClinicStatementHtml({
           <tbody>
             <!-- แถวยอดยกมาของหน้านี้ -->
             <tr class="opening-row">
-              <td class="text-center nowrap num-val">${formatStatementDate(rangeBounds.startDateObj)}</td>
+              <td class="text-center nowrap num-val">${pageOpeningDate}</td>
               <td class="text-center nowrap num-val" style="color: #94a3b8;">--:--</td>
               <td class="text-center nowrap" style="font-weight: 700;">ยอดยกมา</td>
               <td class="text-right nowrap num-val">-</td>
@@ -811,7 +877,7 @@ export function generateClinicStatementHtml({
       <!-- ส่วนท้ายหน้ากระดาษ -->
       <div class="footer-section">
         <div>
-          ออกโดย: ระบบสารสนเทศการเงินคลินิก (Periodic Automated Statement) • พิมพ์เมื่อ: ${printedAt}
+          ออกโดย: ระบบสารสนเทศการเงินคลินิก • วันที่สั่งพิมพ์เอกสาร: ${printedAt} น.
         </div>
         <div style="text-align: right;">
           เอกสารนี้เป็นรายงานสรุปรายการเดินบัญชีภายในสำหรับตรวจสอบทางบัญชีและการเงิน
