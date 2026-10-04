@@ -18,10 +18,11 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Copy, Check, RefreshCw
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { dispatchClinicNotification, calculateDailySalesSummary } from '../lib/notificationHub';
+import { getBankInfo, formatAccountNumber, generatePromptPayQrDataUrl } from '../lib/promptpay';
 
 const POSSystem = ({ 
     products = [], setProducts, 
@@ -39,7 +40,8 @@ const POSSystem = ({
     currentUser,
     integrationTokens = {},
     fetchPatientTreatments,
-    fetchPatientsPaginated
+    fetchPatientsPaginated,
+    posQrSettings = { accounts: [] }
 }) => {
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -409,35 +411,65 @@ const POSSystem = ({
   };
 
 
-  // --- [NEW] State สำหรับระบบจับเวลา QR Code ---
-  const [qrCountdown, setQrCountdown] = useState(300); // 300 วินาที = 5 นาที
-  const [isQrExpired, setIsQrExpired] = useState(false);
-  const [qrKey, setQrKey] = useState(Date.now()); // ไว้ใช้รีเฟรชรูป QR ใหม่
+  // --- [NEW] State สำหรับระบบรีเฟรช QR Code ---
+  const [qrKey, setQrKey] = useState(Date.now());
 
-  // --- [NEW] ระบบจับเวลาถอยหลัง QR Code ---
-  useEffect(() => {
-    let timer;
-    if (paymentMethod === 'transfer' && checkoutModal.isOpen && !checkoutSuccess && !isQrExpired) {
-      timer = setInterval(() => {
-        setQrCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            setIsQrExpired(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+  // --- [NEW] ระบบบัญชีรับเงิน QR Code สำหรับ POS ---
+  const activeQrAccounts = useMemo(() => {
+    const list = posQrSettings?.accounts || [];
+    const active = list.filter(a => a.isActive !== false);
+    if (active.length > 0) return active;
+    return [{
+      id: 'default-kbank-promptpay',
+      name: 'นาย พุทธินัทธ์ จงเจริญเลิศสิน',
+      type: 'promptpay_mobile',
+      accountNumber: '0631434927',
+      bankCode: 'KBANK',
+      bankName: 'ธนาคารกสิกรไทย',
+      qrImage: '',
+      isDefault: true,
+      isActive: true,
+      note: 'บัญชีหลักคลินิก'
+    }];
+  }, [posQrSettings]);
+
+  // หา Branch ID ที่กำลังใช้งานอยู่ (หากเป็น 'all' หรือไม่ได้ระบุ ให้หาจาก branch แรกหรือ 'b1')
+  const activeBranchId = useMemo(() => {
+    if (currentBranch && currentBranch !== 'all') return String(currentBranch);
+    return String(branchesData?.[0]?.id || 'b1');
+  }, [currentBranch, branchesData]);
+
+  // หา ID บัญชีหลักของสาขาปัจจุบัน (ถ้าไม่มีการตั้งเฉพาะสาขา ให้ใช้บัญชีหลักส่วนกลาง)
+  const branchDefaultAccountId = useMemo(() => {
+    const branchDefaults = posQrSettings?.branchDefaults || {};
+    // 1. ตรวจสอบว่ามีการกำหนดบัญชีหลักสำหรับสาขานี้โดยเฉพาะหรือไม่
+    if (activeBranchId && branchDefaults[activeBranchId]) {
+      const found = activeQrAccounts.find(a => a.id === branchDefaults[activeBranchId]);
+      if (found) return found.id;
     }
-    return () => clearInterval(timer);
-  }, [paymentMethod, checkoutModal.isOpen, checkoutSuccess, isQrExpired]);
+    // 2. Fallback ไปยังบัญชีหลักส่วนกลาง (isDefault)
+    const globalDef = activeQrAccounts.find(a => a.isDefault);
+    if (globalDef) return globalDef.id;
 
-  const formatCountdown = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
-  };
-  // ------------------------------------------------
+    // 3. บัญชีแรกสุดที่เปิดใช้งาน
+    return activeQrAccounts[0]?.id || '';
+  }, [activeBranchId, posQrSettings?.branchDefaults, activeQrAccounts]);
+
+  const [selectedAccountId, setSelectedAccountId] = useState(() => branchDefaultAccountId);
+
+  // Keep selectedAccountId in sync if activeQrAccounts or branchDefaultAccountId changes
+  useEffect(() => {
+    if (!activeQrAccounts.some(a => a.id === selectedAccountId)) {
+      setSelectedAccountId(branchDefaultAccountId);
+    }
+  }, [activeQrAccounts, selectedAccountId, branchDefaultAccountId]);
+
+  const currentQrAccount = useMemo(() => {
+    return activeQrAccounts.find(a => a.id === selectedAccountId) || activeQrAccounts[0];
+  }, [activeQrAccounts, selectedAccountId]);
+
+  const [dynamicQrUrl, setDynamicQrUrl] = useState('');
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
 
   // แก้ไข: เพิ่ม Effect สำหรับรีเซ็ตสถานะตะกร้ามือถือเมื่อขยายหน้าจอ (Resize Bug Fix)
   useEffect(() => {
@@ -968,6 +1000,34 @@ const POSSystem = ({
     return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(validNum);
   };
 
+  // Generate QR Code dynamically when modal is open and payment method is transfer
+  useEffect(() => {
+    let isCancelled = false;
+    if (paymentMethod === 'transfer' && checkoutModal.isOpen && currentQrAccount) {
+      if (currentQrAccount.type === 'custom_qr' && currentQrAccount.qrImage) {
+        setDynamicQrUrl(currentQrAccount.qrImage);
+        return;
+      }
+      setIsGeneratingQr(true);
+      generatePromptPayQrDataUrl(currentQrAccount.accountNumber, grandTotal)
+        .then(url => {
+          if (!isCancelled) {
+            setDynamicQrUrl(url || currentQrAccount.qrImage || '');
+            setIsGeneratingQr(false);
+          }
+        })
+        .catch(err => {
+          if (!isCancelled) {
+            console.error('Error generating QR code:', err);
+            const cleanNo = String(currentQrAccount.accountNumber || '').replace(/[^0-9]/g, '');
+            setDynamicQrUrl(currentQrAccount.qrImage || `https://promptpay.io/${cleanNo}/${grandTotal}.png`);
+            setIsGeneratingQr(false);
+          }
+        });
+    }
+    return () => { isCancelled = true; };
+  }, [paymentMethod, checkoutModal.isOpen, currentQrAccount, grandTotal, qrKey]);
+
   // จัดการการชำระเงิน (ตรวจสอบสต็อกสินค้าก่อนเปิดหน้าต่างคิดเงิน)
   const handleCheckout = () => {
     if (cart.length === 0) {
@@ -990,6 +1050,8 @@ const POSSystem = ({
       }
     }
 
+    setPaymentMethod('cash');
+    setSelectedAccountId(branchDefaultAccountId);
     checkoutModal.open();
     setCheckoutSuccess(false);
   };
@@ -1166,6 +1228,11 @@ const POSSystem = ({
         netAmount: grandTotal,
         discount: discountAmount,
         paymentMethod: paymentMethod,
+        paymentAccount: paymentMethod === 'transfer' && currentQrAccount ? {
+          name: currentQrAccount.name,
+          accountNumber: currentQrAccount.accountNumber,
+          bankCode: currentQrAccount.bankCode
+        } : null,
         status: 'completed',
         createdAt: new Date().toISOString()
     };
@@ -1502,6 +1569,8 @@ const POSSystem = ({
       if (checkoutSuccess) {
         clearCart();
       }
+      setPaymentMethod('cash');
+      setSelectedAccountId(branchDefaultAccountId);
       setCheckoutSuccess(false);
     }, 300);
   };
@@ -3061,16 +3130,21 @@ const POSSystem = ({
                          </span>
                       </div>
                    ) : (
-                      <select
-                         value={selectedSellerId}
-                         onChange={(e) => setSelectedSellerId(e.target.value)}
-                         className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-amber-500 kanit-text cursor-pointer"
-                      >
-                         <option value="">- เลือกผู้ขาย / ผู้แนะนำ (ไม่ระบุก็ได้) -</option>
-                         {staffData.map(s => (
-                            <option key={s.id} value={s.id}>{s.name} ({s.position || s.role})</option>
-                         ))}
-                      </select>
+                      <CustomSelect
+                         value={selectedSellerId || ''}
+                         onChange={(val) => setSelectedSellerId(val)}
+                         placeholder="- เลือกผู้ขาย / ผู้แนะนำ (ไม่ระบุก็ได้) -"
+                         options={[
+                            { value: '', label: '- ไม่ระบุผู้ขาย / แคชเชียร์ทั่วไป -' },
+                            ...(staffData || []).map(s => ({
+                               value: s.id,
+                               label: `${s.name} (${s.position || s.role || 'พนักงาน'})`
+                            }))
+                         ]}
+                         compact
+                         fullWidth
+                         className="w-full text-xs font-bold kanit-text"
+                      />
                    )}
                 </div>
 
@@ -3089,26 +3163,93 @@ const POSSystem = ({
                   </div>
 
                   {paymentMethod === 'transfer' && (
-                     <div className="mt-4 border border-sky-100 bg-sky-50/50 p-4 sm:p-5 rounded-2xl flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
-                        <p className="text-xs sm:text-sm font-bold text-slate-500 kanit-text mb-3 sm:mb-4 text-center">สแกน QR Code พร้อมเพย์</p>
-                        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 shrink-0 relative mb-4">
-                            <div className="absolute inset-0 border-2 border-sky-400 rounded-xl animate-pulse opacity-40 pointer-events-none"></div>
-                            <img 
-                               src={`https://promptpay.io/0631434927/${grandTotal}.png`} 
-                               alt="PromptPay QR" 
-                               className="w-48 h-48 sm:w-56 sm:h-56 object-contain pointer-events-none select-none relative z-10" 
-                            />
-                        </div>
-                        <div className="text-center flex flex-col items-center w-full">
-                            <h4 className="text-lg sm:text-xl font-black text-sky-700 kanit-text leading-tight mb-1">นาย พุทธินัทธ์ จงเจริญเลิศสิน</h4>
-                            <p className="text-xs sm:text-sm text-slate-500 font-data mb-3">เบอร์พร้อมเพย์: 063-143-4927</p>
-                            <div className="bg-white px-5 py-3 rounded-2xl border border-sky-100 shadow-sm w-full max-w-[240px]">
+                      <div className="mt-3 border border-sky-100 bg-gradient-to-b from-sky-50/60 to-slate-50/50 p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
+                         {/* Dropdown เลือกสลับบัญชีรับเงิน (เมื่อมีมากกว่า 1 บัญชี) */}
+                          {activeQrAccounts.length > 1 && (
+                             <div className="w-full mb-3">
+                                <div className="flex items-center justify-between gap-1 mb-1.5 px-0.5">
+                                   <label htmlFor="pos-qr-account-select" className="text-[11px] font-bold text-slate-600 kanit-text flex items-center gap-1.5">
+                                      <Wallet size={13} className="text-sky-500" /> บัญชีรับเงิน:
+                                   </label>
+                                   {selectedAccountId === branchDefaultAccountId ? (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold kanit-text flex items-center gap-1">
+                                         <CheckCircle2 size={10} /> บัญชีหลักประจำสาขา
+                                      </span>
+                                   ) : (
+                                      <button
+                                         type="button"
+                                         onClick={() => setSelectedAccountId(branchDefaultAccountId)}
+                                         className="text-[10px] text-sky-600 hover:text-sky-700 font-bold kanit-text hover:underline cursor-pointer"
+                                      >
+                                         สลับกลับบัญชีหลัก
+                                      </button>
+                                   )}
+                                </div>
+
+                                <CustomSelect
+                                    value={selectedAccountId}
+                                    onChange={(val) => setSelectedAccountId(val)}
+                                    options={activeQrAccounts.map((acc) => {
+                                       const bank = getBankInfo(acc.bankCode);
+                                       const isBranchDef = acc.id === branchDefaultAccountId;
+                                       return {
+                                          value: acc.id,
+                                          label: `${isBranchDef ? '★ ' : ''}${acc.name} — ${bank.code} (${formatAccountNumber(acc.accountNumber, acc.type)})${isBranchDef ? ' (บัญชีหลัก)' : ''}`
+                                       };
+                                    })}
+                                    compact
+                                    fullWidth
+                                    className="w-full text-xs font-bold kanit-text"
+                                 />
+                              </div>
+                           )}
+
+
+                         {/* ส่วนแสดงภาพ QR Code */}
+                         <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 shrink-0 relative mb-3 flex flex-col items-center w-full max-w-[280px]">
+                            <div className="absolute inset-0 border-2 border-sky-400 rounded-2xl animate-pulse opacity-30 pointer-events-none"></div>
+
+                            <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center bg-white rounded-xl overflow-hidden">
+                               {isGeneratingQr ? (
+                                  <div className="flex flex-col items-center gap-2 text-sky-600">
+                                     <Loader2 size={30} className="animate-spin" />
+                                     <span className="text-[11px] font-bold kanit-text">กำลังสร้าง QR...</span>
+                                  </div>
+                               ) : dynamicQrUrl ? (
+                                  <img 
+                                     src={dynamicQrUrl} 
+                                     alt="Payment QR" 
+                                     className="w-full h-full object-contain pointer-events-none select-none relative z-10" 
+                                  />
+                               ) : (
+                                  <div className="text-slate-400 text-xs kanit-text text-center p-2">
+                                     ไม่พบข้อมูล QR Code กรุณาตรวจสอบในหน้าตั้งค่า
+                                  </div>
+                               )}
+                            </div>
+                         </div>
+
+                         {/* ข้อมูลชื่อบัญชี, หมายเลข และยอดชำระ */}
+                         <div className="text-center flex flex-col items-center w-full">
+                            <h4 className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight mb-0.5">
+                               {currentQrAccount?.name || 'คลินิกอันผิง'}
+                            </h4>
+                            
+                            <div className="flex items-center justify-center gap-1.5 mb-2.5">
+                               <span className="text-xs text-slate-500 font-data font-semibold">
+                                  {currentQrAccount?.type === 'bank_account' ? 'เลขที่บัญชี: ' : 'พร้อมเพย์: '}
+                                  {formatAccountNumber(currentQrAccount?.accountNumber, currentQrAccount?.type)}
+                               </span>
+                            </div>
+
+                            {/* กล่องยอดชำระสุทธิ */}
+                            <div className="bg-white px-5 py-2.5 rounded-2xl border border-sky-100 shadow-sm w-full max-w-[240px]">
                                <p className="text-[10px] sm:text-xs text-slate-400 font-bold kanit-text mb-0.5">ยอดชำระสุทธิ</p>
                                <p className="text-xl sm:text-2xl font-black text-sky-600 font-data leading-none">{formatCurrency(grandTotal)}</p>
                             </div>
-                        </div>
-                     </div>
-                  )}
+                         </div>
+                      </div>
+                   )}
                </div>
 
                <div className="mt-auto pt-4 flex flex-col justify-end shrink-0">
@@ -3296,10 +3437,9 @@ const POSSystem = ({
                                                 <label className="block text-[10px] font-bold text-slate-600 mb-1 kanit-text flex items-center gap-1">
                                                     <Stethoscope size={12} className="text-emerald-600"/> แพทย์ผู้ตรวจรักษา (ค่า DF)
                                                 </label>
-                                                <select
+                                                <CustomSelect
                                                     value={historyEditForm.doctorId || ''}
-                                                    onChange={e => {
-                                                        const docId = e.target.value;
+                                                    onChange={docId => {
                                                         const doc = (staffData || []).find(s => s.id === docId);
                                                         setHistoryEditForm({
                                                             ...historyEditForm,
@@ -3310,22 +3450,26 @@ const POSSystem = ({
                                                             doctor: doc ? doc.name : ''
                                                         });
                                                     }}
-                                                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 kanit-text cursor-pointer"
-                                                >
-                                                    <option value="">- ไม่ระบุแพทย์ (ขายเฉพาะสินค้า) -</option>
-                                                    {doctorsList.map(d => (
-                                                        <option key={d.id} value={d.id}>{d.name} ({d.position || 'แพทย์'})</option>
-                                                    ))}
-                                                </select>
+                                                    placeholder="- ไม่ระบุแพทย์ (ขายเฉพาะสินค้า) -"
+                                                    options={[
+                                                        { value: '', label: '- ไม่ระบุแพทย์ (ขายเฉพาะสินค้า) -' },
+                                                        ...(doctorsList || []).map(d => ({
+                                                            value: d.id,
+                                                            label: `${d.name} (${d.position || 'แพทย์'})`
+                                                        }))
+                                                    ]}
+                                                    compact
+                                                    fullWidth
+                                                    className="w-full text-xs font-bold kanit-text"
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-[10px] font-bold text-slate-600 mb-1 kanit-text flex items-center gap-1">
                                                     <Award size={12} className="text-amber-500"/> ผู้แนะนำ / ผู้ขาย (ค่าคอมยอดขาย)
                                                 </label>
-                                                <select
+                                                <CustomSelect
                                                     value={historyEditForm.sellerId || historyEditForm.staffId || ''}
-                                                    onChange={e => {
-                                                        const sellerId = e.target.value;
+                                                    onChange={sellerId => {
                                                         const seller = (staffData || []).find(s => s.id === sellerId);
                                                         setHistoryEditForm({
                                                             ...historyEditForm,
@@ -3339,13 +3483,18 @@ const POSSystem = ({
                                                             staff_name: seller ? seller.name : ''
                                                         });
                                                     }}
-                                                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-amber-500 kanit-text cursor-pointer"
-                                                >
-                                                    <option value="">- ไม่ระบุผู้ขาย / แคชเชียร์ -</option>
-                                                    {staffData.map(s => (
-                                                        <option key={s.id} value={s.id}>{s.name} ({s.position || s.role})</option>
-                                                    ))}
-                                                </select>
+                                                    placeholder="- ไม่ระบุผู้ขาย / แคชเชียร์ -"
+                                                    options={[
+                                                        { value: '', label: '- ไม่ระบุผู้ขาย / แคชเชียร์ -' },
+                                                        ...(staffData || []).map(s => ({
+                                                            value: s.id,
+                                                            label: `${s.name} (${s.position || s.role || 'พนักงาน'})`
+                                                        }))
+                                                    ]}
+                                                    compact
+                                                    fullWidth
+                                                    className="w-full text-xs font-bold kanit-text"
+                                                />
                                             </div>
                                         </div>
                                     </div>

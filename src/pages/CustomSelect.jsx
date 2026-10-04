@@ -78,25 +78,31 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
             setIsOpen(false);
         };
 
-        const handleScrollOrResize = (e) => {
-            if (dropdownRef.current && dropdownRef.current.contains(e.target)) {
+        const handleScroll = (e) => {
+            // หากเลื่อนสกอร์ภายในลิสต์ตัวเลือกของ dropdown เอง ให้ทำงานปกติ
+            if (dropdownRef.current && (dropdownRef.current === e.target || dropdownRef.current.contains(e.target))) {
                 return;
             }
-            updatePosition();
+            // หากเกิดการ scroll ที่อื่น (เช่น ตัว modal หรือหน้าจอ) ให้ปิด dropdown ทันที ป้องกันค้างลอย
+            setIsOpen(false);
+        };
+
+        const handleResize = () => {
+            setIsOpen(false);
         };
 
         document.addEventListener('mousedown', handleOutsideClick);
         document.addEventListener('touchstart', handleOutsideClick);
-        window.addEventListener('scroll', handleScrollOrResize, true);
-        window.addEventListener('resize', handleScrollOrResize);
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('resize', handleResize);
 
         return () => {
             document.removeEventListener('mousedown', handleOutsideClick);
             document.removeEventListener('touchstart', handleOutsideClick);
-            window.removeEventListener('scroll', handleScrollOrResize, true);
-            window.removeEventListener('resize', handleScrollOrResize);
+            window.removeEventListener('scroll', handleScroll, true);
+            window.removeEventListener('resize', handleResize);
         };
-    }, [isOpen, updatePosition]);
+    }, [isOpen]);
 
     return (
         <div ref={containerRef} className={`relative ${className || ''} ${disabled ? (hasColor ? 'pointer-events-none' : 'opacity-70 pointer-events-none') : ''}`}>

@@ -1,3 +1,4 @@
+import CustomSelect from './CustomSelect';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import CalendarDay from './CalendarDay';
@@ -21,6 +22,7 @@ import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 import { normalizeIntegrationTokens, syncLineBotQuotas, sendDiscordEmbed, sendTestLinePush, sendMenuLinePush, formatDirectImageUrl } from '../lib/notificationHub';
 import DatabaseStorageManager from '../components/DatabaseStorageManager';
+import { THAI_BANKS, getBankInfo, formatAccountNumber, DEFAULT_POS_QR_SETTINGS, generatePromptPayQrDataUrl } from '../lib/promptpay';
 
 const SettingsManager = ({
   staffPrefixes = [],
@@ -37,6 +39,10 @@ const SettingsManager = ({
   setIntegrationTokens,
   gdriveTokens = {},
   setGdriveTokens,
+  posQrSettings = { accounts: [] },
+  setPosQrSettings,
+  showGlobalAlert,
+  globalAlert,
   callAppScript,
   showToast,
   isGlobalLoading,
@@ -48,7 +54,7 @@ const SettingsManager = ({
   branchesData = [],
   currentBranch = 'all'
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses' | 'integrations' | 'logs'
+  const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses' | 'pos_qr' | 'integrations' | 'logs'
   const [newPrefix, setNewPrefix] = useState('');
   const [logsData, setLogsData] = useState([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -93,6 +99,36 @@ const SettingsManager = ({
   const [testingDiscordId, setTestingDiscordId] = useState(null);
   const [showBotTokens, setShowBotTokens] = useState({});
   const [localGdriveTokens, setLocalGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
+
+  // POS QR Code Accounts State
+  const [localPosQrSettings, setLocalPosQrSettings] = useState(() => {
+    if (posQrSettings && Array.isArray(posQrSettings.accounts) && posQrSettings.accounts.length > 0) {
+      return {
+        accounts: posQrSettings.accounts,
+        branchDefaults: posQrSettings.branchDefaults || {}
+      };
+    }
+    return DEFAULT_POS_QR_SETTINGS;
+  });
+  const [qrModal, setQrModal] = useState({
+    isOpen: false,
+    isEdit: false,
+    data: {
+      id: '',
+      name: '',
+      type: 'promptpay_mobile', // 'promptpay_mobile' | 'promptpay_id' | 'bank_account' | 'custom_qr'
+      accountNumber: '',
+      bankCode: 'KBANK',
+      bankName: 'ธนาคารกสิกรไทย',
+      qrImage: '',
+      isDefault: false,
+      isActive: true,
+      note: ''
+    }
+  });
+  const [modalPreviewQrUrl, setModalPreviewQrUrl] = useState('');
+  const [isGeneratingModalQr, setIsGeneratingModalQr] = useState(false);
+  const qrImageFileInputRef = useRef(null);
 
   // Modal แจ้งเตือนเมื่อมีข้อมูลการเชื่อมต่อที่ยังไม่ได้บันทึกก่อนสลับแท็บย่อย
   const [subTabUnsavedModal, setSubTabUnsavedModal] = useState({ isOpen: false, targetSubTab: null });
@@ -196,6 +232,255 @@ const SettingsManager = ({
   useEffect(() => {
     if (gdriveTokens) setLocalGdriveTokens({ ...gdriveTokens });
   }, [gdriveTokens]);
+
+  useEffect(() => {
+    if (posQrSettings && Array.isArray(posQrSettings.accounts) && posQrSettings.accounts.length > 0) {
+      setLocalPosQrSettings({
+        accounts: posQrSettings.accounts,
+        branchDefaults: posQrSettings.branchDefaults || {}
+      });
+    }
+  }, [posQrSettings]);
+
+  // Live QR Code preview inside Add/Edit Modal
+  useEffect(() => {
+    let isCancelled = false;
+    if (qrModal.isOpen) {
+      if (qrModal.data.type === 'custom_qr' && qrModal.data.qrImage) {
+        setModalPreviewQrUrl(qrModal.data.qrImage);
+        return;
+      }
+      const rawNo = qrModal.data.accountNumber || '';
+      if (rawNo.trim()) {
+        setIsGeneratingModalQr(true);
+        generatePromptPayQrDataUrl(rawNo, 0)
+          .then(url => {
+            if (!isCancelled) {
+              setModalPreviewQrUrl(url || '');
+              setIsGeneratingModalQr(false);
+            }
+          })
+          .catch(() => {
+            if (!isCancelled) {
+              setIsGeneratingModalQr(false);
+            }
+          });
+      } else {
+        setModalPreviewQrUrl('');
+      }
+    }
+    return () => { isCancelled = true; };
+  }, [qrModal.isOpen, qrModal.data.accountNumber, qrModal.data.type, qrModal.data.qrImage]);
+
+  const handleOpenAddQrAccount = () => {
+    setQrModal({
+      isOpen: true,
+      isEdit: false,
+      data: {
+        id: 'acc_' + Date.now(),
+        name: '',
+        type: 'promptpay_mobile',
+        accountNumber: '',
+        bankCode: 'KBANK',
+        bankName: 'ธนาคารกสิกรไทย',
+        qrImage: '',
+        isDefault: (localPosQrSettings.accounts || []).length === 0,
+        isActive: true,
+        note: ''
+      }
+    });
+  };
+
+  const handleOpenEditQrAccount = (acc) => {
+    setQrModal({
+      isOpen: true,
+      isEdit: true,
+      data: { ...acc }
+    });
+  };
+
+  const handleSaveQrAccountModal = () => {
+    const d = qrModal.data;
+    if (!d.name || !d.name.trim()) {
+      showToast('กรุณาระบุชื่อบัญชี / ชื่อผู้รับเงิน', 'warning');
+      return;
+    }
+    if (d.type !== 'custom_qr' && (!d.accountNumber || !d.accountNumber.trim())) {
+      showToast('กรุณาระบุหมายเลขพร้อมเพย์ หรือเลขที่บัญชี', 'warning');
+      return;
+    }
+    if (d.type === 'custom_qr' && !d.qrImage) {
+      showToast('กรุณาอัปโหลดรูปภาพ QR Code สำหรับรับเงิน', 'warning');
+      return;
+    }
+
+    const currentAccounts = [...(localPosQrSettings.accounts || [])];
+    let updatedAccounts = [];
+
+    const bankInfo = getBankInfo(d.bankCode);
+    const finalizedData = {
+      ...d,
+      name: d.name.trim(),
+      accountNumber: d.accountNumber ? d.accountNumber.trim() : '',
+      bankName: bankInfo.name
+    };
+
+    if (qrModal.isEdit) {
+      updatedAccounts = currentAccounts.map(a => a.id === finalizedData.id ? finalizedData : a);
+    } else {
+      updatedAccounts = [...currentAccounts, { ...finalizedData, id: finalizedData.id || 'acc_' + Date.now() }];
+    }
+
+    // จัดการบัญชีหลัก (Default Account)
+    if (finalizedData.isDefault) {
+      updatedAccounts = updatedAccounts.map(a => ({
+        ...a,
+        isDefault: a.id === finalizedData.id
+      }));
+    } else if (!updatedAccounts.some(a => a.isDefault)) {
+      if (updatedAccounts.length > 0) updatedAccounts[0].isDefault = true;
+    }
+
+    setLocalPosQrSettings(prev => ({ ...prev, accounts: updatedAccounts }));
+    setQrModal({ isOpen: false, isEdit: false, data: {} });
+    showToast(qrModal.isEdit ? 'แก้ไขข้อมูลบัญชีเรียบร้อย' : 'เพิ่มบัญชีเรียบร้อย (อย่าลืมกดบันทึกการตั้งค่า)', 'success');
+  };
+
+  const handleDeleteQrAccount = (accId) => {
+    const currentAccounts = localPosQrSettings.accounts || [];
+    if (currentAccounts.length <= 1) {
+      showToast('ต้องมีบัญชีรับเงินอย่างน้อย 1 บัญชี', 'warning');
+      return;
+    }
+    const acc = currentAccounts.find(a => a.id === accId);
+
+    const performDelete = () => {
+      let updated = currentAccounts.filter(a => a.id !== accId);
+      if (acc?.isDefault && updated.length > 0) {
+        updated[0].isDefault = true;
+      }
+      const nextBranchDefaults = { ...(localPosQrSettings.branchDefaults || {}) };
+      for (const bId in nextBranchDefaults) {
+        if (nextBranchDefaults[bId] === accId) {
+          delete nextBranchDefaults[bId];
+        }
+      }
+      setLocalPosQrSettings(prev => ({
+        ...prev,
+        accounts: updated,
+        branchDefaults: nextBranchDefaults
+      }));
+      showToast('ลบบัญชีเรียบร้อย (อย่าลืมกดบันทึกการตั้งค่า)', 'info');
+    };
+
+    if (typeof showGlobalAlert === 'function') {
+      showGlobalAlert({
+        type: 'danger',
+        title: 'ยืนยันการลบบัญชี',
+        text: `ยืนยันการลบบัญชี "${acc?.name || 'นี้'}" ออกจากระบบหรือไม่?`,
+        onConfirm: performDelete
+      });
+    } else {
+      performDelete();
+    }
+  };
+
+  const handleToggleDefaultQrAccount = (accId) => {
+    const updated = (localPosQrSettings.accounts || []).map(a => ({
+      ...a,
+      isDefault: a.id === accId
+    }));
+    setLocalPosQrSettings(prev => ({ ...prev, accounts: updated }));
+    showToast('ตั้งเป็นบัญชีหลักส่วนกลางเรียบร้อย (อย่าลืมกดบันทึกการตั้งค่า)', 'info');
+  };
+
+  const handleToggleActiveQrAccount = (accId) => {
+    const updated = (localPosQrSettings.accounts || []).map(a => {
+      if (a.id === accId) {
+        if (a.isDefault && a.isActive) {
+          showToast('ไม่สามารถปิดการใช้งานบัญชีหลักได้', 'warning');
+          return a;
+        }
+        return { ...a, isActive: !a.isActive };
+      }
+      return a;
+    });
+    setLocalPosQrSettings(prev => ({ ...prev, accounts: updated }));
+  };
+
+  const handleSetBranchDefault = (branchId, accountId) => {
+    setLocalPosQrSettings(prev => {
+      const nextDefaults = { ...(prev.branchDefaults || {}) };
+      if (!accountId) {
+        delete nextDefaults[branchId];
+      } else {
+        nextDefaults[branchId] = accountId;
+      }
+      return {
+        ...prev,
+        branchDefaults: nextDefaults
+      };
+    });
+    showToast('กำหนดบัญชีหลักของสาขาเรียบร้อย (กรุณากดบันทึกการตั้งค่า)', 'info');
+  };
+
+  const handleQrImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'warning');
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      showToast('ขนาดไฟล์รูปภาพต้องไม่เกิน 3MB', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setQrModal(prev => ({
+        ...prev,
+        data: {
+          ...prev.data,
+          qrImage: event.target.result
+        }
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const savePosQrSettings = async () => {
+    setIsSaving(true);
+    try {
+      if (supabase) {
+        const { error: sbErr } = await supabase
+          .from('settings')
+          .upsert({
+            id: 'pos_qr_settings',
+            values: localPosQrSettings,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
+        if (sbErr) console.error("Supabase upsert pos_qr_settings error:", sbErr);
+      }
+
+      if (typeof callAppScript === 'function') {
+        await callAppScript('SAVE_DATA', 'Settings', { id: 'pos_qr_settings', values: localPosQrSettings });
+      }
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('clinic_pos_qr_settings', JSON.stringify(localPosQrSettings));
+      }
+
+      if (typeof setPosQrSettings === 'function') {
+        setPosQrSettings(localPosQrSettings);
+      }
+
+      showToast('บันทึกการตั้งค่า QR รับเงิน POS สำเร็จ', 'success');
+    } catch (e) {
+      showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const addPrefix = () => {
     const trimmed = newPrefix.trim();
@@ -930,6 +1215,17 @@ const SettingsManager = ({
             <span>สถานะนัดหมาย</span>
           </button>
           <button
+            onClick={() => handleSubTabClick('pos_qr')}
+            className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center gap-2.5 sm:gap-3 shadow-xs ${
+              activeSubTab === 'pos_qr'
+                ? 'bg-sky-500 text-white shadow-sky-500/20 scale-[1.01]'
+                : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-800 border border-slate-100'
+            }`}
+          >
+            <QrCode size={18} className="shrink-0" />
+            <span>QR รับเงิน POS</span>
+          </button>
+          <button
             onClick={() => handleSubTabClick('integrations')}
             className={`shrink-0 whitespace-nowrap lg:whitespace-normal w-auto lg:w-full text-left px-4 sm:px-5 py-3 sm:py-4 rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all flex items-center justify-between gap-2.5 sm:gap-3 shadow-xs ${
               activeSubTab === 'integrations'
@@ -1368,6 +1664,306 @@ const SettingsManager = ({
                   >
                     {isSaving && <Loader2 size={16} className="animate-spin" />}
                     บันทึกสถานะนัดหมาย
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB: POS QR PAYMENT SETTINGS */}
+            {activeSubTab === 'pos_qr' && (
+              <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 text-left min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
+                      <QrCode className="text-sky-500" size={22} />
+                      ตั้งค่า QR รับเงินสำหรับระบบ POS
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-1 kanit-text">
+                      จัดการบัญชีพร้อมเพย์และบัญชีธนาคารสำหรับสร้าง QR Code ชำระเงินบนหน้าแคชเชียร์ POS สามารถเพิ่มได้หลายบัญชี และเลือกสลับบัญชีได้ทันทีขณะคิดเงิน
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddQrAccount}
+                    className="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-2xl font-bold kanit-text text-sm transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                  >
+                    <Plus size={18} />
+                    เพิ่มบัญชีรับเงิน
+                  </button>
+                </div>
+
+                {/* Banner แนะนำการทำงาน & ความเข้ากันได้ของ Thai QR Payment */}
+                <div className="bg-gradient-to-r from-sky-50 via-indigo-50 to-purple-50 p-4 sm:p-5 rounded-2xl border border-sky-100/80 shadow-2xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                      <QrCode size={18} />
+                    </div>
+                    <div className="space-y-1 text-xs text-slate-600 kanit-text leading-relaxed">
+                      <p className="font-bold text-slate-800 text-sm">
+                        รองรับมาตรฐาน Thai QR Payment (EMVCo) สแกนจ่ายได้จากทุกธนาคารในไทย 100%
+                      </p>
+                      <p>
+                        • <strong>พร้อมเพย์ (เบอร์โทร / เลขบัตร 13 หลัก):</strong> ระบบ POS จะสร้าง Dynamic QR Code ระบุยอดเงินรวมตามบิลให้อัตโนมัติ ลูกค้าสแกนแล้วยอดเงินจะขึ้นตรงตามบิลทันที
+                      </p>
+                      <p>
+                        • <strong>เลขที่บัญชีธนาคาร / QR จากแอปธนาคาร:</strong> สามารถระบุเลขที่บัญชีธนาคาร (เช่น กสิกรไทย, ไทยพาณิชย์) หรืออัปโหลดรูปภาพ QR ที่เซฟจากแอป K PLUS / SCB Easy ได้เช่นกัน ทุกธนาคารสามารถสแกนโอนเข้าบัญชีได้ตามมาตรฐานกลาง ITMX
+                      </p>
+                      <p>
+                        • สามารถเพิ่มได้หลายบัญชี เช่น บัญชีหลักของคลินิก, บัญชีหมอ, หรือแยกตามธนาคาร เพื่อให้แคชเชียร์สลับรับเงินได้สะดวก
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* กำหนดบัญชีหลักแยกตามสาขา (เมื่อมีสาขาในระบบ) */}
+                {branchesData && branchesData.length > 0 && (
+                  <div className="bg-white p-4 sm:p-5 rounded-2xl border border-sky-100 shadow-2xs space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+                        <Building2 size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800 kanit-text">
+                          ตั้งค่าบัญชีหลักประจำสาขา (Default Account per Branch)
+                        </h4>
+                        <p className="text-slate-400 text-xs kanit-text">
+                          เมื่อแคชเชียร์เปิดหน้าจอคิดเงิน POS ในแต่ละสาขา ระบบจะเลือกบัญชีหลักที่ผูกกับสาขานั้นให้อัตโนมัติทันที
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      {branchesData.map((branch) => {
+                        const currentAssignedId = localPosQrSettings.branchDefaults?.[branch.id] || '';
+                        const globalDefaultAcc = (localPosQrSettings.accounts || []).find(a => a.isDefault);
+
+                        return (
+                          <div key={branch.id} className="p-3 rounded-xl border border-slate-200/80 bg-slate-50/60 flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5">
+                                <Building2 size={13} className="text-sky-500" />
+                                {branch.name}
+                              </span>
+                              {currentAssignedId ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold kanit-text">
+                                  กำหนดเฉพาะสาขา
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 font-medium kanit-text">
+                                  ใช้บัญชีหลักกลาง
+                                </span>
+                              )}
+                            </div>
+
+                            <CustomSelect
+                              value={currentAssignedId}
+                              onChange={(val) => handleSetBranchDefault(branch.id, val)}
+                              options={[
+                                { value: '', label: `-- ใช้บัญชีหลักกลาง (${globalDefaultAcc?.name || 'ไม่ได้ระบุ'}) --` },
+                                ...(localPosQrSettings.accounts || []).filter(a => a.isActive !== false).map((acc) => {
+                                  const bInfo = getBankInfo(acc.bankCode);
+                                  return {
+                                    value: acc.id,
+                                    label: `${acc.name} - ${bInfo.name} (${formatAccountNumber(acc.accountNumber, acc.type)})`
+                                  };
+                                })
+                              ]}
+                              compact
+                              fullWidth
+                              className="w-full text-xs font-bold kanit-text"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* รายการบัญชีรับเงิน */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(localPosQrSettings.accounts || []).map((acc) => {
+                    const bank = getBankInfo(acc.bankCode);
+                    return (
+                      <div
+                        key={acc.id}
+                        className={`rounded-2xl border p-4 sm:p-5 transition-all flex flex-col justify-between relative bg-white ${
+                          acc.isDefault
+                            ? 'border-sky-300 ring-2 ring-sky-100 shadow-md'
+                            : 'border-slate-200/80 shadow-xs hover:border-slate-300'
+                        } ${!acc.isActive ? 'opacity-60 bg-slate-50/50' : ''}`}
+                      >
+                        {/* Header ของการ์ด */}
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className="px-3 py-1 rounded-xl text-xs font-bold font-data shadow-2xs flex items-center gap-1.5"
+                                style={{ backgroundColor: bank.color, color: bank.textColor }}
+                              >
+                                {bank.code}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-600 kanit-text">
+                                {bank.name}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 justify-end">
+                              {acc.isDefault && (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 kanit-text" title="บัญชีหลักส่วนกลาง">
+                                  บัญชีหลักกลาง
+                                </span>
+                              )}
+                              {(() => {
+                                const assignedBranches = (branchesData || []).filter(
+                                  b => localPosQrSettings.branchDefaults?.[b.id] === acc.id
+                                );
+                                if (assignedBranches.length === 0) return null;
+                                return assignedBranches.map(b => (
+                                  <span
+                                    key={b.id}
+                                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 kanit-text flex items-center gap-1"
+                                  >
+                                    <Building2 size={10} /> {b.name}
+                                  </span>
+                                ));
+                              })()}
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold kanit-text border ${
+                                  acc.isActive
+                                    ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                                }`}
+                              >
+                                {acc.isActive ? 'เปิดใช้' : 'ปิดใช้'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* ชื่อบัญชี และหมายเลข */}
+                          <div className="space-y-1 mb-3">
+                            <h4 className="text-base font-bold text-slate-800 kanit-text leading-tight">
+                              {acc.name || '-'}
+                            </h4>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm font-black text-slate-700 tracking-wide">
+                                {formatAccountNumber(acc.accountNumber, acc.type)}
+                              </span>
+                              <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium kanit-text">
+                                {acc.type === 'promptpay_mobile'
+                                  ? 'พร้อมเพย์มือถือ'
+                                  : acc.type === 'promptpay_id'
+                                  ? 'พร้อมเพย์เลขบัตร/นิติบุคคล'
+                                  : acc.type === 'bank_account'
+                                  ? 'เลขบัญชีธนาคาร'
+                                  : 'QR รูปภาพ'}
+                              </span>
+                            </div>
+                            {acc.note && (
+                              <p className="text-xs text-slate-400 kanit-text mt-1">
+                                หมายเหตุ: {acc.note}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* แสดงรูป QR ขนาดย่อ ถ้ามี */}
+                          {acc.qrImage && (
+                            <div className="my-2 p-2 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-3">
+                              <img
+                                src={acc.qrImage}
+                                alt="QR Code"
+                                className="w-12 h-12 object-contain rounded-lg border border-slate-200 bg-white"
+                              />
+                              <div className="text-[11px] text-slate-500 kanit-text">
+                                <span className="font-semibold text-slate-700">รูปภาพ QR Code</span>
+                                <p className="text-slate-400">อัปโหลดไว้สำหรับแสดงบน POS</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* การกระทำ (Actions) */}
+                        <div className="border-t border-slate-100 pt-3 mt-3 flex items-center justify-between gap-2">
+                          <div>
+                            {!acc.isDefault ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleDefaultQrAccount(acc.id)}
+                                className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline kanit-text cursor-pointer"
+                              >
+                                ตั้งเป็นบัญชีหลัก
+                              </button>
+                            ) : (
+                              <span className="text-xs text-emerald-600 font-semibold kanit-text flex items-center gap-1">
+                                <CheckCircle2 size={13} /> กำลังใช้เป็นบัญชีหลัก
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActiveQrAccount(acc.id)}
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer text-xs font-bold kanit-text ${
+                                acc.isActive
+                                  ? 'border-slate-200 text-slate-500 hover:bg-slate-100'
+                                  : 'border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+                              }`}
+                              title={acc.isActive ? 'คลิกเพื่อปิดใช้งาน' : 'คลิกเพื่อเปิดใช้งาน'}
+                            >
+                              {acc.isActive ? 'ปิดใช้' : 'เปิดใช้'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditQrAccount(acc)}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-sky-600 transition-colors cursor-pointer"
+                              title="แก้ไขข้อมูลบัญชี"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteQrAccount(acc.id)}
+                              className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
+                              title="ลบบัญชีนี้"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* การ์ดเพิ่มบัญชีใหม่ (Dashed Card) */}
+                  <div
+                    onClick={handleOpenAddQrAccount}
+                    className="rounded-2xl border-2 border-dashed border-slate-200 hover:border-sky-400 hover:bg-sky-50/30 p-6 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer min-h-[160px] text-center group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-sky-100 text-slate-400 group-hover:text-sky-600 flex items-center justify-center transition-colors">
+                      <Plus size={24} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700 group-hover:text-sky-600 kanit-text text-sm">
+                        เพิ่มบัญชีรับเงินใหม่
+                      </p>
+                      <p className="text-slate-400 text-xs kanit-text">
+                        เพิ่มพร้อมเพย์ หรือเลขที่บัญชีธนาคารสำหรับ POS
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ปุ่มบันทึกการตั้งค่าลงฐานข้อมูล */}
+                <div className="border-t border-slate-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <span className="text-xs text-slate-400 kanit-text">
+                    * เมื่อเพิ่มหรือแก้ไขข้อมูลแล้ว กรุณากดปุ่ม <strong>"บันทึกการตั้งค่า QR รับเงิน"</strong> เพื่ออัปเดตลงระบบ
+                  </span>
+                  <button
+                    data-save-btn="true"
+                    onClick={savePosQrSettings}
+                    disabled={isSaving}
+                    className="w-full sm:w-auto px-8 py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    {isSaving && <Loader2 size={16} className="animate-spin" />}
+                    บันทึกการตั้งค่า QR รับเงิน
                   </button>
                 </div>
               </div>
@@ -2388,7 +2984,7 @@ const SettingsManager = ({
               <button
                 type="button"
                 onClick={() => setSubTabUnsavedModal({ isOpen: false, targetSubTab: null })}
-                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-sm kanit-text transition-colors"
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-sm kanit-text transition-colors cursor-pointer"
               >
                 อยู่หน้านี้ต่อ
               </button>
@@ -2400,13 +2996,270 @@ const SettingsManager = ({
                   setSubTabUnsavedModal({ isOpen: false, targetSubTab: null });
                   if (target) setActiveSubTab(target);
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm kanit-text transition-colors shadow-sm"
+                className="flex-1 py-3 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm kanit-text transition-colors shadow-sm cursor-pointer"
               >
                 สลับแท็บ (ไม่บันทึก)
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal เพิ่ม / แก้ไขบัญชีรับเงิน POS */}
+      {qrModal.isOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+                  <QrCode size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text">
+                    {qrModal.isEdit ? 'แก้ไขบัญชีรับเงิน POS' : 'เพิ่มบัญชีรับเงิน POS'}
+                  </h3>
+                  <p className="text-slate-400 text-xs kanit-text">
+                    ข้อมูลนี้จะใช้สร้าง QR Code บนหน้าชำระเงิน POS
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQrModal({ isOpen: false, isEdit: false, data: {} })}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* ชื่อบัญชี / ชื่อผู้รับเงิน */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                  ชื่อบัญชี / ชื่อผู้รับเงิน <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น นาย พุทธินัทธ์ จงเจริญเลิศสิน หรือ คลินิกการแพทย์แผนไทยประยุกต์อันผิง"
+                  value={qrModal.data.name || ''}
+                  onChange={(e) => setQrModal(prev => ({ ...prev, data: { ...prev.data, name: e.target.value } }))}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 kanit-text"
+                />
+              </div>
+
+              {/* ประเภทบัญชี */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                  ประเภทบัญชีรับเงิน <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: 'promptpay_mobile', label: 'พร้อมเพย์ เบอร์มือถือ (10 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ' },
+                    { id: 'promptpay_id', label: 'พร้อมเพย์ บัตร ปชช. / นิติบุคคล (13 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ' },
+                    { id: 'bank_account', label: 'เลขที่บัญชีธนาคาร', desc: 'ระบุเลขบัญชี + ธนาคาร' },
+                    { id: 'custom_qr', label: 'รูปภาพ QR Code (อัปโหลดภาพ)', desc: 'เซฟจากแอปธนาคาร K+ / SCB' }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setQrModal(prev => ({ ...prev, data: { ...prev.data, type: t.id } }))}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        qrModal.data.type === t.id
+                          ? 'border-sky-500 bg-sky-50/50 ring-2 ring-sky-200 text-sky-800'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className="font-bold text-xs kanit-text leading-tight">{t.label}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 kanit-text">{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ธนาคาร */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                  ธนาคาร
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {THAI_BANKS.map((b) => (
+                    <button
+                      key={b.code}
+                      type="button"
+                      onClick={() => setQrModal(prev => ({ ...prev, data: { ...prev.data, bankCode: b.code, bankName: b.name } }))}
+                      className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                        qrModal.data.bankCode === b.code
+                          ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-200'
+                          : 'border-slate-100 hover:border-slate-200 bg-slate-50/40'
+                      }`}
+                    >
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-bold font-data"
+                        style={{ backgroundColor: b.color, color: b.textColor }}
+                      >
+                        {b.code}
+                      </span>
+                      <span className="text-[10px] text-slate-600 truncate max-w-full kanit-text">
+                        {b.name.replace('ธนาคาร', '')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* หมายเลขพร้อมเพย์ หรือเลขที่บัญชี */}
+              {qrModal.data.type !== 'custom_qr' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                    {qrModal.data.type === 'promptpay_mobile'
+                      ? 'เบอร์โทรศัพท์พร้อมเพย์ (10 หลัก)'
+                      : qrModal.data.type === 'promptpay_id'
+                      ? 'เลขบัตรประชาชน / เลขนิติบุคคล (13 หลัก)'
+                      : 'เลขที่บัญชีธนาคาร (10-12 หลัก)'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={
+                      qrModal.data.type === 'promptpay_mobile'
+                        ? 'เช่น 0631434927'
+                        : qrModal.data.type === 'promptpay_id'
+                        ? 'เช่น 1100000000000'
+                        : 'เช่น 004999097200421'
+                    }
+                    value={qrModal.data.accountNumber || ''}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/[^0-9]/g, '');
+                      setQrModal(prev => ({ ...prev, data: { ...prev.data, accountNumber: clean } }));
+                    }}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-mono text-base font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  />
+                  {qrModal.data.accountNumber && (
+                    <p className="text-[11px] text-slate-400 mt-1 kanit-text">
+                      รูปแบบที่แสดง: {formatAccountNumber(qrModal.data.accountNumber, qrModal.data.type)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* อัปโหลดรูปภาพ QR Code (ถ้ามี หรือถ้าเลือก custom_qr) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                  รูปภาพ QR Code {qrModal.data.type === 'custom_qr' && <span className="text-rose-500">*</span>}
+                  <span className="text-[11px] text-slate-400 font-normal ml-1">
+                    (แนบรูปภาพ QR รับเงินที่เซฟจากแอปธนาคาร K PLUS, SCB Easy ฯลฯ ได้)
+                  </span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    ref={qrImageFileInputRef}
+                    accept="image/*"
+                    onChange={handleQrImageUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => qrImageFileInputRef.current?.click()}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold kanit-text flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Upload size={15} />
+                    {qrModal.data.qrImage ? 'เปลี่ยนรูปภาพ QR' : 'เลือกรูปภาพ QR Code'}
+                  </button>
+                  {qrModal.data.qrImage && (
+                    <button
+                      type="button"
+                      onClick={() => setQrModal(prev => ({ ...prev, data: { ...prev.data, qrImage: '' } }))}
+                      className="text-xs text-rose-500 hover:underline kanit-text cursor-pointer"
+                    >
+                      ลบรูปภาพ
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* หมายเหตุ */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
+                  หมายเหตุ (ไม่บังคับ)
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น บัญชีหลักคลินิก, บัญชีสาขา 1, บัญชีโอนค่าคอร์ส"
+                  value={qrModal.data.note || ''}
+                  onChange={(e) => setQrModal(prev => ({ ...prev, data: { ...prev.data, note: e.target.value } }))}
+                  className="w-full px-4 py-2 rounded-xl border border-slate-200 text-xs kanit-text focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                />
+              </div>
+
+              {/* ตัวเลือก Checkbox */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-4">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700 kanit-text">
+                  <input
+                    type="checkbox"
+                    checked={!!qrModal.data.isDefault}
+                    onChange={(e) => setQrModal(prev => ({ ...prev, data: { ...prev.data, isDefault: e.target.checked } }))}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
+                  />
+                  <span>ตั้งเป็นบัญชีหลักเริ่มต้น (Default)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-700 kanit-text">
+                  <input
+                    type="checkbox"
+                    checked={qrModal.data.isActive !== false}
+                    onChange={(e) => setQrModal(prev => ({ ...prev, data: { ...prev.data, isActive: e.target.checked } }))}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
+                  />
+                  <span>เปิดใช้งานในหน้า POS</span>
+                </label>
+              </div>
+
+              {/* Live QR Preview Box */}
+              {(modalPreviewQrUrl || qrModal.data.qrImage) && (
+                <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col items-center justify-center">
+                  <p className="text-[11px] font-bold text-slate-500 kanit-text mb-2">
+                    ตัวอย่าง QR Code ที่จะแสดงบน POS
+                  </p>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                    {isGeneratingModalQr ? (
+                      <div className="w-32 h-32 flex items-center justify-center">
+                        <Loader2 className="animate-spin text-sky-500" size={24} />
+                      </div>
+                    ) : (
+                      <img
+                        src={modalPreviewQrUrl || qrModal.data.qrImage}
+                        alt="QR Preview"
+                        className="w-32 h-32 object-contain"
+                      />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 kanit-text mt-1.5">
+                    * เมื่อใช้งานจริงบน POS ระบบจะฝังยอดเงินสุทธิของแต่ละบิลลงใน QR โดยอัตโนมัติ
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-5 border-t border-slate-100 mt-5">
+              <button
+                type="button"
+                onClick={() => setQrModal({ isOpen: false, isEdit: false, data: {} })}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs kanit-text cursor-pointer transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQrAccountModal}
+                className="px-6 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs kanit-text cursor-pointer transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <Check size={16} />
+                {qrModal.isEdit ? 'บันทึกการแก้ไข' : 'เพิ่มบัญชีนี้'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

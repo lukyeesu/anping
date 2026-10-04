@@ -53,6 +53,7 @@ import PortalDropdown from './pages/PortalDropdown';
 import AnimatedModal from './pages/AnimatedModal';
 import Skeleton from './pages/Skeleton';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import { DEFAULT_POS_QR_SETTINGS } from './lib/promptpay';
 const theme = {
   primary: 'bg-sky-500 text-white hover:bg-sky-600',
   primaryText: 'text-sky-500',
@@ -1410,6 +1411,18 @@ export default function App() {
     return { line: '', telegram: '', discord: '', lineGroupId: '' };
   });
   const [gdriveTokens, setGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
+  const [posQrSettings, setPosQrSettings] = useState(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cached = localStorage.getItem('clinic_pos_qr_settings');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && Array.isArray(parsed.accounts) && parsed.accounts.length > 0) return parsed;
+        }
+      }
+    } catch(e) {}
+    return DEFAULT_POS_QR_SETTINGS;
+  });
 
   // --- ฟังก์ชันอ่านออกเสียง (TTS) รองรับทั้ง Localhost และ Production (Vite/Vercel Proxy + Native Fallback) ---
   const speak = (text, onEnd) => {
@@ -1503,8 +1516,8 @@ export default function App() {
   const globalAlert = useModal();
   const [globalAlertConfig, setGlobalAlertConfig] = useState({ type: '', title: '', text: '', onConfirm: null, hideCancel: false });
 
-  const showGlobalAlert = ({ type = 'info', title = '', text = '', onConfirm = null, hideCancel = false }) => {
-    setGlobalAlertConfig({ type, title, text, onConfirm, hideCancel });
+  const showGlobalAlert = ({ type = 'info', title = '', text = '', message = '', onConfirm = null, hideCancel = false }) => {
+    setGlobalAlertConfig({ type, title, text: text || message, onConfirm, hideCancel });
     globalAlert.open();
   };
 
@@ -2425,6 +2438,15 @@ export default function App() {
         if (Array.isArray(vals)) setAppointmentStatuses(vals);
       } else if (settingId === 'gdrive_tokens') {
         if (vals) setGdriveTokens(vals);
+      } else if (settingId === 'pos_qr_settings') {
+        if (vals && Array.isArray(vals.accounts)) {
+          setPosQrSettings(vals);
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('clinic_pos_qr_settings', JSON.stringify(vals));
+            }
+          } catch (e) {}
+        }
       }
     }
   };
@@ -2612,6 +2634,21 @@ export default function App() {
       const gdTokens = resSettings.data.find(s => s.id === 'gdrive_tokens');
       if (gdTokens && gdTokens.values) {
         setGdriveTokens(gdTokens.values);
+      }
+      const qrSett = resSettings.data.find(s => s.id === 'pos_qr_settings');
+      if (qrSett && qrSett.values) {
+        let val = qrSett.values;
+        if (typeof val === 'string') {
+          try { val = JSON.parse(val); } catch (e) {}
+        }
+        if (val && Array.isArray(val.accounts) && val.accounts.length > 0) {
+          setPosQrSettings(val);
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('clinic_pos_qr_settings', JSON.stringify(val));
+            }
+          } catch (e) {}
+        }
       }
     }
   };
@@ -3496,6 +3533,7 @@ export default function App() {
                         integrationTokens={integrationTokens}
                         fetchPatientTreatments={fetchPatientTreatments}
                         fetchPatientsPaginated={fetchPatientsPaginated}
+                        posQrSettings={posQrSettings}
                     showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} />
                 </div>
             )}
@@ -3626,6 +3664,10 @@ export default function App() {
                         onExitSimulation={handleExitSimulation}
                         branchesData={branchesData}
                         currentBranch={currentBranch}
+                        posQrSettings={posQrSettings}
+                        setPosQrSettings={setPosQrSettings}
+                        showGlobalAlert={showGlobalAlert}
+                        globalAlert={globalAlert}
                     />
                 </div>
             )}

@@ -272,3 +272,53 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 GRANT EXECUTE ON FUNCTION deduct_pos_stock(jsonb, text, text) TO anon, authenticated, service_role;
 
+-- 5. RPC Function: คำนวณยอดยกมาของ Statement บน Postgres Server โดยตรง (ประหยัด Egress แบนด์วิดท์มหาศาล)
+CREATE OR REPLACE FUNCTION public.get_statement_opening_balance(
+    p_start_date text,
+    p_branch_id text DEFAULT 'all'
+)
+RETURNS numeric
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_balance numeric := 0;
+    v_clean_date text;
+    v_start_day text;
+BEGIN
+    v_clean_date := TRIM(COALESCE(p_start_date, ''));
+    IF v_clean_date = '' THEN
+        RETURN 0;
+    END IF;
+
+    v_start_day := SUBSTRING(v_clean_date FROM 1 FOR 10);
+
+    SELECT COALESCE(
+        SUM(
+            CASE 
+                WHEN type = 'expense' OR id ILIKE 'EXP%' OR category = 'รายจ่าย' THEN -COALESCE(amount, 0)
+                ELSE COALESCE(amount, 0)
+            END
+        ), 0
+    )
+    INTO v_balance
+    FROM public.finance_all_transactions
+    WHERE (
+        SUBSTRING(timestamp_date FROM 1 FOR 10) < v_start_day
+        OR (
+            LENGTH(v_clean_date) > 10 
+            AND SUBSTRING(timestamp_date FROM 1 FOR 10) = v_start_day 
+            AND timestamp_date < v_clean_date
+        )
+    )
+      AND (status IS NULL OR status != 'cancelled')
+      AND (is_deleted IS NULL OR is_deleted = false)
+      AND (p_branch_id IS NULL OR p_branch_id = 'all' OR p_branch_id = '' OR branch_id = p_branch_id);
+
+    RETURN ROUND(COALESCE(v_balance, 0), 2);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_statement_opening_balance(text, text) TO anon, authenticated, service_role;
+
+
