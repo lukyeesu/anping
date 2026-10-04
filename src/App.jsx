@@ -18,7 +18,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard
+  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard, FlaskConical
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -1031,6 +1031,11 @@ export default function App() {
   const [pdpaQrModal, setPdpaQrModal] = useState({ isOpen: false, link: '' });
   const [pdpaQrDataUrl, setPdpaQrDataUrl] = useState('');
 
+  // 🧪 Simulation Sandbox State (โหมดจำลองข้อมูลจาก Excel โดยไม่แตะ Supabase)
+  const [isSimulationMode, setIsSimulationMode] = useState(false);
+  const [simulationMeta, setSimulationMeta] = useState(null);
+  const [realBackupData, setRealBackupData] = useState(null);
+
   // --- Auto Print Receipt (POS) & OPD from URL (LINE / Discord / Push) ---
   useEffect(() => {
     // 🔒 PDPA Security Check: ต้องผ่านการยืนยันตัวตน (เข้าสู่ระบบ) ก่อนเสมอ
@@ -1781,6 +1786,77 @@ export default function App() {
     triggerGlobalToast(message, type);
   };
 
+  // --- 🧪 Sandbox Simulation Handlers (รันข้อมูลจากไฟล์ Excel บน Memory เท่านั้น) ---
+  const handleStartSimulation = (simData) => {
+    if (!simData) return;
+
+    // 1. สำรองข้อมูลจริงไว้คืนค่าเมื่อออกจากโหมดจำลอง
+    setRealBackupData({
+      posHistoryData: [...posHistoryData],
+      financeData: [...financeData],
+      inventoryLogsData: [...inventoryLogsData]
+    });
+
+    // 2. ปรับแต่งและโหลดข้อมูลจำลอง
+    if (Array.isArray(simData.pos_transactions) && simData.pos_transactions.length > 0) {
+      const mappedPos = simData.pos_transactions.map(row => {
+        let items = row.items;
+        if (typeof items === 'string') {
+          try { items = JSON.parse(items); } catch (e) { items = []; }
+        }
+        return {
+          ...row,
+          items: Array.isArray(items) ? items : (row.items || []),
+          receiptNo: row.receipt_no || row.receiptNo || row.id,
+          totalAmount: Number(row.total_amount || row.totalAmount || row.grand_total || row.grandTotal || 0),
+          netTotal: Number(row.net_total || row.netTotal || row.total_amount || 0),
+          paymentMethod: row.payment_method || row.paymentMethod || 'cash'
+        };
+      });
+      setPosHistoryData(mappedPos);
+    }
+
+    const simRevenues = Array.isArray(simData.finance_revenue) ? simData.finance_revenue.map(r => ({
+      ...r,
+      type: 'revenue',
+      amount: Number(r.amount || 0),
+      category: r.category || 'รายรับ',
+      date: r.date || r.created_at
+    })) : [];
+
+    const simExpenses = Array.isArray(simData.finance_expenses) ? simData.finance_expenses.map(e => ({
+      ...e,
+      type: 'expense',
+      amount: Number(e.amount || 0),
+      category: e.category || 'รายจ่าย',
+      date: e.date || e.created_at
+    })) : [];
+
+    if (simRevenues.length > 0 || simExpenses.length > 0) {
+      setFinanceData([...simRevenues, ...simExpenses]);
+    }
+
+    if (Array.isArray(simData.inventory_logs) && simData.inventory_logs.length > 0) {
+      setInventoryLogsData(simData.inventory_logs);
+    }
+
+    setIsSimulationMode(true);
+    setSimulationMeta(simData);
+    showToast(`เข้าสู่โหมดจำลองข้อมูลจาก "${simData.fileName}" รวม ${simData.totalRecords.toLocaleString()} รายการเรียบร้อยแล้ว`, 'info');
+  };
+
+  const handleExitSimulation = () => {
+    if (realBackupData) {
+      setPosHistoryData(realBackupData.posHistoryData || []);
+      setFinanceData(realBackupData.financeData || []);
+      setInventoryLogsData(realBackupData.inventoryLogsData || []);
+    }
+    setIsSimulationMode(false);
+    setSimulationMeta(null);
+    setRealBackupData(null);
+    showToast('ออกจากโหมดจำลองข้อมูล และคืนค่าข้อมูลจริงจากเซิร์ฟเวอร์เรียบร้อยแล้ว', 'success');
+  };
+
   const handleScroll = rAFThrottle((e) => {
     setIsScrolled(e.target.scrollTop > 20);
   });
@@ -2413,6 +2489,11 @@ export default function App() {
 
   // --- ปรับปรุงฟังก์ชันป้องกัน Error HTML แบบ 100% และรองรับ Supabase ---
   const callAppScript = async (action, sheetName, data = null) => {
+    // 🛡️ ในโหมดจำลองข้อมูล (Sandbox Simulation) ไม่อนุญาตให้เขียนหรือลบข้อมูลจริงลง Supabase
+    if (isSimulationMode && (action === 'SAVE_DATA' || action === 'DELETE_DATA' || action === 'UPDATE_DATA')) {
+      showToast('อยู่ในโหมดจำลองข้อมูล (Sandbox Mode): ข้อมูลทำงานบนเบราว์เซอร์เท่านั้น ไม่ถูกบันทึกลงระบบจริง', 'warning');
+      return { status: 'success', simulated: true, data };
+    }
     try {
       let result;
       // หากตั้งค่า Supabase ไว้ ให้เรียกใช้งานผ่าน Supabase Adapter โดยตรง
@@ -3301,6 +3382,40 @@ export default function App() {
           {/* --- [FIX] ย้าย Spacer มาไว้ด้านในกล่อง Scroll แบบตายตัว ไม่ให้ Layout สั่นกระตุก --- */}
           <div className="md:hidden shrink-0 w-full h-[61px] pointer-events-none"></div>
 
+          {/* 🧪 Simulation Sandbox Mode Banner */}
+          {isSimulationMode && (
+            <div className="sticky top-0 z-30 mx-4 md:mx-6 mt-3 mb-2 p-3.5 bg-gradient-to-r from-amber-500/95 via-orange-500/95 to-amber-600/95 backdrop-blur-md text-white rounded-2xl shadow-lg border border-amber-300/40 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-xl shrink-0 backdrop-blur-xs">
+                  <FlaskConical size={20} className="text-white animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm kanit-text tracking-wide">
+                      กำลังทำงานในโหมดจำลองข้อมูล (Sandbox Simulation Mode)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-amber-700 uppercase tracking-wider">
+                      Memory Only
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-100 kanit-text font-normal mt-0.5">
+                    ไฟล์: <span className="font-semibold text-white">{simulationMeta?.fileName || 'ข้อมูลจาก Excel'}</span>
+                    {simulationMeta?.totalRecords ? ` (${simulationMeta.totalRecords.toLocaleString()} รายการ)` : ''} 
+                    {' • '} ข้อมูลทั้งหมดรันบนเบราว์เซอร์ ไม่มีการส่งหรือแก้ไขข้อมูลบน Supabase
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleExitSimulation}
+                className="px-4 py-2 bg-white text-amber-700 hover:bg-amber-50 active:scale-95 transition-all rounded-xl text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 shrink-0"
+              >
+                <LogOut size={14} />
+                <span>ออกจากโหมดจำลอง</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex-1 min-w-0 flex flex-col w-full min-h-full">
             {currentTab === 'dashboard' && (
                 <div className="w-full min-w-0">
@@ -3505,6 +3620,10 @@ export default function App() {
                         showToast={showToast}
                         isGlobalLoading={isGlobalLoading}
                         onDirtyChange={setHasUnsavedSettings}
+                        onStartSimulation={handleStartSimulation}
+                        isSimulationMode={isSimulationMode}
+                        simulationMeta={simulationMeta}
+                        onExitSimulation={handleExitSimulation}
                     />
                 </div>
             )}
