@@ -961,20 +961,17 @@ export async function callSupabase(action, sheetName, payload = null) {
     }
 
     case 'PRELOAD_PATIENTS_OFFLINE': {
-      const selectCols = (TABLE_COLUMNS.patients || []).join(',') || '*';
-      return await differentialSyncTable('patients', selectCols);
+      // ปิดการ Preload ทั้งตาราง 82 รายการ เพื่อไม่ให้กิน Egress ซ้ำซ้อนและตรงตามคำสั่งโหลดเฉพาะ 35 รายการ
+      return { status: 'success', data: [] };
     }
 
     case 'GET_PATIENTS_PAGINATED': {
       const selectCols = (TABLE_COLUMNS.patients || []).join(',') || '*';
-      const offset = payload?.offset || 0;
-      const limit = payload?.limit || 35;
-      const search = (payload?.search || '').trim().toLowerCase();
+      const offset = Number(payload?.offset) || 0;
+      const limit = Number(payload?.limit) || 35;
+      const search = (payload?.search || '').trim();
       const sortKey = payload?.sortKey || 'created_at';
       const sortDir = payload?.sortDir || 'desc';
-
-      // 1. ซิงค์ตารางคนไข้แบบ Differential Sync (Zero Egress Reconcile ~0.035 KB)
-      await differentialSyncTable('patients', selectCols);
 
       let colSort = 'created_at';
       if (sortKey === 'id' || sortKey === 'hn') colSort = 'id';
@@ -983,10 +980,57 @@ export async function callSupabase(action, sheetName, payload = null) {
       else if (sortKey === 'age' || sortKey === 'dob') colSort = 'dob';
       else if (sortKey === 'createdAt') colSort = 'created_at';
 
+      // 1. ดึงตรงจาก Supabase แบบแบ่งหน้า (Server-side range pagination) ดึงเฉพาะ 35 แถว ไม่ดึง 82 แถว
+      if (supabase) {
+        try {
+          let query = supabase
+            .from('patients')
+            .select(selectCols, { count: 'exact' })
+            .or('is_deleted.is.null,is_deleted.eq.false');
+
+          if (search) {
+            query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,name.ilike.%${search}%,nickname.ilike.%${search}%,id.ilike.%${search}%,hn.ilike.%${search}%,phone.ilike.%${search}%,id_card.ilike.%${search}%`);
+          }
+
+          query = query
+            .order(colSort, { ascending: sortDir === 'asc' })
+            .range(offset, offset + limit - 1);
+
+          const { data, count, error } = await query;
+          if (!error && Array.isArray(data)) {
+            const formatted = data.map(rowToJS);
+            
+            // บันทึกเฉพาะ 35 รายการนี้ลงใน IndexedDB เพื่อความเร็วและออฟไลน์
+            if (formatted.length > 0) {
+              await upsertLocalStore('patients', formatted, { broadcast: false });
+            }
+
+            console.log(
+              `%c⚡ [Paginated Sync: patients]%c 🎯 Fetched: ${formatted.length} rows (Page ${Math.floor(offset / limit) + 1}) | Total: ${count || formatted.length} | Range: ${offset}-${offset + formatted.length - 1} | Limit: ${limit}`,
+              'color: #0284c7; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;',
+              'color: #16a34a; font-weight: 600;'
+            );
+
+            return {
+              status: 'success',
+              data: formatted,
+              totalCount: count !== null ? count : formatted.length,
+              hasMore: (offset + limit) < (count || 0)
+            };
+          } else if (error) {
+            console.warn('Paginated patient query error from Supabase:', error);
+          }
+        } catch (err) {
+          console.warn('Paginated patient query exception, falling back to local cache:', err);
+        }
+      }
+
+      // 2. Fallback: Local Cache (กรณี Offline หรือเครือข่ายขัดข้อง)
       const localPatients = (await getLocalStore('patients')) || [];
       let filtered = localPatients.filter(p => !p.is_deleted && !p.isDeleted);
 
       if (search) {
+        const s = search.toLowerCase();
         filtered = filtered.filter(p => {
           const fn = String(p.first_name || p.firstName || '').toLowerCase();
           const ln = String(p.last_name || p.lastName || '').toLowerCase();
@@ -995,7 +1039,7 @@ export async function callSupabase(action, sheetName, payload = null) {
           const idCard = String(p.id_card || p.idCard || '').toLowerCase();
           const phone = String(p.phone || '').toLowerCase();
           const nick = String(p.nickname || '').toLowerCase();
-          return fullName.includes(search) || hn.includes(search) || idCard.includes(search) || phone.includes(search) || nick.includes(search);
+          return fullName.includes(s) || hn.includes(s) || idCard.includes(s) || phone.includes(s) || nick.includes(s);
         });
       }
 

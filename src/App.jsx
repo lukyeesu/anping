@@ -2707,39 +2707,7 @@ export default function App() {
     };
   }, []);
 
-  // --- [BACKGROUND IDLE SYNC] พรีโหลดข้อมูลคนไข้ลง IndexedDB สำหรับ Offline Mode โดยไม่บล็อก UI และประหยัด Egress ---
-  useEffect(() => {
-    let timeoutId;
-    let idleId;
-
-    const runBackgroundIdleSync = async () => {
-      try {
-        if (!supabase) return;
-        // เรียกซิงค์ข้อมูลคนไข้ผ่าน Zero-Egress Reconcile ในช่วงเวลาที่เครื่องว่าง (บันทึกลง IndexedDB ตาราง patients)
-        await callAppScript('PRELOAD_PATIENTS_OFFLINE', 'Patients');
-        console.log('[Offline Engine] ⚡ Background patient sync to IndexedDB completed (Zero Egress).');
-      } catch (err) {
-        console.warn('[Offline Engine] Background patient sync note:', err?.message);
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      if ('requestIdleCallback' in window) {
-        idleId = window.requestIdleCallback(() => {
-          runBackgroundIdleSync();
-        }, { timeout: 10000 });
-      } else {
-        timeoutId = setTimeout(runBackgroundIdleSync, 4000);
-      }
-    }
-
-    return () => {
-      if (idleId && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, []);
+  // --- ผู้ป่วยถูกโหลดแบบ Server-side Pagination ทีละ 35 รายการตามต้องการ (ไม่ Preload 82 รายการลงมาทีเดียว เพื่อประหยัด Egress สูงสุด) ---
 
   // --- BroadcastChannel Listener (ซิงค์ข้อมูลระหว่างหลายแท็บในเครื่องเดียวกัน) ---
   useEffect(() => {
