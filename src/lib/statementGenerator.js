@@ -393,10 +393,10 @@ export function generateClinicStatementHtml({
   });
 
   // จำนวนแถวต่อหน้า A4 ตามขนาดจริง (พิมพ์ให้เต็มหน้าก่อนค่อยขึ้นหน้าใหม่)
-  // หน้าแรกมีกล่อง Summary Box -> จุได้เต็มที่ 38 รายการ
-  // หน้า 2 เป็นต้นไปมีมินิเฮดเดอร์กะทัดรัด -> จุได้เต็มที่ 48 รายการ
-  const ROWS_FIRST_PAGE = 38;
-  const ROWS_SUBSEQUENT_PAGE = 48;
+  // หน้าแรกมีกล่อง Summary Box -> จุได้เต็มที่ 44 รายการ
+  // หน้า 2 เป็นต้นไปมีมินิเฮดเดอร์กะทัดรัด -> จุได้เต็มที่ 54 รายการ
+  const ROWS_FIRST_PAGE = 44;
+  const ROWS_SUBSEQUENT_PAGE = 54;
 
   const pages = [];
   const total = transactions.length;
@@ -443,12 +443,195 @@ export function generateClinicStatementHtml({
     }
 
     body {
-      background: #525659;
+      background: #1e293b;
       color: #0f172a;
       font-size: 8.5px;
       line-height: 1.2;
       margin: 0;
-      padding: 20px 0 40px 0;
+      padding: 0;
+    }
+
+    /* Top Preview Toolbar (no-print) */
+    .preview-toolbar {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 99999;
+      height: 52px;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid #334155;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .tb-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tb-icon {
+      width: 34px;
+      height: 34px;
+      background: #059669;
+      color: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(5, 150, 105, 0.4);
+    }
+
+    .tb-titles {
+      line-height: 1.25;
+    }
+
+    .tb-main-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+
+    .tb-sub-title {
+      font-size: 10.5px;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+
+    .tb-center {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tb-btn-group {
+      display: flex;
+      align-items: center;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 2px;
+    }
+
+    .tb-btn {
+      background: transparent;
+      border: none;
+      color: #e2e8f0;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .tb-btn:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+
+    .tb-btn-pill {
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 500;
+      gap: 5px;
+    }
+
+    .tb-page-info {
+      font-size: 11.5px;
+      color: #cbd5e1;
+      font-weight: 600;
+      padding: 0 8px;
+      min-width: 60px;
+      text-align: center;
+      user-select: none;
+    }
+
+    .tb-zoom-badge {
+      font-size: 11.5px;
+      color: #38bdf8;
+      font-weight: 700;
+      padding: 0 8px;
+      min-width: 48px;
+      text-align: center;
+      font-family: 'Courier New', Courier, monospace;
+      user-select: none;
+    }
+
+    .tb-divider {
+      width: 1px;
+      height: 20px;
+      background: #334155;
+      margin: 0 4px;
+    }
+
+    .tb-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .tb-btn-print {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: white;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 3px 10px rgba(5, 150, 105, 0.4);
+      transition: transform 0.1s, box-shadow 0.15s;
+    }
+
+    .tb-btn-print:hover {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.5);
+    }
+
+    .tb-btn-close {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .tb-btn-close:hover {
+      background: #e11d48;
+      border-color: #e11d48;
+      color: white;
+    }
+
+    .pages-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 0 60px 0;
+      transform-origin: top center;
+      transition: transform 0.1s ease-out;
     }
 
     .page {
@@ -456,10 +639,10 @@ export function generateClinicStatementHtml({
       height: 297mm;
       max-height: 297mm;
       box-sizing: border-box;
-      padding: 10mm 12mm 8mm 12mm;
+      padding: 8mm 10mm 8mm 10mm;
       margin: 0 auto 20px auto;
       background: white;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
       position: relative;
       display: flex;
       flex-direction: column;
@@ -468,17 +651,28 @@ export function generateClinicStatementHtml({
     }
 
     @media print {
+      .preview-toolbar,
+      .no-print {
+        display: none !important;
+      }
       body {
         background: transparent !important;
         margin: 0 !important;
         padding: 0 !important;
+      }
+      .pages-container {
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        transform: none !important;
+        zoom: 1 !important;
       }
       .page {
         width: 210mm !important;
         height: 297mm !important;
         max-height: 297mm !important;
         margin: 0 !important;
-        padding: 10mm 12mm 8mm 12mm !important;
+        padding: 8mm 10mm 8mm 10mm !important;
         box-shadow: none !important;
         page-break-after: always !important;
         break-after: page !important;
@@ -487,9 +681,6 @@ export function generateClinicStatementHtml({
       .page:last-child {
         page-break-after: avoid !important;
         break-after: avoid !important;
-      }
-      .no-print {
-        display: none !important;
       }
     }
 
@@ -558,10 +749,11 @@ export function generateClinicStatementHtml({
     }
 
     .meta-left .account-name {
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 13.5px;
+      font-weight: 800;
       color: #0f172a;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
+      letter-spacing: -0.2px;
     }
 
     /* Summary Box (สไตล์ธนาคาร) */
@@ -622,7 +814,7 @@ export function generateClinicStatementHtml({
       border-left: 1px solid #cbd5e1;
       border-right: 1px solid #cbd5e1;
       border-bottom: 1px solid #e2e8f0;
-      padding: 2.2px 3px;
+      padding: 2px 3px;
       font-size: 8px;
       color: #1e293b;
       vertical-align: middle;
@@ -637,6 +829,26 @@ export function generateClinicStatementHtml({
       background: #f8fafc !important;
       font-weight: 700;
       border-bottom: 1px solid #94a3b8;
+    }
+
+    /* Filler Rows ที่ช่วยเติมตารางให้เต็มจรดขอบล่างของกระดาษ A4 */
+    .stmt-table .filler-row td {
+      height: 18px;
+      padding: 0 3px;
+      border-left: 1px solid #cbd5e1;
+      border-right: 1px solid #cbd5e1;
+      border-bottom: 1px solid #e2e8f0;
+      background: transparent;
+      user-select: none;
+    }
+
+    .stmt-table .filler-row:nth-child(even) td {
+      background-color: #fafbfc;
+    }
+
+    .stmt-table .filler-last td,
+    .stmt-table tr:last-child td {
+      border-bottom: 1.5px solid #1e293b !important;
     }
 
     .text-center { text-align: center; }
@@ -677,15 +889,81 @@ export function generateClinicStatementHtml({
 </head>
 <body>
 
-  <!-- Floating Print Controls -->
-  <div class="no-print" style="position: fixed; top: 16px; right: 24px; z-index: 9999; display: flex; gap: 10px; background: white; padding: 10px 14px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.25); border: 1px solid #e2e8f0;">
-    <button onclick="window.print()" style="background: #059669; color: white; border: none; padding: 8px 18px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; items-center; gap: 6px; box-shadow: 0 2px 8px rgba(5,150,105,0.3);">
-      🖨️ สั่งพิมพ์ / บันทึก PDF
-    </button>
-    <button onclick="window.close()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 10px; font-weight: 600; font-size: 13px; cursor: pointer;">
-      ปิดหน้าต่าง
-    </button>
+  <!-- Top Preview Toolbar (พร้อมเครื่องมือซูม ย่อ-ขยาย เต็มจอ และปุ่มพิมพ์) -->
+  <div id="preview-toolbar" class="preview-toolbar no-print">
+    <div class="tb-left">
+      <div class="tb-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+        </svg>
+      </div>
+      <div class="tb-titles">
+        <div class="tb-main-title">Clinic Statement - ${clinicDisplayTitle}</div>
+        <div class="tb-sub-title">สาขา: ${branchName} • รอบ: ${rangeBounds.label} • ที่เอกสาร: ${refNumber}</div>
+      </div>
+    </div>
+
+    <div class="tb-center">
+      <!-- ตัวเปลี่ยนหน้า -->
+      <div class="tb-btn-group">
+        <button type="button" class="tb-btn" onclick="scrollToPrevPage()" title="หน้าก่อนหน้า (Page Up)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <span class="tb-page-info">หน้า <span id="tb-current-page">1</span> / ${totalPages}</span>
+        <button type="button" class="tb-btn" onclick="scrollToNextPage()" title="หน้าถัดไป (Page Down)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+
+      <div class="tb-divider"></div>
+
+      <!-- เครื่องมือซูมย่อ-ขยาย -->
+      <div class="tb-btn-group">
+        <button type="button" class="tb-btn" onclick="zoomOut()" title="ย่อขนาด (- / Ctrl + Minus)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <span id="tb-zoom-level" class="tb-zoom-badge">100%</span>
+        <button type="button" class="tb-btn" onclick="zoomIn()" title="ขยายขนาด (+ / Ctrl + Plus)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+      </div>
+
+      <div class="tb-divider"></div>
+
+      <!-- ปรับมุมมองเต็มจอ / พอดีความกว้าง / 100% -->
+      <button type="button" class="tb-btn tb-btn-pill" onclick="fitPage()" title="ปรับพอดีหน้าจอเต็มแผ่น (Fit to Page)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+        <span>กระดาษเต็มจอ</span>
+      </button>
+      <button type="button" class="tb-btn tb-btn-pill" onclick="fitWidth()" title="ปรับพอดีความกว้างหน้าจอ (Fit to Width)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+        <span>พอดีความกว้าง</span>
+      </button>
+      <button type="button" class="tb-btn tb-btn-pill" onclick="resetZoom()" title="ขนาดจริง 100%">
+        <span>100%</span>
+      </button>
+    </div>
+
+    <div class="tb-right">
+      <button type="button" class="tb-btn-print" onclick="window.print()" title="สั่งพิมพ์เอกสาร หรือ บันทึกเป็น PDF (Ctrl+P)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        <span>พิมพ์เอกสาร / บันทึก PDF</span>
+      </button>
+      <button type="button" class="tb-btn-close" onclick="window.close()" title="ปิดหน้าต่างนี้ (Esc)">
+        ✕
+      </button>
+    </div>
   </div>
+
+  <!-- Wrapper ครอบกระดาษทั้งหมด เพื่อรองรับการ Zoom จัดกึ่งกลาง และตรวจเช็คความถูกต้อง -->
+  <div id="pages-container" class="pages-container">
 
   ${pages.map((pageRows, pageIdx) => {
     const isFirstPage = pageIdx === 0;
@@ -701,6 +979,11 @@ export function generateClinicStatementHtml({
     const pageOpeningDate = isFirstPage 
       ? formatStatementDate(rangeBounds.startDateObj)
       : (prevPageLastRow?.dateFormatted || formatStatementDate(rangeBounds.startDateObj));
+
+    // คำนวณจำนวนแถวว่าง (Filler Rows) เพื่อต่อตารางให้เต็มจรดขอบล่างของหน้ากระดาษ A4
+    const targetRowsForFullHeight = isFirstPage ? 51 : 58;
+    const renderedRowCount = 1 + pageRows.length + (isLastPage ? 1 : 0);
+    const fillerCount = Math.max(0, targetRowsForFullHeight - renderedRowCount);
 
     return `
     <div class="page">
@@ -725,7 +1008,7 @@ export function generateClinicStatementHtml({
         <!-- ข้อมูลหน่วยงาน และ ตารางสรุปขวามือ (Summary Box สไตล์กสิกรไทย) -->
         <div class="meta-section">
           <div class="meta-left">
-            <div class="account-name">ชื่อสถานพยาบาล / นิติบุคคล: ${clinicDisplayTitle}</div>
+            <div class="account-name">${clinicDisplayTitle}</div>
             <div>สาขา: <strong>${branchName}</strong></div>
             <div>ที่อยู่: ${branchAddress}</div>
             <div>โทรศัพท์: ${branchPhone} • เลขประจำตัวผู้เสียภาษี: ${clinicTaxId}${clinicLicense ? ` • เลขที่ใบอนุญาต: ${clinicLicense}` : ''}</div>
@@ -850,6 +1133,19 @@ export function generateClinicStatementHtml({
                 </td>
               </tr>
             ` : ''}
+            <!-- แถวว่างต่อตารางให้เต็มจรดขอบล่างของกระดาษ A4 (Filler Rows) -->
+            ${Array.from({ length: fillerCount }).map((_, fIdx) => `
+              <tr class="filler-row${fIdx === fillerCount - 1 ? ' filler-last' : ''}">
+                <td class="text-center nowrap num-val">&nbsp;</td>
+                <td class="text-center nowrap num-val">&nbsp;</td>
+                <td class="text-center nowrap">&nbsp;</td>
+                <td class="text-right nowrap num-val">&nbsp;</td>
+                <td class="text-right nowrap num-val">&nbsp;</td>
+                <td class="text-right nowrap num-val">&nbsp;</td>
+                <td class="text-center nowrap">&nbsp;</td>
+                <td class="text-left desc-cell">&nbsp;</td>
+              </tr>
+            `).join('')}
           </tbody>
         </table>
       </div>
@@ -866,12 +1162,107 @@ export function generateClinicStatementHtml({
     </div>
     `;
   }).join('')}
+  </div> <!-- /#pages-container -->
 
   <script>
+    let currentZoom = 1.0;
+    const container = document.getElementById('pages-container');
+    const zoomText = document.getElementById('tb-zoom-level');
+    const pageNumSpan = document.getElementById('tb-current-page');
+    const pages = document.querySelectorAll('.page');
+
+    function applyZoom(scale) {
+      currentZoom = Math.max(0.3, Math.min(2.5, Math.round(scale * 100) / 100));
+      if ('zoom' in container.style) {
+        container.style.zoom = currentZoom;
+      } else {
+        container.style.transform = 'scale(' + currentZoom + ')';
+        container.style.transformOrigin = 'top center';
+      }
+      if (zoomText) {
+        zoomText.textContent = Math.round(currentZoom * 100) + '%';
+      }
+    }
+
+    function zoomIn() {
+      applyZoom(currentZoom + 0.1);
+    }
+
+    function zoomOut() {
+      applyZoom(currentZoom - 0.1);
+    }
+
+    function resetZoom() {
+      applyZoom(1.0);
+    }
+
+    function fitPage() {
+      const tb = document.getElementById('preview-toolbar');
+      const tbH = tb ? tb.offsetHeight : 52;
+      const availH = window.innerHeight - tbH - 40;
+      const firstP = document.querySelector('.page');
+      const ph = firstP ? firstP.offsetHeight : 1123;
+      const scale = availH / ph;
+      applyZoom(scale);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function fitWidth() {
+      const availW = window.innerWidth - 60;
+      const firstP = document.querySelector('.page');
+      const pw = firstP ? firstP.offsetWidth : 794;
+      const scale = availW / pw;
+      applyZoom(scale);
+    }
+
+    function scrollToPrevPage() {
+      const cur = getCurrentPageIdx();
+      if (cur > 0 && pages[cur - 1]) {
+        pages[cur - 1].scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function scrollToNextPage() {
+      const cur = getCurrentPageIdx();
+      if (cur < pages.length - 1 && pages[cur + 1]) {
+        pages[cur + 1].scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function getCurrentPageIdx() {
+      const scrollY = window.scrollY || window.pageYOffset;
+      let cur = 0;
+      pages.forEach((p, idx) => {
+        if (p.offsetTop - 120 <= scrollY) cur = idx;
+      });
+      return cur;
+    }
+
+    window.addEventListener('scroll', function() {
+      if (pageNumSpan) {
+        pageNumSpan.textContent = getCurrentPageIdx() + 1;
+      }
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        zoomIn();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
+        e.preventDefault();
+        zoomOut();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        resetZoom();
+      } else if (e.key === 'Escape') {
+        window.close();
+      }
+    });
+
+    // On Load: Fit to page automatically so user sees the full A4 layout cleanly
     window.addEventListener('load', function() {
-      setTimeout(function() {
-        window.print();
-      }, 500);
+      fitPage();
     });
   </script>
 </body>
@@ -922,7 +1313,7 @@ export function exportClinicStatementExcel({
   // หัวตาราง
   const sheetRows = [
     ['รายการเดินบัญชีรายรับ-รายจ่าย (Clinic Statement)'],
-    [`ชื่อสถานพยาบาล / นิติบุคคล: ${clinicDisplayTitle}`, '', '', `สาขา: ${branchName}`],
+    [clinicDisplayTitle, '', '', `สาขา: ${branchName}`],
     [`รอบระหว่างวันที่: ${rangeBounds.label}`, '', '', `พิมพ์เมื่อ: ${new Date().toLocaleDateString('th-TH')}`],
     [''],
     ['ยอดยกมาเริ่มต้น (บาท)', openingBalance],
