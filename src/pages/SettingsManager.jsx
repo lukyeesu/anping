@@ -44,7 +44,9 @@ const SettingsManager = ({
   onStartSimulation,
   isSimulationMode,
   simulationMeta,
-  onExitSimulation
+  onExitSimulation,
+  branchesData = [],
+  currentBranch = 'all'
 }) => {
   const [activeSubTab, setActiveSubTab] = useState('prefixes'); // 'prefixes' | 'permissions' | 'categories' | 'statuses' | 'integrations' | 'logs'
   const [newPrefix, setNewPrefix] = useState('');
@@ -2361,6 +2363,8 @@ const SettingsManager = ({
                 isSimulationMode={isSimulationMode}
                 simulationMeta={simulationMeta}
                 onExitSimulation={onExitSimulation}
+                branchesData={branchesData}
+                currentBranch={currentBranch}
               />
             )}
           </div>

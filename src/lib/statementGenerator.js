@@ -160,7 +160,7 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
   if (manualOpeningBalance === null) {
     try {
       let prevQuery = supabase.from('finance_all_transactions')
-        .select('type, amount, id, timestamp_date, created_at')
+        .select('type, amount, id, timestamp_date')
         .lt('timestamp_date', queryStartDate)
         .neq('status', 'cancelled');
 
@@ -169,11 +169,14 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
       }
 
       const { data: prevData, error: prevErr } = await prevQuery;
+      if (prevErr) {
+        console.error('prevQuery error:', prevErr);
+      }
       
       const allPrevRows = [...(prevData || [])];
       // เก็บรายการที่ rawRows ดึงมาแต่ตกอยู่ในรอบก่อน startMs เข้ายอดยกมาด้วย
       (rawRows || []).forEach(row => {
-        const raw = row.timestamp_date || row.created_at;
+        const raw = row.timestamp_date;
         if (raw && new Date(raw).getTime() < startMs) {
           allPrevRows.push(row);
         }
@@ -359,7 +362,6 @@ export function generateClinicStatementHtml({
 
   const baseClinicName = clinicInfo.name || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์';
   const clinicEnName = clinicInfo.enName || 'ANPING APPLIED THAI TRADITIONAL MEDICINE CLINIC';
-  const clinicTaxId = clinicInfo.taxId || '0-1055-66000-00-0';
 
   const isAllBranches = !branchInfo || 
     branchInfo.id === 'all' || 
@@ -368,13 +370,21 @@ export function generateClinicStatementHtml({
     String(branchInfo.name || '').includes('ภาพรวม');
 
   const branchName = isAllBranches ? 'ทุกสาขา' : (branchInfo.name || 'สาขาหลัก');
-  const clinicDisplayTitle = isAllBranches 
-    ? `${baseClinicName} (ทุกสาขา)` 
-    : `${baseClinicName} (${branchName})`;
 
-  const branchAddress = isAllBranches 
-    ? (clinicInfo.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110')
-    : (branchInfo?.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110');
+  // ดึง "ชื่อจดทะเบียน / นิติบุคคล" ที่กรอกตรงหน้าสาขา
+  const regName = branchInfo?.clinicRegName || 
+                  branchInfo?.clinic_reg_name || 
+                  branchInfo?.registeredName || 
+                  clinicInfo.clinicRegName || 
+                  clinicInfo.regName;
+
+  const clinicDisplayTitle = regName 
+    ? (isAllBranches ? `${regName} (ทุกสาขา)` : regName)
+    : (isAllBranches ? `${baseClinicName} (ทุกสาขา)` : `${baseClinicName} (${branchName})`);
+
+  const clinicTaxId = branchInfo?.clinicTax || branchInfo?.clinic_tax || branchInfo?.taxId || clinicInfo.taxId || '0-1055-66000-00-0';
+  const clinicLicense = branchInfo?.clinicLicense || branchInfo?.clinic_license || branchInfo?.license || '';
+  const branchAddress = branchInfo?.address || clinicInfo.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110';
   const branchPhone = branchInfo?.phone || clinicInfo.phone || '02-000-0000';
 
   const refNumber = `STM-${Date.now().toString().slice(-8)}`;
@@ -382,53 +392,23 @@ export function generateClinicStatementHtml({
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  // จัดหน้าอัจฉริยะ (Dynamic Smart Pagination)
-  // ให้หน้าแรกจุได้สูงสุด 32 รายการ (มี Summary Box)
-  // และหน้าต่อๆ ไปจุได้สูงสุด 40 รายการ
-  // พร้อมเกลี่ยจำนวนรายการให้สมดุลเพื่อไม่ให้หน้าสุดท้ายเหลือเศษเพียง 1-3 รายการโหวงเหวง
-  const MAX_PAGE_1 = 32;
-  const MAX_PAGE_SUB = 40;
+  // จำนวนแถวต่อหน้า A4 ตามขนาดจริง (พิมพ์ให้เต็มหน้าก่อนค่อยขึ้นหน้าใหม่)
+  // หน้าแรกมีกล่อง Summary Box -> จุได้เต็มที่ 38 รายการ
+  // หน้า 2 เป็นต้นไปมีมินิเฮดเดอร์กะทัดรัด -> จุได้เต็มที่ 48 รายการ
+  const ROWS_FIRST_PAGE = 38;
+  const ROWS_SUBSEQUENT_PAGE = 48;
 
   const pages = [];
   const total = transactions.length;
 
   if (total === 0) {
     pages.push([]);
-  } else if (total <= MAX_PAGE_1) {
-    pages.push(transactions);
   } else {
-    const remaining = total - MAX_PAGE_1;
-    const totalPages = 1 + Math.ceil(remaining / MAX_PAGE_SUB);
-
-    if (totalPages === 2) {
-      // สำหรับ 2 หน้า: แบ่งจำนวนรายการให้ใกล้เคียงกัน (สมดุล)
-      const half = Math.ceil(total / 2);
-      const countP1 = Math.min(MAX_PAGE_1, Math.max(half, total - MAX_PAGE_SUB));
-      pages.push(transactions.slice(0, countP1));
-      pages.push(transactions.slice(countP1));
-    } else {
-      // สำหรับ 3 หน้าขึ้นไป: กระจายแถวให้สมดุล ไม่ให้หน้าสุดท้ายโหวง
-      let offset = 0;
-      for (let p = 0; p < totalPages; p++) {
-        const isFirst = p === 0;
-        const isLast = p === totalPages - 1;
-        const leftRows = total - offset;
-        const pagesLeft = totalPages - p;
-
-        if (isFirst) {
-          const targetP1 = Math.min(MAX_PAGE_1, Math.ceil(total / totalPages));
-          const count = Math.min(leftRows, Math.max(targetP1, total - (pagesLeft - 1) * MAX_PAGE_SUB));
-          pages.push(transactions.slice(offset, offset + count));
-          offset += count;
-        } else if (isLast) {
-          pages.push(transactions.slice(offset));
-          offset = total;
-        } else {
-          const target = Math.min(MAX_PAGE_SUB, Math.ceil(leftRows / pagesLeft));
-          pages.push(transactions.slice(offset, offset + target));
-          offset += target;
-        }
-      }
+    pages.push(transactions.slice(0, ROWS_FIRST_PAGE));
+    let offset = ROWS_FIRST_PAGE;
+    while (offset < total) {
+      pages.push(transactions.slice(offset, offset + ROWS_SUBSEQUENT_PAGE));
+      offset += ROWS_SUBSEQUENT_PAGE;
     }
   }
 
@@ -745,10 +725,10 @@ export function generateClinicStatementHtml({
         <!-- ข้อมูลหน่วยงาน และ ตารางสรุปขวามือ (Summary Box สไตล์กสิกรไทย) -->
         <div class="meta-section">
           <div class="meta-left">
-            <div class="account-name">ชื่อสถานพยาบาล: ${clinicDisplayTitle}</div>
+            <div class="account-name">ชื่อสถานพยาบาล / นิติบุคคล: ${clinicDisplayTitle}</div>
             <div>สาขา: <strong>${branchName}</strong></div>
             <div>ที่อยู่: ${branchAddress}</div>
-            <div>โทรศัพท์: ${branchPhone} • เลขประจำตัวผู้เสียภาษี: ${clinicTaxId}</div>
+            <div>โทรศัพท์: ${branchPhone} • เลขประจำตัวผู้เสียภาษี: ${clinicTaxId}${clinicLicense ? ` • เลขที่ใบอนุญาต: ${clinicLicense}` : ''}</div>
           </div>
 
           <table class="summary-box">
@@ -927,14 +907,22 @@ export function exportClinicStatementExcel({
     String(branchInfo.name || '').includes('ภาพรวม');
 
   const branchName = isAllBranches ? 'ทุกสาขา' : (branchInfo.name || 'สาขาหลัก');
-  const clinicDisplayTitle = isAllBranches 
-    ? `${baseClinicName} (ทุกสาขา)` 
-    : `${baseClinicName} (${branchName})`;
+
+  // ดึง "ชื่อจดทะเบียน / นิติบุคคล" ที่กรอกตรงหน้าสาขา
+  const regName = branchInfo?.clinicRegName || 
+                  branchInfo?.clinic_reg_name || 
+                  branchInfo?.registeredName || 
+                  clinicInfo.clinicRegName || 
+                  clinicInfo.regName;
+
+  const clinicDisplayTitle = regName 
+    ? (isAllBranches ? `${regName} (ทุกสาขา)` : regName)
+    : (isAllBranches ? `${baseClinicName} (ทุกสาขา)` : `${baseClinicName} (${branchName})`);
 
   // หัวตาราง
   const sheetRows = [
     ['รายการเดินบัญชีรายรับ-รายจ่าย (Clinic Statement)'],
-    [`ชื่อสถานพยาบาล: ${clinicDisplayTitle}`, '', '', `สาขา: ${branchName}`],
+    [`ชื่อสถานพยาบาล / นิติบุคคล: ${clinicDisplayTitle}`, '', '', `สาขา: ${branchName}`],
     [`รอบระหว่างวันที่: ${rangeBounds.label}`, '', '', `พิมพ์เมื่อ: ${new Date().toLocaleDateString('th-TH')}`],
     [''],
     ['ยอดยกมาเริ่มต้น (บาท)', openingBalance],

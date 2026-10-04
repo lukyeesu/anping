@@ -3624,6 +3624,8 @@ export default function App() {
                         isSimulationMode={isSimulationMode}
                         simulationMeta={simulationMeta}
                         onExitSimulation={handleExitSimulation}
+                        branchesData={branchesData}
+                        currentBranch={currentBranch}
                     />
                 </div>
             )}

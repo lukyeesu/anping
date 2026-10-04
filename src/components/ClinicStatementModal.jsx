@@ -11,6 +11,8 @@ import {
   generateClinicStatementHtml, 
   exportClinicStatementExcel 
 } from '../lib/statementGenerator';
+import { supabase } from '../lib/supabase';
+import { getLocalStore } from '../lib/offlineStore';
 
 const MONTH_OPTIONS = [
   { value: 0, label: 'มกราคม (เดือน 1)' },
@@ -83,6 +85,42 @@ export default function ClinicStatementModal({
   const [statementData, setStatementData] = useState(null);
   const [filterSearch, setFilterSearch] = useState('');
 
+  // Fallback branches if not passed via props
+  const [internalBranches, setInternalBranches] = useState([]);
+  useEffect(() => {
+    if (branchesData && branchesData.length > 0) {
+      setInternalBranches(branchesData);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const local = await getLocalStore('branches');
+        if (isMounted && Array.isArray(local) && local.length > 0) {
+          setInternalBranches(local);
+          return;
+        }
+      } catch (e) {}
+      if (supabase) {
+        try {
+          const { data } = await supabase.from('branches').select('*');
+          if (isMounted && Array.isArray(data) && data.length > 0) {
+            setInternalBranches(data);
+          }
+        } catch (e) {}
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [branchesData, isOpen]);
+
+  useEffect(() => {
+    if (currentBranch) {
+      setSelectedBranch(currentBranch);
+    }
+  }, [currentBranch]);
+
+  const effectiveBranches = (branchesData && branchesData.length > 0) ? branchesData : internalBranches;
+
   // คำนวณช่วงวันที่ตามโหมดที่เลือก
   const rangeBounds = useMemo(() => {
     return getStatementDateBounds(periodType, {
@@ -148,29 +186,40 @@ export default function ClinicStatementModal({
 
   // ข้อมูลสาขาที่เลือก
   const isAllBranchSelected = selectedBranch === 'all' || !selectedBranch;
+  const primaryBranch = effectiveBranches.find(b => b.id === 'b1') || effectiveBranches[0] || {};
+  const currentBranchObj = effectiveBranches.find(b => b.id === selectedBranch) || {};
+
   const activeBranchInfo = isAllBranchSelected
     ? {
         id: 'all',
         name: 'ทุกสาขา',
-        address: '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
-        phone: '02-000-0000'
+        clinicRegName: primaryBranch.clinicRegName || primaryBranch.clinic_reg_name || primaryBranch.registeredName || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์',
+        clinicLicense: primaryBranch.clinicLicense || primaryBranch.clinic_license || primaryBranch.license || '',
+        clinicTax: primaryBranch.clinicTax || primaryBranch.clinic_tax || primaryBranch.taxId || '0-1055-66000-00-0',
+        address: primaryBranch.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
+        phone: primaryBranch.phone || '02-000-0000'
       }
-    : (branchesData.find(b => b.id === selectedBranch) || {
+    : {
         id: selectedBranch,
-        name: 'สาขาคลินิก',
-        address: '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
-        phone: '02-000-0000'
-      });
+        name: currentBranchObj.name || 'สาขาคลินิก',
+        clinicRegName: currentBranchObj.clinicRegName || currentBranchObj.clinic_reg_name || currentBranchObj.registeredName || currentBranchObj.name || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์',
+        clinicLicense: currentBranchObj.clinicLicense || currentBranchObj.clinic_license || currentBranchObj.license || '',
+        clinicTax: currentBranchObj.clinicTax || currentBranchObj.clinic_tax || currentBranchObj.taxId || '0-1055-66000-00-0',
+        address: currentBranchObj.address || '119/140 ม.1 ต.ลำผักกูด อ.ธัญบุรี จ.ปทุมธานี 12110',
+        phone: currentBranchObj.phone || '02-000-0000'
+      };
+
+  const regName = activeBranchInfo.clinicRegName || 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์';
+  const clinicDisplayTitle = isAllBranchSelected 
+    ? `${regName} (ทุกสาขา)` 
+    : regName;
 
   const clinicInfo = {
     name: 'อันผิง คลินิกการแพทย์แผนไทยประยุกต์',
+    clinicRegName: regName,
     enName: 'ANPING APPLIED THAI TRADITIONAL MEDICINE CLINIC',
-    taxId: '0-1055-66000-00-0'
+    taxId: activeBranchInfo.clinicTax || '0-1055-66000-00-0'
   };
-
-  const clinicDisplayTitle = isAllBranchSelected 
-    ? `${clinicInfo.name} (ทุกสาขา)` 
-    : `${clinicInfo.name} (${activeBranchInfo.name})`;
 
   // ดำเนินการพิมพ์ / เซฟเป็น PDF
   const handlePrintPdf = () => {
@@ -466,8 +515,10 @@ export default function ClinicStatementModal({
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
                 >
                   <option value="all">ทุกสาขา (ภาพรวมทั้งคลินิก)</option>
-                  {branchesData.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
+                  {effectiveBranches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}{b.clinicRegName ? ` (${b.clinicRegName})` : ''}
+                    </option>
                   ))}
                 </select>
               </div>

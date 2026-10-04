@@ -41,7 +41,9 @@ export default function DatabaseStorageManager({
   onStartSimulation, 
   isSimulationMode, 
   simulationMeta, 
-  onExitSimulation 
+  onExitSimulation,
+  branchesData = [],
+  currentBranch = 'all'
 }) {
   // --- 1. Real-time Dashboard State ---
   const [stats, setStats] = useState(null);
@@ -1148,6 +1150,8 @@ export default function DatabaseStorageManager({
       <ClinicStatementModal
         isOpen={isStatementModalOpen}
         onClose={() => setIsStatementModalOpen(false)}
+        branchesData={branchesData}
+        currentBranch={currentBranch}
         showToast={showToast}
       />
     </div>
