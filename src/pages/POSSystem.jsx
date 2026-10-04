@@ -1774,14 +1774,24 @@ const POSSystem = ({
 
   // --- โหลดประวัติการรักษา OPD ของวันนี้จาก Supabase / IndexedDB แบบ Real-time เพื่อให้ POS แสดงคนไข้ที่รอชำระเงินได้ทันที ---
   const [todayTreatments, setTodayTreatments] = useState([]);
+  const lastTodayTreatmentsFetchRef = useRef(0);
 
-  const fetchTodayTreatments = useCallback(async () => {
+  const fetchTodayTreatments = useCallback(async (force = false) => {
+    // ป้องกันการยิงคำขอซ้ำซ้อนเมื่อคลิกเข้า-ออกช่องค้นหาบ่อยๆ (Throttle 20 วินาที หากไม่ได้บังคับ force)
+    const now = Date.now();
+    if (!force && now - lastTodayTreatmentsFetchRef.current < 20000) {
+      return;
+    }
+    lastTodayTreatmentsFetchRef.current = now;
+
     try {
       let trts = [];
       if (supabase) {
+        // ดึงเฉพาะฟิลด์ที่จำเป็น (id, patient_id, date, created_at) เพื่อตัดข้อความผลตรวจ/ประวัติการรักษายาวๆ ช่วยลด Egress ลงกว่า 80%
         const { data, error } = await supabase
           .from('treatments')
-          .select('*')
+          .select('id, patient_id, created_at, date, datetime, is_deleted')
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .order('created_at', { ascending: false })
           .limit(100);
         if (!error && Array.isArray(data)) {
@@ -1827,7 +1837,8 @@ const POSSystem = ({
         if (missingIds.length > 0) {
           const { data: missingPatients } = await supabase
             .from('patients')
-            .select('*')
+            .select('id, hn, first_name, last_name, prefix, phone, phone1, nickname, is_deleted')
+            .or('is_deleted.is.null,is_deleted.eq.false')
             .in('id', missingIds);
           
           let moreP = [];
@@ -1838,7 +1849,8 @@ const POSSystem = ({
           if (stillMissing.length > 0) {
             const { data: byHn } = await supabase
               .from('patients')
-              .select('*')
+              .select('id, hn, first_name, last_name, prefix, phone, phone1, nickname, is_deleted')
+              .or('is_deleted.is.null,is_deleted.eq.false')
               .in('hn', stillMissing);
             if (byHn && byHn.length > 0) {
               moreP = [...moreP, ...byHn.map(rowToJS)];
@@ -1861,13 +1873,13 @@ const POSSystem = ({
 
   // ดึงรายการตรวจวันนี้ทันทีที่เปิดหน้า POS และคอยฟัง Realtime เมื่อมีแพทย์บันทึก OPD ใหม่
   useEffect(() => {
-    fetchTodayTreatments();
+    fetchTodayTreatments(true);
 
     if (!supabase) return;
     const channel = supabase
       .channel('pos-treatments-live-feed')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'treatments' }, () => {
-        fetchTodayTreatments();
+        fetchTodayTreatments(true);
       })
       .subscribe();
 
@@ -2388,7 +2400,7 @@ const POSSystem = ({
                   }}
                   onFocus={() => {
                     setIsPatientDropdownOpen(true);
-                    fetchTodayTreatments();
+                    fetchTodayTreatments(false);
                   }}
                   onBlur={() => setTimeout(() => setIsPatientDropdownOpen(false), 200)}
                 />
