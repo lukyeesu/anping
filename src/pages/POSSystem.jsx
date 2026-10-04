@@ -2093,7 +2093,7 @@ const POSSystem = ({
     });
     
     return [
-      { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)', hn: '', name: 'ลูกค้าทั่วไป (ไม่ระบุ)' },
+      { value: '', label: 'เลือกลูกค้าทั่วไป (ไม่ระบุ)', hn: '', name: 'ลูกค้าทั่วไป (ไม่ระบุ)', nickname: '' },
       ...sortedPatients.map(p => {
         const pId = String(p.id || '').trim().toLowerCase();
         const pHn = String(p.hn || '').trim().toLowerCase();
@@ -2101,11 +2101,13 @@ const POSSystem = ({
         const isWaiting = !!(stat?.hasOpd && !stat?.isPaid);
         const hnDisplay = p.hn || p.id || '-';
         const nameDisplay = getPatientFullName(p);
+        const nickDisplay = (p.nickname || p.nickName || p.nick_name || '').trim();
 
         return { 
           value: p.id || p.hn, 
           hn: hnDisplay,
           name: nameDisplay,
+          nickname: nickDisplay,
           label: `${hnDisplay} - ${nameDisplay}`,
           phone: p.phone || p.phone1 || '',
           isWaiting,
@@ -2124,8 +2126,12 @@ const POSSystem = ({
     const term = patientSearchTerm.toLowerCase().trim();
     return list.filter(p => {
       const matchLabel = (p.label || '').toLowerCase().includes(term);
+      const matchName = (p.name || '').toLowerCase().includes(term);
+      const matchHn = (p.hn || '').toLowerCase().includes(term);
       const matchPhone = (p.phone || '').includes(term);
-      return matchLabel || matchPhone;
+      const nick = (p.nickname || p.raw?.nickname || p.raw?.nickName || p.raw?.nick_name || '').toLowerCase();
+      const matchNickname = nick.includes(term);
+      return matchLabel || matchName || matchHn || matchPhone || matchNickname;
     });
   }, [patientOptions, patientSearchTerm]);
 
@@ -2473,7 +2479,7 @@ const POSSystem = ({
                 <input 
                   type="text"
                   className="w-full bg-transparent outline-none text-sm sm:text-base font-data text-slate-700"
-                  placeholder="ค้นหาชื่อ หรือ HN ลูกค้า..."
+                  placeholder="ค้นหาชื่อ, ชื่อเล่น, เบอร์โทร หรือ HN ลูกค้า..."
                   value={patientSearchTerm}
                   onChange={(e) => {
                     setPatientSearchTerm(e.target.value);
@@ -2572,9 +2578,14 @@ const POSSystem = ({
                                 )}
                             </div>
 
-                            {/* แถวล่าง: ชื่อ-นามสกุล คนไข้ แสดงเต็มบรรทัด คมชัด ไม่โดนแท็กเบียดหรือตัดนามสกุล */}
-                            <div className="text-sm sm:text-base font-semibold text-slate-800 leading-snug break-words">
-                                {opt.name || opt.label}
+                            {/* แถวล่าง: ชื่อ-นามสกุล คนไข้ + ชื่อเล่น (ถ้ามี) แสดงเด่นชัด ไม่โดนแท็กเบียดหรือตัดนามสกุล */}
+                            <div className="text-sm sm:text-base font-semibold text-slate-800 leading-snug break-words flex items-center flex-wrap gap-1.5">
+                                <span>{opt.name || opt.label}</span>
+                                {opt.nickname && (
+                                    <span className="text-xs sm:text-sm font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-lg border border-sky-200/80">
+                                        ({opt.nickname})
+                                    </span>
+                                )}
                             </div>
                         </div>
                     ))}
