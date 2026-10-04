@@ -15,11 +15,12 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, FileSpreadsheet
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
+import ClinicStatementModal from '../components/ClinicStatementModal';
 
 const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', suffix = '', formatter, className = '', title }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -108,6 +109,7 @@ const FinancePage = ({
 
   // Master list ของทุกหมวดหมู่ที่มีอยู่ในระบบ (เพื่อไม่ให้หมวดไม่อื่นหายไปเวลากดเลือกตัวกรอง)
   const [masterCategories, setMasterCategories] = useState([]);
+  const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
 
   // ดึงหมวดหมู่ทั้งหมดจาก IndexedDB และ Supabase ทันทีเมื่อเริ่มเปิดหน้า (เพื่อไม่ต้องรอเลื่อนดูบิลเก่า)
   useEffect(() => {
@@ -2104,9 +2106,22 @@ const FinancePage = ({
               <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title kanit-text">ระบบการเงิน (Finance)</h1>
               <p className="text-slate-500 sticky-header-desc kanit-text">ภาพรวมรายรับรายจ่าย และระบบเชื่อมโยงอัตโนมัติ</p>
             </div>
-            <button type="button" onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn px-4 py-2 sm:px-6 sm:py-3`}>
-              <Plus size={20} /> <span className="hidden sm:inline kanit-text">เพิ่มรายการ</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                type="button" 
+                onClick={() => setIsStatementModalOpen(true)} 
+                className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-xs transition-transform active:scale-95 shrink-0 bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 sticky-header-btn px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm kanit-text"
+                title="ออกรายการเดินบัญชีการเงินคลินิก (Bank Statement Style)"
+              >
+                <FileSpreadsheet size={18} className="text-emerald-600" />
+                <span className="hidden sm:inline">พิมพ์ Statement คลินิก</span>
+                <span className="sm:hidden">Statement</span>
+              </button>
+
+              <button type="button" onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn px-4 py-2 sm:px-6 sm:py-3`}>
+                <Plus size={20} /> <span className="hidden sm:inline kanit-text">เพิ่มรายการ</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -4011,6 +4026,15 @@ const FinancePage = ({
         </div>,
         document.body
       )}
+
+      {/* Clinic Statement Modal (Bank Layout Style) */}
+      <ClinicStatementModal
+        isOpen={isStatementModalOpen}
+        onClose={() => setIsStatementModalOpen(false)}
+        branchesData={branchesData}
+        currentBranch={currentBranch}
+        showToast={showToast}
+      />
 
     </div>
   );

@@ -17,6 +17,7 @@ import {
   parseExcelForSimulation 
 } from '../lib/databaseManager';
 import { clearAllLocalStores } from '../lib/offlineStore';
+import ClinicStatementModal from './ClinicStatementModal';
 
 const THAI_MONTHS = [
   { value: 0, label: 'มกราคม' },
@@ -68,6 +69,7 @@ export default function DatabaseStorageManager({
 
   // --- 2. Active Tab State for Management Actions ---
   const [activeActionTab, setActiveActionTab] = useState('export'); // 'export', 'purge', 'simulation', 'cache'
+  const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
 
   // --- 3. Export to Excel State ---
   const [exportRangeType, setExportRangeType] = useState('year'); // 'all', 'year', 'month', 'custom', 'single'
@@ -504,14 +506,25 @@ export default function DatabaseStorageManager({
           {/* ========================================================================= */}
           {activeActionTab === 'export' && (
             <div className="space-y-6">
-              <div>
-                <h3 className="text-base font-bold text-slate-800 kanit-text flex items-center gap-2">
-                  <FileSpreadsheet className="text-emerald-500" size={18} />
-                  ส่งออกข้อมูลจาก Supabase เป็นไฟล์ Excel (.xlsx) แบบหลาย Sheet
-                </h3>
-                <p className="text-xs text-slate-500 kanit-text mt-1">
-                  ดาวน์โหลดข้อมูลเอกสารการเงิน บิล POS การเข้างานพนักงาน และ Log ระบบ เพื่อนำไปเก็บสำรองข้อมูลไว้ดูย้อนหลังก่อนทำการลบ
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 kanit-text flex items-center gap-2">
+                    <FileSpreadsheet className="text-emerald-500" size={18} />
+                    ส่งออกข้อมูลจาก Supabase เป็นไฟล์ Excel (.xlsx) แบบหลาย Sheet
+                  </h3>
+                  <p className="text-xs text-slate-500 kanit-text mt-1">
+                    ดาวน์โหลดข้อมูลเอกสารการเงิน บิล POS การเข้างานพนักงาน และ Log ระบบ เพื่อนำไปเก็บสำรองข้อมูลไว้ดูย้อนหลังก่อนทำการลบ
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsStatementModalOpen(true)}
+                  className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 rounded-2xl font-bold kanit-text text-xs shadow-2xs flex items-center gap-2 shrink-0 transition-all active:scale-95"
+                  title="พิมพ์ / ส่งออก Statement สไตล์ธนาคารพาณิชย์"
+                >
+                  <Printer size={15} />
+                  <span>พิมพ์ Statement คลินิก (Bank Style)</span>
+                </button>
               </div>
 
               {/* 1. เลือกช่วงเวลา */}
@@ -1130,6 +1143,13 @@ export default function DatabaseStorageManager({
           )}
         </div>
       </div>
+
+      {/* Clinic Statement Modal (Bank Layout Style) */}
+      <ClinicStatementModal
+        isOpen={isStatementModalOpen}
+        onClose={() => setIsStatementModalOpen(false)}
+        showToast={showToast}
+      />
     </div>
   );
 }
