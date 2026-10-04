@@ -386,8 +386,8 @@ export default function ClinicStatementModal({
                   <tbody className="divide-y divide-slate-100">
                     {/* ยอดยกมา */}
                     <tr className="bg-slate-50/80 font-bold text-slate-700">
-                      <td className="py-2 px-3 text-center text-slate-500 text-[11px]">
-                        {rangeBounds.dateOnlyStart}
+                      <td className="py-2 px-3 text-center text-slate-500 text-[11px] font-mono">
+                        {rangeBounds.label?.split(' - ')[0] || rangeBounds.dateOnlyStart}
                       </td>
                       <td className="py-2 px-3">ยอดยกมา (Opening Balance)</td>
                       <td className="py-2 px-3 text-right text-slate-400">-</td>

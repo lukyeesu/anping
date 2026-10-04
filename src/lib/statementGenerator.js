@@ -183,11 +183,34 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
     const ref = row.id || '';
     const note = row.note || '';
 
+    // ทำความสะอาดชื่อคนไข้ (ตัดคำนำหน้า HN ซ้ำซ้อนออก)
+    const cleanPatient = patientName ? patientName.replace(/^HN\d*[-\s•]*/i, '').trim() : '';
+
     let desc = '';
+    let shortType = '';
+
     if (row.is_auto || row.category === 'รายได้จาก POS' || String(ref).startsWith('REC')) {
-      desc = `บิล POS: ${ref}${patientName ? ` • คนไข้: ${patientName}` : ''}${hn ? ` (HN: ${hn})` : ''}${itemNames ? ` • รายการ: ${itemNames}` : ''}`;
+      shortType = 'รับชำระ POS';
+      const parts = [ref];
+      if (cleanPatient) parts.push(cleanPatient);
+      if (itemNames) parts.push(`(${itemNames})`);
+      desc = parts.join(' • ');
+    } else if (isExp) {
+      shortType = row.category || 'รายจ่าย';
+      const parts = [];
+      if (row.category) parts.push(row.category);
+      if (note && note !== row.category) parts.push(note);
+      if (cleanPatient) parts.push(`คนไข้: ${cleanPatient}`);
+      if (itemNames) parts.push(`(${itemNames})`);
+      desc = parts.join(' - ') || 'รายจ่ายทั่วไป';
     } else {
-      desc = `${row.category || (isExp ? 'รายจ่าย' : 'รายรับ')}${note ? ` • ${note}` : ''}${patientName ? ` • คนไข้: ${patientName}` : ''}${itemNames ? ` • ${itemNames}` : ''}`;
+      shortType = row.category || 'รายรับ';
+      const parts = [];
+      if (row.category) parts.push(row.category);
+      if (note && note !== row.category) parts.push(note);
+      if (cleanPatient) parts.push(`คนไข้: ${cleanPatient}`);
+      if (itemNames) parts.push(`(${itemNames})`);
+      desc = parts.join(' - ') || 'รายรับทั่วไป';
     }
 
     transactions.push({
@@ -196,7 +219,7 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
       dateObj: dt,
       dateFormatted: formatStatementDate(dt),
       timeFormatted: formatStatementTime(dt),
-      type: isExp ? `รายจ่าย (${row.category || 'ทั่วไป'})` : (row.is_auto ? 'รับชำระบิล POS' : `รายรับ (${row.category || 'ทั่วไป'})`),
+      type: shortType,
       credit: isExp ? 0 : amt,
       debit: isExp ? amt : 0,
       channel: mapPaymentChannel(row.method || row.payment_method),
@@ -251,33 +274,37 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
 }
 
 /**
- * แมปประเภทช่องทางการชำระให้เหมือนของธนาคาร
+ * แมปประเภทช่องทางการชำระให้เหมือนของธนาคาร (กะทัดรัด บรรทัดเดียว)
  */
 function mapPaymentChannel(method) {
   if (!method) return 'โอนเงิน';
   const m = String(method).toLowerCase();
-  if (m.includes('cash') || m.includes('เงินสด')) return 'เงินสด (Cash)';
-  if (m.includes('qr') || m.includes('promptpay') || m.includes('พร้อมเพย์')) return 'EDC/K SHOP/MYQR';
-  if (m.includes('card') || m.includes('บัตร') || m.includes('credit')) return 'บัตรเครดิต (EDC)';
-  if (m.includes('transfer') || m.includes('โอน')) return 'K PLUS/Mobile Banking';
-  return 'โอนเงิน/Mobile Banking';
+  if (m.includes('cash') || m.includes('เงินสด')) return 'เงินสด';
+  if (m.includes('qr') || m.includes('promptpay') || m.includes('พร้อมเพย์')) return 'K PLUS/QR';
+  if (m.includes('card') || m.includes('บัตร') || m.includes('credit')) return 'บัตรเครดิต';
+  if (m.includes('transfer') || m.includes('โอน')) return 'K PLUS';
+  return 'โอนเงิน';
 }
 
 function formatStatementDate(d) {
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const yr = String(d.getFullYear() + 543).slice(-2);
-  return `${day}-${month}-${yr}`;
+  if (!d) return '-';
+  const dateObj = d instanceof Date ? d : new Date(d);
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const yr = String(dateObj.getFullYear() + 543).slice(-2);
+  return `${day}/${month}/${yr}`;
 }
 
 function formatStatementTime(d) {
-  const hr = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
+  if (!d) return '--:--';
+  const dateObj = d instanceof Date ? d : new Date(d);
+  const hr = String(dateObj.getHours()).padStart(2, '0');
+  const min = String(dateObj.getMinutes()).padStart(2, '0');
   return `${hr}:${min}`;
 }
 
 /**
- * สร้าง HTML Statement สไตล์ธนาคารกสิกรไทย (A4 Format) สำหรับสั่งพิมพ์หรือเซฟเป็น PDF
+ * สร้าง HTML Statement สไตล์ธนาคารกสิกรไทย (A4 Format เป๊ะ ไม่ล้น ไม่ตัด) สำหรับสั่งพิมพ์หรือเซฟเป็น PDF
  */
 export function generateClinicStatementHtml({
   statementData,
@@ -307,14 +334,21 @@ export function generateClinicStatementHtml({
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  // แบ่งหน้ารายการ (ประมาณ 32 รายการต่อหน้า A4 เหมือน Statement ธนาคาร)
-  const ROWS_PER_PAGE = 28;
+  // จำนวนแถวต่อหน้า A4 ตามสไตล์ Statement ธนาคารกสิกรไทย
+  // หน้าแรกมีกล่อง Summary Box -> จุได้ 22 รายการพอดีเป๊ะในหน้าเดียว
+  // หน้า 2 เป็นต้นไปมีมินิเฮดเดอร์ 2 บรรทัด -> จุได้ 35 รายการต่อหน้า
+  const ROWS_FIRST_PAGE = 22;
+  const ROWS_SUBSEQUENT_PAGE = 35;
+
   const pages = [];
   if (transactions.length === 0) {
     pages.push([]);
   } else {
-    for (let i = 0; i < transactions.length; i += ROWS_PER_PAGE) {
-      pages.push(transactions.slice(i, i + ROWS_PER_PAGE));
+    pages.push(transactions.slice(0, ROWS_FIRST_PAGE));
+    let offset = ROWS_FIRST_PAGE;
+    while (offset < transactions.length) {
+      pages.push(transactions.slice(offset, offset + ROWS_SUBSEQUENT_PAGE));
+      offset += ROWS_SUBSEQUENT_PAGE;
     }
   }
 
@@ -334,44 +368,65 @@ export function generateClinicStatementHtml({
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
     
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     body {
-      background: #f1f5f9;
-      color: #1e293b;
-      font-size: 11px;
-      line-height: 1.35;
+      background: #525659;
+      color: #0f172a;
+      font-size: 8.5px;
+      line-height: 1.2;
+      margin: 0;
+      padding: 20px 0 40px 0;
     }
 
     .page {
       width: 210mm;
-      min-height: 297mm;
-      padding: 12mm 14mm 12mm 14mm;
-      margin: 10mm auto;
+      height: 297mm;
+      max-height: 297mm;
+      box-sizing: border-box;
+      padding: 10mm 12mm 8mm 12mm;
+      margin: 0 auto 20px auto;
       background: white;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
       position: relative;
       display: flex;
-      flex-col;
+      flex-direction: column;
       justify-content: space-between;
+      overflow: hidden;
     }
 
     @media print {
       body {
-        background: transparent;
+        background: transparent !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
       .page {
-        margin: 0;
-        box-shadow: none;
-        page-break-after: always;
-        height: 297mm;
+        width: 210mm !important;
+        height: 297mm !important;
+        max-height: 297mm !important;
+        margin: 0 !important;
+        padding: 10mm 12mm 8mm 12mm !important;
+        box-shadow: none !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        overflow: hidden !important;
+      }
+      .page:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
       }
       .no-print {
         display: none !important;
@@ -382,18 +437,18 @@ export function generateClinicStatementHtml({
     .header-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .header-title-th {
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
       color: #0f172a;
       letter-spacing: -0.2px;
     }
 
     .header-title-en {
-      font-size: 8.5px;
+      font-size: 8px;
       font-weight: 600;
       color: #475569;
       letter-spacing: 0.2px;
@@ -405,24 +460,24 @@ export function generateClinicStatementHtml({
     }
 
     .clinic-logo-text {
-      font-size: 16px;
+      font-size: 14.5px;
       font-weight: 800;
-      color: #059669; /* Emerald Green เหมือนธนาคารกสิกร */
+      color: #059669; /* Kasikorn Emerald Green */
       letter-spacing: -0.3px;
     }
 
     .clinic-sub-logo {
-      font-size: 8.5px;
+      font-size: 7.5px;
       font-weight: 700;
       color: #047857;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
     }
 
     .page-number {
-      font-size: 10px;
+      font-size: 8.5px;
       color: #475569;
-      margin-top: 3px;
+      margin-top: 2px;
       font-weight: 600;
     }
 
@@ -431,43 +486,44 @@ export function generateClinicStatementHtml({
       width: 100%;
       display: flex;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
+      gap: 10px;
+      margin-bottom: 6px;
     }
 
     .meta-left {
       flex: 1;
-      font-size: 10px;
+      font-size: 8.5px;
       color: #334155;
-      line-height: 1.45;
+      line-height: 1.35;
     }
 
     .meta-left .account-name {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       color: #0f172a;
-      margin-bottom: 2px;
+      margin-bottom: 1px;
     }
 
     .barcode-area {
       font-family: monospace;
-      letter-spacing: 3px;
-      font-size: 10px;
-      margin-top: 8px;
+      letter-spacing: 2px;
+      font-size: 8px;
+      margin-top: 6px;
       color: #64748b;
     }
 
     /* Summary Box (สไตล์ธนาคาร) */
     .summary-box {
-      width: 82mm;
+      width: 80mm;
       border: 1px solid #1e293b;
       border-collapse: collapse;
-      font-size: 9.5px;
+      font-size: 8.5px;
     }
 
     .summary-box td {
       border: 1px solid #334155;
-      padding: 3px 6px;
+      padding: 2px 5px;
+      line-height: 1.2;
     }
 
     .summary-box .lbl {
@@ -482,6 +538,7 @@ export function generateClinicStatementHtml({
       font-weight: 700;
       color: #0f172a;
       width: 52%;
+      font-family: 'Courier New', Courier, monospace;
     }
 
     .summary-box .val-hl {
@@ -493,33 +550,35 @@ export function generateClinicStatementHtml({
     .stmt-table {
       width: 100%;
       border-collapse: collapse;
-      border: 1px solid #334155;
-      margin-top: 4px;
+      table-layout: fixed;
+      border: 1px solid #1e293b;
+      margin-top: 2px;
     }
 
     .stmt-table th {
-      border: 1px solid #334155;
+      border: 1px solid #1e293b;
       background: #f1f5f9;
       color: #0f172a;
-      font-size: 9.5px;
+      font-size: 8px;
       font-weight: 700;
-      padding: 5px 4px;
+      padding: 3px 2px;
       text-align: center;
-      line-height: 1.2;
+      line-height: 1.15;
     }
 
     .stmt-table td {
       border-left: 1px solid #cbd5e1;
       border-right: 1px solid #cbd5e1;
       border-bottom: 1px solid #e2e8f0;
-      padding: 3.5px 5px;
-      font-size: 9px;
+      padding: 2.2px 3px;
+      font-size: 8px;
       color: #1e293b;
-      vertical-align: top;
+      vertical-align: middle;
+      line-height: 1.15;
     }
 
     .stmt-table tr:nth-child(even) td {
-      background-color: #fafafa;
+      background-color: #fafbfc;
     }
 
     .stmt-table .opening-row td {
@@ -531,17 +590,32 @@ export function generateClinicStatementHtml({
     .text-center { text-align: center; }
     .text-right { text-align: right; }
     .text-left { text-align: left; }
+    .nowrap { white-space: nowrap; }
 
-    .debit-val { color: #dc2626; font-weight: 600; }
-    .credit-val { color: #16a34a; font-weight: 600; }
+    .num-val {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 8px;
+      font-weight: 600;
+    }
+
+    .debit-val { color: #dc2626; }
+    .credit-val { color: #16a34a; }
     .balance-val { color: #0f172a; font-weight: 700; }
+
+    .desc-cell {
+      font-size: 7.5px;
+      line-height: 1.15;
+      word-break: break-word;
+      overflow: hidden;
+      max-height: 20px;
+    }
 
     /* Footer */
     .footer-section {
       margin-top: auto;
-      padding-top: 8px;
+      padding-top: 4px;
       border-top: 1px solid #cbd5e1;
-      font-size: 8px;
+      font-size: 7.5px;
       color: #64748b;
       display: flex;
       justify-content: space-between;
@@ -552,7 +626,7 @@ export function generateClinicStatementHtml({
 <body>
 
   <!-- Floating Print Controls -->
-  <div class="no-print" style="position: fixed; top: 18px; right: 24px; z-index: 9999; display: flex; gap: 10px; background: white; padding: 10px 14px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); border: 1px solid #e2e8f0;">
+  <div class="no-print" style="position: fixed; top: 16px; right: 24px; z-index: 9999; display: flex; gap: 10px; background: white; padding: 10px 14px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.25); border: 1px solid #e2e8f0;">
     <button onclick="window.print()" style="background: #059669; color: white; border: none; padding: 8px 18px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; items-center; gap: 6px; box-shadow: 0 2px 8px rgba(5,150,105,0.3);">
       🖨️ สั่งพิมพ์ / บันทึก PDF
     </button>
@@ -573,13 +647,14 @@ export function generateClinicStatementHtml({
     return `
     <div class="page">
       <div>
-        <!-- ส่วนหัวกระดาษ -->
+        ${isFirstPage ? `
+        <!-- ส่วนหัวกระดาษหน้า 1 (Full Header & Summary Box) -->
         <table class="header-table">
           <tr>
             <td style="vertical-align: top;">
               <div class="header-title-th">รายการเดินบัญชีรายรับ-รายจ่าย (มีรายละเอียด)</div>
               <div class="header-title-en">CLINIC STATEMENT OF REVENUE & EXPENSE ACCOUNT (WITH DETAIL)</div>
-              <div style="font-size: 9.5px; color: #64748b; margin-top: 3px;">ที่เอกสาร: ${refNumber}</div>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">ที่เอกสาร: ${refNumber}</div>
             </td>
             <td class="logo-box" style="vertical-align: top;">
               <div class="clinic-logo-text">${clinicName}</div>
@@ -589,7 +664,7 @@ export function generateClinicStatementHtml({
           </tr>
         </table>
 
-        <!-- ข้อมูลหน่วยงาน และ ตารางสรุปขวามือ -->
+        <!-- ข้อมูลหน่วยงาน และ ตารางสรุปขวามือ (Summary Box สไตล์กสิกรไทย) -->
         <div class="meta-section">
           <div class="meta-left">
             <div class="account-name">ชื่อสถานพยาบาล: ${clinicName}</div>
@@ -630,47 +705,86 @@ export function generateClinicStatementHtml({
             </tr>
           </table>
         </div>
+        ` : `
+        <!-- ส่วนหัวกระดาษหน้า 2 เป็นต้นไป (Compact Mini-Header เหมือนกสิกร) -->
+        <table class="header-table" style="margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #cbd5e1;">
+          <tr>
+            <td style="vertical-align: top;">
+              <div class="header-title-th" style="font-size: 11px;">รายการเดินบัญชีรายรับ-รายจ่าย (มีรายละเอียด)</div>
+              <div style="font-size: 8px; color: #64748b;">เลขที่อ้างอิง: ${refNumber} • สาขา: ${branchName} • รอบระหว่างวันที่: ${rangeBounds.label}</div>
+            </td>
+            <td class="logo-box" style="vertical-align: top;">
+              <div class="clinic-logo-text" style="font-size: 13px;">${clinicName}</div>
+              <div class="page-number">หน้าที่ (PAGE/OF) ${pageIdx + 1}/${totalPages}</div>
+            </td>
+          </tr>
+        </table>
+        `}
 
         <!-- ตาราง Statement -->
         <table class="stmt-table">
+          <colgroup>
+            <col style="width: 18mm;">
+            <col style="width: 11mm;">
+            <col style="width: 23mm;">
+            <col style="width: 20mm;">
+            <col style="width: 20mm;">
+            <col style="width: 22mm;">
+            <col style="width: 17mm;">
+            <col>
+          </colgroup>
           <thead>
             <tr>
-              <th style="width: 14mm;">วันที่</th>
-              <th style="width: 11mm;">เวลา</th>
-              <th style="width: 25mm;">รายการ</th>
-              <th style="width: 22mm;">รายจ่าย (ถอน)</th>
-              <th style="width: 22mm;">รายรับ (ฝาก)</th>
-              <th style="width: 24mm;">ยอดคงเหลือ (บาท)</th>
-              <th style="width: 22mm;">ช่องทาง</th>
+              <th>วันที่</th>
+              <th>เวลา</th>
+              <th>รายการ</th>
+              <th>ถอนเงิน (ออก)</th>
+              <th>ฝากเงิน (เข้า)</th>
+              <th>ยอดคงเหลือ (บาท)</th>
+              <th>ช่องทาง</th>
               <th>รายละเอียด</th>
             </tr>
           </thead>
           <tbody>
-            <!-- แถวยอดยกมา -->
+            <!-- แถวยอดยกมาของหน้านี้ -->
             <tr class="opening-row">
-              <td class="text-center">${formatStatementDate(rangeBounds.startDateObj)}</td>
-              <td class="text-center">--:--</td>
-              <td>ยอดยกมา</td>
-              <td class="text-right">-</td>
-              <td class="text-right">-</td>
-              <td class="text-right balance-val">${formatNum(pageOpeningBalance)}</td>
-              <td class="text-center">SYSTEM</td>
-              <td style="color: #64748b;">ยอดยกมาจากรอบก่อนหน้า</td>
+              <td class="text-center nowrap num-val">${formatStatementDate(rangeBounds.startDateObj)}</td>
+              <td class="text-center nowrap num-val" style="color: #94a3b8;">--:--</td>
+              <td class="text-center nowrap" style="font-weight: 700;">ยอดยกมา</td>
+              <td class="text-right nowrap num-val">-</td>
+              <td class="text-right nowrap num-val">-</td>
+              <td class="text-right nowrap num-val balance-val">${formatNum(pageOpeningBalance)}</td>
+              <td class="text-center nowrap" style="color: #94a3b8;">SYSTEM</td>
+              <td class="text-left desc-cell" style="color: #64748b;">${isFirstPage ? 'ยอดยกมาจากรอบก่อนหน้า' : `ยอดยกมาจากหน้าที่ ${pageIdx}`}</td>
             </tr>
 
-            <!-- รายการแต่ละแถว -->
+            <!-- รายการของหน้านี้ -->
             ${pageRows.map(r => `
               <tr>
-                <td class="text-center">${r.dateFormatted}</td>
-                <td class="text-center" style="color: #64748b;">${r.timeFormatted}</td>
-                <td style="font-weight: 600;">${r.type}</td>
-                <td class="text-right debit-val">${r.debit > 0 ? formatNum(r.debit) : '-'}</td>
-                <td class="text-right credit-val">${r.credit > 0 ? formatNum(r.credit) : '-'}</td>
-                <td class="text-right balance-val">${formatNum(r.balance)}</td>
-                <td class="text-center" style="font-size: 8.5px; color: #475569;">${r.channel}</td>
-                <td style="font-size: 8.5px; color: #334155;">${r.description}</td>
+                <td class="text-center nowrap num-val">${r.dateFormatted}</td>
+                <td class="text-center nowrap num-val" style="color: #64748b;">${r.timeFormatted}</td>
+                <td class="text-center nowrap" style="font-weight: 500;">${r.type}</td>
+                <td class="text-right nowrap num-val debit-val">${r.debit > 0 ? formatNum(r.debit) : '-'}</td>
+                <td class="text-right nowrap num-val credit-val">${r.credit > 0 ? formatNum(r.credit) : '-'}</td>
+                <td class="text-right nowrap num-val balance-val">${formatNum(r.balance)}</td>
+                <td class="text-center nowrap" style="font-size: 7.5px;">${r.channel}</td>
+                <td class="text-left desc-cell" title="${r.description}">${r.description}</td>
               </tr>
             `).join('')}
+
+            ${isLastPage ? `
+              <!-- แถวสรุปยอดยกไปสุทธิในหน้าสุดท้าย -->
+              <tr class="opening-row" style="background: #e2e8f0 !important; border-top: 1.5px solid #1e293b;">
+                <td class="text-center nowrap num-val">${formatStatementDate(rangeBounds.endDateObj)}</td>
+                <td class="text-center nowrap num-val" style="color: #94a3b8;">--:--</td>
+                <td class="text-center nowrap" style="font-weight: 700; color: #047857;">ยอดยกไปสุทธิ</td>
+                <td class="text-right nowrap num-val debit-val" style="font-weight: 700;">${formatNum(totalDebit)}</td>
+                <td class="text-right nowrap num-val credit-val" style="font-weight: 700;">${formatNum(totalCredit)}</td>
+                <td class="text-right nowrap num-val balance-val" style="font-size: 9px; color: #047857; font-weight: 800;">${formatNum(closingBalance)}</td>
+                <td class="text-center nowrap" style="font-weight: 700;">สุทธิ</td>
+                <td class="text-left desc-cell" style="font-weight: 600; color: #334155;">ยอดยกไปคงเหลือสุทธิ (รวม ${transactions.length} รายการ)</td>
+              </tr>
+            ` : ''}
 
             ${pageRows.length === 0 ? `
               <tr>
