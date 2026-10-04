@@ -2060,9 +2060,10 @@ const POSSystem = ({
     });
   }, [patientOptions, patientSearchTerm]);
 
-  // State สำหรับ Infinite Scroll ใน Dropdown คนไข้หน้า POS (On-Demand Fetching ประหยัด Egress)
+  // State สำหรับ Infinite Scroll และ การค้นหาใน Dropdown คนไข้หน้า POS
   const [posHasMore, setPosHasMore] = useState(true);
   const [posIsLoadingMore, setPosIsLoadingMore] = useState(false);
+  const [posIsSearching, setPosIsSearching] = useState(false);
   const posLoadingRef = useRef(false);
   const searchDebounceTimerRef = useRef(null);
 
@@ -2072,7 +2073,11 @@ const POSSystem = ({
     if (!posHasMore && !searchQuery && !isNewSearch) return;
 
     posLoadingRef.current = true;
-    setPosIsLoadingMore(true);
+    if (isNewSearch) {
+      setPosIsSearching(true);
+    } else {
+      setPosIsLoadingMore(true);
+    }
 
     try {
       const currentOffset = isNewSearch ? 0 : (searchQuery ? filteredPatientOptions.length : patientsData.length);
@@ -2098,6 +2103,7 @@ const POSSystem = ({
       console.error('POS loadMorePatients error:', err);
     } finally {
       posLoadingRef.current = false;
+      setPosIsSearching(false);
       setPosIsLoadingMore(false);
     }
   }, [fetchPatientsPaginated, posHasMore, patientsData.length, filteredPatientOptions.length, setPatientsData]);
@@ -2390,7 +2396,7 @@ const POSSystem = ({
             </h2>
             <div className="relative w-full">
               <div className="flex items-center w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-sm">
-                {isFetchingOpd ? (
+                {isFetchingOpd || posIsSearching ? (
                   <Loader2 className="w-5 h-5 animate-spin text-sky-500 shrink-0 mr-3" />
                 ) : (
                   <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" />
@@ -2414,7 +2420,7 @@ const POSSystem = ({
                 {selectedPatientId ? (
                   <button 
                     onClick={() => { 
-                      setSelectedPatientId(''); 
+                    setSelectedPatientId(''); 
                       setPatientSearchTerm(''); 
                       setIsPatientDropdownOpen(false); 
                       setCart([]);
@@ -2454,10 +2460,17 @@ const POSSystem = ({
                        <User size={15} className="text-slate-400 shrink-0" />
                        <span>ลูกค้าทั่วไป (ไม่ระบุ)</span>
                     </div>
-                    {filteredPatientOptions.length === 0 && !posIsLoadingMore && patientSearchTerm && (
-                        <div className="px-4 py-3 text-slate-400 text-sm text-center font-data">
-                            ไม่พบข้อมูลลูกค้า
+                    {filteredPatientOptions.length === 0 && (
+                      posIsSearching ? (
+                        <div className="px-4 py-6 text-center text-xs text-sky-600 font-data flex items-center justify-center gap-2">
+                          <Loader2 size={16} className="animate-spin text-sky-500" />
+                          <span>กำลังค้นหาข้อมูล...</span>
                         </div>
+                      ) : patientSearchTerm ? (
+                        <div className="px-4 py-6 text-slate-400 text-sm text-center font-data">
+                          ไม่พบข้อมูลลูกค้า
+                        </div>
+                      ) : null
                     )}
                     {filteredPatientOptions.map((opt) => (
                         <div
@@ -2496,6 +2509,7 @@ const POSSystem = ({
                             </div>
                         </div>
                     ))}
+                    {/* แถบโหลดเพิ่มเติมสำหรับ Infinite scroll ตอนเลื่อนหน้าจอลงล่างสุดเท่านั้น (ไม่แสดงตอนค้นหา เพื่อไม่ให้กระพริบวิบวับ) */}
                     {posIsLoadingMore && (
                         <div className="px-4 py-2.5 text-center text-xs text-sky-600 font-data flex items-center justify-center gap-1.5 bg-sky-50/60 border-t border-sky-100">
                             <Loader2 size={14} className="animate-spin text-sky-500" /> กำลังโหลดรายชื่อเพิ่มเติม...
