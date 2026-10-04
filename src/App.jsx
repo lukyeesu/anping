@@ -574,7 +574,7 @@ export default function App() {
         resStaffSchedules,
         resCourses
       ] = await Promise.all([
-        callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset: 0, limit: 20 }).catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset: 0, limit: 35 }).catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'POS_Transactions').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Inventory').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'setting_pos').catch(err => ({ status: 'error', data: [], message: err?.message })),
@@ -1811,7 +1811,7 @@ export default function App() {
   };
 
   // --- [NEW] ดึงข้อมูลคนไข้แบบ Paginated (Server-side Infinite Loading) พร้อม Treatments เฉพาะกลุ่ม ---
-  const fetchPatientsPaginated = useCallback(async ({ offset = 0, limit = 20, search = '', sortKey = 'createdAt', sortDir = 'desc' } = {}) => {
+  const fetchPatientsPaginated = useCallback(async ({ offset = 0, limit = 35, search = '', sortKey = 'createdAt', sortDir = 'desc' } = {}) => {
     try {
       const resPatients = await callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset, limit, search, sortKey, sortDir });
       if (resPatients?.status === 'success' && Array.isArray(resPatients.data)) {
@@ -2747,7 +2747,19 @@ export default function App() {
       if (eventData && (eventData.type === 'STORE_UPDATED' || eventData.action === 'NETWORK_RECONNECTED')) {
         const storeName = eventData.storeName;
         if (storeName === 'patients' || storeName === '*') {
-          getLocalStore('patients').then(data => data && data.length && setPatientsData(data));
+          getLocalStore('patients').then(allLocal => {
+            if (!allLocal || !allLocal.length) return;
+            setPatientsData(prev => {
+              if (!prev || prev.length === 0) {
+                return allLocal.slice(0, 35);
+              }
+              const map = new Map(allLocal.map(p => [String(p.id || p.hn).toLowerCase(), p]));
+              return prev.map(p => {
+                const key = String(p.id || p.hn).toLowerCase();
+                return map.get(key) ? { ...p, ...map.get(key) } : p;
+              });
+            });
+          });
         }
         if (storeName === 'queue' || storeName === '*') {
           getLocalStore('queue').then(data => data && data.length && setQueueData(data));

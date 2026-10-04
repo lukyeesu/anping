@@ -968,7 +968,7 @@ export async function callSupabase(action, sheetName, payload = null) {
     case 'GET_PATIENTS_PAGINATED': {
       const selectCols = (TABLE_COLUMNS.patients || []).join(',') || '*';
       const offset = payload?.offset || 0;
-      const limit = payload?.limit || 20;
+      const limit = payload?.limit || 35;
       const search = (payload?.search || '').trim().toLowerCase();
       const sortKey = payload?.sortKey || 'created_at';
       const sortDir = payload?.sortDir || 'desc';

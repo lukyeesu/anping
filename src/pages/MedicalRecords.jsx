@@ -29,7 +29,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const medModal = useModal();
   const [editingId, setEditingId] = useState(null);
   const [isViewMode, setIsViewMode] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(20);
+  const [visibleCount, setVisibleCount] = useState(35);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [totalServerPatients, setTotalServerPatients] = useState(null);
@@ -217,10 +217,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   useEffect(() => {
     if (fetchPatientStats) {
       fetchPatientStats().then(res => {
-        if (res) setServerStats(res);
+        if (res) {
+          setServerStats(res);
+          if (res.total !== undefined) {
+            setTotalServerPatients(res.total);
+            if (patientsData.length >= res.total) {
+              setHasMore(false);
+            }
+          }
+        }
       }).catch(err => console.error(err));
     }
-  }, [fetchPatientStats]);
+  }, [fetchPatientStats, patientsData.length]);
 
   // --- 2. Derived State (Memos & Filtering) ---
   const stats = useMemo(() => {
@@ -249,6 +257,31 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const prevSearchRef = useRef(search);
   const prevSortRef = useRef(sortConfig);
 
+  // โหลด 35 รายการแรกทันทีถ้ายังไม่มีข้อมูล หรือตัดเหลือ 35 รายการหากมีแคชเดิมค้างมาเกิน
+  useEffect(() => {
+    if (!fetchPatientsPaginated) return;
+    if (patientsData.length === 0 && !isGlobalLoading) {
+      setIsServerSearching(true);
+      fetchPatientsPaginated({
+        offset: 0,
+        limit: 35,
+        search: '',
+        sortKey: sortConfig.key,
+        sortDir: sortConfig.direction
+      }).then(res => {
+        if (res.status === 'success') {
+          setPatientsData(res.patients);
+          setHasMore(res.hasMore);
+          if (res.totalCount !== undefined) setTotalServerPatients(res.totalCount);
+        }
+      }).catch(console.error).finally(() => {
+        setIsServerSearching(false);
+      });
+    } else if (patientsData.length > 35 && !search) {
+      setPatientsData(prev => prev.slice(0, 35));
+    }
+  }, []);
+
   // Server-side debounced search & sort (only runs when search or sort REALLY changes)
   useEffect(() => {
     if (!fetchPatientsPaginated) return;
@@ -272,7 +305,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       setIsServerSearching(true);
       const res = await fetchPatientsPaginated({
         offset: 0,
-        limit: 20,
+        limit: 35,
         search,
         sortKey: sortConfig.key,
         sortDir: sortConfig.direction
@@ -289,10 +322,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   }, [search, sortConfig.key, sortConfig.direction, fetchPatientsPaginated]);
 
   const filteredPatients = useMemo(() => {
+    if (!search || !search.trim()) return patientsData;
     return patientsData.filter(p => {
       const s = search.toLowerCase();
-      // ค้นหาให้ครอบคลุม (Case-insensitive) รวมชื่อเล่น
-      return ((p.firstName && p.firstName.toLowerCase().includes(s)) || (p.lastName && p.lastName.toLowerCase().includes(s)) || (p.nickname && p.nickname.toLowerCase().includes(s)) || (p.nickName && p.nickName.toLowerCase().includes(s)) || (p.id && p.id.toLowerCase().includes(s)) || (p.hn && p.hn.toLowerCase().includes(s)) || (p.idCard && p.idCard.includes(s)) || (p.phone && p.phone.includes(s)));
+      const fn = String(p.first_name || p.firstName || '').toLowerCase();
+      const ln = String(p.last_name || p.lastName || '').toLowerCase();
+      const fullName = `${fn} ${ln}`.trim();
+      const nick = String(p.nickname || p.nickName || '').toLowerCase();
+      const hn = String(p.id || p.hn || '').toLowerCase();
+      const idCard = String(p.idCard || p.id_card || '').toLowerCase();
+      const phone = String(p.phone || p.phone1 || '').toLowerCase();
+      return fullName.includes(s) || fn.includes(s) || ln.includes(s) || nick.includes(s) || hn.includes(s) || idCard.includes(s) || phone.includes(s);
     });
   }, [patientsData, search]);
 
@@ -1204,7 +1244,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
 
   useEffect(() => {
-    setVisibleCount(20);
+    setVisibleCount(35);
     setIsLoadingMore(false);
   }, [search, sortConfig, currentBranch]);
 
@@ -1247,7 +1287,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
           setIsLoadingMore(true);
           fetchPatientsPaginated({
             offset: patientsData.length,
-            limit: 20,
+            limit: 35,
             search,
             sortKey: sortConfig.key,
             sortDir: sortConfig.direction
@@ -2584,6 +2624,19 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         </>
                     )}
                 </div>
+
+                {/* แสดงสถานะเมื่อกำลังโหลดข้อมูลแถวถัดไป หรือโหลดครบหมดแล้ว */}
+                {isLoadingMore && (
+                  <div className="flex items-center justify-center gap-2 py-4 text-xs text-sky-600 kanit-text font-medium">
+                    <Loader2 size={16} className="animate-spin text-sky-500" />
+                    <span>กำลังโหลดข้อมูลคนไข้เพิ่มเติม...</span>
+                  </div>
+                )}
+                {!hasMore && sortedPatients.length > 0 && !isLoadingMore && (
+                  <div className="text-center py-4 text-xs text-slate-400 kanit-text">
+                    แสดงข้อมูลผู้ป่วยครบทั้งหมดแล้ว ({sortedPatients.length} รายการ)
+                  </div>
+                )}
               </div>
           </div>
         </div>
