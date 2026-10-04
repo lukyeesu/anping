@@ -1800,7 +1800,7 @@ const POSSystem = ({
           .select('id, patient_id, created_at, date, datetime, is_deleted')
           .or('is_deleted.is.null,is_deleted.eq.false')
           .order('created_at', { ascending: false })
-          .limit(100);
+          .limit(30);
         if (!error && Array.isArray(data)) {
           trts = data;
         }
