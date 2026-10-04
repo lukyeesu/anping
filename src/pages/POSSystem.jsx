@@ -2159,7 +2159,9 @@ const POSSystem = ({
       const res = await fetchPatientsPaginated({
         offset: currentOffset,
         limit: 20,
-        search: (searchQuery || '').trim()
+        search: (searchQuery || '').trim(),
+        columns: 'id,hn,first_name,last_name,prefix,phone,nickname,is_deleted',
+        skipTreatments: true
       });
 
       if (res && res.status === 'success' && Array.isArray(res.patients)) {

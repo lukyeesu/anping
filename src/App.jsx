@@ -1900,9 +1900,9 @@ export default function App() {
   };
 
   // --- [NEW] ดึงข้อมูลคนไข้แบบ Paginated (Server-side Infinite Loading) พร้อม Treatments เฉพาะกลุ่ม ---
-  const fetchPatientsPaginated = useCallback(async ({ offset = 0, limit = 35, search = '', sortKey = 'createdAt', sortDir = 'desc' } = {}) => {
+  const fetchPatientsPaginated = useCallback(async ({ offset = 0, limit = 35, search = '', sortKey = 'createdAt', sortDir = 'desc', columns, skipTreatments = false } = {}) => {
     try {
-      const resPatients = await callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset, limit, search, sortKey, sortDir });
+      const resPatients = await callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset, limit, search, sortKey, sortDir, columns });
       if (resPatients?.status === 'success' && Array.isArray(resPatients.data)) {
         const rawPatients = resPatients.data;
         const patientIds = [];
@@ -1912,7 +1912,7 @@ export default function App() {
         });
 
         let treatmentsMap = {};
-        if (patientIds.length > 0) {
+        if (!skipTreatments && patientIds.length > 0) {
           try {
             const resTx = await callAppScript('GET_TREATMENTS_FOR_PATIENTS', 'Treatments', { patientIds });
             if (resTx?.status === 'success' && Array.isArray(resTx.data)) {

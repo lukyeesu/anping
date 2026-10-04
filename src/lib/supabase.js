@@ -966,7 +966,7 @@ export async function callSupabase(action, sheetName, payload = null) {
     }
 
     case 'GET_PATIENTS_PAGINATED': {
-      const selectCols = (TABLE_COLUMNS.patients || []).join(',') || '*';
+      const selectCols = payload?.columns || (TABLE_COLUMNS.patients || []).join(',') || '*';
       const offset = Number(payload?.offset) || 0;
       const limit = Number(payload?.limit) || 35;
       const search = (payload?.search || '').trim();
