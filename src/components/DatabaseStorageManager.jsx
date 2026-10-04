@@ -3,7 +3,7 @@ import {
   Database, HardDrive, ArrowUpRight, ArrowDownRight, RefreshCw, 
   Download, Trash2, ShieldCheck, AlertTriangle, FileSpreadsheet, 
   Upload, CheckCircle2, RotateCcw, AlertOctagon, Calendar, Check,
-  Layers, Lock, Sparkles, FlaskConical, X, Info
+  Layers, Lock, Sparkles, FlaskConical, X, Info, Printer
 } from 'lucide-react';
 import { 
   PURGEABLE_TABLES, 

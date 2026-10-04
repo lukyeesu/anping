@@ -2109,7 +2109,12 @@ const FinancePage = ({
             <div className="flex items-center gap-2">
               <button 
                 type="button" 
-                onClick={() => setIsStatementModalOpen(true)} 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setIsModalOpen(false);
+                  setIsStatementModalOpen(true);
+                }} 
                 className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-xs transition-transform active:scale-95 shrink-0 bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 sticky-header-btn px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm kanit-text"
                 title="ออกรายการเดินบัญชีการเงินคลินิก (Bank Statement Style)"
               >

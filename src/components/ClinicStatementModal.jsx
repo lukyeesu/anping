@@ -72,6 +72,21 @@ export default function ClinicStatementModal({
     }
   }, [isOpen, loadStatement]);
 
+  useEffect(() => {
+    if (currentBranch) {
+      setSelectedBranch(currentBranch);
+    }
+  }, [currentBranch]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // กรองตารางแสดงตัวอย่าง
   const filteredTransactions = useMemo(() => {
     if (!statementData?.transactions) return [];
@@ -146,7 +161,10 @@ export default function ClinicStatementModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+    <div 
+      className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+    >
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
         
         {/* Modal Header */}
@@ -433,6 +451,14 @@ export default function ClinicStatementModal({
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold kanit-text text-xs transition-all active:scale-95"
+            >
+              ปิดหน้าต่าง
+            </button>
+
             <button
               type="button"
               onClick={handleExportExcel}

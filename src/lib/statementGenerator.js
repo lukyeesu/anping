@@ -65,12 +65,12 @@ export function getStatementDateBounds(preset, customOptions = {}) {
     }
     case 'custom': {
       if (customOptions.startDate) {
-        startDate = new Date(customOptions.startDate);
-        startDate.setHours(0, 0, 0, 0);
+        const [sy, sm, sd] = String(customOptions.startDate).split('-').map(Number);
+        startDate = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
       }
       if (customOptions.endDate) {
-        endDate = new Date(customOptions.endDate);
-        endDate.setHours(23, 59, 59, 999);
+        const [ey, em, ed] = String(customOptions.endDate).split('-').map(Number);
+        endDate = new Date(ey, em - 1, ed, 23, 59, 59, 999);
       }
       break;
     }
@@ -108,56 +108,69 @@ export function getStatementDateBounds(preset, customOptions = {}) {
 export async function fetchStatementData(rangeBounds, branchId = 'all', manualOpeningBalance = null) {
   if (!supabase) throw new Error('Supabase client is not connected');
 
-  const { startDate, endDate, dateOnlyStart, dateOnlyEnd } = rangeBounds;
+  const { startDate, endDate } = rangeBounds;
 
-  // 1. ดึงข้อมูล POS Transactions
-  let posQuery = supabase.from('pos_transactions')
+  // 1. ดึงข้อมูลรายการจาก finance_all_transactions (ซึ่งรวม POS, Revenue, Expense ครบและตัดรายการซ้ำแล้ว)
+  let query = supabase.from('finance_all_transactions')
     .select('*')
-    .neq('status', 'cancelled')
-    .or(`created_at.gte.${startDate},and(date.gte.${dateOnlyStart},date.lte.${dateOnlyEnd})`)
-    .lte('created_at', endDate);
+    .gte('timestamp_date', startDate)
+    .lte('timestamp_date', endDate)
+    .neq('status', 'cancelled');
 
   if (branchId && branchId !== 'all') {
-    posQuery = posQuery.or(`branch_id.eq.${branchId},branchId.eq.${branchId}`);
+    query = query.eq('branch_id', branchId);
   }
 
-  // 2. ดึงข้อมูล Finance Revenue
-  let revQuery = supabase.from('finance_revenue')
-    .select('*')
-    .gte('created_at', startDate)
-    .lte('created_at', endDate);
-
-  if (branchId && branchId !== 'all') {
-    revQuery = revQuery.or(`branch_id.eq.${branchId},branchId.eq.${branchId}`);
+  const { data: rawRows, error } = await query.order('timestamp_date', { ascending: true });
+  if (error) {
+    console.error('fetchStatementData query error:', error);
+    throw new Error(error.message || 'ไม่สามารถดึงข้อมูลรายการเดินบัญชีได้');
   }
 
-  // 3. ดึงข้อมูล Finance Expenses
-  let expQuery = supabase.from('finance_expenses')
-    .select('*')
-    .gte('created_at', startDate)
-    .lte('created_at', endDate);
+  // 2. คำนวณยอดยกมา (Opening Balance)
+  let openingBalance = manualOpeningBalance !== null ? Number(manualOpeningBalance) : 0;
+  
+  if (manualOpeningBalance === null) {
+    try {
+      let prevQuery = supabase.from('finance_all_transactions')
+        .select('type, amount, id')
+        .lt('timestamp_date', startDate)
+        .neq('status', 'cancelled');
 
-  if (branchId && branchId !== 'all') {
-    expQuery = expQuery.or(`branch_id.eq.${branchId},branchId.eq.${branchId}`);
+      if (branchId && branchId !== 'all') {
+        prevQuery = prevQuery.eq('branch_id', branchId);
+      }
+
+      const { data: prevData, error: prevErr } = await prevQuery;
+      if (!prevErr && prevData) {
+        let prevIncome = 0;
+        let prevExpense = 0;
+        prevData.forEach(row => {
+          const amt = Number(row.amount || 0);
+          const isExp = row.type === 'expense' || String(row.id || '').toUpperCase().startsWith('EXP');
+          if (isExp) {
+            prevExpense += amt;
+          } else {
+            prevIncome += amt;
+          }
+        });
+        openingBalance = Math.max(0, prevIncome - prevExpense);
+      }
+    } catch (e) {
+      console.warn('Cannot calculate prev opening balance:', e);
+      openingBalance = 0;
+    }
   }
 
-  const [resPos, resRev, resExp] = await Promise.all([
-    posQuery.order('created_at', { ascending: true }),
-    revQuery.order('created_at', { ascending: true }),
-    expQuery.order('created_at', { ascending: true })
-  ]);
-
-  const rawPos = Array.isArray(resPos.data) ? resPos.data : [];
-  const rawRev = Array.isArray(resRev.data) ? resRev.data : [];
-  const rawExp = Array.isArray(resExp.data) ? resExp.data : [];
-
-  // รวบรวมและแปลงเป็นโครงสร้างมาตรฐานของ Statement
+  // 3. รวบรวมและแปลงเป็นโครงสร้างมาตรฐานของ Statement
   const transactions = [];
 
-  // POS
-  rawPos.forEach(p => {
-    const dt = new Date(p.created_at || p.date || Date.now());
-    let items = p.items;
+  (rawRows || []).forEach(row => {
+    const dt = new Date(row.timestamp_date || row.created_at || Date.now());
+    const isExp = row.type === 'expense' || String(row.id || '').toUpperCase().startsWith('EXP') || row.category === 'รายจ่าย';
+    const amt = Number(row.amount || 0);
+
+    let items = row.items;
     if (typeof items === 'string') {
       try { items = JSON.parse(items); } catch (e) { items = []; }
     }
@@ -165,115 +178,37 @@ export async function fetchStatementData(rangeBounds, branchId = 'all', manualOp
       ? items.map(i => i.name || i.title || '').filter(Boolean).slice(0, 3).join(', ')
       : '';
 
-    const patientName = p.patient_name || p.patientName || 'ลูกค้าทั่วไป';
-    const hn = p.hn || p.patient_id || '';
-    const ref = p.receipt_no || p.receiptNo || p.id || '';
-    const amount = Number(p.net_total || p.netTotal || p.total_amount || p.totalAmount || 0);
+    const patientName = row.patient_name || row.patientName || '';
+    const hn = row.hn || row.patient_id || '';
+    const ref = row.id || '';
+    const note = row.note || '';
+
+    let desc = '';
+    if (row.is_auto || row.category === 'รายได้จาก POS' || String(ref).startsWith('REC')) {
+      desc = `บิล POS: ${ref}${patientName ? ` • คนไข้: ${patientName}` : ''}${hn ? ` (HN: ${hn})` : ''}${itemNames ? ` • รายการ: ${itemNames}` : ''}`;
+    } else {
+      desc = `${row.category || (isExp ? 'รายจ่าย' : 'รายรับ')}${note ? ` • ${note}` : ''}${patientName ? ` • คนไข้: ${patientName}` : ''}${itemNames ? ` • ${itemNames}` : ''}`;
+    }
 
     transactions.push({
-      id: p.id,
+      id: row.id,
       timestamp: dt.getTime(),
       dateObj: dt,
       dateFormatted: formatStatementDate(dt),
       timeFormatted: formatStatementTime(dt),
-      type: 'รับชำระบิล POS',
-      credit: amount,
-      debit: 0,
-      channel: mapPaymentChannel(p.payment_method || p.paymentMethod),
+      type: isExp ? `รายจ่าย (${row.category || 'ทั่วไป'})` : (row.is_auto ? 'รับชำระบิล POS' : `รายรับ (${row.category || 'ทั่วไป'})`),
+      credit: isExp ? 0 : amt,
+      debit: isExp ? amt : 0,
+      channel: mapPaymentChannel(row.method || row.payment_method),
       refNo: ref,
-      description: `บิล POS: ${ref} • คนไข้: ${patientName}${hn ? ` (HN: ${hn})` : ''}${itemNames ? ` • รายการ: ${itemNames}` : ''}`,
-      category: 'ค่ารักษาพยาบาล/ยา',
-      branchId: p.branch_id || p.branchId
-    });
-  });
-
-  // Revenue (เฉพาะที่ไม่ใช่บิล POS ซ้ำ)
-  rawRev.forEach(r => {
-    const ref = r.id || '';
-    const isAutoPos = r.is_auto || r.category === 'รายได้จาก POS' || String(r.id || '').startsWith('REC');
-    if (isAutoPos) return; // ข้ามเพื่อป้องกันการนับซ้ำกับ POS
-
-    const dt = new Date(r.created_at || r.date || Date.now());
-    const amount = Number(r.amount || 0);
-
-    transactions.push({
-      id: r.id,
-      timestamp: dt.getTime(),
-      dateObj: dt,
-      dateFormatted: formatStatementDate(dt),
-      timeFormatted: formatStatementTime(dt),
-      type: `รายรับ (${r.category || 'ทั่วไป'})`,
-      credit: amount,
-      debit: 0,
-      channel: mapPaymentChannel(r.payment_method || r.paymentMethod),
-      refNo: ref,
-      description: `${r.title || r.description || 'รายรับ'} • ${r.detail || r.note || ''}`,
-      category: r.category || 'รายรับอื่นๆ',
-      branchId: r.branch_id || r.branchId
-    });
-  });
-
-  // Expense
-  rawExp.forEach(e => {
-    const dt = new Date(e.created_at || e.date || Date.now());
-    const amount = Number(e.amount || 0);
-    const payee = e.payee || e.vendor || '';
-
-    transactions.push({
-      id: e.id,
-      timestamp: dt.getTime(),
-      dateObj: dt,
-      dateFormatted: formatStatementDate(dt),
-      timeFormatted: formatStatementTime(dt),
-      type: `รายจ่าย (${e.category || 'ทั่วไป'})`,
-      credit: 0,
-      debit: amount,
-      channel: mapPaymentChannel(e.payment_method || e.paymentMethod),
-      refNo: e.id || '',
-      description: `${e.title || e.description || 'รายจ่าย'}${payee ? ` • จ่ายให้: ${payee}` : ''} • ${e.detail || e.note || ''}`,
-      category: e.category || 'รายจ่าย',
-      branchId: e.branch_id || e.branchId
+      description: desc,
+      category: row.category || (isExp ? 'รายจ่าย' : 'รายรับ'),
+      branchId: row.branch_id
     });
   });
 
   // เรียงลำดับตามวันเวลา (น้อยไปมาก - Chronological Order)
   transactions.sort((a, b) => a.timestamp - b.timestamp);
-
-  // คำนวณยอดยกมา (Opening Balance)
-  let openingBalance = manualOpeningBalance !== null ? Number(manualOpeningBalance) : 0;
-  
-  // ถ้าไม่ได้กรอกยอดยกมาแบบ Manual ให้ลองคำนวณสะสมก่อนวันเริ่มต้น
-  if (manualOpeningBalance === null) {
-    try {
-      const { data: prevPos } = await supabase.from('pos_transactions')
-        .select('net_total, total_amount')
-        .neq('status', 'cancelled')
-        .lt('created_at', startDate);
-
-      const { data: prevRev } = await supabase.from('finance_revenue')
-        .select('amount, category, is_auto')
-        .lt('created_at', startDate);
-
-      const { data: prevExp } = await supabase.from('finance_expenses')
-        .select('amount')
-        .lt('created_at', startDate);
-
-      let prevTotalIncome = 0;
-      (prevPos || []).forEach(p => { prevTotalIncome += Number(p.net_total || p.total_amount || 0); });
-      (prevRev || []).forEach(r => {
-        if (!r.is_auto && r.category !== 'รายได้จาก POS') {
-          prevTotalIncome += Number(r.amount || 0);
-        }
-      });
-
-      let prevTotalExpense = 0;
-      (prevExp || []).forEach(e => { prevTotalExpense += Number(e.amount || 0); });
-
-      openingBalance = Math.max(0, prevTotalIncome - prevTotalExpense);
-    } catch (e) {
-      openingBalance = 0;
-    }
-  }
 
   // คำนวณ Running Balance ทีละแถว
   let currentBalance = openingBalance;
@@ -761,6 +696,13 @@ export function generateClinicStatementHtml({
     `;
   }).join('')}
 
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    });
+  </script>
 </body>
 </html>
   `;
