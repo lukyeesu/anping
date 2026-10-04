@@ -176,7 +176,8 @@ const POSSystem = ({
 
     if (missingIds.length > 0 && supabase) {
       supabase.from('patients')
-        .select('*')
+        .select('id, hn, first_name, last_name, prefix, phone, phone1, nickname, is_deleted')
+        .or('is_deleted.is.null,is_deleted.eq.false')
         .in('id', missingIds)
         .then(({ data, error }) => {
           if (!error && Array.isArray(data) && data.length > 0) {
@@ -1519,10 +1520,16 @@ const POSSystem = ({
     dailySummaryModal.open();
     setIsSummaryLoading(true);
     try {
+      // ดึงเฉพาะของวันนี้ (ตั้งแต่ช่วงเริ่มต้นของวันในเวลาประเทศไทย UTC+7) เผื่อ offset เล็กน้อย และเลือกเฉพาะฟิลด์ที่ใช้คำนวณ
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const querySince = new Date(startOfToday.getTime() - 2 * 60 * 60 * 1000).toISOString();
+
       const { data, error } = await supabase
         .from('pos_transactions')
-        .select('*')
-        .eq('is_deleted', false)
+        .select('id, receipt_no, total_amount, net_amount, payment_method, status, patient_name, hn, is_deleted, created_at, date, branch_id')
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .gte('created_at', querySince)
         .order('created_at', { ascending: false });
 
       const txnsToUse = (data && !error && data.length > 0) ? data : (posHistoryData || []);

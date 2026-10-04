@@ -2667,9 +2667,10 @@ export default function App() {
 
       try {
         // รีเฟรชสต็อกสินค้าล่าสุด
+        const explicitInvCols = 'id,code,product_id,product_name,name,category,unit,cost_price,selling_price,stock_quantity,min_stock,lot_no,expire_date,receive_date,branch_id,created_at,updated_at,is_deleted';
         const { data: invData, error: invErr } = await supabase
           .from('inventory')
-          .select('*')
+          .select(explicitInvCols)
           .or('is_deleted.is.null,is_deleted.eq.false');
         if (!invErr && Array.isArray(invData)) {
           setInventoryData(invData.map(rowToJS));

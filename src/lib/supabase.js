@@ -1441,19 +1441,27 @@ export async function callSupabase(action, sheetName, payload = null) {
           console.warn('RPC get_executive_dashboard_data fallback to query:', rpcErr);
         }
 
-        let posQuery = supabase.from('pos_transactions').select('*');
+        let posQuery = supabase.from('pos_transactions')
+          .select('id, net_amount, total_amount, discount, discount_amount, payment_method, status, is_deleted, created_at, date, datetime, branch_id, items')
+          .or('is_deleted.is.null,is_deleted.eq.false');
         if (branchId && branchId !== 'all') posQuery = posQuery.eq('branch_id', branchId);
 
-        let revQuery = supabase.from('finance_revenue').select('*');
+        let revQuery = supabase.from('finance_revenue')
+          .select('id, amount, method, status, is_auto, date, datetime, created_at, branch_id, is_deleted')
+          .or('is_deleted.is.null,is_deleted.eq.false');
         if (branchId && branchId !== 'all') revQuery = revQuery.eq('branch_id', branchId);
 
-        let expQuery = supabase.from('finance_expenses').select('*');
+        let expQuery = supabase.from('finance_expenses')
+          .select('id, amount, status, date, datetime, created_at, branch_id, is_deleted')
+          .or('is_deleted.is.null,is_deleted.eq.false');
         if (branchId && branchId !== 'all') expQuery = expQuery.eq('branch_id', branchId);
 
-        let queueQuery = supabase.from('queue').select('*');
+        let queueQuery = supabase.from('queue')
+          .select('id, doctor, status, raw_date_time, datetime, created_at, branch_id, is_deleted')
+          .or('is_deleted.is.null,is_deleted.eq.false');
         if (branchId && branchId !== 'all') queueQuery = queueQuery.eq('branch_id', branchId);
 
-        let patientQuery = supabase.from('patients').select('id, created_at');
+        let patientQuery = supabase.from('patients').select('id, created_at').or('is_deleted.is.null,is_deleted.eq.false');
 
         const [posRes, revRes, expRes, queueRes, patientRes] = await Promise.all([
           posQuery, revQuery, expQuery, queueQuery, patientQuery
