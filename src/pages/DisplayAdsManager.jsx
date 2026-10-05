@@ -920,6 +920,7 @@ export default function DisplayAdsManager({
                               className="w-full h-full object-cover opacity-60"
                               muted
                               playsInline
+                              preload="none"
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
                               <Film className="w-5 h-5 text-white/90 drop-shadow" />

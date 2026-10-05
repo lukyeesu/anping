@@ -9,7 +9,8 @@ import { DEFAULT_CLINIC_ADS } from './DisplayAdsManager';
 import { 
   getCachedOrDirectMediaUrl, 
   preloadAllAdsMedia, 
-  formatMediaUrl 
+  formatMediaUrl,
+  isMediaVideo
 } from '../lib/customerDisplayMediaCache';
 import { 
   createCustomerDisplaySubscriber, 
@@ -208,8 +209,8 @@ export default function CustomerDisplay({
 
   // Detect if an advertisement video is actively playing on screen
   const isAdVideoPlaying = displayMode === 'STANDBY_ADS' && (
-    (activeLayer === 'A' && layerAData?.type === 'video') ||
-    (activeLayer === 'B' && layerBData?.type === 'video')
+    (activeLayer === 'A' && layerAData && isMediaVideo(layerAData.url, layerAData.type)) ||
+    (activeLayer === 'B' && layerBData && isMediaVideo(layerBData.url, layerBData.type))
   );
   const isAdVideoPlayingRef = useRef(isAdVideoPlaying);
   isAdVideoPlayingRef.current = isAdVideoPlaying;
@@ -659,6 +660,10 @@ export default function CustomerDisplay({
     const vid = keepAliveVideoRef.current;
     if (vid && !isAdVideoPlayingRef.current) {
       try {
+        if (!vid.getAttribute('src')) {
+          vid.setAttribute('src', NO_SLEEP_MP4);
+          vid.load();
+        }
         if (vid.paused) {
           await vid.play();
         }
@@ -741,7 +746,7 @@ export default function CustomerDisplay({
     };
     if (vid) {
       vid.addEventListener('ended', handleVideoEnded);
-      vid.addEventListener('pause', handleVideoEnded);
+      // NOTE: Removed pause listener to allow keep-alive video to yield without auto-resuming
     }
 
     // Periodic safety check every 10 seconds to maintain lock
@@ -770,7 +775,6 @@ export default function CustomerDisplay({
       document.removeEventListener('webkitfullscreenchange', handleVisibilityChange);
       if (vid) {
         vid.removeEventListener('ended', handleVideoEnded);
-        vid.removeEventListener('pause', handleVideoEnded);
       }
       if (wakeLockRef.current) {
         wakeLockRef.current.release().catch(() => {});
@@ -780,6 +784,31 @@ export default function CustomerDisplay({
       }
     };
   }, [activateKeepAwake]);
+
+  // Yield hardware video decoder exclusively to the active Ad Video
+  // iPad and mobile devices have a single active hardware video decode pipeline.
+  // When an Ad Video is playing, we MUST pause and release the keep-alive video loop.
+  // The Ad Video natively prevents the screen from sleeping while playing.
+  useEffect(() => {
+    const keepVid = keepAliveVideoRef.current;
+    if (!keepVid) return;
+
+    if (isAdVideoPlaying) {
+      try {
+        keepVid.pause();
+        keepVid.removeAttribute('src');
+        keepVid.load();
+      } catch (e) {}
+    } else {
+      try {
+        if (!keepVid.getAttribute('src')) {
+          keepVid.setAttribute('src', NO_SLEEP_MP4);
+          keepVid.load();
+        }
+        keepVid.play().catch(() => {});
+      } catch (e) {}
+    }
+  }, [isAdVideoPlaying]);
 
   // 4. Gesture & Swipe Handler for Touch (Single Finger Hold to Pause, Swipe to Navigate, 3-Finger Tap x 5 for Admin)
   const handleTouchStart = (e) => {
@@ -943,6 +972,8 @@ export default function CustomerDisplay({
           if (videoRefA.current) {
             videoRefA.current.muted = true;
             videoRefA.current.pause();
+            videoRefA.current.removeAttribute('src');
+            videoRefA.current.load();
           }
         }, 600);
       });
@@ -986,6 +1017,8 @@ export default function CustomerDisplay({
           if (videoRefB.current) {
             videoRefB.current.muted = true;
             videoRefB.current.pause();
+            videoRefB.current.removeAttribute('src');
+            videoRefB.current.load();
           }
         }, 600);
       });
@@ -1011,8 +1044,18 @@ export default function CustomerDisplay({
     if (activeAds.length === 0) {
       setLayerAData(null);
       setLayerBData(null);
-      if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-      if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      if (videoRefA.current) {
+        videoRefA.current.muted = true;
+        videoRefA.current.pause();
+        videoRefA.current.removeAttribute('src');
+        videoRefA.current.load();
+      }
+      if (videoRefB.current) {
+        videoRefB.current.muted = true;
+        videoRefB.current.pause();
+        videoRefB.current.removeAttribute('src');
+        videoRefB.current.load();
+      }
       return;
     }
 
@@ -1029,6 +1072,12 @@ export default function CustomerDisplay({
         if (activeLayerRef.current === 'A') {
           setLayerAData(prepared);
           setLayerBData(null);
+          if (videoRefB.current) {
+            videoRefB.current.muted = true;
+            videoRefB.current.pause();
+            videoRefB.current.removeAttribute('src');
+            videoRefB.current.load();
+          }
           if (prepared.type === 'video') {
             const shouldMute = prepared.enableAudio !== true;
             setIsVideoMuted(shouldMute);
@@ -1040,11 +1089,16 @@ export default function CustomerDisplay({
           } else {
             setIsVideoMuted(true);
             if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-            if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
           }
         } else {
           setLayerBData(prepared);
           setLayerAData(null);
+          if (videoRefA.current) {
+            videoRefA.current.muted = true;
+            videoRefA.current.pause();
+            videoRefA.current.removeAttribute('src');
+            videoRefA.current.load();
+          }
           if (prepared.type === 'video') {
             const shouldMute = prepared.enableAudio !== true;
             setIsVideoMuted(shouldMute);
@@ -1055,7 +1109,6 @@ export default function CustomerDisplay({
             }
           } else {
             setIsVideoMuted(true);
-            if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
             if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
           }
         }
@@ -1127,6 +1180,17 @@ export default function CustomerDisplay({
       }
     }
   }, [displayMode, goToNextSlide]);
+
+  // Handle Video Playback Error (Auto-advance after 3s so the signage never freezes on broken media)
+  const handleVideoError = useCallback((fromLayer, e) => {
+    if (activeLayerRef.current !== fromLayer) return;
+    console.warn(`[CustomerDisplay] Layer ${fromLayer} Video error:`, e?.target?.error);
+    setTimeout(() => {
+      if (activeLayerRef.current === fromLayer) {
+        goToNextSlide();
+      }
+    }, 3000);
+  }, [goToNextSlide]);
 
   // Sync video audio mute state strictly with active ad (Guarantees NO sound clashing)
   useEffect(() => {
@@ -1579,21 +1643,17 @@ export default function CustomerDisplay({
                     ref={videoRefA}
                     src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
                     className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    autoPlay
                     muted={activeLayer === 'A' ? isVideoMuted : true}
                     loop={activeAds.length <= 1}
                     playsInline
                     webkit-playsinline="true"
                     disablePictureInPicture
                     disableRemotePlayback
-                    preload="auto"
-                    style={{
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      backfaceVisibility: 'hidden'
-                    }}
+                    preload="metadata"
                     onEnded={(e) => handleVideoEnded('A', e)}
                     onContextMenu={(e) => e.preventDefault()}
-                    onError={(e) => console.warn('[CustomerDisplay] Layer A Video error:', e.target?.error)}
+                    onError={(e) => handleVideoError('A', e)}
                   />
                 ) : (
                   <img
@@ -1619,21 +1679,17 @@ export default function CustomerDisplay({
                     ref={videoRefB}
                     src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
                     className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    autoPlay
                     muted={activeLayer === 'B' ? isVideoMuted : true}
                     loop={activeAds.length <= 1}
                     playsInline
                     webkit-playsinline="true"
                     disablePictureInPicture
                     disableRemotePlayback
-                    preload="auto"
-                    style={{
-                      transform: 'translateZ(0)',
-                      willChange: 'transform',
-                      backfaceVisibility: 'hidden'
-                    }}
+                    preload="metadata"
                     onEnded={(e) => handleVideoEnded('B', e)}
                     onContextMenu={(e) => e.preventDefault()}
-                    onError={(e) => console.warn('[CustomerDisplay] Layer B Video error:', e.target?.error)}
+                    onError={(e) => handleVideoError('B', e)}
                   />
                 ) : (
                   <img
@@ -2293,7 +2349,6 @@ export default function CustomerDisplay({
         src={NO_SLEEP_MP4}
         loop
         muted
-        autoPlay
         playsInline
         webkit-playsinline="true"
         aria-hidden="true"
