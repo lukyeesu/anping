@@ -55,6 +55,7 @@ export const DEFAULT_CLINIC_ADS = [
     objectFit: 'cover',
     showBottomOverlay: true,
     showBrandHeader: true,
+    showClock: true,
     isSpecial: false,
     isActive: true,
     order: 1
@@ -72,6 +73,7 @@ export const DEFAULT_CLINIC_ADS = [
     objectFit: 'cover',
     showBottomOverlay: true,
     showBrandHeader: true,
+    showClock: true,
     isSpecial: true,
     isActive: true,
     order: 2
@@ -89,6 +91,7 @@ export const DEFAULT_CLINIC_ADS = [
     objectFit: 'cover',
     showBottomOverlay: true,
     showBrandHeader: true,
+    showClock: true,
     isSpecial: true,
     isActive: true,
     order: 3
@@ -106,6 +109,7 @@ export const DEFAULT_CLINIC_ADS = [
     objectFit: 'cover',
     showBottomOverlay: true,
     showBrandHeader: true,
+    showClock: true,
     isSpecial: false,
     isActive: true,
     order: 4
@@ -178,6 +182,7 @@ export default function DisplayAdsManager({
     objectFit: 'cover',
     showBottomOverlay: true,
     showBrandHeader: true,
+    showClock: true,
     enableAudio: false,
     isActive: true,
     applyToAllBranches: false
@@ -502,6 +507,7 @@ export default function DisplayAdsManager({
       objectFit: 'cover',
       showBottomOverlay: true,
       showBrandHeader: true,
+      showClock: true,
       enableAudio: false,
       isActive: true,
       applyToAllBranches: false
@@ -529,6 +535,7 @@ export default function DisplayAdsManager({
       objectFit: ad.objectFit || 'cover',
       showBottomOverlay: ad.showBottomOverlay ?? true,
       showBrandHeader: ad.showBrandHeader ?? true,
+      showClock: ad.showClock ?? true,
       enableAudio: ad.enableAudio ?? false,
       isActive: ad.isActive ?? true,
       applyToAllBranches: false
@@ -651,6 +658,7 @@ export default function DisplayAdsManager({
         customTextShadow: modalForm.customTextShadow || 'none',
         showBottomOverlay: modalForm.showBottomOverlay ?? true,
         showBrandHeader: modalForm.showBrandHeader ?? true,
+        showClock: modalForm.showClock ?? true,
         enableAudio: modalForm.type === 'video' ? (modalForm.enableAudio ?? false) : false
       } : a);
       showToast?.('แก้ไขสื่อโฆษณาสำเร็จ', 'success');
@@ -667,6 +675,7 @@ export default function DisplayAdsManager({
         customTextShadow: modalForm.customTextShadow || 'none',
         showBottomOverlay: modalForm.showBottomOverlay ?? true,
         showBrandHeader: modalForm.showBrandHeader ?? true,
+        showClock: modalForm.showClock ?? true,
         enableAudio: modalForm.type === 'video' ? (modalForm.enableAudio ?? false) : false,
         order: ads.length + 1
       };
@@ -985,6 +994,11 @@ export default function DisplayAdsManager({
                               ซ่อนโลโก้
                             </span>
                           )}
+                          {ad.showClock === false && (
+                            <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/60 font-medium flex items-center gap-0.5">
+                              <Clock className="w-2.5 h-2.5" /> ซ่อนนาฬิกา
+                            </span>
+                          )}
                         </div>
 
                         <h3 className="font-bold text-slate-800 text-xs sm:text-sm truncate">
@@ -1196,12 +1210,14 @@ export default function DisplayAdsManager({
                                   )}
                                 </button>
                               )}
-                              <div className="px-2 py-0.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white flex items-center gap-1">
-                                <Clock className="w-2.5 h-2.5 text-white/80" />
-                                <span className="text-[11px] font-bold font-mono text-white/90">
-                                  {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </div>
+                              {currentAd?.showClock !== false && (
+                                <div className="px-2 py-0.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white flex items-center gap-1">
+                                  <Clock className="w-2.5 h-2.5 text-white/80" />
+                                  <span className="text-[11px] font-bold font-mono text-white/90">
+                                    {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -1464,6 +1480,14 @@ export default function DisplayAdsManager({
                                 <div className="w-4 h-4 rounded bg-sky-500 text-white text-[9px] flex items-center justify-center font-bold">AP</div>
                               )}
                               <span className="text-[10px] text-white font-medium drop-shadow-xs kanit-text">{activeClinicName}</span>
+                            </div>
+                          )}
+
+                          {/* Clock preview if enabled */}
+                          {modalForm.showClock !== false && (
+                            <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-lg text-white text-[9px] font-mono font-bold">
+                              <Clock className="w-2.5 h-2.5 text-white/80" />
+                              <span>12:00</span>
                             </div>
                           )}
 
@@ -1849,6 +1873,23 @@ export default function DisplayAdsManager({
                       <ToggleSwitch
                         checked={modalForm.showBrandHeader ?? true}
                         onChange={(val) => setModalForm(prev => ({ ...prev, showBrandHeader: val }))}
+                      />
+                    </div>
+
+                    {/* Show/Hide Clock Toggle */}
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
+                          <Clock className="w-4 h-4 text-sky-600" />
+                          <span>แสดงนาฬิกามุมขวาบน</span>
+                        </span>
+                        <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
+                          เปิดเพื่อแสดงนาฬิกาที่มุมขวาบน หรือปิดหากสื่อโฆษณานี้มีโลโก้หรือเนื้อหาสำคัญอยู่ที่มุมขวาบน เพื่อไม่ให้บังเนื้อหา
+                        </p>
+                      </div>
+                      <ToggleSwitch
+                        checked={modalForm.showClock ?? true}
+                        onChange={(val) => setModalForm(prev => ({ ...prev, showClock: val }))}
                       />
                     </div>
 

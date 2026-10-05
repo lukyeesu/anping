@@ -22,6 +22,83 @@ import { formatThaiTypography, getTagBadgeStyle } from '../utils/thaiTypography'
 
 import { NO_SLEEP_MP4 } from '../lib/nosleepMedia';
 
+// ==============================================================
+// Micro-Components for Clock (Isolated 1-second ticks)
+// Prevents root CustomerDisplay from re-rendering every 1000ms,
+// completely eliminating main-thread stutters / dropped frames during 60fps video playback.
+// ==============================================================
+const StandbyClock = React.memo(function StandbyClock({ pixelShift }) {
+  const [time, setTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const hours = String(time.getHours()).padStart(2, '0');
+  const minutes = String(time.getMinutes()).padStart(2, '0');
+  const isColonVisible = time.getSeconds() % 2 === 0;
+
+  return (
+    <div 
+      className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-7 md:right-8 z-30 pointer-events-auto shrink-0 select-none"
+      style={{
+        transform: `translate3d(${pixelShift.x}px, ${pixelShift.y}px, 0)`,
+        transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+        willChange: 'transform'
+      }}
+    >
+      <div className="px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-2xl sm:rounded-3xl bg-black/60 backdrop-blur-md border border-white/25 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap">
+        <Clock className="w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9 text-white shrink-0 stroke-[2.2]" />
+        <span className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black font-mono tabular-nums tracking-wide leading-none text-white drop-shadow-lg inline-flex items-center">
+          <span>{hours}</span>
+          <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${isColonVisible ? 'opacity-100' : 'opacity-20'}`}>
+            :
+          </span>
+          <span>{minutes}</span>
+        </span>
+      </div>
+    </div>
+  );
+});
+
+const CartClock = React.memo(function CartClock({ pixelShift }) {
+  const [time, setTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const hours = String(time.getHours()).padStart(2, '0');
+  const minutes = String(time.getMinutes()).padStart(2, '0');
+  const isColonVisible = time.getSeconds() % 2 === 0;
+
+  return (
+    <div 
+      className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-100 border border-slate-200/90 text-slate-800 flex items-center gap-2 sm:gap-2.5 shadow-2xs"
+      style={{
+        transform: `translate3d(${pixelShift.x}px, ${pixelShift.y}px, 0)`,
+        transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+        willChange: 'transform'
+      }}
+    >
+      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 shrink-0" />
+      <span className="text-lg sm:text-2xl font-black font-mono text-slate-800 tracking-wide inline-flex items-center">
+        <span>{hours}</span>
+        <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${isColonVisible ? 'opacity-100' : 'opacity-20'}`}>
+          :
+        </span>
+        <span>{minutes}</span>
+      </span>
+    </div>
+  );
+});
+
 export default function CustomerDisplay({
   branchId: propBranchId,
   stationId: propStationId,
@@ -117,14 +194,25 @@ export default function CustomerDisplay({
   const slideTimerRef = useRef(null);
   const cleanupTimerRef = useRef(null);
 
-  // Live Clock Tick (Real-time update)
-  const [clockTime, setClockTime] = useState(() => new Date());
+  // Minute Tick for Samsung OLED-Style Anti Burn-in Pixel Shift
+  // Evaluated every 5 seconds, updating React state strictly once every 60 seconds.
+  // This keeps CustomerDisplay from re-rendering every second while video plays smoothly at 60fps.
+  const [minuteTick, setMinuteTick] = useState(() => Math.floor(Date.now() / 60000));
   useEffect(() => {
     const timer = setInterval(() => {
-      setClockTime(new Date());
-    }, 1000);
+      const currentM = Math.floor(Date.now() / 60000);
+      setMinuteTick(prev => (prev !== currentM ? currentM : prev));
+    }, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  // Detect if an advertisement video is actively playing on screen
+  const isAdVideoPlaying = displayMode === 'STANDBY_ADS' && (
+    (activeLayer === 'A' && layerAData?.type === 'video') ||
+    (activeLayer === 'B' && layerBData?.type === 'video')
+  );
+  const isAdVideoPlayingRef = useRef(isAdVideoPlaying);
+  isAdVideoPlayingRef.current = isAdVideoPlaying;
 
   // ==============================================================
   // Samsung OLED-Style Anti Burn-in Pixel Shift (Pixel Orbit)
@@ -146,10 +234,29 @@ export default function CustomerDisplay({
     { x: 1, y: 0 },
   ], []);
 
-  const currentMinute = clockTime.getMinutes();
+  const currentMinute = minuteTick % 60;
   const pixelShiftClock = PIXEL_SHIFT_OFFSETS[currentMinute % 12];
   const pixelShiftLogo = PIXEL_SHIFT_OFFSETS[(currentMinute + 3) % 12];
   const pixelShiftCenter = PIXEL_SHIFT_OFFSETS[(currentMinute + 6) % 12];
+
+  // Global Clock Visibility Setting (Persisted in localStorage)
+  const [isClockEnabledGlobal, setIsClockEnabledGlobal] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = localStorage.getItem('clinic_customer_display_show_clock');
+      if (saved !== null) return saved === 'true';
+    }
+    return true;
+  });
+
+  const toggleClockGlobal = useCallback((val) => {
+    setIsClockEnabledGlobal(prev => {
+      const nextVal = typeof val === 'boolean' ? val : !prev;
+      try {
+        localStorage.setItem('clinic_customer_display_show_clock', String(nextVal));
+      } catch (e) {}
+      return nextVal;
+    });
+  }, []);
 
   // Secret Admin Modal (Opened by 3-Finger Tap x 5 or Ctrl+Alt+S)
   const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -481,21 +588,40 @@ export default function CustomerDisplay({
   useEffect(() => {
     if (displayMode === 'STANDBY_ADS') {
       if (activeLayer === 'A') {
-        if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+        if (videoRefB.current && !videoRefB.current.paused) { videoRefB.current.muted = true; videoRefB.current.pause(); }
         if (videoRefA.current && layerAData?.type === 'video') {
-          videoRefA.current.play().catch(() => {});
+          if (videoRefA.current.paused) videoRefA.current.play().catch(() => {});
         }
       } else if (activeLayer === 'B') {
-        if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+        if (videoRefA.current && !videoRefA.current.paused) { videoRefA.current.muted = true; videoRefA.current.pause(); }
         if (videoRefB.current && layerBData?.type === 'video') {
-          videoRefB.current.play().catch(() => {});
+          if (videoRefB.current.paused) videoRefB.current.play().catch(() => {});
         }
       }
     } else {
-      if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-      if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      if (videoRefA.current && !videoRefA.current.paused) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+      if (videoRefB.current && !videoRefB.current.paused) { videoRefB.current.muted = true; videoRefB.current.pause(); }
     }
   }, [displayMode, activeLayer, layerAData?.type, layerBData?.type]);
+
+  // Automatically pause keep-alive video when an ad video is actively playing.
+  // Playing an ad video natively prevents the screen from sleeping across all browsers (iOS/Android/PC).
+  // Pausing keepAliveVideoRef frees 100% of the GPU hardware video decoder, completely preventing
+  // dual-decoder starvation, micro-stutters, and periodic slow-motion/catch-up frame drops.
+  useEffect(() => {
+    const keepVid = keepAliveVideoRef.current;
+    if (!keepVid) return;
+
+    if (isAdVideoPlaying) {
+      if (!keepVid.paused) {
+        keepVid.pause();
+      }
+    } else {
+      if (keepVid.paused) {
+        keepVid.play().catch(() => {});
+      }
+    }
+  }, [isAdVideoPlaying]);
 
   // 3. Screen Keep-Awake Engine (Triple-Engine: Native Wake Lock + Rendered Video Loop + Silent Web Audio)
   // Guarantees iPad/Android tablets remain in Always-On Display mode without sleeping, even on LAN HTTP.
@@ -531,7 +657,7 @@ export default function CustomerDisplay({
 
     // B. Rendered Silent Video Loop (Tested and proven for iPad Safari & Android tablets over HTTP)
     const vid = keepAliveVideoRef.current;
-    if (vid) {
+    if (vid && !isAdVideoPlayingRef.current) {
       try {
         if (vid.paused) {
           await vid.play();
@@ -609,7 +735,7 @@ export default function CustomerDisplay({
     // Continuous video loop watchdog
     const vid = keepAliveVideoRef.current;
     const handleVideoEnded = () => {
-      if (vid && !released) {
+      if (vid && !released && !isAdVideoPlayingRef.current) {
         vid.play().catch(() => {});
       }
     };
@@ -623,7 +749,7 @@ export default function CustomerDisplay({
       if (!released && typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const isWakeLockLost = 'wakeLock' in navigator && (!wakeLockRef.current || wakeLockRef.current.released);
         const isVideoPaused = keepAliveVideoRef.current && keepAliveVideoRef.current.paused;
-        if (isWakeLockLost || isVideoPaused) {
+        if ((isWakeLockLost || isVideoPaused) && !isAdVideoPlayingRef.current) {
           activateKeepAwake(false);
         }
       }
@@ -728,9 +854,9 @@ export default function CustomerDisplay({
     if (!activeVideo) return;
 
     if (isPausedByTouch) {
-      activeVideo.pause();
+      if (!activeVideo.paused) activeVideo.pause();
     } else if (displayMode === 'STANDBY_ADS') {
-      activeVideo.play().catch(() => {});
+      if (activeVideo.paused) activeVideo.play().catch(() => {});
     }
   }, [isPausedByTouch, activeLayer, displayMode]);
 
@@ -1005,8 +1131,8 @@ export default function CustomerDisplay({
   // Sync video audio mute state strictly with active ad (Guarantees NO sound clashing)
   useEffect(() => {
     if (displayMode !== 'STANDBY_ADS') {
-      if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-      if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      if (videoRefA.current && !videoRefA.current.paused) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+      if (videoRefB.current && !videoRefB.current.paused) { videoRefB.current.muted = true; videoRefB.current.pause(); }
       return;
     }
 
@@ -1015,7 +1141,7 @@ export default function CustomerDisplay({
     const inactiveVid = activeLayer === 'A' ? videoRefB.current : videoRefA.current;
 
     // Inactive video MUST ALWAYS be muted and paused
-    if (inactiveVid) {
+    if (inactiveVid && !inactiveVid.paused) {
       inactiveVid.muted = true;
       inactiveVid.pause();
     }
@@ -1025,17 +1151,19 @@ export default function CustomerDisplay({
       setIsVideoMuted(shouldMute);
       if (activeVid) {
         activeVid.muted = shouldMute;
-        activeVid.play().catch(() => {
-          if (!shouldMute) {
-            activeVid.muted = true;
-            activeVid.play().catch(() => {});
-          }
-        });
+        if (activeVid.paused) {
+          activeVid.play().catch(() => {
+            if (!shouldMute) {
+              activeVid.muted = true;
+              if (activeVid.paused) activeVid.play().catch(() => {});
+            }
+          });
+        }
       }
     } else {
       // If current ad is an image, all video audio must be silent
       setIsVideoMuted(true);
-      if (activeVid) {
+      if (activeVid && !activeVid.paused) {
         activeVid.muted = true;
         activeVid.pause();
       }
@@ -1050,10 +1178,10 @@ export default function CustomerDisplay({
         setIsVideoMuted(false);
         if (activeLayer === 'A' && videoRefA.current) {
           videoRefA.current.muted = false;
-          videoRefA.current.play().catch(() => {});
+          if (videoRefA.current.paused) videoRefA.current.play().catch(() => {});
         } else if (activeLayer === 'B' && videoRefB.current) {
           videoRefB.current.muted = false;
-          videoRefB.current.play().catch(() => {});
+          if (videoRefB.current.paused) videoRefB.current.play().catch(() => {});
         }
       }
     };
@@ -1455,7 +1583,14 @@ export default function CustomerDisplay({
                     loop={activeAds.length <= 1}
                     playsInline
                     webkit-playsinline="true"
+                    disablePictureInPicture
+                    disableRemotePlayback
                     preload="auto"
+                    style={{
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      backfaceVisibility: 'hidden'
+                    }}
                     onEnded={(e) => handleVideoEnded('A', e)}
                     onContextMenu={(e) => e.preventDefault()}
                     onError={(e) => console.warn('[CustomerDisplay] Layer A Video error:', e.target?.error)}
@@ -1488,7 +1623,14 @@ export default function CustomerDisplay({
                     loop={activeAds.length <= 1}
                     playsInline
                     webkit-playsinline="true"
+                    disablePictureInPicture
+                    disableRemotePlayback
                     preload="auto"
+                    style={{
+                      transform: 'translateZ(0)',
+                      willChange: 'transform',
+                      backfaceVisibility: 'hidden'
+                    }}
                     onEnded={(e) => handleVideoEnded('B', e)}
                     onContextMenu={(e) => e.preventDefault()}
                     onError={(e) => console.warn('[CustomerDisplay] Layer B Video error:', e.target?.error)}
@@ -1672,25 +1814,13 @@ export default function CustomerDisplay({
         })()}
 
         {/* Top-Right Fixed Clock (Permanently Fixed Coordinates & High Readability White Icon) */}
-        <div 
-          className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-7 md:right-8 z-30 pointer-events-auto shrink-0 select-none"
-          style={{
-            transform: `translate3d(${pixelShiftClock.x}px, ${pixelShiftClock.y}px, 0)`,
-            transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
-            willChange: 'transform'
-          }}
-        >
-          <div className="px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-2xl sm:rounded-3xl bg-black/60 backdrop-blur-md border border-white/25 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap">
-            <Clock className="w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9 text-white shrink-0 stroke-[2.2]" />
-            <span className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black font-mono tabular-nums tracking-wide leading-none text-white drop-shadow-lg inline-flex items-center">
-              <span>{String(clockTime.getHours()).padStart(2, '0')}</span>
-              <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${clockTime.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-20'}`}>
-                :
-              </span>
-              <span>{String(clockTime.getMinutes()).padStart(2, '0')}</span>
-            </span>
-          </div>
-        </div>
+        {(() => {
+          const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+          const isClockVisible = isClockEnabledGlobal && (activeAds.length === 0 || currentAd?.showClock !== false);
+          if (!isClockVisible) return null;
+
+          return <StandbyClock pixelShift={pixelShiftClock} />;
+        })()}
       </div>
 
       {/* ============================================================== */}
@@ -1746,23 +1876,7 @@ export default function CustomerDisplay({
                   กำลังคิดเงิน
                 </span>
               </div>
-              <div 
-                className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-100 border border-slate-200/90 text-slate-800 flex items-center gap-2 sm:gap-2.5 shadow-2xs"
-                style={{
-                  transform: `translate3d(${pixelShiftClock.x}px, ${pixelShiftClock.y}px, 0)`,
-                  transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                  willChange: 'transform'
-                }}
-              >
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 shrink-0" />
-                <span className="text-lg sm:text-2xl font-black font-mono text-slate-800 tracking-wide inline-flex items-center">
-                  <span>{String(clockTime.getHours()).padStart(2, '0')}</span>
-                  <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${clockTime.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-20'}`}>
-                    :
-                  </span>
-                  <span>{String(clockTime.getMinutes()).padStart(2, '0')}</span>
-                </span>
-              </div>
+              <CartClock pixelShift={pixelShiftClock} />
             </div>
           </div>
 
@@ -2067,6 +2181,26 @@ export default function CustomerDisplay({
 
               {/* Toggles & Keep Awake Card */}
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-700 flex items-center gap-2 font-medium">
+                    <Clock className="w-4 h-4 text-emerald-600" />
+                    <span>แสดงนาฬิกามุมขวาบน</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleClockGlobal()}
+                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                      isClockEnabledGlobal ? 'bg-emerald-600' : 'bg-slate-300'
+                    }`}
+                  >
+                    <div 
+                      className={`w-3.5 h-3.5 rounded-full bg-white transition-transform absolute top-0.5 ${
+                        isClockEnabledGlobal ? 'left-4.5' : 'left-0.5'
+                      }`} 
+                    />
+                  </button>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-700 flex items-center gap-2 font-medium">
                     <Volume2 className="w-4 h-4 text-emerald-600" />
