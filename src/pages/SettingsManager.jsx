@@ -22,7 +22,7 @@ import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 import { normalizeIntegrationTokens, syncLineBotQuotas, sendDiscordEmbed, sendTestLinePush, sendMenuLinePush, formatDirectImageUrl } from '../lib/notificationHub';
 import DatabaseStorageManager from '../components/DatabaseStorageManager';
-import { THAI_BANKS, getBankInfo, formatAccountNumber, DEFAULT_POS_QR_SETTINGS, generatePromptPayQrDataUrl } from '../lib/promptpay';
+import { THAI_BANKS, getBankInfo, formatAccountNumber, DEFAULT_POS_QR_SETTINGS, generatePromptPayQrDataUrl, decodeQrFromImage } from '../lib/promptpay';
 
 const SettingsManager = ({
   staffPrefixes = [],
@@ -424,7 +424,7 @@ const SettingsManager = ({
     showToast('กำหนดบัญชีหลักของสาขาเรียบร้อย (กรุณากดบันทึกการตั้งค่า)', 'info');
   };
 
-  const handleQrImageUpload = (e) => {
+  const handleQrImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -435,6 +435,27 @@ const SettingsManager = ({
       showToast('ขนาดไฟล์รูปภาพต้องไม่เกิน 3MB', 'warning');
       return;
     }
+
+    // สแกนและถอดรหัส QR Code จากไฟล์รูปภาพอัตโนมัติ
+    try {
+      const decoded = await decodeQrFromImage(file);
+      if (decoded?.parsed?.number) {
+        const { type, number, bankCode } = decoded.parsed;
+        const bankName = bankCode ? getBankInfo(bankCode).name : '';
+        showToast(`ตรวจพบ ${type === 'promptpay_ref' ? 'เลขอ้างอิง K PLUS' : 'หมายเลขพร้อมเพย์'} อัตโนมัติ: ${number}`, 'success');
+        setQrModal(prev => ({
+          ...prev,
+          data: {
+            ...prev.data,
+            accountNumber: number,
+            type: type || prev.data.type,
+            bankCode: bankCode || prev.data.bankCode,
+            bankName: bankName || prev.data.bankName
+          }
+        }));
+      }
+    } catch (_) {}
+
     const reader = new FileReader();
     reader.onload = (event) => {
       setQrModal(prev => ({

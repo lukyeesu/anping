@@ -1,4 +1,5 @@
 import QRCode from 'qrcode';
+import jsQR from 'jsqr';
 
 /**
  * รายชื่อธนาคารในประเทศไทย พร้อมสีประจำธนาคาร
@@ -128,6 +129,88 @@ export function formatAccountNumber(number, type = 'promptpay_mobile') {
     return `${clean.slice(0, 3)}-${clean.slice(3, 4)}-${clean.slice(4, 9)}-${clean.slice(9)}`;
   }
   return number;
+}
+
+/**
+ * ถอดรหัสโครงสร้าง EMVCo Thai QR Payment Payload เพื่อดึงเบอร์โทร / เลขบัตร ปชช. / เลขอ้างอิง e-Wallet / K PLUS
+ */
+export function parsePromptPayPayload(payload) {
+  if (!payload || typeof payload !== 'string') return null;
+  const tag29Idx = payload.indexOf('29');
+  if (tag29Idx === -1) return null;
+  
+  const len = parseInt(payload.slice(tag29Idx + 2, tag29Idx + 4), 10);
+  if (isNaN(len)) return null;
+  const tag29Val = payload.slice(tag29Idx + 4, tag29Idx + 4 + len);
+  
+  let i = 0;
+  let result = null;
+  while (i < tag29Val.length) {
+    const subTag = tag29Val.slice(i, i + 2);
+    const subLen = parseInt(tag29Val.slice(i + 2, i + 4), 10);
+    if (isNaN(subLen)) break;
+    const subVal = tag29Val.slice(i + 4, i + 4 + subLen);
+    
+    if (subTag === '01') {
+      result = { type: 'promptpay_mobile', number: subVal.replace(/^0066/, '0') };
+    } else if (subTag === '02') {
+      result = { type: 'promptpay_id', number: subVal };
+    } else if (subTag === '03') {
+      const bankCode = subVal.startsWith('004') ? 'KBANK' : subVal.startsWith('014') ? 'SCB' : 'PROMPTPAY';
+      result = { type: 'promptpay_ref', number: subVal, bankCode };
+    }
+    i += 4 + subLen;
+  }
+  return result;
+}
+
+/**
+ * สแกนอ่านข้อมูลจากไฟล์รูปภาพ QR Code โดยตรงใน Browser
+ */
+export async function decodeQrFromImage(imageFileOrDataUrl) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof window === 'undefined') {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          ctx.drawImage(img, 0, 0);
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imgData.data, imgData.width, imgData.height);
+          if (code && code.data) {
+            const parsed = parsePromptPayPayload(code.data);
+            resolve({ raw: code.data, parsed });
+          } else {
+            resolve(null);
+          }
+        } catch (_) {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+
+      if (typeof imageFileOrDataUrl === 'string') {
+        img.src = imageFileOrDataUrl;
+      } else if (imageFileOrDataUrl instanceof Blob || imageFileOrDataUrl instanceof File) {
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(imageFileOrDataUrl);
+      } else {
+        resolve(null);
+      }
+    } catch (_) {
+      resolve(null);
+    }
+  });
 }
 
 export const DEFAULT_POS_QR_SETTINGS = {
