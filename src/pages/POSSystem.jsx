@@ -18,11 +18,13 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, Copy, Check, RefreshCw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Copy, Check, RefreshCw, Monitor, Radio, Sparkles
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { theme } from '../global/theme';
 import { dispatchClinicNotification, calculateDailySalesSummary } from '../lib/notificationHub';
 import { getBankInfo, formatAccountNumber, generatePromptPayQrDataUrl } from '../lib/promptpay';
+import { createCustomerDisplayPublisher } from '../lib/customerDisplaySync';
 
 const POSSystem = ({ 
     products = [], setProducts, 
@@ -51,6 +53,17 @@ const POSSystem = ({
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [isFetchingOpd, setIsFetchingOpd] = useState(false);
   const [discount, setDiscount] = useState(0);
+
+  // State สำหรับระบบจอแสดงผลฝั่งลูกค้า (Customer-Facing Display: CFD)
+  const [posStationId, setPosStationId] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem('clinic_pos_station_id') || 'station_1';
+    }
+    return 'station_1';
+  });
+  const [isStationModalOpen, setIsStationModalOpen] = useState(false);
+  const [pairingQrDataUrl, setPairingQrDataUrl] = useState('');
+  const customerDisplayPublisherRef = useRef(null);
   
   // State สำหรับเลือกแพทย์ผู้ตรวจและผู้แนะนำ/ผู้ขาย (Dual Commission)
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
@@ -1000,10 +1013,10 @@ const POSSystem = ({
     return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(validNum);
   };
 
-  // Generate QR Code dynamically when modal is open and payment method is transfer
+  // Generate QR Code dynamically in advance whenever currentQrAccount or grandTotal changes
   useEffect(() => {
     let isCancelled = false;
-    if (paymentMethod === 'transfer' && checkoutModal.isOpen && currentQrAccount) {
+    if (currentQrAccount && grandTotal > 0) {
       if (currentQrAccount.type === 'custom_qr' && currentQrAccount.qrImage) {
         setDynamicQrUrl(currentQrAccount.qrImage);
         return;
@@ -1026,7 +1039,193 @@ const POSSystem = ({
         });
     }
     return () => { isCancelled = true; };
-  }, [paymentMethod, checkoutModal.isOpen, currentQrAccount, grandTotal, qrKey]);
+  }, [currentQrAccount, grandTotal, qrKey]);
+
+  // --- ระบบเชื่อมต่อจอแสดงผลฝั่งลูกค้า (Customer-Facing Display: CFD) ---
+  const displayStateRef = useRef({});
+  displayStateRef.current = {
+    cart,
+    subtotal,
+    discountAmount,
+    grandTotal,
+    selectedPatientId,
+    patientsData,
+    patientCoursesData,
+    checkoutModalOpen: checkoutModal.isOpen && !checkoutModal.isClosing,
+    paymentMethod,
+    dynamicQrUrl,
+    currentQrAccount,
+    checkoutSuccess
+  };
+
+  // Helper สร้าง Payload ตะกร้าสินค้า
+  const buildDisplayCartPayload = useCallback((customState = null) => {
+    const s = customState || displayStateRef.current;
+    if (!s || !s.cart || s.cart.length === 0) return null;
+
+    let patientInfo = null;
+    if (s.selectedPatientId) {
+      const patient = (s.patientsData || []).find(p => p && ((p.id && String(p.id) === String(s.selectedPatientId)) || (p.hn && String(p.hn) === String(s.selectedPatientId))));
+      if (patient) {
+        const normPid = String(s.selectedPatientId || '').trim().toLowerCase();
+        const activeCourses = (s.patientCoursesData || []).filter(c => {
+          if (!c || c.isDeleted || c.is_deleted) return false;
+          const cPid = String(c.patientId || c.patient_id || '').trim().toLowerCase();
+          const rem = Number(c.remainingSessions ?? c.remaining_sessions) || 0;
+          const expDate = c.expireDate || c.expire_date;
+          const isExpired = expDate ? (new Date(expDate).setHours(23, 59, 59, 999) < Date.now()) : false;
+          return (cPid === normPid) && rem > 0 && !isExpired && (c.status || 'active') === 'active';
+        });
+
+        patientInfo = {
+          hn: patient.hn || patient.id || '-',
+          name: getPatientFullName(patient),
+          nickname: (patient.nickname || patient.nickName || patient.nick_name || '').trim(),
+          remainingCourses: activeCourses.map(c => ({
+            id: c.id,
+            name: c.courseName || c.course_name || c.name,
+            remaining: Number(c.remainingSessions ?? c.remaining_sessions) || 0,
+            total: Number(c.totalSessions ?? c.total_sessions) || 0
+          }))
+        };
+      }
+    }
+
+    const items = s.cart.map((item, idx) => ({
+      id: item.product?.id || item.id || `item_${idx}`,
+      name: item.product?.name || item.product?.productName || item.product?.courseName || 'สินค้า/บริการ',
+      quantity: Number(item.quantity) || 1,
+      price: Number(item.product?.price) || 0,
+      total: (Number(item.quantity) || 1) * (Number(item.product?.price) || 0)
+    }));
+
+    return {
+      items,
+      subtotal: s.subtotal,
+      discount: s.discountAmount,
+      grandTotal: s.grandTotal,
+      patient: patientInfo
+    };
+  }, []);
+
+  // ฟังก์ชันกระจายสัญญาณสถานะจอลูกค้า (Instant Sync)
+  const syncCustomerDisplay = useCallback(() => {
+    const pub = customerDisplayPublisherRef.current;
+    if (!pub) return;
+
+    const s = displayStateRef.current;
+    if (!s) return;
+
+    if (s.checkoutSuccess) {
+      return; // จัดการผ่าน PAYMENT_SUCCESS
+    }
+
+    // 1. ถ้ากำลังเปิดหน้าต่างคิดเงินแบบโอนเงิน (QR)
+    if (s.checkoutModalOpen && s.paymentMethod === 'transfer') {
+      const qrAccount = s.currentQrAccount;
+      const qrTarget = qrAccount?.accountNumber || '';
+      const customQrImg = qrAccount?.type === 'custom_qr' ? qrAccount.qrImage : null;
+      const cleanNo = qrTarget ? String(qrTarget).replace(/[^0-9]/g, '') : '';
+      const fallbackQr = customQrImg || (cleanNo && s.grandTotal > 0 ? `https://promptpay.io/${cleanNo}/${s.grandTotal}.png` : '');
+
+      pub.publish('PAYMENT_QR', {
+        qrUrl: s.dynamicQrUrl || fallbackQr,
+        accountName: qrAccount?.name || 'คลินิกการแพทย์แผนจีนอันผิง',
+        accountNumber: qrTarget,
+        bankName: qrAccount?.bankName || '',
+        bankCode: qrAccount?.bankCode || '',
+        amount: s.grandTotal
+      });
+      return;
+    }
+
+    // 2. ถ้ามีสินค้าในตะกร้า (ทั้งขณะเลือกสินค้า หรือเลือกชำระเงินสด/บัตร)
+    if (s.cart && s.cart.length > 0) {
+      const cartPayload = buildDisplayCartPayload(s);
+      if (cartPayload) {
+        pub.publish('CART_UPDATE', cartPayload);
+        return;
+      }
+    }
+
+    // 3. ถ้าไม่มีสินค้าในตะกร้า -> กลับสู่หน้าโฆษณา
+    pub.publish('STANDBY_ADS', {});
+  }, [buildDisplayCartPayload]);
+
+  // ซิงก์ Dual-Transport Pub/Sub (เชื่อมต่อถาวรตลอดอายุการใช้งานเคาน์เตอร์นั้นๆ ไม่ตัดต่อใหม่เมื่อเพิ่มสินค้า)
+  useEffect(() => {
+    const publisher = createCustomerDisplayPublisher(currentBranch, posStationId);
+    customerDisplayPublisherRef.current = publisher;
+
+    // เมื่อจอแสดงผล iPad / จอ 2 ส่งสัญญาณร้องขอสถานะล่าสุด
+    publisher.onMessage((msg) => {
+      if (msg?.event === 'GET_CURRENT_STATE') {
+        const s = displayStateRef.current;
+        if (!s) return;
+
+        if (s.checkoutModalOpen && s.paymentMethod === 'transfer') {
+          const qrAccount = s.currentQrAccount;
+          const qrTarget = qrAccount?.accountNumber || '';
+          const customQrImg = qrAccount?.type === 'custom_qr' ? qrAccount.qrImage : null;
+          const cleanNo = qrTarget ? String(qrTarget).replace(/[^0-9]/g, '') : '';
+          const fallbackQr = customQrImg || (cleanNo && s.grandTotal > 0 ? `https://promptpay.io/${cleanNo}/${s.grandTotal}.png` : '');
+
+          publisher.publish('PAYMENT_QR', {
+            qrUrl: s.dynamicQrUrl || fallbackQr,
+            accountName: qrAccount?.name || 'คลินิกการแพทย์แผนจีนอันผิง',
+            accountNumber: qrTarget,
+            bankName: qrAccount?.bankName || '',
+            bankCode: qrAccount?.bankCode || '',
+            amount: s.grandTotal
+          });
+        } else if (s.cart && s.cart.length > 0) {
+          const cartPayload = buildDisplayCartPayload(s);
+          if (cartPayload) {
+            publisher.publish('CART_UPDATE', cartPayload);
+          }
+        } else {
+          publisher.publish('STANDBY_ADS', {});
+        }
+      }
+    });
+
+    return () => {
+      publisher.close();
+    };
+  }, [currentBranch, posStationId, buildDisplayCartPayload]);
+
+  // ซิงก์การเปลี่ยนแปลงตะกร้าและหน้าต่างชำระเงินแบบเรียลไทม์ทันที
+  useEffect(() => {
+    syncCustomerDisplay();
+  }, [cart, subtotal, discountAmount, grandTotal, selectedPatientId, checkoutModal.isOpen, paymentMethod, dynamicQrUrl, syncCustomerDisplay]);
+
+  // สร้าง QR Code สำหรับจับคู่ iPad กับเคาน์เตอร์นี้
+  useEffect(() => {
+    if (isStationModalOpen && typeof window !== 'undefined') {
+      const displayUrl = `${window.location.origin}/customer-display?station=${posStationId}&branch=${currentBranch}`;
+      QRCode.toDataURL(displayUrl, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })
+        .then(url => setPairingQrDataUrl(url))
+        .catch(err => console.error("Error generating pairing QR:", err));
+    }
+  }, [isStationModalOpen, posStationId, currentBranch]);
+
+  const handleStationChange = (newStation) => {
+    setPosStationId(newStation);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('clinic_pos_station_id', newStation);
+    }
+    showToast?.(`สลับไปใช้งานเคาน์เตอร์ ${newStation.replace('station_', '')} เรียบร้อย`, 'info');
+  };
+
+  const handlePingDisplay = () => {
+    if (customerDisplayPublisherRef.current) {
+      customerDisplayPublisherRef.current.publish('PING', {
+        time: Date.now(),
+        message: 'ทดสอบการเชื่อมต่อจอแสดงผล'
+      });
+      showToast?.('ส่งสัญญาณทดสอบไปยังจอลูกค้าเรียบร้อย', 'success');
+    }
+  };
 
   // จัดการการชำระเงิน (ตรวจสอบสต็อกสินค้าก่อนเปิดหน้าต่างคิดเงิน)
   const handleCheckout = () => {
@@ -1555,6 +1754,16 @@ const POSSystem = ({
         setIsProcessingPayment(false);
         setCheckoutSuccess(true);
         setIsMobileCartOpen(false); // ปิดหน้าตะกร้ามือถือเมื่อชำระเงินสำเร็จ
+
+        // ส่งสัญญาณแจ้งชำระเงินสำเร็จไปยังจอแสดงผลฝั่งลูกค้า (พร้อมเสียง Chime)
+        if (customerDisplayPublisherRef.current) {
+          customerDisplayPublisherRef.current.publish('PAYMENT_SUCCESS', {
+            grandTotal,
+            receiptId: receiptId || '',
+            paymentMethod
+          });
+        }
+
         showToast('ทำรายการชำระเงินและบันทึกข้อมูลสำเร็จ', 'success');
     } catch (error) {
         console.error("POS Transaction Error:", error);
@@ -1564,15 +1773,28 @@ const POSSystem = ({
   };
 
   const closeCheckoutAndReset = () => {
+    const wasSuccess = checkoutSuccess;
     checkoutModal.close();
-    setTimeout(() => {
-      if (checkoutSuccess) {
-        clearCart();
+    setPaymentMethod('cash');
+    setSelectedAccountId(branchDefaultAccountId);
+    setCheckoutSuccess(false);
+
+    if (wasSuccess) {
+      clearCart();
+      if (customerDisplayPublisherRef.current) {
+        customerDisplayPublisherRef.current.publish('STANDBY_ADS', {});
       }
-      setPaymentMethod('cash');
-      setSelectedAccountId(branchDefaultAccountId);
-      setCheckoutSuccess(false);
-    }, 300);
+    } else {
+      // Returned to cart without paying - restore cart view on customer display if cart has items
+      if (cart.length > 0 && customerDisplayPublisherRef.current) {
+        const cartPayload = buildDisplayCartPayload();
+        if (cartPayload) {
+          customerDisplayPublisherRef.current.publish('CART_UPDATE', cartPayload);
+        }
+      } else if (customerDisplayPublisherRef.current) {
+        customerDisplayPublisherRef.current.publish('STANDBY_ADS', {});
+      }
+    }
   };
 
   const closeHistoryModal = () => {
@@ -2255,6 +2477,19 @@ const POSSystem = ({
           </div>
           
           <div className="flex items-center gap-2 shrink-0">
+            {/* ปุ่มตั้งค่าเคาน์เตอร์ & จอลูกค้า */}
+            <button
+              type="button"
+              onClick={() => setIsStationModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
+              title="ตั้งค่าเคาน์เตอร์และเชื่อมต่อจอแสดงผลฝั่งลูกค้า"
+            >
+              <Monitor size={16} className="sm:w-[18px] sm:h-[18px] text-emerald-600" />
+              <span className="hidden sm:inline">เคาน์เตอร์ {posStationId.replace('station_', '')}</span>
+              <span className="sm:hidden">จอ {posStationId.replace('station_', '')}</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
+              <ChevronDown size={14} className="text-emerald-600/70" />
+            </button>
             <button
               onClick={handleOpenDailySummaryModal}
               className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 hover:text-blue-800 hover:bg-blue-100 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
@@ -4123,6 +4358,164 @@ const POSSystem = ({
                 className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all kanit-text active:scale-95"
               >
                 ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Customer Display Station & Pairing Modal */}
+      {isStationModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+            {/* Header */}
+            <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <Monitor className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base kanit-text">
+                    เคาน์เตอร์ & จอแสดงผลฝั่งลูกค้า (CFD)
+                  </h3>
+                  <p className="text-xs text-slate-400 kanit-text">
+                    เชื่อมต่อจอที่สอง หรือแท็บเล็ต iPad สำหรับให้คนไข้ดูรายการและสแกนชำระเงิน
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStationModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1 kanit-text">
+              {/* Station Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  เลือกจุดเคาน์เตอร์ปัจจุบันของเครื่องนี้
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {['station_1', 'station_2', 'station_3', 'station_4'].map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => handleStationChange(st)}
+                      className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                        posStationId === st
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-sm font-bold'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Radio className={`w-4 h-4 ${posStationId === st ? 'text-emerald-600' : 'text-slate-400'}`} />
+                      <span className="text-xs">เคาน์เตอร์ {st.replace('station_', '')}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dual Transport Options */}
+              <div className="space-y-3">
+                <span className="block text-xs font-bold text-slate-700">วิธีเชื่อมต่อจอแสดงผล:</span>
+
+                {/* Option 1: Wired Monitor (HDMI / Type-C) */}
+                <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-sky-900">
+                      <Monitor className="w-4 h-4 text-sky-600" />
+                      <span>รูปแบบที่ 1: ต่อสายตรง (HDMI / จอคอมตัวที่ 2)</span>
+                    </div>
+                    <p className="text-[11px] text-sky-700/80 mt-0.5 font-light">
+                      ความเร็ว 0ms ไม่กินแบนด์วิดท์อินเทอร์เน็ต ใช้งานได้แม้ออฟไลน์
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(`/customer-display?station=${posStationId}&branch=${currentBranch}`, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>เปิดจอบนแท็บใหม่</span>
+                  </button>
+                </div>
+
+                {/* Option 2: Wireless iPad / Tablet Pairing */}
+                <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+                      <Radio className="w-4 h-4 text-purple-600" />
+                      <span>รูปแบบที่ 2: ไร้สายผ่าน iPad / แท็บเล็ต (Real-time Cloud)</span>
+                    </div>
+                    <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">
+                      1-to-Many
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {pairingQrDataUrl ? (
+                      <div className="p-2 bg-white rounded-2xl border border-purple-200/80 shadow-sm shrink-0">
+                        <img src={pairingQrDataUrl} alt="Pairing QR" className="w-28 h-28 object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-28 h-28 bg-purple-100/50 rounded-2xl flex items-center justify-center text-purple-400">
+                        <RefreshCw className="w-6 h-6 animate-spin" />
+                      </div>
+                    )}
+                    <div className="text-left text-xs text-purple-900/80 space-y-1.5">
+                      <p className="font-semibold text-purple-950">
+                        สแกน QR Code ด้วยกล้อง iPad เพื่อเปิดหน้าจอเคาน์เตอร์นี้ทันที
+                      </p>
+                      <p className="text-[11px] text-purple-700 font-light leading-relaxed">
+                        ระบบจะจับคู่กับ <strong>เคาน์เตอร์ {posStationId.replace('station_', '')}</strong> อัตโนมัติ สามารถวาง iPad ไว้บนแท่นชาร์จหน้าร้านได้เลย
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/customer-display?station=${posStationId}&branch=${currentBranch}`;
+                          navigator.clipboard?.writeText(url);
+                          showToast?.('คัดลอกลิงก์จอลูกค้าเรียบร้อย', 'success');
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 hover:text-purple-900 underline"
+                      >
+                        <Copy className="w-3 h-3" /> คัดลอกลิงก์จอ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Test Signal Button */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
+                <span className="text-xs text-slate-600">ทดสอบการส่งสัญญาณไปยังจอแสดงผล</span>
+                <button
+                  type="button"
+                  onClick={handlePingDisplay}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>ส่งสัญญาณทดสอบ (Ping)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-light">
+                💡 กดปิดหน้าต่างได้เมื่อตั้งค่าเสร็จสิ้น
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsStationModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all kanit-text active:scale-95 shadow-md shadow-slate-900/10"
+              >
+                เสร็จสิ้น
               </button>
             </div>
           </div>

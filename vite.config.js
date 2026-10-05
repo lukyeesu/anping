@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import apiDbHandler from './api/db.js'
 import apiTtsHandler from './api/tts.js'
 import apiLineHandler from './api/line.js'
+import apiMediaHandler from './api/media.js'
 
 function apiDevMiddlewarePlugin() {
   return {
@@ -14,6 +15,31 @@ function apiDevMiddlewarePlugin() {
           const host = req.headers.host || 'localhost:5173';
           const urlObj = new URL(req.url, `http://${host}`);
           const pathname = urlObj.pathname;
+
+          if (pathname === '/api/media' || pathname.startsWith('/api/media?')) {
+            const query = Object.fromEntries(urlObj.searchParams.entries());
+            req.query = query;
+            if (!res.status) {
+              res.status = function(code) {
+                this.statusCode = code;
+                return this;
+              };
+            }
+            if (!res.json) {
+              res.json = function(data) {
+                this.setHeader('Content-Type', 'application/json');
+                this.end(JSON.stringify(data));
+              };
+            }
+            apiMediaHandler(req, res).catch(err => {
+              console.error("Localhost Media Handler Error:", err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.end("Media Proxy Error");
+              }
+            });
+            return;
+          }
 
           if (pathname === '/api/tts' || pathname.startsWith('/api/tts?')) {
             const query = Object.fromEntries(urlObj.searchParams.entries());

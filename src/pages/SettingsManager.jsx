@@ -1149,6 +1149,7 @@ const SettingsManager = ({
     { id: 'staff', label: 'พนักงาน' },
     { id: 'branch', label: 'สาขา' },
     { id: 'reports', label: 'รายงาน' },
+    { id: 'display_ads', label: 'จัดการโฆษณา' },
     { id: 'settings', label: 'ตั้งค่า' }
   ];
 

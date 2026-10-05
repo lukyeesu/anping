@@ -53,6 +53,8 @@ import PortalDropdown from './pages/PortalDropdown';
 import AnimatedModal from './pages/AnimatedModal';
 import Skeleton from './pages/Skeleton';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import DisplayAdsManager from './pages/DisplayAdsManager';
+import CustomerDisplay from './pages/CustomerDisplay';
 import { DEFAULT_POS_QR_SETTINGS } from './lib/promptpay';
 const theme = {
   primary: 'bg-sky-500 text-white hover:bg-sky-600',
@@ -800,7 +802,8 @@ export default function App() {
     '/branch': 'branch',
     '/reports': 'reports',
     '/settings': 'settings',
-    '/profile': 'profile'
+    '/profile': 'profile',
+    '/display_ads': 'display_ads'
   };
 
   const currentTab = pathToTab[location.pathname] || 'dashboard';
@@ -1378,7 +1381,7 @@ export default function App() {
   // --- States for clinic settings (prefixes, roles/permissions, categories) ---
   const [staffPrefixes, setStaffPrefixes] = useState(['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']);
   const [rolePermissions, setRolePermissions] = useState({
-    admin: ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings'],
+    admin: ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings', 'display_ads'],
     doctor: ['dashboard', 'records', 'queue'],
     nurse: ['records', 'queue'],
     sale: ['pos', 'catalog'],
@@ -2880,6 +2883,7 @@ export default function App() {
     { id: 'staff', label: 'พนักงาน', icon: UserCog },
     { id: 'branch', label: 'สาขา', icon: Building2 },
     { id: 'reports', label: 'รายงาน', icon: BarChart3 },
+    { id: 'display_ads', label: 'จัดการโฆษณา', icon: Megaphone },
     { id: 'settings', label: 'ตั้งค่า', icon: Settings },
   ];
 
@@ -2919,7 +2923,7 @@ export default function App() {
   }, [appointmentStatuses]);
 
   const allowedTabs = useMemo(() => {
-    return rolePermissions[currentUser.role] || ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings'];
+    return rolePermissions[currentUser.role] || ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings', 'display_ads'];
   }, [rolePermissions, currentUser.role]);
 
   const filteredNavItems = useMemo(() => {
@@ -2941,6 +2945,18 @@ export default function App() {
   // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า
   const mobileNavItems = filteredNavItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'reports'].includes(item.id));
   const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
+
+  const isCustomerDisplayRoute = location.pathname === '/customer-display' || location.pathname === '/display' || Boolean(getUrlParam('customer_display'));
+  if (isCustomerDisplayRoute) {
+      return (
+        <CustomerDisplay 
+          branchId={getUrlParam('branch') || currentBranch}
+          stationId={getUrlParam('station') || 'station_1'}
+          branchesData={branchesData}
+          showToast={showToast}
+        />
+      );
+  }
 
   if (pdpaToken && pdpaHn) {
       return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} gdriveTokens={gdriveTokens} isAuthDataFetched={isAuthDataFetched} />;
@@ -3668,6 +3684,19 @@ export default function App() {
                         setPosQrSettings={setPosQrSettings}
                         showGlobalAlert={showGlobalAlert}
                         globalAlert={globalAlert}
+                    />
+                </div>
+            )}
+
+            {currentTab === 'display_ads' && (
+                <div className="w-full">
+                    <DisplayAdsManager 
+                        gdriveTokens={gdriveTokens}
+                        callAppScript={callAppScript}
+                        showToast={showToast}
+                        showGlobalAlert={showGlobalAlert}
+                        branchesData={branchesData}
+                        currentBranch={currentBranch}
                     />
                 </div>
             )}
