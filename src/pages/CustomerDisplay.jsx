@@ -553,6 +553,7 @@ export default function CustomerDisplay({
     window.addEventListener('pageshow', handleVisibilityChange);
     window.addEventListener('orientationchange', handleVisibilityChange);
     document.addEventListener('fullscreenchange', handleVisibilityChange);
+    document.addEventListener('webkitfullscreenchange', handleVisibilityChange);
 
     // Continuous video loop watchdog
     const vid = keepAliveVideoRef.current;
@@ -589,6 +590,7 @@ export default function CustomerDisplay({
       window.removeEventListener('pageshow', handleVisibilityChange);
       window.removeEventListener('orientationchange', handleVisibilityChange);
       document.removeEventListener('fullscreenchange', handleVisibilityChange);
+      document.removeEventListener('webkitfullscreenchange', handleVisibilityChange);
       if (vid) {
         vid.removeEventListener('ended', handleVideoEnded);
         vid.removeEventListener('pause', handleVideoEnded);
@@ -897,14 +899,69 @@ export default function CustomerDisplay({
     showToast?.('ตั้งค่าเคาน์เตอร์และสาขาเรียบร้อย', 'success');
   };
 
-  // Toggle Fullscreen
+  // Toggle Fullscreen (Cross-Browser & iOS / iPadOS Safari WebKit Support)
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    const doc = document;
+    const docEl = document.documentElement;
+
+    const isFull = !!(
+      doc.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement
+    );
+
+    if (!isFull) {
+      if (typeof docEl.requestFullscreen === 'function') {
+        docEl.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {
+          if (typeof docEl.webkitRequestFullscreen === 'function') {
+            docEl.webkitRequestFullscreen();
+            setIsFullscreen(true);
+          }
+        });
+      } else if (typeof docEl.webkitRequestFullscreen === 'function') {
+        docEl.webkitRequestFullscreen();
+        setIsFullscreen(true);
+      } else if (typeof docEl.webkitRequestFullScreen === 'function') {
+        docEl.webkitRequestFullScreen();
+        setIsFullscreen(true);
+      }
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      if (typeof doc.exitFullscreen === 'function') {
+        doc.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {
+          if (typeof doc.webkitExitFullscreen === 'function') {
+            doc.webkitExitFullscreen();
+            setIsFullscreen(false);
+          }
+        });
+      } else if (typeof doc.webkitExitFullscreen === 'function') {
+        doc.webkitExitFullscreen();
+        setIsFullscreen(false);
+      } else if (typeof doc.webkitCancelFullScreen === 'function') {
+        doc.webkitCancelFullScreen();
+        setIsFullscreen(false);
+      }
     }
   };
+
+  // Sync fullscreen state with native browser events
+  useEffect(() => {
+    const handleFullscreenSync = () => {
+      const isFull = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(isFull);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenSync);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenSync);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenSync);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenSync);
+    };
+  }, []);
 
   return (
     <div 
@@ -1744,6 +1801,9 @@ export default function CustomerDisplay({
 
               {/* Secret Gesture info and iPad recommendations for staff */}
               <div className="space-y-2">
+                <div className="p-3 rounded-xl bg-sky-50/70 border border-sky-100 text-[11px] text-sky-900 leading-relaxed font-light">
+                  🚀 <strong>เปิดเต็มจอ 100% บน iPad (แนะนำ):</strong> กดปุ่ม <strong>แชร์ (Share)</strong> ที่แถบบนของ Safari &gt; เลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong> จะเปิดเป็นแอปเต็มจอไร้แถบ URL ถาวร
+                </div>
                 <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-800 leading-relaxed font-light">
                   💡 <strong>วิธีเปิดหน้าต่างนี้ในอนาคต:</strong> บน iPad ใช้นิ้ว <strong>3 นิ้วแตะพร้อมกัน 5 ครั้ง</strong> ที่ใดก็ได้บนจอ หรือบน PC กดคีย์ลัด <strong>Ctrl + Alt + S</strong>
                 </div>
