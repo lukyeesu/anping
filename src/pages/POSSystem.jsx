@@ -483,6 +483,7 @@ const POSSystem = ({
 
   const [dynamicQrUrl, setDynamicQrUrl] = useState('');
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  const [isQrConfirmed, setIsQrConfirmed] = useState(false);
 
   // แก้ไข: เพิ่ม Effect สำหรับรีเซ็ตสถานะตะกร้ามือถือเมื่อขยายหน้าจอ (Resize Bug Fix)
   useEffect(() => {
@@ -1053,6 +1054,7 @@ const POSSystem = ({
     patientCoursesData,
     checkoutModalOpen: checkoutModal.isOpen && !checkoutModal.isClosing,
     paymentMethod,
+    isQrConfirmed: isQrConfirmed || activeQrAccounts.length <= 1,
     dynamicQrUrl,
     currentQrAccount,
     checkoutSuccess
@@ -1120,8 +1122,8 @@ const POSSystem = ({
       return; // จัดการผ่าน PAYMENT_SUCCESS
     }
 
-    // 1. ถ้ากำลังเปิดหน้าต่างคิดเงินแบบโอนเงิน (QR)
-    if (s.checkoutModalOpen && s.paymentMethod === 'transfer') {
+    // 1. ถ้ากำลังเปิดหน้าต่างคิดเงินแบบโอนเงิน (QR) และได้รับการเลือก/ยืนยันบัญชีแล้ว
+    if (s.checkoutModalOpen && s.paymentMethod === 'transfer' && s.isQrConfirmed) {
       const qrAccount = s.currentQrAccount;
       const qrTarget = qrAccount?.accountNumber || '';
       const customQrImg = qrAccount?.type === 'custom_qr' ? qrAccount.qrImage : null;
@@ -1140,7 +1142,7 @@ const POSSystem = ({
       return;
     }
 
-    // 2. ถ้ามีสินค้าในตะกร้า (ทั้งขณะเลือกสินค้า หรือเลือกชำระเงินสด/บัตร)
+    // 2. ถ้ามีสินค้าในตะกร้า (ทั้งขณะเลือกสินค้า หรือเลือกชำระเงินสด/บัตร หรือยังไม่ได้กดยืนยันบัญชี QR)
     if (s.cart && s.cart.length > 0) {
       const cartPayload = buildDisplayCartPayload(s);
       if (cartPayload) {
@@ -1164,7 +1166,7 @@ const POSSystem = ({
         const s = displayStateRef.current;
         if (!s) return;
 
-        if (s.checkoutModalOpen && s.paymentMethod === 'transfer') {
+        if (s.checkoutModalOpen && s.paymentMethod === 'transfer' && s.isQrConfirmed) {
           const qrAccount = s.currentQrAccount;
           const qrTarget = qrAccount?.accountNumber || '';
           const customQrImg = qrAccount?.type === 'custom_qr' ? qrAccount.qrImage : null;
@@ -1199,7 +1201,7 @@ const POSSystem = ({
   // ซิงก์การเปลี่ยนแปลงตะกร้าและหน้าต่างชำระเงินแบบเรียลไทม์ทันที
   useEffect(() => {
     syncCustomerDisplay();
-  }, [cart, subtotal, discountAmount, grandTotal, selectedPatientId, checkoutModal.isOpen, paymentMethod, dynamicQrUrl, syncCustomerDisplay]);
+  }, [cart, subtotal, discountAmount, grandTotal, selectedPatientId, checkoutModal.isOpen, paymentMethod, isQrConfirmed, dynamicQrUrl, syncCustomerDisplay]);
 
   // สร้าง QR Code สำหรับจับคู่ iPad กับเคาน์เตอร์นี้
   useEffect(() => {
@@ -1253,12 +1255,18 @@ const POSSystem = ({
 
     setPaymentMethod('cash');
     setSelectedAccountId(branchDefaultAccountId);
+    setIsQrConfirmed(false);
     checkoutModal.open();
     setCheckoutSuccess(false);
   };
 
   // แก้ไข: เปลี่ยนเป็นการทำงานแบบ Asynchronous และส่งข้อมูลไปบันทึกผ่าน API
   const confirmPayment = async () => {
+    if (paymentMethod === 'transfer' && activeQrAccounts.length > 1 && !isQrConfirmed) {
+      showToast('กรุณาเลือกบัญชีรับเงินและกดแสดง QR Code ก่อน', 'warning');
+      return;
+    }
+
     // ตรวจสอบสต็อกล่าสุดอีกครั้งก่อนบันทึกเงิน ป้องกันการขายสินค้าเกินพร้อมกันหลายอุปกรณ์
     for (const item of cart) {
       if (isStockManaged(item.product)) {
@@ -1781,6 +1789,7 @@ const POSSystem = ({
     checkoutModal.close();
     setPaymentMethod('cash');
     setSelectedAccountId(branchDefaultAccountId);
+    setIsQrConfirmed(false);
     setCheckoutSuccess(false);
 
     if (wasSuccess) {
@@ -3408,7 +3417,15 @@ const POSSystem = ({
                      <button onClick={() => setPaymentMethod('cash')} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text ${paymentMethod === 'cash' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
                         <Banknote size={24} /> <span className="text-xs sm:text-sm font-bold whitespace-nowrap">เงินสด</span>
                      </button>
-                     <button onClick={() => setPaymentMethod('transfer')} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text ${paymentMethod === 'transfer' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                     <button 
+                        onClick={() => {
+                           setPaymentMethod('transfer');
+                           if (activeQrAccounts.length > 1) {
+                              setIsQrConfirmed(false);
+                           }
+                        }} 
+                        className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text ${paymentMethod === 'transfer' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                     >
                         <QrCode size={24} /> <span className="text-xs sm:text-sm font-bold whitespace-nowrap">โอนเงิน (QR)</span>
                      </button>
                      <button onClick={() => setPaymentMethod('credit')} className={`p-3 sm:p-4 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all kanit-text col-span-2 ${paymentMethod === 'credit' ? 'ring-2 ring-sky-500 border-transparent bg-sky-50 text-sky-700 shadow-sm scale-[1.02] z-10' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
@@ -3418,114 +3435,197 @@ const POSSystem = ({
 
                   {paymentMethod === 'transfer' && (
                       <div className="mt-3 border border-sky-100 bg-gradient-to-b from-sky-50/60 to-slate-50/50 p-3 sm:p-4 rounded-2xl flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
-                         {/* Dropdown เลือกสลับบัญชีรับเงิน (เมื่อมีมากกว่า 1 บัญชี) */}
-                          {activeQrAccounts.length > 1 && (
-                             <div className="w-full mb-3">
-                                <div className="flex items-center justify-between gap-1 mb-1.5 px-0.5">
-                                   <label htmlFor="pos-qr-account-select" className="text-[11px] font-bold text-slate-600 kanit-text flex items-center gap-1.5">
-                                      <Wallet size={13} className="text-sky-500" /> บัญชีรับเงิน:
-                                   </label>
-                                   {selectedAccountId === branchDefaultAccountId ? (
-                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold kanit-text flex items-center gap-1">
-                                         <CheckCircle2 size={10} /> บัญชีหลักประจำสาขา
-                                      </span>
-                                   ) : (
-                                      <button
-                                         type="button"
-                                         onClick={() => setSelectedAccountId(branchDefaultAccountId)}
-                                         className="text-[10px] text-sky-600 hover:text-sky-700 font-bold kanit-text hover:underline cursor-pointer"
-                                      >
-                                         สลับกลับบัญชีหลัก
-                                      </button>
-                                   )}
-                                </div>
-
-                                <CustomSelect
-                                    value={selectedAccountId}
-                                    onChange={(val) => setSelectedAccountId(val)}
-                                    options={activeQrAccounts.map((acc) => {
-                                       const bank = getBankInfo(acc.bankCode);
-                                       const isBranchDef = acc.id === branchDefaultAccountId;
-                                       return {
-                                          value: acc.id,
-                                          label: `${isBranchDef ? '★ ' : ''}${acc.name} — ${bank.code} (${acc.bankAccountNumber || formatAccountNumber(acc.accountNumber, acc.type)})${isBranchDef ? ' (บัญชีหลัก)' : ''}`
-                                       };
-                                    })}
-                                    compact
-                                    fullWidth
-                                    className="w-full text-xs font-bold kanit-text"
-                                 />
+                        
+                        {/* โหมดที่ 1: หน้าต่างเลือกบัญชีรับเงิน (เมื่อมีมากกว่า 1 บัญชี และยังไม่ได้กดยืนยันแสดง QR) */}
+                        {activeQrAccounts.length > 1 && !isQrConfirmed ? (
+                           <div className="w-full">
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                 <label className="text-xs font-bold text-slate-800 kanit-text flex items-center gap-1.5">
+                                    <Wallet size={15} className="text-sky-500" />
+                                    เลือกบัญชีรับเงิน (QR Code):
+                                 </label>
+                                 <span className="text-[10px] text-slate-400 kanit-text">
+                                    {activeQrAccounts.length} บัญชีพร้อมใช้งาน
+                                 </span>
                               </div>
-                           )}
+                              <p className="text-[11px] text-slate-500 kanit-text mb-2.5">
+                                 กรุณาเลือกบัญชีที่ต้องการก่อนแสดง QR โค้ดส่งขึ้นหน้าจอลูกค้า
+                              </p>
 
+                              {/* รายการบัญชีให้คลิกเลือก */}
+                              <div className="space-y-2 mb-3 max-h-[240px] overflow-y-auto custom-scrollbar pr-0.5">
+                                 {activeQrAccounts.map((acc) => {
+                                    const bank = getBankInfo(acc.bankCode);
+                                    const isSelected = acc.id === selectedAccountId;
+                                    const isBranchDef = acc.id === branchDefaultAccountId;
+                                    return (
+                                       <button
+                                          key={acc.id}
+                                          type="button"
+                                          onClick={() => setSelectedAccountId(acc.id)}
+                                          onDoubleClick={() => {
+                                             setSelectedAccountId(acc.id);
+                                             setIsQrConfirmed(true);
+                                          }}
+                                          className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer relative flex items-start gap-2.5 ${
+                                             isSelected
+                                                ? 'border-sky-500 bg-sky-50/80 ring-2 ring-sky-200 shadow-2xs'
+                                                : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                                          }`}
+                                       >
+                                          {/* Radio Icon */}
+                                          <div className="mt-0.5 shrink-0">
+                                             <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                                                isSelected ? 'border-sky-600 bg-sky-600' : 'border-slate-300 bg-white'
+                                             }`}>
+                                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                             </div>
+                                          </div>
 
-                         {/* ส่วนแสดงภาพ QR Code */}
-                         <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 shrink-0 relative mb-3 flex flex-col items-center w-full max-w-[280px]">
-                            <div className="absolute inset-0 border-2 border-sky-400 rounded-2xl animate-pulse opacity-30 pointer-events-none"></div>
+                                          {/* เนื้อหาข้อมูลบัญชี */}
+                                          <div className="flex-1 min-w-0">
+                                             <div className="flex items-center justify-between gap-1 mb-0.5">
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                   <span
+                                                      className="px-1.5 py-0.5 rounded text-[10px] font-bold font-data shrink-0"
+                                                      style={{ backgroundColor: bank.color, color: bank.textColor }}
+                                                   >
+                                                      {bank.code}
+                                                   </span>
+                                                   <span className="text-xs font-bold text-slate-800 kanit-text truncate">
+                                                      {acc.name}
+                                                   </span>
+                                                </div>
+                                                {isBranchDef && (
+                                                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold kanit-text shrink-0">
+                                                      บัญชีหลักสาขา
+                                                   </span>
+                                                )}
+                                             </div>
 
-                            <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center bg-white rounded-xl overflow-hidden">
-                               {isGeneratingQr ? (
-                                  <div className="flex flex-col items-center gap-2 text-sky-600">
-                                     <Loader2 size={30} className="animate-spin" />
-                                     <span className="text-[11px] font-bold kanit-text">กำลังสร้าง QR...</span>
-                                  </div>
-                               ) : dynamicQrUrl ? (
-                                  <img 
-                                     src={dynamicQrUrl} 
-                                     alt="Payment QR" 
-                                     className="w-full h-full object-contain pointer-events-none select-none relative z-10" 
-                                  />
-                               ) : (
-                                  <div className="text-slate-400 text-xs kanit-text text-center p-2">
-                                     ไม่พบข้อมูล QR Code กรุณาตรวจสอบในหน้าตั้งค่า
-                                  </div>
-                               )}
-                            </div>
-                         </div>
+                                             <div className="flex flex-col gap-0.5 text-xs">
+                                                {acc.bankAccountNumber ? (
+                                                   <div className="flex items-center gap-1">
+                                                      <span className="text-slate-400 text-[11px] font-data">เลขบัญชี:</span>
+                                                      <span className="font-mono font-bold text-slate-800">{acc.bankAccountNumber}</span>
+                                                   </div>
+                                                ) : null}
+                                                <div className="flex items-center gap-1">
+                                                   <span className="text-slate-400 text-[10px] font-data">
+                                                      {acc.type === 'promptpay_ref' ? 'เลขอ้างอิง:' : 'พร้อมเพย์:'}
+                                                   </span>
+                                                   <span className="font-mono text-[11px] text-slate-500 font-semibold">
+                                                      {formatAccountNumber(acc.accountNumber, acc.type)}
+                                                   </span>
+                                                </div>
+                                             </div>
+                                          </div>
+                                       </button>
+                                    );
+                                 })}
+                              </div>
 
-                         {/* ข้อมูลชื่อบัญชี, หมายเลข และยอดชำระ */}
-                         <div className="text-center flex flex-col items-center w-full">
-                            <h4 className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight mb-1">
-                               {currentQrAccount?.name || 'คลินิกอันผิง'}
-                            </h4>
-                            
-                            <div className="flex flex-col items-center justify-center gap-0.5 mb-2.5">
-                               {currentQrAccount?.bankAccountNumber && (
-                                  <div className="flex items-center gap-1.5">
-                                     <span className="text-xs text-slate-500 font-data font-semibold">เลขที่บัญชี:</span>
-                                     <span className="text-sm text-slate-800 font-data font-bold tracking-wide">
-                                        {currentQrAccount.bankAccountNumber}
-                                     </span>
-                                     <span 
-                                        className="text-[10px] px-1.5 py-0.5 rounded font-bold font-data"
-                                        style={{ backgroundColor: getBankInfo(currentQrAccount.bankCode).color, color: getBankInfo(currentQrAccount.bankCode).textColor }}
-                                     >
-                                        {getBankInfo(currentQrAccount.bankCode).code}
-                                     </span>
-                                  </div>
-                               )}
-                               <div className="flex items-center gap-1.5">
-                                  <span className="text-[11px] text-slate-400 font-data font-semibold">
-                                     {currentQrAccount?.type === 'bank_account' 
-                                        ? (!currentQrAccount?.bankAccountNumber ? 'เลขที่บัญชี: ' : '')
-                                        : currentQrAccount?.type === 'promptpay_ref'
-                                        ? 'เลขอ้างอิงพร้อมเพย์: '
-                                        : 'พร้อมเพย์: '}
-                                  </span>
-                                  {(currentQrAccount?.type !== 'bank_account' || !currentQrAccount?.bankAccountNumber) && (
-                                     <span className="text-xs text-slate-600 font-data font-semibold">
-                                        {formatAccountNumber(currentQrAccount?.accountNumber, currentQrAccount?.type)}
-                                     </span>
-                                  )}
-                               </div>
-                            </div>
+                              {/* ปุ่มยืนยันแสดง QR และส่งขึ้นจอลูกค้า */}
+                              <button
+                                 type="button"
+                                 onClick={() => setIsQrConfirmed(true)}
+                                 disabled={!selectedAccountId}
+                                 className="w-full py-2.5 px-4 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl font-bold kanit-text text-xs sm:text-sm transition-all shadow-md shadow-sky-500/25 active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                              >
+                                 <QrCode size={16} />
+                                 <span>แสดง QR Code และส่งขึ้นจอลูกค้า</span>
+                              </button>
+                           </div>
+                        ) : (
+                           /* โหมดที่ 2: แสดงรูป QR Code ที่ได้รับการยืนยันแล้ว */
+                           <>
+                              {activeQrAccounts.length > 1 && (
+                                 <div className="w-full flex items-center justify-between mb-2 pb-2 border-b border-sky-100/80">
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-sky-800 kanit-text">
+                                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                                       <span>แสดง QR บนหน้าจอลูกค้าแล้ว</span>
+                                    </div>
+                                    <button
+                                       type="button"
+                                       onClick={() => setIsQrConfirmed(false)}
+                                       className="px-2.5 py-1 rounded-lg bg-white hover:bg-sky-50 text-sky-600 border border-sky-200 text-[11px] font-bold kanit-text flex items-center gap-1 transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-95"
+                                       title="สลับไปเลือกบัญชีรับเงินอื่น"
+                                    >
+                                       <RotateCcw size={12} />
+                                       <span>เปลี่ยนบัญชีรับเงิน</span>
+                                    </button>
+                                 </div>
+                              )}
 
-                            {/* กล่องยอดชำระสุทธิ */}
-                            <div className="bg-white px-5 py-2.5 rounded-2xl border border-sky-100 shadow-sm w-full max-w-[240px]">
-                               <p className="text-[10px] sm:text-xs text-slate-400 font-bold kanit-text mb-0.5">ยอดชำระสุทธิ</p>
-                               <p className="text-xl sm:text-2xl font-black text-sky-600 font-data leading-none">{formatCurrency(grandTotal)}</p>
-                            </div>
-                         </div>
+                              {/* ส่วนแสดงภาพ QR Code */}
+                              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 shrink-0 relative mb-3 flex flex-col items-center w-full max-w-[280px]">
+                                 <div className="absolute inset-0 border-2 border-sky-400 rounded-2xl animate-pulse opacity-30 pointer-events-none"></div>
+
+                                 <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center bg-white rounded-xl overflow-hidden">
+                                    {isGeneratingQr ? (
+                                       <div className="flex flex-col items-center gap-2 text-sky-600">
+                                          <Loader2 size={30} className="animate-spin" />
+                                          <span className="text-[11px] font-bold kanit-text">กำลังสร้าง QR...</span>
+                                       </div>
+                                    ) : dynamicQrUrl ? (
+                                       <img 
+                                          src={dynamicQrUrl} 
+                                          alt="Payment QR" 
+                                          className="w-full h-full object-contain pointer-events-none select-none relative z-10" 
+                                       />
+                                    ) : (
+                                       <div className="text-slate-400 text-xs kanit-text text-center p-2">
+                                          ไม่พบข้อมูล QR Code กรุณาตรวจสอบในหน้าตั้งค่า
+                                       </div>
+                                    )}
+                                 </div>
+                              </div>
+
+                              {/* ข้อมูลชื่อบัญชี, หมายเลข และยอดชำระ */}
+                              <div className="text-center flex flex-col items-center w-full">
+                                 <h4 className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight mb-1">
+                                    {currentQrAccount?.name || 'คลินิกอันผิง'}
+                                 </h4>
+                                 
+                                 <div className="flex flex-col items-center justify-center gap-0.5 mb-2.5">
+                                    {currentQrAccount?.bankAccountNumber && (
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="text-xs text-slate-500 font-data font-semibold">เลขที่บัญชี:</span>
+                                          <span className="text-sm text-slate-800 font-data font-bold tracking-wide">
+                                             {currentQrAccount.bankAccountNumber}
+                                          </span>
+                                          <span 
+                                             className="text-[10px] px-1.5 py-0.5 rounded font-bold font-data"
+                                             style={{ backgroundColor: getBankInfo(currentQrAccount.bankCode).color, color: getBankInfo(currentQrAccount.bankCode).textColor }}
+                                          >
+                                             {getBankInfo(currentQrAccount.bankCode).code}
+                                          </span>
+                                       </div>
+                                    )}
+                                    <div className="flex items-center gap-1.5">
+                                       <span className="text-[11px] text-slate-400 font-data font-semibold">
+                                          {currentQrAccount?.type === 'bank_account' 
+                                             ? (!currentQrAccount?.bankAccountNumber ? 'เลขที่บัญชี: ' : '')
+                                             : currentQrAccount?.type === 'promptpay_ref'
+                                             ? 'เลขอ้างอิงพร้อมเพย์: '
+                                             : 'พร้อมเพย์: '}
+                                       </span>
+                                       {(currentQrAccount?.type !== 'bank_account' || !currentQrAccount?.bankAccountNumber) && (
+                                          <span className="text-xs text-slate-600 font-data font-semibold">
+                                             {formatAccountNumber(currentQrAccount?.accountNumber, currentQrAccount?.type)}
+                                          </span>
+                                       )}
+                                    </div>
+                                 </div>
+
+                                 {/* กล่องยอดชำระสุทธิ */}
+                                 <div className="bg-white px-5 py-2.5 rounded-2xl border border-sky-100 shadow-sm w-full max-w-[240px]">
+                                    <p className="text-[10px] sm:text-xs text-slate-400 font-bold kanit-text mb-0.5">ยอดชำระสุทธิ</p>
+                                    <p className="text-xl sm:text-2xl font-black text-sky-600 font-data leading-none">{formatCurrency(grandTotal)}</p>
+                                 </div>
+                              </div>
+                           </>
+                        )}
                       </div>
                    )}
                </div>
@@ -3548,11 +3648,15 @@ const POSSystem = ({
                  ) : (
                     <button 
                        onClick={confirmPayment}
-                       disabled={isProcessingPayment}
-                       className="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/30 transition-all active:scale-95 flex justify-center items-center gap-2 kanit-text text-base"
+                       disabled={isProcessingPayment || (paymentMethod === 'transfer' && activeQrAccounts.length > 1 && !isQrConfirmed)}
+                       className="w-full py-3 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:pointer-events-none text-white rounded-xl font-bold shadow-md shadow-sky-500/30 transition-all active:scale-95 flex justify-center items-center gap-2 kanit-text text-base"
                     >
                        {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : <Receipt size={18} />}
-                       {isProcessingPayment ? 'กำลังบันทึก...' : 'ยืนยันการรับเงิน'}
+                       {isProcessingPayment 
+                          ? 'กำลังบันทึก...' 
+                          : (paymentMethod === 'transfer' && activeQrAccounts.length > 1 && !isQrConfirmed)
+                          ? 'กรุณาเลือกบัญชีและแสดง QR ก่อน'
+                          : 'ยืนยันการรับเงิน'}
                     </button>
                  )}
                </div>
