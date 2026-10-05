@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   }
 
   const targetUrl = fileId
-    ? `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download`
+    ? `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`
     : urlParam;
 
   try {

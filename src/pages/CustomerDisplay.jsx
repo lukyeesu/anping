@@ -1161,8 +1161,23 @@ export default function CustomerDisplay({
     if (!ads || ads.length <= 1) {
       const vid = fromLayer === 'A' ? videoRefA.current : videoRefB.current;
       if (vid) {
-        vid.currentTime = 0;
-        vid.play().catch(() => {});
+        const currentAd = ads?.[0];
+        if (currentAd) {
+          getCachedOrDirectMediaUrl(currentAd.url, currentAd.type).then(cachedUrl => {
+            if (cachedUrl && cachedUrl.startsWith('blob:') && vid.src !== cachedUrl) {
+              vid.src = cachedUrl;
+              vid.load();
+            }
+            vid.currentTime = 0;
+            vid.play().catch(() => {});
+          }).catch(() => {
+            vid.currentTime = 0;
+            vid.play().catch(() => {});
+          });
+        } else {
+          vid.currentTime = 0;
+          vid.play().catch(() => {});
+        }
       }
       return;
     }

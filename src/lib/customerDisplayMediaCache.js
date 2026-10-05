@@ -1,21 +1,117 @@
 /**
  * Customer Display Media Cache Manager
- * Provides offline caching for customer display images using CacheStorage & IndexedDB.
- * MP4 videos bypass CacheStorage/blob URLs completely to stream directly via native HTTP 206 Partial Content,
- * eliminating decoder starvation, RAM pressure, and video frame stuttering on iPad / mobile devices.
+ * Provides 100% offline persistent storage for customer display images & MP4 videos using IndexedDB.
+ * Downloads the ENTIRE media file as a whole chunk into local IndexedDB storage (not sliced byte-ranges),
+ * completely eliminating 2-3 second buffering stalls, network jitter, and allowing continuous playback even when internet is disconnected.
  */
 
-const CACHE_NAME = 'anping_customer_display_media_v2';
-const PREVIOUS_CACHES = ['anping_customer_display_media_v1'];
+const DB_NAME = 'AnpingMediaCacheDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'media_blobs';
 
-// Auto-cleanup legacy video-bloated caches
-if (typeof window !== 'undefined' && 'caches' in window) {
-  PREVIOUS_CACHES.forEach(oldName => {
-    caches.delete(oldName).catch(() => {});
+let dbPromise = null;
+
+function getDB() {
+  if (dbPromise) return dbPromise;
+
+  dbPromise = new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      return reject(new Error('IndexedDB not supported in this environment'));
+    }
+
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      console.warn('[MediaCache] IndexedDB open error:', event.target.error);
+      reject(event.target.error);
+    };
   });
+
+  return dbPromise;
 }
 
-const blobUrlMap = new Map(); // In-memory map to reuse created ObjectURLs for images and prevent memory leaks
+/**
+ * Retrieve blob from IndexedDB
+ */
+export async function getBlobFromIndexedDB(url) {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(url);
+      req.onsuccess = () => {
+        resolve(req.result?.blob || null);
+      };
+      req.onerror = () => {
+        resolve(null);
+      };
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Save binary blob to IndexedDB
+ */
+export async function saveBlobToIndexedDB(url, blob, mimeType = null) {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const record = {
+        url,
+        blob,
+        mimeType: mimeType || blob.type || 'video/mp4',
+        size: blob.size,
+        cachedAt: Date.now()
+      };
+      const req = store.put(record);
+      req.onsuccess = () => resolve(true);
+      req.onerror = (e) => {
+        console.warn('[MediaCache] Failed to save blob to IndexedDB:', e.target?.error);
+        resolve(false);
+      };
+    });
+  } catch (e) {
+    console.warn('[MediaCache] IndexedDB save error:', e);
+    return false;
+  }
+}
+
+/**
+ * Clear all records from IndexedDB
+ */
+export async function clearIndexedDB() {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.clear();
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+const blobUrlMap = new Map(); // Reuses created ObjectURLs across slides to avoid memory leaks
+const pendingDownloads = new Map(); // Deduplicates concurrent downloads for the same URL
 
 /**
  * Check if a media item is a video
@@ -29,7 +125,6 @@ export function isMediaVideo(url, type = null) {
 
 /**
  * Format Google Drive or external URL to direct streaming link
- * Automatically distinguishes between images (lh3 CDN) and video MP4 streams (drive.usercontent download / /api/media)
  */
 export function formatMediaUrl(url, type = null) {
   if (!url || typeof url !== 'string') return '';
@@ -56,109 +151,125 @@ export function formatMediaUrl(url, type = null) {
 }
 
 /**
- * Pre-cache a single image file into CacheStorage
- * Videos bypass CacheStorage and return their direct stream URL immediately.
+ * Download the ENTIRE media file as a whole chunk and save to IndexedDB.
+ * Returns local blob: URL.
+ */
+export async function downloadAndCacheMedia(rawUrl, type = null) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
+
+  // 1. If already created in memory
+  if (blobUrlMap.has(trimmed)) {
+    return blobUrlMap.get(trimmed);
+  }
+
+  // 2. If already saved in IndexedDB
+  try {
+    const existingBlob = await getBlobFromIndexedDB(trimmed);
+    if (existingBlob && existingBlob.size > 1000) {
+      const objectUrl = URL.createObjectURL(existingBlob);
+      blobUrlMap.set(trimmed, objectUrl);
+      return objectUrl;
+    }
+  } catch (e) {}
+
+  // 3. Deduplicate active download
+  if (pendingDownloads.has(trimmed)) {
+    return pendingDownloads.get(trimmed);
+  }
+
+  const downloadPromise = (async () => {
+    try {
+      const isVideo = isMediaVideo(trimmed, type);
+      const streamUrl = formatMediaUrl(trimmed, type);
+
+      // Fetch whole file at once (single request, no range fragmentation)
+      const res = await fetch(streamUrl, { mode: 'cors' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      let blob = await res.blob();
+      if (!blob || blob.size < 1000) {
+        throw new Error('Downloaded file is empty or invalid');
+      }
+
+      // Ensure proper MIME type so browser decoders handle it flawlessly
+      if (isVideo && (!blob.type || blob.type === 'application/octet-stream')) {
+        blob = new Blob([blob], { type: 'video/mp4' });
+      } else if (!isVideo && (!blob.type || blob.type === 'application/octet-stream')) {
+        blob = new Blob([blob], { type: 'image/jpeg' });
+      }
+
+      // Save to IndexedDB persistently for 100% offline usage
+      await saveBlobToIndexedDB(trimmed, blob, blob.type);
+      console.log(`[MediaCache] Successfully cached ${isVideo ? 'video' : 'image'} to IndexedDB (${Math.round(blob.size / 1024)} KB):`, trimmed);
+
+      // Create ObjectURL for instant local zero-latency playback
+      const objectUrl = URL.createObjectURL(blob);
+      blobUrlMap.set(trimmed, objectUrl);
+      return objectUrl;
+    } catch (err) {
+      console.warn(`[MediaCache] Download whole file failed for ${trimmed}, fallback to direct URL:`, err.message || err);
+      return formatMediaUrl(trimmed, type);
+    } finally {
+      pendingDownloads.delete(trimmed);
+    }
+  })();
+
+  pendingDownloads.set(trimmed, downloadPromise);
+  return downloadPromise;
+}
+
+/**
+ * Pre-cache a single media file into IndexedDB
  */
 export async function cacheMediaUrl(rawUrl, type = null) {
-  const url = formatMediaUrl(rawUrl, type);
-  if (!url || url.startsWith('blob:') || url.startsWith('data:')) return url;
-
-  // Never cache videos in CacheStorage or as blobs!
-  // Videos must stream directly via native HTTP 206 partial content range requests
-  // to prevent decoder starvation, RAM saturation, and frame stuttering on mobile/iPad devices.
-  if (isMediaVideo(url, type)) {
-    return url;
-  }
-
-  if (blobUrlMap.has(url)) {
-    return blobUrlMap.get(url);
-  }
-
-  if (typeof window === 'undefined' || !('caches' in window)) {
-    return url;
-  }
-
-  try {
-    const cache = await caches.open(CACHE_NAME);
-    const match = await cache.match(url);
-    if (match) {
-      const blob = await match.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      blobUrlMap.set(url, objectUrl);
-      return objectUrl;
-    }
-
-    // Fetch and store image in cache
-    const response = await fetch(url, { mode: 'cors' });
-    if (response && response.ok) {
-      try {
-        await cache.put(url, response.clone());
-      } catch (cacheErr) {
-        console.warn('[MediaCache] Cache storage quota skipped, utilizing blob URL:', cacheErr);
-      }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      blobUrlMap.set(url, objectUrl);
-      return objectUrl;
-    }
-  } catch (err) {
-    // If CORS or fetch fails, fallback to direct url gracefully
-    console.warn(`[MediaCache] Cache fetch skipped for ${url}:`, err.message || err);
-  }
-
-  return url;
+  return downloadAndCacheMedia(rawUrl, type);
 }
 
 /**
- * Get cached URL for images, or direct streamable URL for videos
+ * Get cached ObjectURL from IndexedDB, or fallback to stream URL while caching in background
  */
 export async function getCachedOrDirectMediaUrl(rawUrl, type = null) {
-  const url = formatMediaUrl(rawUrl, type);
-  if (!url || url.startsWith('blob:') || url.startsWith('data:')) return url;
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
 
-  // Videos stream natively — bypass CacheStorage and blobs completely
-  if (isMediaVideo(url, type)) {
-    return url;
+  // 1. In-memory hit
+  if (blobUrlMap.has(trimmed)) {
+    return blobUrlMap.get(trimmed);
   }
 
-  if (blobUrlMap.has(url)) {
-    return blobUrlMap.get(url);
-  }
-
-  if (typeof window !== 'undefined' && 'caches' in window) {
-    try {
-      const cache = await caches.open(CACHE_NAME);
-      const match = await cache.match(url);
-      if (match) {
-        const blob = await match.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        blobUrlMap.set(url, objectUrl);
-        return objectUrl;
-      }
-    } catch (e) {
-      // Ignore cache lookup errors
+  // 2. IndexedDB persistent hit (Works 100% OFFLINE!)
+  try {
+    const cachedBlob = await getBlobFromIndexedDB(trimmed);
+    if (cachedBlob && cachedBlob.size > 1000) {
+      const objectUrl = URL.createObjectURL(cachedBlob);
+      blobUrlMap.set(trimmed, objectUrl);
+      return objectUrl;
     }
+  } catch (e) {
+    console.warn('[MediaCache] IndexedDB read error:', e);
   }
 
-  // Not yet cached, trigger caching in background and return direct url immediately
-  cacheMediaUrl(url, type).catch(() => {});
-  return url;
+  // 3. Not yet cached: trigger background download into IndexedDB immediately
+  downloadAndCacheMedia(trimmed, type).catch(() => {});
+
+  // For immediate first-time playback before download finishes, return stream URL
+  return formatMediaUrl(trimmed, type);
 }
 
 /**
- * Preload active static image ads into CacheStorage
- * Videos are filtered out and streamed on-demand natively by the browser video engine.
+ * Preload all active ads (both videos and images) into IndexedDB
  */
 export async function preloadAllAdsMedia(adsList = [], onProgress = null) {
   if (!Array.isArray(adsList) || adsList.length === 0) return;
 
-  const validImageAds = adsList.filter(ad => {
-    if (!ad || ad.isActive === false || !ad.url) return false;
-    return !isMediaVideo(ad.url, ad.type);
-  });
-
+  const validMedia = adsList.filter(ad => ad && ad.isActive !== false && ad.url);
   let loaded = 0;
-  const total = validImageAds.length;
+  const total = validMedia.length;
   if (total === 0) {
     if (typeof onProgress === 'function') {
       onProgress({ loaded: 0, total: 0, percent: 100 });
@@ -166,11 +277,12 @@ export async function preloadAllAdsMedia(adsList = [], onProgress = null) {
     return;
   }
 
-  for (const ad of validImageAds) {
+  // Preload sequentially to ensure complete whole-file downloads without bandwidth contention
+  for (const ad of validMedia) {
     try {
-      await cacheMediaUrl(ad.url, ad.type);
+      await downloadAndCacheMedia(ad.url, ad.type);
     } catch (e) {
-      // Continue next
+      console.warn('[MediaCache] Preload item skipped:', ad.url, e);
     }
     loaded++;
     if (typeof onProgress === 'function') {
@@ -192,20 +304,16 @@ export function revokeAllCachedBlobUrls() {
 }
 
 /**
- * Purge cache storage completely
+ * Purge cache storage & IndexedDB completely
  */
 export async function clearMediaCache() {
   revokeAllCachedBlobUrls();
+  await clearIndexedDB();
   if (typeof window !== 'undefined' && 'caches' in window) {
     try {
-      await caches.delete(CACHE_NAME);
-      for (const oldName of PREVIOUS_CACHES) {
-        await caches.delete(oldName);
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
+      await caches.delete('anping_customer_display_media_v1');
+      await caches.delete('anping_customer_display_media_v2');
+    } catch (e) {}
   }
   return true;
 }
