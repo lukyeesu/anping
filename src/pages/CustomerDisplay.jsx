@@ -52,7 +52,7 @@ const StandbyClock = React.memo(function StandbyClock({ pixelShift }) {
         willChange: 'transform'
       }}
     >
-      <div className="px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-2xl sm:rounded-3xl bg-black/60 backdrop-blur-md border border-white/25 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap">
+      <div className="px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-2xl sm:rounded-3xl bg-black/80 border border-white/20 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap">
         <Clock className="w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9 text-white shrink-0 stroke-[2.2]" />
         <span className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black font-mono tabular-nums tracking-wide leading-none text-white drop-shadow-lg inline-flex items-center">
           <span>{hours}</span>
@@ -615,19 +615,29 @@ export default function CustomerDisplay({
         console.log('[CustomerDisplay] Seamlessly adopting newly cached IndexedDB blob for active media:', cachedUrl);
         if (currentLayer === 'A') {
           setLayerAData(prev => prev ? { ...prev, resolvedUrl: objectUrl } : prev);
-          if (videoRefA.current && videoRefA.current.src !== objectUrl) {
-            const currentPos = videoRefA.current.currentTime || 0;
-            videoRefA.current.src = objectUrl;
-            videoRefA.current.currentTime = currentPos;
-            videoRefA.current.play().catch(() => {});
+          const vid = videoRefA.current;
+          if (vid && vid.src !== objectUrl) {
+            const currentPos = vid.currentTime || 0;
+            const onMeta = () => {
+              vid.removeEventListener('loadedmetadata', onMeta);
+              try { vid.currentTime = currentPos; } catch (_) {}
+              vid.play().catch(() => {});
+            };
+            vid.addEventListener('loadedmetadata', onMeta, { once: true });
+            vid.src = objectUrl;
           }
         } else {
           setLayerBData(prev => prev ? { ...prev, resolvedUrl: objectUrl } : prev);
-          if (videoRefB.current && videoRefB.current.src !== objectUrl) {
-            const currentPos = videoRefB.current.currentTime || 0;
-            videoRefB.current.src = objectUrl;
-            videoRefB.current.currentTime = currentPos;
-            videoRefB.current.play().catch(() => {});
+          const vid = videoRefB.current;
+          if (vid && vid.src !== objectUrl) {
+            const currentPos = vid.currentTime || 0;
+            const onMeta = () => {
+              vid.removeEventListener('loadedmetadata', onMeta);
+              try { vid.currentTime = currentPos; } catch (_) {}
+              vid.play().catch(() => {});
+            };
+            vid.addEventListener('loadedmetadata', onMeta, { once: true });
+            vid.src = objectUrl;
           }
         }
       }
@@ -1172,22 +1182,21 @@ export default function CustomerDisplay({
     if (!ads || ads.length <= 1) {
       const vid = fromLayer === 'A' ? videoRefA.current : videoRefB.current;
       if (vid) {
+        // Immediate zero-delay rewind & play to eliminate the gap between loops
+        vid.currentTime = 0;
+        vid.play().catch(() => {});
+
+        // Check if IndexedDB has finished caching and adopt blob URL
         const currentAd = ads?.[0];
-        if (currentAd) {
+        if (currentAd && !vid.src.startsWith('blob:')) {
           getCachedOrDirectMediaUrl(currentAd.url, currentAd.type).then(cachedUrl => {
             if (cachedUrl && cachedUrl.startsWith('blob:') && vid.src !== cachedUrl) {
+              const currentPos = vid.currentTime;
               vid.src = cachedUrl;
-              vid.load();
+              vid.currentTime = currentPos;
+              vid.play().catch(() => {});
             }
-            vid.currentTime = 0;
-            vid.play().catch(() => {});
-          }).catch(() => {
-            vid.currentTime = 0;
-            vid.play().catch(() => {});
-          });
-        } else {
-          vid.currentTime = 0;
-          vid.play().catch(() => {});
+          }).catch(() => {});
         }
       }
       return;
@@ -1662,6 +1671,7 @@ export default function CustomerDisplay({
               className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
                 activeLayer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0'
               }`}
+              style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
             >
               {layerAData && (
                 layerAData.type === 'video' ? (
@@ -1671,11 +1681,13 @@ export default function CustomerDisplay({
                     className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     autoPlay
                     muted={activeLayer === 'A' ? isVideoMuted : true}
+                    loop={activeAds.length <= 1 && !!layerAData.resolvedUrl?.startsWith('blob:')}
                     playsInline
                     webkit-playsinline="true"
                     disablePictureInPicture
                     disableRemotePlayback
-                    preload="metadata"
+                    preload="auto"
+                    style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
                     onEnded={(e) => handleVideoEnded('A', e)}
                     onContextMenu={(e) => e.preventDefault()}
                     onError={(e) => handleVideoError('A', e)}
@@ -1697,6 +1709,7 @@ export default function CustomerDisplay({
               className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
                 activeLayer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0'
               }`}
+              style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
             >
               {layerBData && (
                 layerBData.type === 'video' ? (
@@ -1706,11 +1719,13 @@ export default function CustomerDisplay({
                     className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     autoPlay
                     muted={activeLayer === 'B' ? isVideoMuted : true}
+                    loop={activeAds.length <= 1 && !!layerBData.resolvedUrl?.startsWith('blob:')}
                     playsInline
                     webkit-playsinline="true"
                     disablePictureInPicture
                     disableRemotePlayback
-                    preload="metadata"
+                    preload="auto"
+                    style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
                     onEnded={(e) => handleVideoEnded('B', e)}
                     onContextMenu={(e) => e.preventDefault()}
                     onError={(e) => handleVideoError('B', e)}
