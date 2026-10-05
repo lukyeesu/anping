@@ -124,3 +124,31 @@
   animation: courseNumPop 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: transform, opacity;
 }
+
+/* Video.js Digital Signage Player Optimizations */
+.video-js-custom-container {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute;
+  inset: 0;
+}
+.video-js-custom-container .video-js {
+  width: 100% !important;
+  height: 100% !important;
+  background-color: transparent !important;
+}
+.video-js-custom-container .vjs-tech {
+  object-fit: var(--vjs-object-fit, cover) !important;
+  width: 100% !important;
+  height: 100% !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+.video-js-custom-container .vjs-control-bar,
+.video-js-custom-container .vjs-big-play-button,
+.video-js-custom-container .vjs-loading-spinner,
+.video-js-custom-container .vjs-error-display {
+  display: none !important;
+}
+

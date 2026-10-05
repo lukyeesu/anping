@@ -136,12 +136,31 @@ function notifyMediaCached(url, objectUrl) {
 }
 
 /**
+ * Extract YouTube Video ID from any standard YouTube URL (watch, shorts, youtu.be, embed)
+ */
+export function getYouTubeVideoId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([a-zA-Z0-9_-]{11})/;
+  const match = trimmed.match(regExp);
+  return match ? match[1] : null;
+}
+
+/**
+ * Check if a URL is a YouTube video URL
+ */
+export function isYouTubeUrl(url) {
+  return !!getYouTubeVideoId(url);
+}
+
+/**
  * Check if a media item is a video
  */
 export function isMediaVideo(url, type = null) {
-  if (type === 'video') return true;
+  if (type === 'video' || type === 'youtube') return true;
   if (!url || typeof url !== 'string') return false;
   const trimmed = url.trim();
+  if (isYouTubeUrl(trimmed)) return true;
   return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(trimmed) || trimmed.includes('/api/media');
 }
 
@@ -152,8 +171,8 @@ export function formatMediaUrl(url, type = null) {
   if (!url || typeof url !== 'string') return '';
   const trimmed = url.trim();
 
-  // If already a local blob or data url
-  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+  // If already a local blob, data url, or YouTube URL
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:') || isYouTubeUrl(trimmed)) {
     return trimmed;
   }
 
@@ -179,7 +198,7 @@ export function formatMediaUrl(url, type = null) {
 export async function downloadAndCacheMedia(rawUrl, type = null) {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
   const trimmed = rawUrl.trim();
-  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:') || isYouTubeUrl(trimmed)) return trimmed;
 
   // 1. If already created in memory
   if (blobUrlMap.has(trimmed)) {
@@ -258,7 +277,7 @@ export async function cacheMediaUrl(rawUrl, type = null) {
 export async function getCachedOrDirectMediaUrl(rawUrl, type = null) {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
   const trimmed = rawUrl.trim();
-  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return trimmed;
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:') || isYouTubeUrl(trimmed)) return trimmed;
 
   // 1. In-memory hit
   if (blobUrlMap.has(trimmed)) {
@@ -290,7 +309,7 @@ export async function getCachedOrDirectMediaUrl(rawUrl, type = null) {
 export async function preloadAllAdsMedia(adsList = [], onProgress = null) {
   if (!Array.isArray(adsList) || adsList.length === 0) return;
 
-  const validMedia = adsList.filter(ad => ad && ad.isActive !== false && ad.url);
+  const validMedia = adsList.filter(ad => ad && ad.isActive !== false && ad.url && !isYouTubeUrl(ad.url));
   let loaded = 0;
   const total = validMedia.length;
   if (total === 0) {

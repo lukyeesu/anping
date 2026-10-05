@@ -11,8 +11,11 @@ import {
   preloadAllAdsMedia, 
   formatMediaUrl,
   isMediaVideo,
+  isYouTubeUrl,
   addMediaCacheListener
 } from '../lib/customerDisplayMediaCache';
+import YouTubePlayer from '../components/YouTubePlayer';
+import VideoJSPlayer from '../components/VideoJSPlayer';
 import { 
   createCustomerDisplaySubscriber, 
   createAdsSyncHub,
@@ -1674,23 +1677,26 @@ export default function CustomerDisplay({
               style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
             >
               {layerAData && (
-                layerAData.type === 'video' ? (
-                  <video
-                    ref={videoRefA}
-                    src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
-                    className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                    autoPlay
-                    muted={activeLayer === 'A' ? isVideoMuted : true}
-                    loop={activeAds.length <= 1 && !!layerAData.resolvedUrl?.startsWith('blob:')}
-                    playsInline
-                    webkit-playsinline="true"
-                    disablePictureInPicture
-                    disableRemotePlayback
-                    preload="auto"
-                    style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-                    onEnded={(e) => handleVideoEnded('A', e)}
-                    onContextMenu={(e) => e.preventDefault()}
+                isYouTubeUrl(layerAData.url) ? (
+                  <YouTubePlayer
+                    url={layerAData.url}
+                    isActive={activeLayer === 'A' && displayMode === 'STANDBY_ADS'}
+                    isMuted={isVideoMuted}
+                    isLooping={activeAds.length <= 1}
+                    objectFit={layerAData.objectFit}
+                    onEnded={() => handleVideoEnded('A')}
                     onError={(e) => handleVideoError('A', e)}
+                  />
+                ) : layerAData.type === 'video' || isMediaVideo(layerAData.url, layerAData.type) ? (
+                  <VideoJSPlayer
+                    src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
+                    isActive={activeLayer === 'A' && displayMode === 'STANDBY_ADS'}
+                    isMuted={isVideoMuted}
+                    isLooping={activeAds.length <= 1}
+                    objectFit={layerAData.objectFit}
+                    onEnded={() => handleVideoEnded('A')}
+                    onError={(e) => handleVideoError('A', e)}
+                    playerRef={videoRefA}
                   />
                 ) : (
                   <img
@@ -1712,23 +1718,26 @@ export default function CustomerDisplay({
               style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
             >
               {layerBData && (
-                layerBData.type === 'video' ? (
-                  <video
-                    ref={videoRefB}
-                    src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
-                    className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                    autoPlay
-                    muted={activeLayer === 'B' ? isVideoMuted : true}
-                    loop={activeAds.length <= 1 && !!layerBData.resolvedUrl?.startsWith('blob:')}
-                    playsInline
-                    webkit-playsinline="true"
-                    disablePictureInPicture
-                    disableRemotePlayback
-                    preload="auto"
-                    style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
-                    onEnded={(e) => handleVideoEnded('B', e)}
-                    onContextMenu={(e) => e.preventDefault()}
+                isYouTubeUrl(layerBData.url) ? (
+                  <YouTubePlayer
+                    url={layerBData.url}
+                    isActive={activeLayer === 'B' && displayMode === 'STANDBY_ADS'}
+                    isMuted={isVideoMuted}
+                    isLooping={activeAds.length <= 1}
+                    objectFit={layerBData.objectFit}
+                    onEnded={() => handleVideoEnded('B')}
                     onError={(e) => handleVideoError('B', e)}
+                  />
+                ) : layerBData.type === 'video' || isMediaVideo(layerBData.url, layerBData.type) ? (
+                  <VideoJSPlayer
+                    src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
+                    isActive={activeLayer === 'B' && displayMode === 'STANDBY_ADS'}
+                    isMuted={isVideoMuted}
+                    isLooping={activeAds.length <= 1}
+                    objectFit={layerBData.objectFit}
+                    onEnded={() => handleVideoEnded('B')}
+                    onError={(e) => handleVideoError('B', e)}
+                    playerRef={videoRefB}
                   />
                 ) : (
                   <img

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDirectImageUrl } from '../lib/notificationHub';
-import { formatMediaUrl, preloadAllAdsMedia } from '../lib/customerDisplayMediaCache';
+import { formatMediaUrl, preloadAllAdsMedia, isYouTubeUrl, getYouTubeVideoId } from '../lib/customerDisplayMediaCache';
 import { createAdsSyncHub } from '../lib/customerDisplaySync';
 import { rAFThrottle } from '../global/helpers';
 import { formatThaiTypography, TAG_STYLE_CATEGORIES, ALL_TAG_SHADES, getTagBadgeStyle, getTagBadgeClass, TAG_TEXT_COLOR_SWATCHES, TAG_TEXT_STROKE_OPTIONS, TAG_TEXT_SHADOW_OPTIONS } from '../utils/thaiTypography';
@@ -913,7 +913,21 @@ export default function DisplayAdsManager({
 
                       {/* Thumbnail Preview */}
                       <div className="w-20 h-14 sm:w-24 sm:h-16 rounded-xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-100">
-                        {isVideo ? (
+                        {isYouTubeUrl(ad.url) ? (
+                          <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white relative">
+                            <img
+                              src={`https://img.youtube.com/vi/${getYouTubeVideoId(ad.url)}/hqdefault.jpg`}
+                              alt={ad.title || 'YouTube Video'}
+                              className="w-full h-full object-cover opacity-80"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-rose-500 fill-rose-500 drop-shadow" />
+                            </div>
+                            <span className="absolute bottom-1 right-1 text-[9px] font-bold bg-rose-600 px-1 py-0.2 rounded text-white font-mono">
+                              YT
+                            </span>
+                          </div>
+                        ) : isVideo ? (
                           <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white relative">
                             <video
                               src={formattedUrl}
@@ -1355,30 +1369,42 @@ export default function DisplayAdsManager({
                   {/* Media Type Switcher */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-2">ประเภทของสื่อ</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => setModalForm(prev => ({ ...prev, type: 'image' }))}
-                        className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-semibold transition-all cursor-pointer ${
+                        className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-all cursor-pointer ${
                           modalForm.type === 'image' 
                             ? 'border-sky-500 bg-sky-50/60 text-sky-700 shadow-sm' 
                             : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         <ImageIcon className="w-4 h-4 text-sky-500" />
-                        <span>🖼️ รูปภาพ (Image)</span>
+                        <span>🖼️ รูปภาพ</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setModalForm(prev => ({ ...prev, type: 'video' }))}
-                        className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-semibold transition-all cursor-pointer ${
-                          modalForm.type === 'video' 
+                        className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-all cursor-pointer ${
+                          modalForm.type === 'video' && !isYouTubeUrl(modalForm.url)
                             ? 'border-purple-500 bg-purple-50/60 text-purple-700 shadow-sm' 
                             : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         <Film className="w-4 h-4 text-purple-500" />
-                        <span>🎬 วิดีโอ MP4 / WebM</span>
+                        <span>🎬 วิดีโอ MP4</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModalForm(prev => ({ ...prev, type: 'video' }))}
+                        className={`p-2.5 rounded-2xl border flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-all cursor-pointer ${
+                          isYouTubeUrl(modalForm.url)
+                            ? 'border-rose-500 bg-rose-50/60 text-rose-700 shadow-sm' 
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Play className="w-4 h-4 text-rose-500 fill-rose-500" />
+                        <span>▶️ YouTube</span>
                       </button>
                     </div>
                   </div>
@@ -1426,12 +1452,21 @@ export default function DisplayAdsManager({
 
                     {/* Direct URL input fallback */}
                     <div>
-                      <label className="block text-[11px] font-medium text-slate-500 mb-1">หรือระบุ URL สื่อโดยตรง</label>
+                      <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                        หรือระบุ URL สื่อโดยตรง (รองรับ YouTube Unlisted, Google Drive, MP4)
+                      </label>
                       <input
                         type="text"
                         value={modalForm.url}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, url: e.target.value }))}
-                        placeholder="https://drive.google.com/... หรือ https://images..."
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setModalForm(prev => ({ 
+                            ...prev, 
+                            url: val,
+                            type: isYouTubeUrl(val) ? 'video' : prev.type 
+                          }));
+                        }}
+                        placeholder="https://youtu.be/... หรือ https://drive.google.com/..."
                         className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-sky-500 font-mono text-slate-700"
                       />
                     </div>
@@ -1446,7 +1481,7 @@ export default function DisplayAdsManager({
                       </span>
                       {modalForm.url && (
                         <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          พร้อมแสดงผล
+                          {isYouTubeUrl(modalForm.url) ? 'YouTube 60fps' : 'พร้อมแสดงผล'}
                         </span>
                       )}
                     </label>
@@ -1454,7 +1489,15 @@ export default function DisplayAdsManager({
                     <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-900 border border-slate-200 shadow-inner flex items-center justify-center">
                       {modalForm.url ? (
                         <>
-                          {modalForm.type === 'video' ? (
+                          {isYouTubeUrl(modalForm.url) ? (
+                            <iframe
+                              key={modalForm.url}
+                              src={`https://www.youtube-nocookie.com/embed/${getYouTubeVideoId(modalForm.url)}?autoplay=1&mute=1&controls=1&playsinline=1`}
+                              title="YouTube Preview"
+                              className="w-full h-full border-0"
+                              allow="autoplay; encrypted-media"
+                            />
+                          ) : modalForm.type === 'video' ? (
                             <video
                               key={modalForm.url}
                               src={formatMediaUrl(modalForm.url, 'video')}
