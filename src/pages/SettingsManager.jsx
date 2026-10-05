@@ -281,6 +281,7 @@ const SettingsManager = ({
         name: '',
         type: 'promptpay_mobile',
         accountNumber: '',
+        bankAccountNumber: '',
         bankCode: 'KBANK',
         bankName: 'ธนาคารกสิกรไทย',
         qrImage: '',
@@ -295,7 +296,10 @@ const SettingsManager = ({
     setQrModal({
       isOpen: true,
       isEdit: true,
-      data: { ...acc }
+      data: { 
+        ...acc,
+        bankAccountNumber: acc.bankAccountNumber || (acc.type === 'bank_account' ? acc.accountNumber : '')
+      }
     });
   };
 
@@ -322,6 +326,7 @@ const SettingsManager = ({
       ...d,
       name: d.name.trim(),
       accountNumber: d.accountNumber ? d.accountNumber.trim() : '',
+      bankAccountNumber: d.bankAccountNumber ? d.bankAccountNumber.trim() : (d.type === 'bank_account' ? (d.accountNumber ? d.accountNumber.trim() : '') : ''),
       bankName: bankInfo.name
     };
 
@@ -1786,7 +1791,7 @@ const SettingsManager = ({
                                   const bInfo = getBankInfo(acc.bankCode);
                                   return {
                                     value: acc.id,
-                                    label: `${acc.name} - ${bInfo.name} (${formatAccountNumber(acc.accountNumber, acc.type)})`
+                                    label: `${acc.name} - ${bInfo.name} (${acc.bankAccountNumber || formatAccountNumber(acc.accountNumber, acc.type)})`
                                   };
                                 })
                               ]}
@@ -1874,11 +1879,19 @@ const SettingsManager = ({
                                   ? 'พร้อมเพย์มือถือ'
                                   : acc.type === 'promptpay_id'
                                   ? 'พร้อมเพย์เลขบัตร/นิติบุคคล'
+                                  : acc.type === 'promptpay_ref'
+                                  ? 'เลขอ้างอิง K PLUS (15 หลัก)'
                                   : acc.type === 'bank_account'
                                   ? 'เลขบัญชีธนาคาร'
                                   : 'QR รูปภาพ'}
                               </span>
                             </div>
+                            {acc.bankAccountNumber && acc.type !== 'bank_account' && (
+                              <div className="text-xs text-slate-600 kanit-text flex items-center gap-1.5 mt-1">
+                                <span className="text-slate-400">เลขที่บัญชี:</span>
+                                <span className="font-mono font-bold text-slate-800">{acc.bankAccountNumber}</span>
+                              </div>
+                            )}
                             {acc.note && (
                               <p className="text-xs text-slate-400 kanit-text mt-1">
                                 หมายเหตุ: {acc.note}
@@ -3182,6 +3195,30 @@ const SettingsManager = ({
                       ✅ <strong>รองรับสมบูรณ์:</strong> ระบบจะนำเลขอ้างอิง 15 หลักนี้ไปสร้าง QR Code มาตรฐาน Thai QR Payment พร้อมฝังยอดเงินตามบิลให้ลูกค้าสแกนจ่ายเข้าบัญชีนี้ได้ทันทีจากทุกธนาคาร
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* เลขที่บัญชีธนาคาร (สำหรับแสดงหน้า POS และหน้าจอลูกค้า เมื่อใช้พร้อมเพย์ หรือ รูปภาพ QR) */}
+              {qrModal.data.type !== 'bank_account' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 kanit-text">
+                      เลขที่บัญชีธนาคาร (สำหรับแสดงหน้า POS และหน้าจอลูกค้า)
+                    </label>
+                    <span className="text-[10px] text-slate-400 kanit-text">
+                      {qrModal.data.type === 'promptpay_ref' ? 'แสดงคู่กับเลขอ้างอิง 15 หลัก' : 'ไม่บังคับ'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="เช่น 045-2-15328-9 หรือ 012-3-45328-9"
+                    value={qrModal.data.bankAccountNumber || ''}
+                    onChange={(e) => setQrModal(prev => ({ ...prev, data: { ...prev.data, bankAccountNumber: e.target.value } }))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-mono text-sm font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1 kanit-text">
+                    เลขนี้จะนำไปแสดงให้ลูกค้าและแคชเชียร์เห็นว่าเงินจะโอนเข้าเลขที่บัญชีใดอย่างชัดเจน (เช่น {qrModal.data.bankName || 'ธนาคาร'})
+                  </p>
                 </div>
               )}
 

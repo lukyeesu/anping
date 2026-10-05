@@ -1132,6 +1132,7 @@ const POSSystem = ({
         qrUrl: s.dynamicQrUrl || fallbackQr,
         accountName: qrAccount?.name || 'คลินิกการแพทย์แผนจีนอันผิง',
         accountNumber: qrTarget,
+        bankAccountNumber: qrAccount?.bankAccountNumber || (qrAccount?.type === 'bank_account' ? qrAccount?.accountNumber : ''),
         bankName: qrAccount?.bankName || '',
         bankCode: qrAccount?.bankCode || '',
         amount: s.grandTotal
@@ -1174,6 +1175,7 @@ const POSSystem = ({
             qrUrl: s.dynamicQrUrl || fallbackQr,
             accountName: qrAccount?.name || 'คลินิกการแพทย์แผนจีนอันผิง',
             accountNumber: qrTarget,
+            bankAccountNumber: qrAccount?.bankAccountNumber || (qrAccount?.type === 'bank_account' ? qrAccount?.accountNumber : ''),
             bankName: qrAccount?.bankName || '',
             bankCode: qrAccount?.bankCode || '',
             amount: s.grandTotal
@@ -1430,6 +1432,8 @@ const POSSystem = ({
         paymentAccount: paymentMethod === 'transfer' && currentQrAccount ? {
           name: currentQrAccount.name,
           accountNumber: currentQrAccount.accountNumber,
+          bankAccountNumber: currentQrAccount.bankAccountNumber || (currentQrAccount.type === 'bank_account' ? currentQrAccount.accountNumber : ''),
+          bankName: currentQrAccount.bankName || '',
           bankCode: currentQrAccount.bankCode
         } : null,
         status: 'completed',
@@ -3444,7 +3448,7 @@ const POSSystem = ({
                                        const isBranchDef = acc.id === branchDefaultAccountId;
                                        return {
                                           value: acc.id,
-                                          label: `${isBranchDef ? '★ ' : ''}${acc.name} — ${bank.code} (${formatAccountNumber(acc.accountNumber, acc.type)})${isBranchDef ? ' (บัญชีหลัก)' : ''}`
+                                          label: `${isBranchDef ? '★ ' : ''}${acc.name} — ${bank.code} (${acc.bankAccountNumber || formatAccountNumber(acc.accountNumber, acc.type)})${isBranchDef ? ' (บัญชีหลัก)' : ''}`
                                        };
                                     })}
                                     compact
@@ -3481,15 +3485,39 @@ const POSSystem = ({
 
                          {/* ข้อมูลชื่อบัญชี, หมายเลข และยอดชำระ */}
                          <div className="text-center flex flex-col items-center w-full">
-                            <h4 className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight mb-0.5">
+                            <h4 className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight mb-1">
                                {currentQrAccount?.name || 'คลินิกอันผิง'}
                             </h4>
                             
-                            <div className="flex items-center justify-center gap-1.5 mb-2.5">
-                               <span className="text-xs text-slate-500 font-data font-semibold">
-                                  {currentQrAccount?.type === 'bank_account' ? 'เลขที่บัญชี: ' : 'พร้อมเพย์: '}
-                                  {formatAccountNumber(currentQrAccount?.accountNumber, currentQrAccount?.type)}
-                               </span>
+                            <div className="flex flex-col items-center justify-center gap-0.5 mb-2.5">
+                               {currentQrAccount?.bankAccountNumber && (
+                                  <div className="flex items-center gap-1.5">
+                                     <span className="text-xs text-slate-500 font-data font-semibold">เลขที่บัญชี:</span>
+                                     <span className="text-sm text-slate-800 font-data font-bold tracking-wide">
+                                        {currentQrAccount.bankAccountNumber}
+                                     </span>
+                                     <span 
+                                        className="text-[10px] px-1.5 py-0.5 rounded font-bold font-data"
+                                        style={{ backgroundColor: getBankInfo(currentQrAccount.bankCode).color, color: getBankInfo(currentQrAccount.bankCode).textColor }}
+                                     >
+                                        {getBankInfo(currentQrAccount.bankCode).code}
+                                     </span>
+                                  </div>
+                               )}
+                               <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] text-slate-400 font-data font-semibold">
+                                     {currentQrAccount?.type === 'bank_account' 
+                                        ? (!currentQrAccount?.bankAccountNumber ? 'เลขที่บัญชี: ' : '')
+                                        : currentQrAccount?.type === 'promptpay_ref'
+                                        ? 'เลขอ้างอิงพร้อมเพย์: '
+                                        : 'พร้อมเพย์: '}
+                                  </span>
+                                  {(currentQrAccount?.type !== 'bank_account' || !currentQrAccount?.bankAccountNumber) && (
+                                     <span className="text-xs text-slate-600 font-data font-semibold">
+                                        {formatAccountNumber(currentQrAccount?.accountNumber, currentQrAccount?.type)}
+                                     </span>
+                                  )}
+                               </div>
                             </div>
 
                             {/* กล่องยอดชำระสุทธิ */}

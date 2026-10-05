@@ -220,6 +220,7 @@ export const DEFAULT_POS_QR_SETTINGS = {
       name: 'นาย พุทธินัทธ์ จงเจริญเลิศสิน',
       type: 'promptpay_mobile',
       accountNumber: '0631434927',
+      bankAccountNumber: '',
       bankCode: 'KBANK',
       bankName: 'ธนาคารกสิกรไทย',
       qrImage: '',

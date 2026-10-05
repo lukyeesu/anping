@@ -21,7 +21,7 @@ import {
   createAdsSyncHub,
   playGentleChime 
 } from '../lib/customerDisplaySync';
-import { generatePromptPayQrDataUrl } from '../lib/promptpay';
+import { generatePromptPayQrDataUrl, formatAccountNumber } from '../lib/promptpay';
 import { formatDirectImageUrl } from '../lib/notificationHub';
 import { formatThaiTypography, getTagBadgeStyle } from '../utils/thaiTypography';
 
@@ -152,6 +152,7 @@ export default function CustomerDisplay({
     qrUrl: '',
     accountName: '',
     accountNumber: '',
+    bankAccountNumber: '',
     bankName: '',
     bankCode: '',
     amount: 0
@@ -522,6 +523,7 @@ export default function CustomerDisplay({
             qrUrl: resolvedQr,
             accountName: payload.accountName || 'คลินิกการแพทย์แผนจีนอันผิง',
             accountNumber: qrAccountNo,
+            bankAccountNumber: payload.bankAccountNumber || '',
             bankName: payload.bankName || '',
             bankCode: payload.bankCode || '',
             amount: amt
@@ -2181,19 +2183,33 @@ export default function CustomerDisplay({
           </div>
 
           {/* Account Details */}
-          <div className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 mb-5 text-left kanit-text">
-            <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+          <div className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 mb-5 text-left kanit-text space-y-1.5">
+            <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
               <span>ชื่อบัญชี:</span>
               <span className="font-semibold text-slate-800">{qrPaymentData.accountName || 'คลินิกการแพทย์แผนจีนอันผิง'}</span>
             </div>
+            {qrPaymentData.bankAccountNumber && (
+              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
+                <span className="font-medium text-slate-700">เลขที่บัญชี:</span>
+                <span className="font-mono font-bold text-slate-900 tracking-wider text-sm sm:text-base">
+                  {qrPaymentData.bankAccountNumber}
+                </span>
+              </div>
+            )}
             {qrPaymentData.accountNumber && (
-              <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
-                <span>หมายเลขบัญชี / พร้อมเพย์:</span>
-                <span className="font-mono font-bold text-emerald-700">{qrPaymentData.accountNumber}</span>
+              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
+                <span>
+                  {qrPaymentData.bankAccountNumber
+                    ? (String(qrPaymentData.accountNumber).replace(/[^0-9]/g, '').length === 15 ? 'เลขอ้างอิงพร้อมเพย์:' : 'พร้อมเพย์:')
+                    : (String(qrPaymentData.accountNumber).replace(/[^0-9]/g, '').length === 15 ? 'เลขอ้างอิงพร้อมเพย์ (15 หลัก):' : 'หมายเลขบัญชี / พร้อมเพย์:')}
+                </span>
+                <span className="font-mono font-bold text-emerald-700">
+                  {formatAccountNumber(qrPaymentData.accountNumber)}
+                </span>
               </div>
             )}
             {qrPaymentData.bankName && (
-              <div className="flex items-center justify-between text-xs text-slate-500">
+              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
                 <span>ธนาคาร:</span>
                 <span className="text-slate-700 font-medium">{qrPaymentData.bankName}</span>
               </div>
