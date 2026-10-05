@@ -5,16 +5,19 @@ import { getYouTubeVideoId } from '../lib/customerDisplayMediaCache';
  * High-Performance Digital Signage YouTube Player
  * Embedded via YouTube IFrame Player API for 60fps adaptive bitrate streaming
  * Completely hides all controls and branding for a seamless kiosk appearance
+ * Supports hold-to-pause and exposes a safe adapter for playerRef
  */
 export default function YouTubePlayer({
   url,
   isActive = true,
+  isPaused = false,
   isMuted = true,
   isLooping = true,
   objectFit = 'cover',
   onEnded,
   onError,
-  className = ''
+  className = '',
+  playerRef
 }) {
   const iframeRef = useRef(null);
   const containerRef = useRef(null);
@@ -40,17 +43,57 @@ export default function YouTubePlayer({
     }
   };
 
-  // Sync Play / Pause when isActive changes
+  // Sync Play / Pause / Mute when isActive or isPaused changes
   useEffect(() => {
     if (!isIframeLoaded) return;
-    if (isActive) {
+    if (isActive && !isPaused) {
       sendCommand('playVideo');
       sendCommand(isMuted ? 'mute' : 'unMute');
     } else {
       sendCommand('pauseVideo');
       sendCommand('mute');
     }
-  }, [isActive, isIframeLoaded, isMuted]);
+  }, [isActive, isPaused, isIframeLoaded, isMuted]);
+
+  // Expose safe adapter to playerRef
+  useEffect(() => {
+    if (playerRef) {
+      playerRef.current = {
+        get paused() {
+          return !isActive || isPaused;
+        },
+        get muted() {
+          return isMuted;
+        },
+        set muted(val) {
+          sendCommand(val ? 'mute' : 'unMute');
+        },
+        get currentTime() {
+          return 0;
+        },
+        set currentTime(_) {},
+        get src() {
+          return url || '';
+        },
+        set src(_) {},
+        play() {
+          sendCommand('playVideo');
+          return Promise.resolve();
+        },
+        pause() {
+          sendCommand('pauseVideo');
+        },
+        load() {},
+        removeAttribute() {},
+        setAttribute() {},
+        addEventListener() {},
+        removeEventListener() {}
+      };
+    }
+    return () => {
+      if (playerRef) playerRef.current = null;
+    };
+  }, [playerRef, isActive, isPaused, isMuted, url]);
 
   // Listen to YouTube postMessage events (onStateChange, onReady, onError)
   useEffect(() => {
@@ -68,7 +111,7 @@ export default function YouTubePlayer({
         const state = data.info?.playerState !== undefined ? data.info.playerState : data.info;
         // 0 = YT.PlayerState.ENDED
         if (state === 0) {
-          if (onEnded && isActive) {
+          if (onEnded && isActive && !isPaused) {
             onEnded();
           }
         }
@@ -81,7 +124,7 @@ export default function YouTubePlayer({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onEnded, onError, isActive]);
+  }, [onEnded, onError, isActive, isPaused]);
 
   if (!videoId) {
     return (
@@ -128,9 +171,12 @@ export default function YouTubePlayer({
           // YouTube API initialization handshake
           setTimeout(() => {
             sendCommand('listening');
-            if (isActive) {
+            if (isActive && !isPaused) {
               sendCommand('playVideo');
               sendCommand(isMuted ? 'mute' : 'unMute');
+            } else {
+              sendCommand('pauseVideo');
+              sendCommand('mute');
             }
           }, 300);
         }}

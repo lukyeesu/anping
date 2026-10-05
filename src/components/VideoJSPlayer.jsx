@@ -5,11 +5,13 @@ import 'video.js/dist/video-js.css';
 /**
  * Enterprise Video.js Player for Digital Signage
  * Provides hardware-accelerated playback, intelligent buffer caching,
- * and seamless offline playback from IndexedDB blobs or direct streams.
+ * seamless hold-to-pause touch handling, and a rock-solid safe adapter
+ * for zero-exception DOM/legacy API compatibility.
  */
 export default function VideoJSPlayer({
   src,
   isActive = true,
+  isPaused = false,
   isMuted = true,
   isLooping = false,
   objectFit = 'cover',
@@ -35,7 +37,7 @@ export default function VideoJSPlayer({
     containerRef.current.appendChild(videoElement);
 
     const player = videojs(videoElement, {
-      autoplay: isActive,
+      autoplay: isActive && !isPaused,
       muted: isMuted,
       controls: false,
       loop: isLooping,
@@ -52,14 +54,78 @@ export default function VideoJSPlayer({
       },
       sources: src ? [{ src, type: 'video/mp4' }] : []
     }, () => {
-      if (isActive) {
+      if (isActive && !isPaused) {
         player.play().catch(() => {});
       }
     });
 
     internalPlayerRef.current = player;
+
+    // Expose a safe, multi-paradigm player adapter to playerRef
+    // Emulates native HTMLVideoElement properties & getters/setters without throwing TypeErrors
     if (playerRef) {
-      playerRef.current = player;
+      playerRef.current = {
+        get paused() {
+          if (!player || player.isDisposed()) return true;
+          return typeof player.paused === 'function' ? player.paused() : true;
+        },
+        get muted() {
+          if (!player || player.isDisposed()) return true;
+          return typeof player.muted === 'function' ? player.muted() : true;
+        },
+        set muted(val) {
+          if (player && !player.isDisposed() && typeof player.muted === 'function') {
+            try { player.muted(Boolean(val)); } catch (_) {}
+          }
+        },
+        get currentTime() {
+          if (!player || player.isDisposed()) return 0;
+          return typeof player.currentTime === 'function' ? player.currentTime() : 0;
+        },
+        set currentTime(val) {
+          if (player && !player.isDisposed() && typeof player.currentTime === 'function') {
+            try { player.currentTime(Number(val) || 0); } catch (_) {}
+          }
+        },
+        get src() {
+          if (!player || player.isDisposed()) return '';
+          return typeof player.currentSrc === 'function' ? player.currentSrc() : '';
+        },
+        set src(val) {
+          if (player && !player.isDisposed() && typeof player.src === 'function') {
+            try { player.src([{ src: val, type: 'video/mp4' }]); } catch (_) {}
+          }
+        },
+        play() {
+          if (player && !player.isDisposed() && typeof player.play === 'function') {
+            return player.play().catch(() => {});
+          }
+          return Promise.resolve();
+        },
+        pause() {
+          if (player && !player.isDisposed() && typeof player.pause === 'function') {
+            try { player.pause(); } catch (_) {}
+          }
+        },
+        load() {
+          if (player && !player.isDisposed() && typeof player.load === 'function') {
+            try { player.load(); } catch (_) {}
+          }
+        },
+        removeAttribute() {},
+        setAttribute() {},
+        addEventListener(event, fn) {
+          if (player && !player.isDisposed() && typeof player.on === 'function') {
+            try { player.on(event, fn); } catch (_) {}
+          }
+        },
+        removeEventListener(event, fn) {
+          if (player && !player.isDisposed() && typeof player.off === 'function') {
+            try { player.off(event, fn); } catch (_) {}
+          }
+        },
+        rawPlayer: player
+      };
     }
 
     player.on('ended', () => {
@@ -99,33 +165,40 @@ export default function VideoJSPlayer({
           try {
             if (currentTime > 0) player.currentTime(currentTime);
           } catch (_) {}
-          if (isActive) {
+          if (isActive && !isPaused) {
             player.play().catch(() => {});
           }
         });
       }
     }
-  }, [src, isActive]);
+  }, [src, isActive, isPaused]);
 
-  // Update isActive / Play / Pause
+  // Update Play / Pause / Muted
   useEffect(() => {
     const player = internalPlayerRef.current;
     if (player && !player.isDisposed()) {
-      if (isActive) {
-        player.muted(isMuted);
-        player.play().catch(() => {});
+      if (typeof player.muted === 'function') {
+        try { player.muted(isMuted); } catch (_) {}
+      }
+      if (isActive && !isPaused) {
+        if (typeof player.play === 'function') {
+          player.play().catch(() => {});
+        }
       } else {
-        player.muted(true);
-        player.pause();
+        if (typeof player.pause === 'function') {
+          try { player.pause(); } catch (_) {}
+        }
       }
     }
-  }, [isActive, isMuted]);
+  }, [isActive, isPaused, isMuted]);
 
   // Update loop
   useEffect(() => {
     const player = internalPlayerRef.current;
     if (player && !player.isDisposed()) {
-      player.loop(isLooping);
+      if (typeof player.loop === 'function') {
+        player.loop(isLooping);
+      }
     }
   }, [isLooping]);
 

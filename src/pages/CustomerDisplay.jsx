@@ -593,21 +593,33 @@ export default function CustomerDisplay({
   useEffect(() => {
     if (displayMode === 'STANDBY_ADS') {
       if (activeLayer === 'A') {
-        if (videoRefB.current && !videoRefB.current.paused) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+        if (videoRefB.current) { 
+          try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {} 
+        }
         if (videoRefA.current && layerAData?.type === 'video') {
-          if (videoRefA.current.paused) videoRefA.current.play().catch(() => {});
+          if (videoRefA.current.paused && !isPausedByTouch && !adminModalOpen) {
+            try { videoRefA.current.play()?.catch?.(() => {}); } catch (_) {}
+          }
         }
       } else if (activeLayer === 'B') {
-        if (videoRefA.current && !videoRefA.current.paused) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+        if (videoRefA.current) { 
+          try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {} 
+        }
         if (videoRefB.current && layerBData?.type === 'video') {
-          if (videoRefB.current.paused) videoRefB.current.play().catch(() => {});
+          if (videoRefB.current.paused && !isPausedByTouch && !adminModalOpen) {
+            try { videoRefB.current.play()?.catch?.(() => {}); } catch (_) {}
+          }
         }
       }
     } else {
-      if (videoRefA.current && !videoRefA.current.paused) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-      if (videoRefB.current && !videoRefB.current.paused) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      if (videoRefA.current) { 
+        try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {} 
+      }
+      if (videoRefB.current) { 
+        try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {} 
+      }
     }
-  }, [displayMode, activeLayer, layerAData?.type, layerBData?.type]);
+  }, [displayMode, activeLayer, layerAData?.type, layerBData?.type, isPausedByTouch, adminModalOpen]);
 
   // Seamlessly adopt newly cached IndexedDB blob for active playing media
   useEffect(() => {
@@ -836,7 +848,7 @@ export default function CustomerDisplay({
 
   // 4. Gesture & Swipe Handler for Touch (Single Finger Hold to Pause, Swipe to Navigate, 3-Finger Tap x 5 for Admin)
   const handleTouchStart = (e) => {
-    // Single finger interaction
+    // Single finger interaction: hold to pause
     if (e.touches.length === 1) {
       touchStartXRef.current = e.touches[0].clientX;
       touchStartYRef.current = e.touches[0].clientY;
@@ -846,11 +858,11 @@ export default function CustomerDisplay({
       }
     }
 
-    // Secret 3-Finger Tap detection
+    // Secret 3-Finger Tap detection (Tap with 3 fingers 5 times quickly)
     if (e.touches.length === 3) {
       setIsPausedByTouch(false);
       const now = Date.now();
-      if (now - lastTouchTapTimeRef.current < 600) {
+      if (now - lastTouchTapTimeRef.current < 850) {
         touchTapCountRef.current += 1;
       } else {
         touchTapCountRef.current = 1;
@@ -883,6 +895,9 @@ export default function CustomerDisplay({
   const handleTouchEnd = (e) => {
     setIsPausedByTouch(false);
 
+    // If in the middle of multi-finger tapping, ignore single finger swipe
+    if (touchTapCountRef.current > 0) return;
+
     // Swipe navigation (single finger swipe)
     if (displayMode === 'STANDBY_ADS' && e.changedTouches && e.changedTouches.length === 1) {
       const endX = e.changedTouches[0].clientX;
@@ -906,12 +921,16 @@ export default function CustomerDisplay({
     const activeVideo = activeLayer === 'A' ? videoRefA.current : videoRefB.current;
     if (!activeVideo) return;
 
-    if (isPausedByTouch) {
-      if (!activeVideo.paused) activeVideo.pause();
+    if (isPausedByTouch || adminModalOpen) {
+      try {
+        if (!activeVideo.paused) activeVideo.pause();
+      } catch (_) {}
     } else if (displayMode === 'STANDBY_ADS') {
-      if (activeVideo.paused) activeVideo.play().catch(() => {});
+      try {
+        if (activeVideo.paused) activeVideo.play()?.catch?.(() => {});
+      } catch (_) {}
     }
-  }, [isPausedByTouch, activeLayer, displayMode]);
+  }, [isPausedByTouch, adminModalOpen, activeLayer, displayMode]);
 
   // 5. Secret Keyboard Shortcut for PC / HDMI (Ctrl + Alt + S or F2)
   useEffect(() => {
@@ -994,18 +1013,20 @@ export default function CustomerDisplay({
         cleanupTimerRef.current = setTimeout(() => {
           setLayerAData(null);
           if (videoRefA.current) {
-            videoRefA.current.muted = true;
-            videoRefA.current.pause();
-            videoRefA.current.removeAttribute('src');
-            videoRefA.current.load();
+            try {
+              videoRefA.current.muted = true;
+              videoRefA.current.pause();
+            } catch (_) {}
           }
         }, 600);
       });
     } else {
       // Immediately silence and pause Layer B video so sound stops INSTANTLY (0ms)
       if (videoRefB.current) {
-        videoRefB.current.muted = true;
-        videoRefB.current.pause();
+        try {
+          videoRefB.current.muted = true;
+          videoRefB.current.pause();
+        } catch (_) {}
       }
 
       // Prepare Layer A and crossfade
@@ -1015,20 +1036,22 @@ export default function CustomerDisplay({
           const shouldMute = preparedAd.enableAudio !== true;
           setIsVideoMuted(shouldMute);
           if (videoRefA.current) {
-            videoRefA.current.currentTime = 0;
-            videoRefA.current.muted = shouldMute;
-            videoRefA.current.play().catch(() => {
-              if (!shouldMute) {
-                videoRefA.current.muted = true;
-                videoRefA.current.play().catch(() => {});
-              }
-            });
+            try {
+              videoRefA.current.currentTime = 0;
+              videoRefA.current.muted = shouldMute;
+              videoRefA.current.play()?.catch?.(() => {
+                if (!shouldMute) {
+                  videoRefA.current.muted = true;
+                  videoRefA.current.play()?.catch?.(() => {});
+                }
+              });
+            } catch (_) {}
           }
         } else {
           // If next slide is an image, all video audio must be silent
           setIsVideoMuted(true);
-          if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-          if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+          if (videoRefA.current) { try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {} }
+          if (videoRefB.current) { try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {} }
         }
         setActiveLayer('A');
         activeLayerRef.current = 'A';
@@ -1039,10 +1062,10 @@ export default function CustomerDisplay({
         cleanupTimerRef.current = setTimeout(() => {
           setLayerBData(null);
           if (videoRefB.current) {
-            videoRefB.current.muted = true;
-            videoRefB.current.pause();
-            videoRefB.current.removeAttribute('src');
-            videoRefB.current.load();
+            try {
+              videoRefB.current.muted = true;
+              videoRefB.current.pause();
+            } catch (_) {}
           }
         }, 600);
       });
@@ -1069,16 +1092,10 @@ export default function CustomerDisplay({
       setLayerAData(null);
       setLayerBData(null);
       if (videoRefA.current) {
-        videoRefA.current.muted = true;
-        videoRefA.current.pause();
-        videoRefA.current.removeAttribute('src');
-        videoRefA.current.load();
+        try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {}
       }
       if (videoRefB.current) {
-        videoRefB.current.muted = true;
-        videoRefB.current.pause();
-        videoRefB.current.removeAttribute('src');
-        videoRefB.current.load();
+        try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {}
       }
       return;
     }
@@ -1097,43 +1114,41 @@ export default function CustomerDisplay({
           setLayerAData(prepared);
           setLayerBData(null);
           if (videoRefB.current) {
-            videoRefB.current.muted = true;
-            videoRefB.current.pause();
-            videoRefB.current.removeAttribute('src');
-            videoRefB.current.load();
+            try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {}
           }
           if (prepared.type === 'video') {
             const shouldMute = prepared.enableAudio !== true;
             setIsVideoMuted(shouldMute);
             if (videoRefA.current) {
-              videoRefA.current.currentTime = 0;
-              videoRefA.current.muted = shouldMute;
-              videoRefA.current.play().catch(() => {});
+              try {
+                videoRefA.current.currentTime = 0;
+                videoRefA.current.muted = shouldMute;
+                videoRefA.current.play()?.catch?.(() => {});
+              } catch (_) {}
             }
           } else {
             setIsVideoMuted(true);
-            if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+            if (videoRefA.current) { try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {} }
           }
         } else {
           setLayerBData(prepared);
           setLayerAData(null);
           if (videoRefA.current) {
-            videoRefA.current.muted = true;
-            videoRefA.current.pause();
-            videoRefA.current.removeAttribute('src');
-            videoRefA.current.load();
+            try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {}
           }
           if (prepared.type === 'video') {
             const shouldMute = prepared.enableAudio !== true;
             setIsVideoMuted(shouldMute);
             if (videoRefB.current) {
-              videoRefB.current.currentTime = 0;
-              videoRefB.current.muted = shouldMute;
-              videoRefB.current.play().catch(() => {});
+              try {
+                videoRefB.current.currentTime = 0;
+                videoRefB.current.muted = shouldMute;
+                videoRefB.current.play()?.catch?.(() => {});
+              } catch (_) {}
             }
           } else {
             setIsVideoMuted(true);
-            if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+            if (videoRefB.current) { try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {} }
           }
         }
       });
@@ -1233,8 +1248,12 @@ export default function CustomerDisplay({
   // Sync video audio mute state strictly with active ad (Guarantees NO sound clashing)
   useEffect(() => {
     if (displayMode !== 'STANDBY_ADS') {
-      if (videoRefA.current && !videoRefA.current.paused) { videoRefA.current.muted = true; videoRefA.current.pause(); }
-      if (videoRefB.current && !videoRefB.current.paused) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      if (videoRefA.current && !videoRefA.current.paused) { 
+        try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {} 
+      }
+      if (videoRefB.current && !videoRefB.current.paused) { 
+        try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {} 
+      }
       return;
     }
 
@@ -1244,33 +1263,41 @@ export default function CustomerDisplay({
 
     // Inactive video MUST ALWAYS be muted and paused
     if (inactiveVid && !inactiveVid.paused) {
-      inactiveVid.muted = true;
-      inactiveVid.pause();
+      try {
+        inactiveVid.muted = true;
+        inactiveVid.pause();
+      } catch (_) {}
     }
 
     if (currentAd?.type === 'video') {
       const shouldMute = currentAd.enableAudio !== true;
       setIsVideoMuted(shouldMute);
       if (activeVid) {
-        activeVid.muted = shouldMute;
-        if (activeVid.paused) {
-          activeVid.play().catch(() => {
-            if (!shouldMute) {
-              activeVid.muted = true;
-              if (activeVid.paused) activeVid.play().catch(() => {});
-            }
-          });
-        }
+        try {
+          activeVid.muted = shouldMute;
+          if (activeVid.paused && !isPausedByTouch && !adminModalOpen) {
+            activeVid.play()?.catch?.(() => {
+              if (!shouldMute) {
+                try {
+                  activeVid.muted = true;
+                  if (activeVid.paused) activeVid.play()?.catch?.(() => {});
+                } catch (_) {}
+              }
+            });
+          }
+        } catch (_) {}
       }
     } else {
       // If current ad is an image, all video audio must be silent
       setIsVideoMuted(true);
       if (activeVid && !activeVid.paused) {
-        activeVid.muted = true;
-        activeVid.pause();
+        try {
+          activeVid.muted = true;
+          activeVid.pause();
+        } catch (_) {}
       }
     }
-  }, [currentSlideIndex, activeLayer, layerAData, layerBData, activeAds, displayMode]);
+  }, [currentSlideIndex, activeLayer, layerAData, layerBData, activeAds, displayMode, isPausedByTouch, adminModalOpen]);
 
   // Global user interaction listener to unlock unmuted video audio on iOS Safari & Chrome
   useEffect(() => {
@@ -1279,11 +1306,19 @@ export default function CustomerDisplay({
       if (currentAd?.type === 'video' && currentAd.enableAudio === true) {
         setIsVideoMuted(false);
         if (activeLayer === 'A' && videoRefA.current) {
-          videoRefA.current.muted = false;
-          if (videoRefA.current.paused) videoRefA.current.play().catch(() => {});
+          try {
+            videoRefA.current.muted = false;
+            if (videoRefA.current.paused && !isPausedByTouch && !adminModalOpen) {
+              videoRefA.current.play()?.catch?.(() => {});
+            }
+          } catch (_) {}
         } else if (activeLayer === 'B' && videoRefB.current) {
-          videoRefB.current.muted = false;
-          if (videoRefB.current.paused) videoRefB.current.play().catch(() => {});
+          try {
+            videoRefB.current.muted = false;
+            if (videoRefB.current.paused && !isPausedByTouch && !adminModalOpen) {
+              videoRefB.current.play()?.catch?.(() => {});
+            }
+          } catch (_) {}
         }
       }
     };
@@ -1681,16 +1716,19 @@ export default function CustomerDisplay({
                   <YouTubePlayer
                     url={layerAData.url}
                     isActive={activeLayer === 'A' && displayMode === 'STANDBY_ADS'}
+                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
                     isMuted={isVideoMuted}
                     isLooping={activeAds.length <= 1}
                     objectFit={layerAData.objectFit}
                     onEnded={() => handleVideoEnded('A')}
                     onError={(e) => handleVideoError('A', e)}
+                    playerRef={videoRefA}
                   />
                 ) : layerAData.type === 'video' || isMediaVideo(layerAData.url, layerAData.type) ? (
                   <VideoJSPlayer
                     src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
                     isActive={activeLayer === 'A' && displayMode === 'STANDBY_ADS'}
+                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
                     isMuted={isVideoMuted}
                     isLooping={activeAds.length <= 1}
                     objectFit={layerAData.objectFit}
@@ -1722,16 +1760,19 @@ export default function CustomerDisplay({
                   <YouTubePlayer
                     url={layerBData.url}
                     isActive={activeLayer === 'B' && displayMode === 'STANDBY_ADS'}
+                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
                     isMuted={isVideoMuted}
                     isLooping={activeAds.length <= 1}
                     objectFit={layerBData.objectFit}
                     onEnded={() => handleVideoEnded('B')}
                     onError={(e) => handleVideoError('B', e)}
+                    playerRef={videoRefB}
                   />
                 ) : layerBData.type === 'video' || isMediaVideo(layerBData.url, layerBData.type) ? (
                   <VideoJSPlayer
                     src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
                     isActive={activeLayer === 'B' && displayMode === 'STANDBY_ADS'}
+                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
                     isMuted={isVideoMuted}
                     isLooping={activeAds.length <= 1}
                     objectFit={layerBData.objectFit}
@@ -1975,7 +2016,7 @@ export default function CustomerDisplay({
                   รายการรับบริการ & ชำระเงิน
                 </h2>
                 <p className="text-xs sm:text-sm md:text-base text-slate-500 kanit-text mt-0.5">
-                  <span className="font-semibold text-slate-700">{branchDisplayName}</span> • {branchSubtitle} • เคาน์เตอร์ {stationId.replace('station_', '')}
+                  <span className="font-semibold text-slate-700">{branchDisplayName}</span> • {branchSubtitle} • เคาน์เตอร์ {String(stationId || '1').replace('station_', '')}
                 </p>
               </div>
             </div>
@@ -1993,7 +2034,7 @@ export default function CustomerDisplay({
           </div>
 
           {/* Patient Welcome & Course Balance Card */}
-          {cartData.patient && (
+          {cartData?.patient && (
             <div className="my-3 sm:my-4 p-4 rounded-2xl bg-white border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-xs">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
@@ -2017,11 +2058,11 @@ export default function CustomerDisplay({
                 <div className="flex flex-wrap items-center gap-2">
                   {cartData.patient.remainingCourses.map((c, i) => (
                     <div 
-                      key={c.id || i}
+                      key={c?.id || i}
                       className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium kanit-text flex items-center gap-1.5"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{c.name}: คงเหลือ <strong>{c.remaining}</strong> ครั้ง</span>
+                      <span>{c?.name || 'คอร์ส'}: คงเหลือ <strong>{c?.remaining ?? 0}</strong> ครั้ง</span>
                     </div>
                   ))}
                 </div>
@@ -2043,22 +2084,29 @@ export default function CustomerDisplay({
                   </tr>
                 </thead>
                 <tbody className="text-xs sm:text-sm md:text-base text-slate-700">
-                  {cartData.items.map((item, index) => (
-                    <tr 
-                      key={item.id || item.product?.id || `item_${index}`} 
-                      className={`customer-cart-row hover:bg-slate-50/80 ${index > 0 ? 'border-t border-slate-100' : ''}`}
-                    >
-                      <td className="py-3 px-4 sm:px-5 text-slate-400 font-mono text-xs sm:text-sm">{index + 1}</td>
-                      <td className="py-3 px-4 sm:px-5 font-semibold text-slate-800">{item.name || item.product?.name}</td>
-                      <td className="py-3 px-4 sm:px-5 text-center font-mono font-bold text-slate-700">{item.quantity}</td>
-                      <td className="py-3 px-4 sm:px-5 text-right font-mono text-slate-600">
-                        {Number(item.price || item.product?.price || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-3 px-4 sm:px-5 text-right font-mono font-bold text-slate-900">
-                        {Number(item.total || (item.quantity * (item.price || item.product?.price || 0))).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
+                  {(Array.isArray(cartData?.items) ? cartData.items : []).map((item, index) => {
+                    if (!item) return null;
+                    const itemName = item.name || item.product?.name || 'รายการสินค้า / บริการ';
+                    const itemQty = Number(item.quantity || 1);
+                    const itemPrice = Number(item.price || item.product?.price || 0);
+                    const itemTotal = Number(item.total !== undefined ? item.total : (itemQty * itemPrice));
+                    return (
+                      <tr 
+                        key={item.id || item.product?.id || `item_${index}`} 
+                        className={`customer-cart-row hover:bg-slate-50/80 ${index > 0 ? 'border-t border-slate-100' : ''}`}
+                      >
+                        <td className="py-3 px-4 sm:px-5 text-slate-400 font-mono text-xs sm:text-sm">{index + 1}</td>
+                        <td className="py-3 px-4 sm:px-5 font-semibold text-slate-800">{itemName}</td>
+                        <td className="py-3 px-4 sm:px-5 text-center font-mono font-bold text-slate-700">{itemQty}</td>
+                        <td className="py-3 px-4 sm:px-5 text-right font-mono text-slate-600">
+                          {itemPrice.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 sm:px-5 text-right font-mono font-bold text-slate-900">
+                          {itemTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -2067,7 +2115,7 @@ export default function CustomerDisplay({
           {/* Cart Summary Bottom Bar */}
           <div className="mt-2.5 p-3.5 sm:p-5 border border-slate-200/90 bg-white rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
             <div className="flex items-center gap-5 sm:gap-7 text-xs sm:text-sm md:text-base text-slate-600 kanit-text">
-              {cartData.discount > 0 ? (
+              {Number(cartData?.discount || 0) > 0 ? (
                 <div className="flex items-center gap-2">
                   <span className="text-slate-500 font-medium">ส่วนลดพิเศษ:</span>
                   <span className="font-mono text-rose-600 font-bold text-sm sm:text-lg">
@@ -2082,7 +2130,7 @@ export default function CustomerDisplay({
             <div className="flex items-center gap-3 sm:gap-3.5">
               <span className="text-sm sm:text-lg md:text-xl font-bold text-slate-700 kanit-text">ยอดชำระสุทธิ:</span>
               <div className="px-5 py-2 sm:px-7 sm:py-2.5 rounded-2xl bg-emerald-600 text-white font-mono font-black text-2xl sm:text-3xl md:text-4xl shadow-md tracking-tight flex items-baseline gap-1.5">
-                <span>{Number(cartData.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                <span>{Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                 <span className="text-sm sm:text-base font-normal opacity-90">บาท</span>
               </div>
             </div>
@@ -2266,7 +2314,7 @@ export default function CustomerDisplay({
                           : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      <span>เคาน์เตอร์ {st.replace('station_', '')}</span>
+                      <span>เคาน์เตอร์ {String(st || '').replace('station_', '')}</span>
                     </button>
                   ))}
                 </div>
@@ -2283,11 +2331,16 @@ export default function CustomerDisplay({
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
                 >
                   <option value="b1">สาขา 1 (สำนักงานใหญ่)</option>
-                  {(branchesData || []).filter(b => (b.id || b.branch_id) !== 'b1').map(b => (
-                    <option key={b.id || b.branch_id} value={b.id || b.branch_id}>
-                      {b.name || `สาขา ${b.id}`}
-                    </option>
-                  ))}
+                  {((Array.isArray(branchesData) && branchesData.length > 0 ? branchesData : internalBranches) || [])
+                    .filter(b => b && typeof b === 'object' && (b.id || b.branch_id) !== 'b1')
+                    .map(b => {
+                      const bId = b.id || b.branch_id;
+                      return (
+                        <option key={bId} value={bId}>
+                          {b.name || `สาขา ${bId}`}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
