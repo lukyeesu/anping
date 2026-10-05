@@ -49,9 +49,15 @@ export function generatePromptPayPayload(target, amount) {
   if (!sanitized) return '';
 
   let targetTag = '';
-  if (sanitized.length >= 13) {
+  if (sanitized.length === 15) {
+    // e-Wallet ID / Biller Reference ID / K PLUS My QR (15 หลัก เช่น 004999097200421)
+    targetTag = '03' + String(sanitized.length).padStart(2, '0') + sanitized;
+  } else if (sanitized.length === 13) {
     // เลขบัตรประชาชน / เลขประจำตัวผู้เสียภาษี 13 หลัก
     targetTag = '02' + String(sanitized.length).padStart(2, '0') + sanitized;
+  } else if (sanitized.length > 13) {
+    // กรณีใส่เลขเกิน 13 หลัก
+    targetTag = '0213' + sanitized.slice(0, 13);
   } else {
     // เบอร์โทรศัพท์มือถือ (แปลง 08x -> 00668x)
     const formattedMobile = '0066' + sanitized.replace(/^0/, '');
@@ -106,7 +112,11 @@ export async function generatePromptPayQrDataUrl(target, amount, options = {}) {
 export function formatAccountNumber(number, type = 'promptpay_mobile') {
   if (!number) return '-';
   const clean = String(number).replace(/[^0-9]/g, '');
-  if (type === 'promptpay_mobile' || (clean.length === 10 && clean.startsWith('0'))) {
+  if (clean.length === 15) {
+    // K PLUS Reference / e-Wallet (15 หลัก: เช่น 004-999-097200421)
+    return `${clean.slice(0, 3)}-${clean.slice(3, 6)}-${clean.slice(6)}`;
+  }
+  if (type === 'promptpay_mobile' || (clean.length === 10 && clean.startsWith('0') && (clean.startsWith('06') || clean.startsWith('08') || clean.startsWith('09')))) {
     if (clean.length === 10) {
       return `${clean.slice(0, 3)}-${clean.slice(3, 6)}-${clean.slice(6)}`;
     }

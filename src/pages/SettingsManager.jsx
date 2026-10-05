@@ -3055,10 +3055,11 @@ const SettingsManager = ({
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
-                    { id: 'promptpay_mobile', label: 'พร้อมเพย์ เบอร์มือถือ (10 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ' },
-                    { id: 'promptpay_id', label: 'พร้อมเพย์ บัตร ปชช. / นิติบุคคล (13 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ' },
-                    { id: 'bank_account', label: 'เลขที่บัญชีธนาคาร', desc: 'ระบุเลขบัญชี + ธนาคาร' },
-                    { id: 'custom_qr', label: 'รูปภาพ QR Code (อัปโหลดภาพ)', desc: 'เซฟจากแอปธนาคาร K+ / SCB' }
+                    { id: 'promptpay_mobile', label: 'พร้อมเพย์ เบอร์มือถือ (10 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ (เช่น 08x, 06x, 09x)' },
+                    { id: 'promptpay_id', label: 'พร้อมเพย์ บัตร ปชช. / นิติบุคคล (13 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ (13 หลัก)' },
+                    { id: 'promptpay_ref', label: 'เลขอ้างอิง K PLUS / e-Wallet (15 หลัก)', desc: 'ฝังยอดเงินอัตโนมัติ (ดูใต้รูป QR ในแอป K+)' },
+                    { id: 'bank_account', label: 'เลขที่บัญชีธนาคาร (โอนเลขบัญชี)', desc: 'แสดงเลขบัญชีธรรมดาให้ลูกค้าพิมพ์โอน' },
+                    { id: 'custom_qr', label: 'รูปภาพ QR Code (อัปโหลดภาพ)', desc: 'เซฟภาพ QR จากแอปธนาคาร K+ / SCB มาใส่' }
                   ].map((t) => (
                     <button
                       key={t.id}
@@ -3111,13 +3112,22 @@ const SettingsManager = ({
               {/* หมายเลขพร้อมเพย์ หรือเลขที่บัญชี */}
               {qrModal.data.type !== 'custom_qr' && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 kanit-text mb-1">
-                    {qrModal.data.type === 'promptpay_mobile'
-                      ? 'เบอร์โทรศัพท์พร้อมเพย์ (10 หลัก)'
-                      : qrModal.data.type === 'promptpay_id'
-                      ? 'เลขบัตรประชาชน / เลขนิติบุคคล (13 หลัก)'
-                      : 'เลขที่บัญชีธนาคาร (10-12 หลัก)'} <span className="text-rose-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 kanit-text">
+                      {qrModal.data.type === 'promptpay_mobile'
+                        ? 'เบอร์โทรศัพท์พร้อมเพย์ (10 หลัก)'
+                        : qrModal.data.type === 'promptpay_id'
+                        ? 'เลขบัตรประชาชน / เลขนิติบุคคล (13 หลัก)'
+                        : qrModal.data.type === 'promptpay_ref'
+                        ? 'เลขอ้างอิง K PLUS / e-Wallet (15 หลัก)'
+                        : 'เลขที่บัญชีธนาคาร (10-12 หลัก)'} <span className="text-rose-500">*</span>
+                    </label>
+                    {qrModal.data.type === 'promptpay_ref' && (
+                      <span className="text-[10px] text-emerald-600 font-semibold kanit-text">
+                        ✓ แนะนำสำหรับบัญชีที่ไม่มีเบอร์พร้อมเพย์
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     placeholder={
@@ -3125,7 +3135,9 @@ const SettingsManager = ({
                         ? 'เช่น 0631434927'
                         : qrModal.data.type === 'promptpay_id'
                         ? 'เช่น 1100000000000'
-                        : 'เช่น 004999097200421'
+                        : qrModal.data.type === 'promptpay_ref'
+                        ? 'เช่น 004999097200421 (ดูใต้ภาพ QR ในแอป K PLUS)'
+                        : 'เช่น 045-2-15328-9'
                     }
                     value={qrModal.data.accountNumber || ''}
                     onChange={(e) => {
@@ -3137,6 +3149,16 @@ const SettingsManager = ({
                   {qrModal.data.accountNumber && (
                     <p className="text-[11px] text-slate-400 mt-1 kanit-text">
                       รูปแบบที่แสดง: {formatAccountNumber(qrModal.data.accountNumber, qrModal.data.type)}
+                    </p>
+                  )}
+                  {qrModal.data.type === 'bank_account' && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/80 rounded-lg p-2 mt-2 kanit-text leading-relaxed">
+                      💡 <strong>ข้อสังเกต:</strong> เลขบัญชีธนาคารทั่วไป 10 หลัก ไม่สามารถสร้างเป็น QR Code พร้อมเพย์แบบฝังยอดเงินได้ หากต้องการให้ระบบสร้าง QR Code พร้อมเพย์และใส่ยอดเงินให้อัตโนมัติ กรุณาเลือก <strong>"เลขอ้างอิง K PLUS (15 หลัก)"</strong> โดยคัดลอกเลขที่อ้างอิงใต้ QR ในแอป K PLUS (เช่น 004999...) มาใส่ หรือเลือก <strong>"รูปภาพ QR Code"</strong> เพื่อแนบภาพ QR โดยตรง
+                    </p>
+                  )}
+                  {qrModal.data.type === 'promptpay_ref' && (
+                    <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200/80 rounded-lg p-2 mt-2 kanit-text leading-relaxed">
+                      ✅ <strong>รองรับสมบูรณ์:</strong> ระบบจะนำเลขอ้างอิง 15 หลักนี้ไปสร้าง QR Code มาตรฐาน Thai QR Payment พร้อมฝังยอดเงินตามบิลให้ลูกค้าสแกนจ่ายเข้าบัญชีนี้ได้ทันทีจากทุกธนาคาร
                     </p>
                   )}
                 </div>
