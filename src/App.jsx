@@ -2950,7 +2950,7 @@ export default function App() {
   if (isCustomerDisplayRoute) {
       return (
         <CustomerDisplay 
-          branchId={getUrlParam('branch') || currentBranch}
+          branchId={getUrlParam('branch') || (currentBranch && currentBranch !== 'all' ? currentBranch : 'b1')}
           stationId={getUrlParam('station') || 'station_1'}
           branchesData={branchesData}
           showToast={showToast}

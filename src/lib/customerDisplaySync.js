@@ -104,12 +104,15 @@ export function createCustomerDisplayPublisher(branchId = 'b1', stationId = 'sta
     }
   }
 
+  const publisherId = `pos_${Math.random().toString(36).slice(2, 9)}`;
+
   // Broadcast a message through all active transports
   const publish = (eventType, payload = {}) => {
     msgSeq++;
     const message = {
       id: `${branchId}_${stationId}_${Date.now()}_${msgSeq}`,
       seq: msgSeq,
+      publisherId,
       event: eventType,
       payload,
       timestamp: Date.now(),
@@ -199,8 +202,7 @@ export function createCustomerDisplaySubscriber(branchId = 'b1', stationId = 'st
   let localBc = null;
   let realtimeChannel = null;
   const seenMessageIds = new Set();
-  let highestTimestamp = 0;
-  let highestSeq = 0;
+  const highestSeqPerPublisher = new Map();
 
   // Deduplicate identical events received from both channels and discard late out-of-order packets
   const handleEvent = (data) => {
@@ -218,17 +220,17 @@ export function createCustomerDisplaySubscriber(branchId = 'b1', stationId = 'st
       }
     }
 
-    // Drop stale messages that arrive out-of-order over slow internet
-    // (e.g. Realtime WebSocket packet arriving after local BroadcastChannel already processed a newer event)
-    if (data.timestamp) {
-      if (data.timestamp < highestTimestamp) {
-        return; // Stale message from the past
+    // Sequence check per publisher (prevents clock skew between different PCs from blocking messages)
+    if (data.publisherId && data.seq) {
+      const prevSeq = highestSeqPerPublisher.get(data.publisherId) || 0;
+      if (data.seq < prevSeq) {
+        return; // Stale sequence from the same sender
       }
-      if (data.timestamp === highestTimestamp && data.seq && data.seq < highestSeq) {
-        return; // Stale sequence within the same millisecond
+      highestSeqPerPublisher.set(data.publisherId, data.seq);
+      if (highestSeqPerPublisher.size > 50) {
+        const firstKey = highestSeqPerPublisher.keys().next().value;
+        highestSeqPerPublisher.delete(firstKey);
       }
-      highestTimestamp = data.timestamp;
-      if (data.seq) highestSeq = data.seq;
     }
 
     if (typeof onEventReceived === 'function') {

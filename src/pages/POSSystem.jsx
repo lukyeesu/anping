@@ -1154,7 +1154,7 @@ const POSSystem = ({
 
   // ซิงก์ Dual-Transport Pub/Sub (เชื่อมต่อถาวรตลอดอายุการใช้งานเคาน์เตอร์นั้นๆ ไม่ตัดต่อใหม่เมื่อเพิ่มสินค้า)
   useEffect(() => {
-    const publisher = createCustomerDisplayPublisher(currentBranch, posStationId);
+    const publisher = createCustomerDisplayPublisher(activeBranchId, posStationId);
     customerDisplayPublisherRef.current = publisher;
 
     // เมื่อจอแสดงผล iPad / จอ 2 ส่งสัญญาณร้องขอสถานะล่าสุด
@@ -1192,7 +1192,7 @@ const POSSystem = ({
     return () => {
       publisher.close();
     };
-  }, [currentBranch, posStationId, buildDisplayCartPayload]);
+  }, [activeBranchId, posStationId, buildDisplayCartPayload]);
 
   // ซิงก์การเปลี่ยนแปลงตะกร้าและหน้าต่างชำระเงินแบบเรียลไทม์ทันที
   useEffect(() => {
@@ -1202,12 +1202,12 @@ const POSSystem = ({
   // สร้าง QR Code สำหรับจับคู่ iPad กับเคาน์เตอร์นี้
   useEffect(() => {
     if (isStationModalOpen && typeof window !== 'undefined') {
-      const displayUrl = `${window.location.origin}/customer-display?station=${posStationId}&branch=${currentBranch}`;
+      const displayUrl = `${window.location.origin}/customer-display?station=${posStationId}&branch=${activeBranchId}`;
       QRCode.toDataURL(displayUrl, { width: 220, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })
         .then(url => setPairingQrDataUrl(url))
         .catch(err => console.error("Error generating pairing QR:", err));
     }
-  }, [isStationModalOpen, posStationId, currentBranch]);
+  }, [isStationModalOpen, posStationId, activeBranchId]);
 
   const handleStationChange = (newStation) => {
     setPosStationId(newStation);
@@ -4437,7 +4437,7 @@ const POSSystem = ({
                   <button
                     type="button"
                     onClick={() => {
-                      window.open(`/customer-display?station=${posStationId}&branch=${currentBranch}`, '_blank', 'noopener,noreferrer');
+                      window.open(`/customer-display?station=${posStationId}&branch=${activeBranchId}`, '_blank', 'noopener,noreferrer');
                     }}
                     className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 shrink-0"
                   >
@@ -4478,7 +4478,7 @@ const POSSystem = ({
                       <button
                         type="button"
                         onClick={() => {
-                          const url = `${window.location.origin}/customer-display?station=${posStationId}&branch=${currentBranch}`;
+                          const url = `${window.location.origin}/customer-display?station=${posStationId}&branch=${activeBranchId}`;
                           navigator.clipboard?.writeText(url);
                           showToast?.('คัดลอกลิงก์จอลูกค้าเรียบร้อย', 'success');
                         }}
