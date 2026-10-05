@@ -1230,7 +1230,7 @@ export default function CustomerDisplay({
 
               <div className="flex items-center gap-2 shrink-0">
                 <div className="px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-black/50 backdrop-blur-md border border-white/20 text-white shadow-xl flex items-center gap-1.5 sm:gap-2.5 pointer-events-auto whitespace-nowrap">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400 shrink-0" />
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 shrink-0" />
                   <span className="text-base sm:text-2xl md:text-3xl font-black font-mono tracking-wider text-white drop-shadow-md">
                     {clockTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -1285,10 +1285,10 @@ export default function CustomerDisplay({
                 )}
               </div>
 
-              {/* Bottom Right Slide Navigation Dots (Minimal Floating Circles) */}
+              {/* Bottom Right Slide Navigation Dots (Minimal Floating Dots & Active Pill) */}
               {activeAds.length > 1 && (
                 <div 
-                  className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto shrink-0 self-start md:self-end pb-2 z-40 select-none"
+                  className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0 self-start md:self-end pb-2 z-40 select-none"
                   onTouchStart={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
@@ -1302,14 +1302,14 @@ export default function CustomerDisplay({
                           e.stopPropagation();
                           transitionToSlide(idx);
                         }}
-                        className="p-1 sm:p-1.5 rounded-full flex items-center justify-center cursor-pointer group transition-transform active:scale-75"
+                        className="py-1 px-0.5 sm:py-1.5 sm:px-1 rounded-full flex items-center justify-center cursor-pointer group transition-transform active:scale-90"
                         aria-label={`Go to slide ${idx + 1}`}
                       >
                         <span 
-                          className={`block rounded-full transition-all duration-300 ${
+                          className={`block rounded-full transition-all duration-300 ease-out ${
                             isActive 
-                              ? 'w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white ring-2 ring-white/60 shadow-[0_2px_8px_rgba(0,0,0,0.8)] scale-110' 
-                              : 'w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white/40 group-hover:bg-white/75 shadow-[0_1px_4px_rgba(0,0,0,0.6)]'
+                              ? 'w-6 h-2 sm:w-7 sm:h-2.5 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.6)]' 
+                              : 'w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white/45 group-hover:bg-white/75 shadow-[0_1px_4px_rgba(0,0,0,0.5)]'
                           }`}
                         />
                       </button>
@@ -1369,7 +1369,7 @@ export default function CustomerDisplay({
                 </span>
               </div>
               <div className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-slate-100 border border-slate-200/80 text-slate-700 flex items-center gap-2 shadow-2xs">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500 shrink-0" />
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 shrink-0" />
                 <span className="text-base sm:text-xl font-bold font-mono text-slate-800">
                   {clockTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -1589,27 +1589,37 @@ export default function CustomerDisplay({
       {/* 5. SECRET ADMIN MODAL (Opened via 3-Finger Tap x 5 or Ctrl+Alt+S) */}
       {/* ============================================================== */}
       {adminModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md p-6 text-slate-800 kanit-text">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setAdminModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[min(90vh,680px)] flex flex-col text-slate-800 kanit-text overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header (Fixed) */}
+            <div className="flex items-center justify-between p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                   <Settings className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-800">ตั้งค่าจอแสดงผล (Admin Mode)</h3>
+                  <h3 className="font-bold text-base text-slate-800 leading-tight">ตั้งค่าจอแสดงผล (Admin Mode)</h3>
                   <p className="text-xs text-slate-400 font-normal">กำหนดเคาน์เตอร์และระบบเสียง</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setAdminModalOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors shrink-0"
+                title="ปิด"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            {/* Scrollable Content Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 overscroll-contain">
               {/* Station Selection */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -1743,7 +1753,8 @@ export default function CustomerDisplay({
               </div>
             </div>
 
-            <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            {/* Sticky Footer */}
+            <div className="p-4 sm:p-5 pt-3 sm:pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0 bg-slate-50/50">
               <button
                 type="button"
                 onClick={() => setAdminModalOpen(false)}

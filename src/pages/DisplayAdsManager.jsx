@@ -1154,7 +1154,7 @@ export default function DisplayAdsManager({
                                 </button>
                               )}
                               <div className="px-2 py-0.5 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white flex items-center gap-1">
-                                <Clock className="w-2.5 h-2.5 text-sky-400" />
+                                <Clock className="w-2.5 h-2.5 text-white/80" />
                                 <span className="text-[11px] font-bold font-mono text-white/90">
                                   {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
