@@ -367,68 +367,148 @@ export const TAG_STYLE_CATEGORIES = [
 // Flat registry for fast lookup
 export const ALL_TAG_SHADES = TAG_STYLE_CATEGORIES.flatMap(cat => cat.shades);
 
+// Typography customization options for Tag Badge
+export const TAG_TEXT_STROKE_OPTIONS = [
+  { id: 'none', label: 'ไม่มีขอบ', value: 'none' },
+  { id: 'thin_dark', label: 'ขอบดำบาง (1px)', value: '1px rgba(0,0,0,0.65)' },
+  { id: 'bold_dark', label: 'ขอบดำชัดเจน (1.5px)', value: '1.5px rgba(0,0,0,0.9)' },
+  { id: 'white_glow', label: 'ขอบขาวสว่าง (1px)', value: '1px rgba(255,255,255,0.85)' },
+  { id: 'gold_stroke', label: 'ขอบทองประกาย (1px)', value: '1px rgba(255,215,0,0.85)' }
+];
+
+export const TAG_TEXT_SHADOW_OPTIONS = [
+  { id: 'none', label: 'ไม่มีเงา', value: 'none' },
+  { id: 'soft_dark', label: 'เงานุ่มนวล', value: '0 2px 4px rgba(0,0,0,0.5)' },
+  { id: 'sharp_dark', label: 'เงาคมชัด', value: '0 2px 0 #000, 0 3px 6px rgba(0,0,0,0.7)' },
+  { id: 'gold_glow', label: 'แสงทองเรืองรอง', value: '0 0 10px rgba(255,215,0,0.85), 0 2px 4px rgba(0,0,0,0.4)' },
+  { id: 'flame_glow', label: 'แสงเพลิงจัดจ้าน', value: '0 0 12px rgba(255,69,0,0.9), 0 2px 4px rgba(0,0,0,0.5)' },
+  { id: 'lift_3d', label: 'ยกมิติ 3D คมชัด', value: '0 1px 0 rgba(255,255,255,0.6), 0 2px 4px rgba(0,0,0,0.6)' }
+];
+
+export const TAG_TEXT_COLOR_SWATCHES = [
+  { label: 'ค่าเริ่มต้น', value: '' },
+  { label: 'ขาวบริสุทธิ์', value: '#FFFFFF' },
+  { label: 'ดำสนิท', value: '#000000' },
+  { label: 'ทองคำสว่าง', value: '#FFF49E' },
+  { label: 'ทองบรอนซ์เข้ม', value: '#2E1700' },
+  { label: 'เหลืองสด', value: '#FEF08A' },
+  { label: 'แดงเพลิง', value: '#FF4D4D' }
+];
+
 /**
  * Resolves full badge style object ({ className, style }) for any given tagColor key
+ * Supports custom typography overrides (customTextColor, customTextStroke, customTextShadow)
  */
-export function getTagBadgeStyle(tagColor) {
-  const safe = String(tagColor || 'gold_royal_metallic').toLowerCase().trim();
+export function getTagBadgeStyle(tagColorInput, customOverrides = null) {
+  // If tagColorInput is an ad object or contains customization fields
+  let tagColor = tagColorInput;
+  let overrides = customOverrides || {};
 
-  // 1. Direct match with 24 curated shades
-  const exact = ALL_TAG_SHADES.find(s => s.id === safe);
-  if (exact) {
-    return {
-      className: 'font-black tracking-wide kanit-text select-none',
-      style: exact.style
+  if (tagColorInput && typeof tagColorInput === 'object') {
+    tagColor = tagColorInput.tagColor || tagColorInput.color;
+    overrides = {
+      textColor: tagColorInput.customTextColor || customOverrides?.textColor,
+      textStroke: tagColorInput.customTextStroke || customOverrides?.textStroke,
+      textShadow: tagColorInput.customTextShadow || customOverrides?.textShadow,
+      ...customOverrides
     };
   }
 
-  // 2. Legacy or category alias mapping
-  switch (safe) {
-    case 'luxury_gold':
-    case 'gold':
-    case 'amber':
-    case 'yellow':
-    case 'gold_royal':
-      return getTagBadgeStyle('gold_royal_metallic');
-    case 'minimal':
-    case 'glass':
-    case 'mono':
-      return getTagBadgeStyle('minimal_crystal_frost');
-    case 'vibrant_promo':
-    case 'promo':
-    case 'rose':
-    case 'red':
-      return getTagBadgeStyle('promo_fire_red');
-    case 'special':
-    case 'special_edition':
-      return getTagBadgeStyle('gold_royal_metallic');
-    case 'emerald_nature':
-    case 'emerald':
-    case 'green':
-    case 'teal':
-      return getTagBadgeStyle('minimal_sage_mint');
-    case 'ocean_sapphire':
-    case 'blue':
-    case 'sky':
-    case 'cyan':
-      return getTagBadgeStyle('minimal_pastel_sky');
-    case 'royal_amethyst':
-    case 'purple':
-    case 'indigo':
-    case 'violet':
-    case 'fuchsia':
-      return getTagBadgeStyle('promo_hot_fuchsia');
-    default:
-      return getTagBadgeStyle('gold_royal_metallic');
+  const safe = String(tagColor || 'gold_royal_metallic').toLowerCase().trim();
+
+  // 1. Direct match with 24 curated shades
+  let baseStyle = null;
+  const exact = ALL_TAG_SHADES.find(s => s.id === safe);
+  if (exact) {
+    baseStyle = { ...exact.style };
+  } else {
+    // 2. Legacy or category alias mapping
+    let resolvedId = 'gold_royal_metallic';
+    switch (safe) {
+      case 'luxury_gold':
+      case 'gold':
+      case 'amber':
+      case 'yellow':
+      case 'gold_royal':
+        resolvedId = 'gold_royal_metallic';
+        break;
+      case 'minimal':
+      case 'glass':
+      case 'mono':
+        resolvedId = 'minimal_crystal_frost';
+        break;
+      case 'vibrant_promo':
+      case 'promo':
+      case 'rose':
+      case 'red':
+        resolvedId = 'promo_fire_red';
+        break;
+      case 'special':
+      case 'special_edition':
+        resolvedId = 'gold_royal_metallic';
+        break;
+      case 'emerald_nature':
+      case 'emerald':
+      case 'green':
+      case 'teal':
+        resolvedId = 'minimal_sage_mint';
+        break;
+      case 'ocean_sapphire':
+      case 'blue':
+      case 'sky':
+      case 'cyan':
+        resolvedId = 'minimal_pastel_sky';
+        break;
+      case 'royal_amethyst':
+      case 'purple':
+      case 'indigo':
+      case 'violet':
+      case 'fuchsia':
+        resolvedId = 'promo_hot_fuchsia';
+        break;
+      default:
+        resolvedId = 'gold_royal_metallic';
+        break;
+    }
+    const mapped = ALL_TAG_SHADES.find(s => s.id === resolvedId);
+    baseStyle = mapped ? { ...mapped.style } : {};
   }
+
+  // Apply typography customizations if present
+  if (overrides) {
+    const textColor = overrides.textColor || overrides.customTextColor;
+    if (textColor && textColor.trim()) {
+      baseStyle.color = textColor.trim();
+    }
+    const textStroke = overrides.textStroke || overrides.customTextStroke;
+    if (textStroke) {
+      if (textStroke === 'none') {
+        delete baseStyle.WebkitTextStroke;
+        delete baseStyle.textStroke;
+      } else {
+        baseStyle.WebkitTextStroke = textStroke;
+      }
+    }
+    const textShadow = overrides.textShadow || overrides.customTextShadow;
+    if (textShadow) {
+      if (textShadow === 'none') {
+        delete baseStyle.textShadow;
+      } else {
+        baseStyle.textShadow = textShadow;
+      }
+    }
+  }
+
+  return {
+    className: 'font-black tracking-wide kanit-text select-none',
+    style: baseStyle
+  };
 }
 
 /**
  * Backward compatibility fallback: returns Tailwind class string
  */
-export function getTagBadgeClass(tagColor) {
-  const { style } = getTagBadgeStyle(tagColor);
-  // Return a safe base class; components should prefer using getTagBadgeStyle for exact rendering
+export function getTagBadgeClass(tagColor, customOverrides = null) {
   return 'font-black tracking-wide kanit-text shadow-sm';
 }
 

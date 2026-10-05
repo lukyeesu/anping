@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   CheckCircle2, ShoppingBag, QrCode, CreditCard, Banknote, Clock, 
   Sparkles, ShieldCheck, Heart, User, ChevronRight, ChevronLeft, 
-  Maximize, Minimize, Settings, Volume2, RefreshCw, X, Radio, ArrowRight
+  Maximize, Minimize, Settings, Volume2, RefreshCw, X, Radio, ArrowRight, Megaphone
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_CLINIC_ADS } from './DisplayAdsManager';
@@ -82,8 +82,24 @@ export default function CustomerDisplay({
     paymentMethod: 'cash'
   });
 
-  // Ads & Signage State
-  const [adsList, setAdsList] = useState(DEFAULT_CLINIC_ADS);
+  // Ads & Signage State (Initialized from cache or empty array, strictly avoiding default fallback)
+  const [adsList, setAdsList] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const branchCached = localStorage.getItem(`clinic_customer_display_ads_${branchId}`);
+        if (branchCached) {
+          const parsed = JSON.parse(branchCached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+        const generalCached = localStorage.getItem('clinic_customer_display_ads');
+        if (generalCached) {
+          const parsed = JSON.parse(generalCached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isPausedByTouch, setIsPausedByTouch] = useState(false);
   const [isChimeEnabled, setIsChimeEnabled] = useState(true);
@@ -99,6 +115,7 @@ export default function CustomerDisplay({
   const videoRefB = useRef(null);
   const keepAliveVideoRef = useRef(null);
   const slideTimerRef = useRef(null);
+  const cleanupTimerRef = useRef(null);
 
   // Live Clock Tick (Real-time update)
   const [clockTime, setClockTime] = useState(() => new Date());
@@ -108,6 +125,31 @@ export default function CustomerDisplay({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // ==============================================================
+  // Samsung OLED-Style Anti Burn-in Pixel Shift (Pixel Orbit)
+  // Subtly orbits high-brightness static elements (Logo, Clock, Text)
+  // by 1-2 pixels every minute with a 2.5s ease to protect display panels.
+  // ==============================================================
+  const PIXEL_SHIFT_OFFSETS = useMemo(() => [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 2, y: 1 },
+    { x: 1, y: 2 },
+    { x: 0, y: 2 },
+    { x: -1, y: 1 },
+    { x: -2, y: 0 },
+    { x: -2, y: -1 },
+    { x: -1, y: -2 },
+    { x: 0, y: -2 },
+    { x: 1, y: -1 },
+    { x: 1, y: 0 },
+  ], []);
+
+  const currentMinute = clockTime.getMinutes();
+  const pixelShiftClock = PIXEL_SHIFT_OFFSETS[currentMinute % 12];
+  const pixelShiftLogo = PIXEL_SHIFT_OFFSETS[(currentMinute + 3) % 12];
+  const pixelShiftCenter = PIXEL_SHIFT_OFFSETS[(currentMinute + 6) % 12];
 
   // Secret Admin Modal (Opened by 3-Finger Tap x 5 or Ctrl+Alt+S)
   const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -169,38 +211,37 @@ export default function CustomerDisplay({
 
   // Helper to extract ads for this specific branch
   const resolveAdsForBranch = useCallback((dataValues, targetBranchId) => {
-    if (!dataValues) return null;
+    if (!dataValues) return [];
     const safeBranch = String(targetBranchId || 'b1').trim().toLowerCase();
 
     // 1. New Per-Branch format: { branchAds: { b1: [...], b2: [...] } }
     if (dataValues.branchAds && typeof dataValues.branchAds === 'object') {
       const branchList = dataValues.branchAds[safeBranch] || dataValues.branchAds[targetBranchId];
-      if (Array.isArray(branchList) && branchList.length > 0) {
+      if (Array.isArray(branchList)) {
         return branchList;
       }
-      // If no custom ads configured for this branch, try 'b1' or 'default'
-      if (Array.isArray(dataValues.branchAds['b1']) && dataValues.branchAds['b1'].length > 0) {
+      // If no custom ads configured for this branch, try 'b1'
+      if (Array.isArray(dataValues.branchAds['b1'])) {
         return dataValues.branchAds['b1'];
       }
     }
 
     // 2. Legacy Flat array: { ads: [...] }
-    if (Array.isArray(dataValues.ads) && dataValues.ads.length > 0) {
+    if (Array.isArray(dataValues.ads)) {
       return dataValues.ads;
     }
 
     // 3. Raw array
-    if (Array.isArray(dataValues) && dataValues.length > 0) {
+    if (Array.isArray(dataValues)) {
       return dataValues;
     }
 
-    return null;
+    return [];
   }, []);
 
-  // Active Ads Filtered
+  // Active Ads Filtered (Strictly user-configured active ads with URL; no resurrecting defaults)
   const activeAds = useMemo(() => {
-    const list = (adsList || []).filter(ad => ad && ad.isActive !== false && ad.url);
-    return list.length > 0 ? list : DEFAULT_CLINIC_ADS;
+    return (adsList || []).filter(ad => ad && ad.isActive !== false && ad.url);
   }, [adsList]);
 
   // 1. Fetch Ads from Supabase / LocalStorage & Pre-cache Media & Subscribe to Realtime Sync Hub
@@ -214,7 +255,7 @@ export default function CustomerDisplay({
           const branchSpecificCached = localStorage.getItem(`clinic_customer_display_ads_${branchId}`);
           if (branchSpecificCached) {
             const parsed = JSON.parse(branchSpecificCached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
               setAdsList(parsed);
             }
           } else {
@@ -222,7 +263,7 @@ export default function CustomerDisplay({
             if (generalCached) {
               const parsed = JSON.parse(generalCached);
               const resolved = resolveAdsForBranch(parsed, branchId);
-              if (resolved && resolved.length > 0) {
+              if (Array.isArray(resolved)) {
                 setAdsList(resolved);
               }
             }
@@ -241,13 +282,15 @@ export default function CustomerDisplay({
 
           if (!isCancelled && data?.values) {
             const resolved = resolveAdsForBranch(data.values, branchId);
-            if (resolved && resolved.length > 0) {
+            if (Array.isArray(resolved)) {
               setAdsList(resolved);
               if (typeof window !== 'undefined' && window.localStorage) {
                 localStorage.setItem(`clinic_customer_display_ads_${branchId}`, JSON.stringify(resolved));
                 localStorage.setItem('clinic_customer_display_ads', JSON.stringify(data.values));
               }
             }
+          } else if (!isCancelled) {
+            setAdsList([]);
           }
         } catch (err) {
           console.warn('[Display] Error loading ads:', err);
@@ -271,7 +314,7 @@ export default function CustomerDisplay({
         targetAds = event.allBranchAds[currentBranch] || event.allBranchAds[branchId];
       }
 
-      if (Array.isArray(targetAds) && targetAds.length > 0) {
+      if (Array.isArray(targetAds)) {
         setAdsList(targetAds);
         if (typeof window !== 'undefined' && window.localStorage) {
           localStorage.setItem(`clinic_customer_display_ads_${branchId}`, JSON.stringify(targetAds));
@@ -429,20 +472,28 @@ export default function CustomerDisplay({
     return () => {
       subscriber.unsubscribe();
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      if (cleanupTimerRef.current) clearTimeout(cleanupTimerRef.current);
+      if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
     };
   }, [branchId, stationId]);
 
   // Pause all background videos when not in STANDBY_ADS to free GPU/CPU and eliminate jitter
   useEffect(() => {
     if (displayMode === 'STANDBY_ADS') {
-      if (activeLayer === 'A' && videoRefA.current && layerAData?.type === 'video') {
-        videoRefA.current.play().catch(() => {});
-      } else if (activeLayer === 'B' && videoRefB.current && layerBData?.type === 'video') {
-        videoRefB.current.play().catch(() => {});
+      if (activeLayer === 'A') {
+        if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+        if (videoRefA.current && layerAData?.type === 'video') {
+          videoRefA.current.play().catch(() => {});
+        }
+      } else if (activeLayer === 'B') {
+        if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+        if (videoRefB.current && layerBData?.type === 'video') {
+          videoRefB.current.play().catch(() => {});
+        }
       }
     } else {
-      if (videoRefA.current) videoRefA.current.pause();
-      if (videoRefB.current) videoRefB.current.pause();
+      if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+      if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
     }
   }, [displayMode, activeLayer, layerAData?.type, layerBData?.type]);
 
@@ -715,52 +766,102 @@ export default function CustomerDisplay({
     const targetAd = ads[safeIndex];
     if (!targetAd) return;
 
+    // Clear any pending crossfade cleanup timer
+    if (cleanupTimerRef.current) {
+      clearTimeout(cleanupTimerRef.current);
+      cleanupTimerRef.current = null;
+    }
+
     // Get cached or direct url
     const cachedUrl = await getCachedOrDirectMediaUrl(targetAd.url, targetAd.type);
     const preparedAd = { ...targetAd, resolvedUrl: cachedUrl };
 
     const currentLayer = activeLayerRef.current;
     if (currentLayer === 'A') {
+      // Immediately silence and pause Layer A video so sound stops INSTANTLY (0ms)
+      if (videoRefA.current) {
+        videoRefA.current.muted = true;
+        videoRefA.current.pause();
+      }
+
       // Prepare Layer B and crossfade
       setLayerBData(preparedAd);
       requestAnimationFrame(() => {
-        if (preparedAd.type === 'video' && videoRefB.current) {
-          videoRefB.current.currentTime = 0;
+        if (preparedAd.type === 'video') {
           const shouldMute = preparedAd.enableAudio !== true;
-          videoRefB.current.muted = shouldMute;
           setIsVideoMuted(shouldMute);
-          videoRefB.current.play().catch(() => {
-            if (!shouldMute) {
-              videoRefB.current.muted = true;
-              videoRefB.current.play().catch(() => {});
-            }
-          });
+          if (videoRefB.current) {
+            videoRefB.current.currentTime = 0;
+            videoRefB.current.muted = shouldMute;
+            videoRefB.current.play().catch(() => {
+              if (!shouldMute) {
+                videoRefB.current.muted = true;
+                videoRefB.current.play().catch(() => {});
+              }
+            });
+          }
+        } else {
+          // If next slide is an image, all video audio must be silent
+          setIsVideoMuted(true);
+          if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+          if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
         }
         setActiveLayer('B');
         activeLayerRef.current = 'B';
         setCurrentSlideIndex(safeIndex);
         currentSlideIndexRef.current = safeIndex;
+
+        // Clean up Layer A after crossfade duration (600ms) so no inactive ghost video can ever play in background
+        cleanupTimerRef.current = setTimeout(() => {
+          setLayerAData(null);
+          if (videoRefA.current) {
+            videoRefA.current.muted = true;
+            videoRefA.current.pause();
+          }
+        }, 600);
       });
     } else {
+      // Immediately silence and pause Layer B video so sound stops INSTANTLY (0ms)
+      if (videoRefB.current) {
+        videoRefB.current.muted = true;
+        videoRefB.current.pause();
+      }
+
       // Prepare Layer A and crossfade
       setLayerAData(preparedAd);
       requestAnimationFrame(() => {
-        if (preparedAd.type === 'video' && videoRefA.current) {
-          videoRefA.current.currentTime = 0;
+        if (preparedAd.type === 'video') {
           const shouldMute = preparedAd.enableAudio !== true;
-          videoRefA.current.muted = shouldMute;
           setIsVideoMuted(shouldMute);
-          videoRefA.current.play().catch(() => {
-            if (!shouldMute) {
-              videoRefA.current.muted = true;
-              videoRefA.current.play().catch(() => {});
-            }
-          });
+          if (videoRefA.current) {
+            videoRefA.current.currentTime = 0;
+            videoRefA.current.muted = shouldMute;
+            videoRefA.current.play().catch(() => {
+              if (!shouldMute) {
+                videoRefA.current.muted = true;
+                videoRefA.current.play().catch(() => {});
+              }
+            });
+          }
+        } else {
+          // If next slide is an image, all video audio must be silent
+          setIsVideoMuted(true);
+          if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+          if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
         }
         setActiveLayer('A');
         activeLayerRef.current = 'A';
         setCurrentSlideIndex(safeIndex);
         currentSlideIndexRef.current = safeIndex;
+
+        // Clean up Layer B after crossfade duration (600ms) so no inactive ghost video can ever play in background
+        cleanupTimerRef.current = setTimeout(() => {
+          setLayerBData(null);
+          if (videoRefB.current) {
+            videoRefB.current.muted = true;
+            videoRefB.current.pause();
+          }
+        }, 600);
       });
     }
   }, [displayMode]);
@@ -779,22 +880,64 @@ export default function CustomerDisplay({
     transitionToSlide(prevIndex);
   }, [transitionToSlide]);
 
-  // Initial Slide Load & Data Sync
-  const isInitialLoadDoneRef = useRef(false);
+  // Data Sync when activeAds changes (Instant refresh, no fallback)
   useEffect(() => {
-    if (activeAds.length > 0 && !isInitialLoadDoneRef.current) {
-      isInitialLoadDoneRef.current = true;
-      const targetAd = activeAds[0];
-      if (targetAd) {
-        getCachedOrDirectMediaUrl(targetAd.url, targetAd.type).then(resolvedUrl => {
-          setLayerAData({ ...targetAd, resolvedUrl });
-          setActiveLayer('A');
-        });
-      }
+    if (activeAds.length === 0) {
+      setLayerAData(null);
+      setLayerBData(null);
+      if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+      if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      return;
+    }
+
+    const safeIndex = currentSlideIndex >= activeAds.length ? 0 : currentSlideIndex;
+    if (safeIndex !== currentSlideIndex) {
+      setCurrentSlideIndex(safeIndex);
+      currentSlideIndexRef.current = safeIndex;
+    }
+
+    const targetAd = activeAds[safeIndex];
+    if (targetAd) {
+      getCachedOrDirectMediaUrl(targetAd.url, targetAd.type).then(resolvedUrl => {
+        const prepared = { ...targetAd, resolvedUrl };
+        if (activeLayerRef.current === 'A') {
+          setLayerAData(prepared);
+          setLayerBData(null);
+          if (prepared.type === 'video') {
+            const shouldMute = prepared.enableAudio !== true;
+            setIsVideoMuted(shouldMute);
+            if (videoRefA.current) {
+              videoRefA.current.currentTime = 0;
+              videoRefA.current.muted = shouldMute;
+              videoRefA.current.play().catch(() => {});
+            }
+          } else {
+            setIsVideoMuted(true);
+            if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+            if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+          }
+        } else {
+          setLayerBData(prepared);
+          setLayerAData(null);
+          if (prepared.type === 'video') {
+            const shouldMute = prepared.enableAudio !== true;
+            setIsVideoMuted(shouldMute);
+            if (videoRefB.current) {
+              videoRefB.current.currentTime = 0;
+              videoRefB.current.muted = shouldMute;
+              videoRefB.current.play().catch(() => {});
+            }
+          } else {
+            setIsVideoMuted(true);
+            if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+            if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+          }
+        }
+      });
     }
   }, [activeAds]);
 
-  // Slide Timer Loop for Standby Mode
+  // Slide Timer Loop for Standby Mode (Precise duration execution)
   useEffect(() => {
     if (displayMode !== 'STANDBY_ADS' || isPausedByTouch || activeAds.length <= 1) {
       if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
@@ -802,12 +945,20 @@ export default function CustomerDisplay({
     }
 
     const currentAd = activeAds[currentSlideIndex] || activeAds[0];
-    const durationMs = (currentAd?.duration || 8) * 1000;
+    if (!currentAd) return;
 
-    // If it's a video and autoVideoEnd is true, wait for video 'ended' event instead
-    if (currentAd?.type === 'video' && currentAd?.autoVideoEnd) {
-      return; // Handled by onEnded event on <video>
+    // Clear previous timer
+    if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+
+    // If it's a video and autoVideoEnd is true (or undefined), wait for video 'ended' event
+    if (currentAd?.type === 'video' && currentAd?.autoVideoEnd !== false) {
+      return; // Handled by onEnded event on the active <video>
     }
+
+    // For all static images, or videos where autoVideoEnd is explicitly false:
+    // Strictly respect the duration in seconds (default 8s if not configured)
+    const durationSec = Number(currentAd?.duration) > 0 ? Number(currentAd.duration) : 8;
+    const durationMs = durationSec * 1000;
 
     slideTimerRef.current = setTimeout(() => {
       goToNextSlide();
@@ -819,38 +970,77 @@ export default function CustomerDisplay({
   }, [displayMode, isPausedByTouch, currentSlideIndex, activeAds, goToNextSlide]);
 
   // Handle Video Ended (loops seamlessly if single ad/video, or transitions to next slide)
-  const handleVideoEnded = (e) => {
+  const handleVideoEnded = useCallback((fromLayer, e) => {
+    // CRITICAL: ONLY the currently ACTIVE layer can trigger slide transition!
+    // Inactive background video events are strictly discarded.
+    if (activeLayerRef.current !== fromLayer) {
+      return;
+    }
     if (displayMode !== 'STANDBY_ADS') return;
-    if (activeAds.length <= 1) {
-      const vid = e?.target || (activeLayer === 'A' ? videoRefA.current : videoRefB.current);
+
+    const ads = activeAdsRef.current;
+    if (!ads || ads.length <= 1) {
+      const vid = fromLayer === 'A' ? videoRefA.current : videoRefB.current;
       if (vid) {
         vid.currentTime = 0;
         vid.play().catch(() => {});
       }
-    } else {
-      goToNextSlide();
+      return;
     }
-  };
 
-  // Sync video audio mute state with current ad settings
+    const currentAd = ads[currentSlideIndexRef.current];
+    // If autoVideoEnd is true (or default), advance to next slide when video finishes
+    if (currentAd?.autoVideoEnd !== false) {
+      goToNextSlide();
+    } else {
+      // Loop this video seamlessly until the duration timer triggers
+      const vid = fromLayer === 'A' ? videoRefA.current : videoRefB.current;
+      if (vid) {
+        vid.currentTime = 0;
+        vid.play().catch(() => {});
+      }
+    }
+  }, [displayMode, goToNextSlide]);
+
+  // Sync video audio mute state strictly with active ad (Guarantees NO sound clashing)
   useEffect(() => {
+    if (displayMode !== 'STANDBY_ADS') {
+      if (videoRefA.current) { videoRefA.current.muted = true; videoRefA.current.pause(); }
+      if (videoRefB.current) { videoRefB.current.muted = true; videoRefB.current.pause(); }
+      return;
+    }
+
     const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+    const activeVid = activeLayer === 'A' ? videoRefA.current : videoRefB.current;
+    const inactiveVid = activeLayer === 'A' ? videoRefB.current : videoRefA.current;
+
+    // Inactive video MUST ALWAYS be muted and paused
+    if (inactiveVid) {
+      inactiveVid.muted = true;
+      inactiveVid.pause();
+    }
+
     if (currentAd?.type === 'video') {
       const shouldMute = currentAd.enableAudio !== true;
       setIsVideoMuted(shouldMute);
-      const vid = activeLayer === 'A' ? videoRefA.current : videoRefB.current;
-      if (vid) {
-        vid.muted = shouldMute;
-        if (!shouldMute) {
-          vid.play().catch(() => {
-            // Browser autoplay restrictions may require muted playback first
-            vid.muted = true;
-            vid.play().catch(() => {});
-          });
-        }
+      if (activeVid) {
+        activeVid.muted = shouldMute;
+        activeVid.play().catch(() => {
+          if (!shouldMute) {
+            activeVid.muted = true;
+            activeVid.play().catch(() => {});
+          }
+        });
+      }
+    } else {
+      // If current ad is an image, all video audio must be silent
+      setIsVideoMuted(true);
+      if (activeVid) {
+        activeVid.muted = true;
+        activeVid.pause();
       }
     }
-  }, [currentSlideIndex, activeLayer, layerAData, layerBData, activeAds]);
+  }, [currentSlideIndex, activeLayer, layerAData, layerBData, activeAds, displayMode]);
 
   // Global user interaction listener to unlock unmuted video audio on iOS Safari & Chrome
   useEffect(() => {
@@ -858,11 +1048,10 @@ export default function CustomerDisplay({
       const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
       if (currentAd?.type === 'video' && currentAd.enableAudio === true) {
         setIsVideoMuted(false);
-        if (videoRefA.current) {
+        if (activeLayer === 'A' && videoRefA.current) {
           videoRefA.current.muted = false;
           videoRefA.current.play().catch(() => {});
-        }
-        if (videoRefB.current) {
+        } else if (activeLayer === 'B' && videoRefB.current) {
           videoRefB.current.muted = false;
           videoRefB.current.play().catch(() => {});
         }
@@ -1128,6 +1317,69 @@ export default function CustomerDisplay({
             font-size: 17px !important;
           }
         }
+
+        @keyframes welcomeFloat {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-8px);
+          }
+        }
+
+        @keyframes welcomeShimmer {
+          0% {
+            background-position: -200% center;
+          }
+          100% {
+            background-position: 200% center;
+          }
+        }
+
+        @keyframes glowPulse {
+          0%, 100% {
+            opacity: 0.6;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.95;
+            transform: scale(1.06);
+          }
+        }
+
+        .animate-welcome-float {
+          animation: welcomeFloat 5s ease-in-out infinite;
+        }
+
+        .animate-welcome-shimmer {
+          background: linear-gradient(
+            90deg, 
+            #ffffff 0%, 
+            #e4f6e9 25%, 
+            #ffffff 50%, 
+            #c8ebd0 75%, 
+            #ffffff 100%
+          );
+          background-size: 200% auto;
+          background-clip: text;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: welcomeShimmer 6s linear infinite;
+        }
+
+        .animate-glow-pulse {
+          animation: glowPulse 6s ease-in-out infinite;
+        }
+
+        :root {
+          --welcome-group-scale: 1.4;
+        }
+
+        @media (min-width: 1536px) and (min-height: 850px) {
+          :root {
+            --welcome-group-scale: 2;
+          }
+        }
       `}</style>
 
       {/* ============================================================== */}
@@ -1141,242 +1393,304 @@ export default function CustomerDisplay({
         onMouseDown={() => setIsPausedByTouch(true)}
         onMouseUp={() => setIsPausedByTouch(false)}
       >
-        {/* Layer A */}
-        <div 
-          className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
-            activeLayer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0'
-          }`}
-        >
-          {layerAData && (
-            layerAData.type === 'video' ? (
-              <video
-                ref={videoRefA}
-                src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
-                className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                autoPlay
-                muted={isVideoMuted}
-                loop={activeAds.length <= 1}
-                playsInline
-                webkit-playsinline="true"
-                preload="auto"
-                onEnded={handleVideoEnded}
-                onContextMenu={(e) => e.preventDefault()}
-                onError={(e) => console.warn('[CustomerDisplay] Layer A Video error:', e.target?.error)}
-              />
-            ) : (
-              <img
-                src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
-                alt={layerAData.title || 'Slide'}
-                draggable={false}
-                onContextMenu={(e) => e.preventDefault()}
-                className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-              />
-            )
-          )}
-        </div>
+        {/* Empty Standby State when activeAds.length === 0 (Anping Clinic TCM Dark Jade Aesthetic) */}
+        {activeAds.length === 0 ? (
+          <div className="absolute inset-0 bg-[#060e09] flex flex-col items-center justify-center text-center px-6 py-12 select-none z-10 overflow-hidden">
+            {/* Ambient Herbal Jade Glows (Matched with Anping Clinic Logo #2D5A3D) */}
+            <div className="absolute w-[800px] h-[800px] bg-[#2D5A3D]/18 rounded-full blur-[160px] pointer-events-none -top-28 -left-28 animate-glow-pulse" />
+            <div className="absolute w-[750px] h-[750px] bg-[#1b3b28]/30 rounded-full blur-[140px] pointer-events-none -bottom-24 -right-24" />
+            <div className="absolute w-[500px] h-[500px] bg-[#3a6b4a]/12 rounded-full blur-[100px] pointer-events-none top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
-        {/* Layer B */}
-        <div 
-          className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
-            activeLayer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0'
-          }`}
-        >
-          {layerBData && (
-            layerBData.type === 'video' ? (
-              <video
-                ref={videoRefB}
-                src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
-                className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                autoPlay
-                muted={isVideoMuted}
-                loop={activeAds.length <= 1}
-                playsInline
-                webkit-playsinline="true"
-                preload="auto"
-                onEnded={handleVideoEnded}
-                onContextMenu={(e) => e.preventDefault()}
-                onError={(e) => console.warn('[CustomerDisplay] Layer B Video error:', e.target?.error)}
-              />
-            ) : (
-              <img
-                src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
-                alt={layerBData.title || 'Slide'}
-                draggable={false}
-                onContextMenu={(e) => e.preventDefault()}
-                className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-              />
-            )
-          )}
-        </div>
+            <div 
+              className="relative z-10 flex flex-col items-center max-w-5xl mx-auto px-4"
+              style={{
+                transform: `translate3d(${pixelShiftCenter.x}px, ${pixelShiftCenter.y}px, 0) scale(var(--welcome-group-scale, 2))`,
+                transformOrigin: 'center center',
+                transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                willChange: 'transform'
+              }}
+            >
+              <div className="flex flex-col items-center w-full animate-welcome-float">
+                {/* Prominent Counter Pill: จุดชำระเงิน • เคาน์เตอร์ X */}
+                <div className="inline-flex items-center gap-2.5 sm:gap-3.5 px-5 py-2.5 sm:px-7 sm:py-3.5 rounded-2xl sm:rounded-3xl bg-[#14291c]/90 border border-[#2D5A3D]/90 text-[#b5d6bd] shadow-[0_10px_36px_rgba(30,60,40,0.5)] backdrop-blur-md mb-4 sm:mb-5">
+                  <span className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-[#3fa35b] animate-pulse shadow-[0_0_16px_#3fa35b]" />
+                  <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black kanit-text tracking-wide text-white">
+                    จุดชำระเงิน • เคาน์เตอร์ {stationId.replace('station_', '')}
+                  </span>
+                </div>
 
-        {/* Subtle Edge Shadows - only at top for clinic badge and bottom for text, center stays 100% crystal clear */}
-        <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/45 via-black/15 to-transparent pointer-events-none z-20" />
-        {/* Dynamic Bottom Gradient Overlay (Auto-height strictly covering content + 5% above) */}
+                {/* Prominent "ยินดีต้อนรับ" Headline */}
+                <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-black kanit-text tracking-tight mb-2 sm:mb-3 drop-shadow-[0_8px_32px_rgba(0,0,0,0.95)] animate-welcome-shimmer">
+                  ยินดีต้อนรับ
+                </h1>
+
+                {/* Clinic Name (Larger than counter station text, Herbal Sage Tone matching logo) */}
+                <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-[#a2d1aa] kanit-text tracking-wide mb-4 sm:mb-5 drop-shadow-lg">
+                  {branchDisplayName || 'อันผิงคลินิกแพทย์แผนจีน'}
+                </h2>
+
+                {/* Formal Customer Guidance Text */}
+                <p className="text-xl sm:text-3xl md:text-4xl lg:text-[42px] font-light text-slate-200/90 kanit-text max-w-5xl leading-snug tracking-normal drop-shadow-md">
+                  รายการบริการและยอดชำระเงินจะปรากฏบนหน้าจอนี้<br className="hidden sm:inline" />
+                  เมื่อเจ้าหน้าที่ทำรายการ
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Layer A */}
+            <div 
+              className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
+                activeLayer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0'
+              }`}
+            >
+              {layerAData && (
+                layerAData.type === 'video' ? (
+                  <video
+                    ref={videoRefA}
+                    src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
+                    className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    muted={activeLayer === 'A' ? isVideoMuted : true}
+                    loop={activeAds.length <= 1}
+                    playsInline
+                    webkit-playsinline="true"
+                    preload="auto"
+                    onEnded={(e) => handleVideoEnded('A', e)}
+                    onContextMenu={(e) => e.preventDefault()}
+                    onError={(e) => console.warn('[CustomerDisplay] Layer A Video error:', e.target?.error)}
+                  />
+                ) : (
+                  <img
+                    src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
+                    alt={layerAData.title || 'Slide'}
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                  />
+                )
+              )}
+            </div>
+
+            {/* Layer B */}
+            <div 
+              className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
+                activeLayer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0'
+              }`}
+            >
+              {layerBData && (
+                layerBData.type === 'video' ? (
+                  <video
+                    ref={videoRefB}
+                    src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
+                    className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    muted={activeLayer === 'B' ? isVideoMuted : true}
+                    loop={activeAds.length <= 1}
+                    playsInline
+                    webkit-playsinline="true"
+                    preload="auto"
+                    onEnded={(e) => handleVideoEnded('B', e)}
+                    onContextMenu={(e) => e.preventDefault()}
+                    onError={(e) => console.warn('[CustomerDisplay] Layer B Video error:', e.target?.error)}
+                  />
+                ) : (
+                  <img
+                    src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
+                    alt={layerBData.title || 'Slide'}
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                  />
+                )
+              )}
+            </div>
+
+            {/* Subtle Edge Shadows - only at top for clinic badge and bottom for text, center stays 100% crystal clear */}
+            <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/45 via-black/15 to-transparent pointer-events-none z-20" />
+            {/* Dynamic Bottom Gradient Overlay (Auto-height strictly covering content + 5% above) */}
+            {(() => {
+              const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+              const hasText = !!(currentAd?.title || currentAd?.subtitle || currentAd?.tag);
+              const isOverlayEnabled = currentAd?.showBottomOverlay !== false;
+
+              if (!hasText || !isOverlayEnabled) return null;
+
+              // Estimate fallback if DOM measurement has not completed on first render frame
+              const estimateTextHeight = () => {
+                let est = 0;
+                if (currentAd?.tag) est += 36;
+                if (currentAd?.title) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 70 : 50;
+                if (currentAd?.subtitle) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 45 : 35;
+                return est;
+              };
+
+              const actualContentHeight = textBlockHeight > 0 ? textBlockHeight : estimateTextHeight();
+              const bottomOffset = (typeof window !== 'undefined' && window.innerWidth >= 640) ? 32 : 20;
+              const totalContentSpan = actualContentHeight + bottomOffset;
+              // Overlay strictly covers content and rises only 5% higher than the content
+              const totalOverlayHeight = Math.round(totalContentSpan * 1.05);
+
+              return (
+                <div 
+                  className="absolute bottom-0 left-0 right-0 pointer-events-none z-20 transition-all duration-300 ease-out"
+                  style={{
+                    height: `${totalOverlayHeight}px`,
+                    background: 'linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.35) 75%, rgba(0, 0, 0, 0.10) 92%, rgba(0, 0, 0, 0) 100%)'
+                  }}
+                />
+              );
+            })()}
+
+            {/* Floating Touch Pause Indicator (Centrally placed, never squeezes the header) */}
+            {isPausedByTouch && (
+              <div className="absolute top-18 sm:top-22 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-white/25 text-white text-xs font-medium kanit-text shadow-2xl animate-pulse pointer-events-none whitespace-nowrap flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>แตะค้างเพื่อหยุดอ่าน</span>
+              </div>
+            )}
+
+            {/* Bottom Promos Title & Indicators */}
+            {(() => {
+              const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+              return (
+                <div className="absolute bottom-5 left-4 right-4 sm:bottom-8 sm:left-8 sm:right-8 z-30 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4 pointer-events-none">
+                  <div ref={textBlockRef} className="max-w-4xl min-w-0 flex-1">
+                    {currentAd?.tag && (() => {
+                      const badge = getTagBadgeStyle(currentAd);
+                      return (
+                        <div className="mb-2 sm:mb-2.5 flex flex-wrap items-center gap-2">
+                          <span 
+                            className={`text-xs sm:text-sm md:text-base px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full inline-block transition-all ${badge.className}`}
+                            style={badge.style}
+                          >
+                            {currentAd.tag}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {currentAd?.title && (
+                      <h1 
+                        lang="th"
+                        className="thai-headline font-black text-white drop-shadow-2xl line-clamp-2"
+                      >
+                        {formatThaiTypography(currentAd.title)}
+                      </h1>
+                    )}
+                    {currentAd?.subtitle && (
+                      <p 
+                        lang="th"
+                        className="thai-subtitle font-medium text-white/95 mt-2 sm:mt-2.5 drop-shadow-xl max-w-4xl line-clamp-2"
+                      >
+                        {formatThaiTypography(currentAd.subtitle)}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Bottom Right Slide Navigation Dots (Minimal Floating Dots & Active Pill) */}
+                  {activeAds.length > 1 && (
+                    <div 
+                      className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0 self-start md:self-end pb-2 z-40 select-none"
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      {activeAds.map((_, idx) => {
+                        const isActive = idx === currentSlideIndex;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              transitionToSlide(idx);
+                            }}
+                            className="py-1 px-0.5 sm:py-1.5 sm:px-1 rounded-full flex items-center justify-center cursor-pointer group transition-transform active:scale-90"
+                            aria-label={`Go to slide ${idx + 1}`}
+                          >
+                            <span 
+                              className={`block rounded-full transition-all duration-300 ease-out ${
+                                isActive 
+                                  ? 'w-6 sm:w-8 h-2 sm:h-2.5 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.6)]' 
+                                  : 'w-2 sm:w-2.5 h-2 sm:h-2.5 bg-white/40 group-hover:bg-white/70 shadow-[0_1px_4px_rgba(0,0,0,0.4)]'
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </>
+        )}
+
+        {/* Top-Left Clinic Brand Header (Independent Absolute Container - Never shifts clock) */}
         {(() => {
           const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-          const hasText = !!(currentAd?.title || currentAd?.subtitle || currentAd?.tag);
-          const isOverlayEnabled = currentAd?.showBottomOverlay !== false;
-
-          if (!hasText || !isOverlayEnabled) return null;
-
-          // Estimate fallback if DOM measurement has not completed on first render frame
-          const estimateTextHeight = () => {
-            let est = 0;
-            if (currentAd?.tag) est += 36;
-            if (currentAd?.title) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 70 : 50;
-            if (currentAd?.subtitle) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 45 : 35;
-            return est;
-          };
-
-          const actualContentHeight = textBlockHeight > 0 ? textBlockHeight : estimateTextHeight();
-          const bottomOffset = (typeof window !== 'undefined' && window.innerWidth >= 640) ? 32 : 20;
-          const totalContentSpan = actualContentHeight + bottomOffset;
-          // Overlay strictly covers content and rises only 5% higher than the content
-          const totalOverlayHeight = Math.round(totalContentSpan * 1.05);
+          const isBrandHeaderVisible = activeAds.length === 0 || currentAd?.showBrandHeader !== false;
+          if (!isBrandHeaderVisible) return null;
 
           return (
             <div 
-              className="absolute bottom-0 left-0 right-0 pointer-events-none z-20 transition-all duration-300 ease-out"
+              className="absolute top-4 left-4 sm:top-6 sm:left-6 md:top-7 md:left-8 z-30 pointer-events-none max-w-[calc(100%-160px)] sm:max-w-[calc(100%-240px)]"
               style={{
-                height: `${totalOverlayHeight}px`,
-                background: 'linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.35) 75%, rgba(0, 0, 0, 0.10) 92%, rgba(0, 0, 0, 0) 100%)'
+                transform: `translate3d(${pixelShiftLogo.x}px, ${pixelShiftLogo.y}px, 0)`,
+                transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                willChange: 'transform'
               }}
-            />
-          );
-        })()}
-
-        {/* Top Header Bar */}
-        {(() => {
-          const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-          const isBrandHeaderVisible = currentAd?.showBrandHeader !== false;
-
-          return (
-            <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-6 md:top-7 md:left-8 md:right-8 flex items-center justify-between gap-3 sm:gap-4 z-30 pointer-events-none">
-              {isBrandHeaderVisible ? (
-                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 mr-2 pointer-events-auto">
-                  {branchLogo ? (
-                    <img 
-                      src={formatDirectImageUrl(branchLogo) || branchLogo}
-                      alt={branchDisplayName}
-                      draggable={false}
-                      onContextMenu={(e) => e.preventDefault()}
-                      className="clinic-brand-logo object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 pointer-events-none select-none"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className={`clinic-brand-logo flex items-center justify-center text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}
-                  >
-                    <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-rose-400 fill-rose-400/30" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="clinic-brand-title text-white tracking-wide drop-shadow-md truncate">
-                      {branchDisplayName}
-                    </h2>
-                    <p className="clinic-brand-subtitle text-white/85 font-light truncate mt-0.5">
-                      {branchSubtitle}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1" />
-              )}
-
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-black/50 backdrop-blur-md border border-white/20 text-white shadow-xl flex items-center gap-1.5 sm:gap-2.5 pointer-events-auto whitespace-nowrap">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 shrink-0" />
-                  <span className="text-base sm:text-2xl md:text-3xl font-black font-mono tracking-wider text-white drop-shadow-md">
-                    {clockTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Floating Touch Pause Indicator (Centrally placed, never squeezes the header) */}
-        {isPausedByTouch && (
-          <div className="absolute top-18 sm:top-22 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-white/25 text-white text-xs font-medium kanit-text shadow-2xl animate-pulse pointer-events-none whitespace-nowrap flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            <span>แตะค้างเพื่อหยุดอ่าน</span>
-          </div>
-        )}
-
-        {/* Bottom Promos Title & Indicators */}
-        {(() => {
-          const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-          return (
-            <div className="absolute bottom-5 left-4 right-4 sm:bottom-8 sm:left-8 sm:right-8 z-30 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4 pointer-events-none">
-              <div ref={textBlockRef} className="max-w-4xl min-w-0 flex-1">
-                {currentAd?.tag && (() => {
-                  const badge = getTagBadgeStyle(currentAd?.tagColor);
-                  return (
-                    <div className="mb-2 sm:mb-2.5 flex flex-wrap items-center gap-2">
-                      <span 
-                        className={`text-xs sm:text-sm md:text-base px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full inline-block transition-all ${badge.className}`}
-                        style={badge.style}
-                      >
-                        {currentAd.tag}
-                      </span>
-                    </div>
-                  );
-                })()}
-                {currentAd?.title && (
-                  <h1 
-                    lang="th"
-                    className="thai-headline font-black text-white drop-shadow-2xl line-clamp-2"
-                  >
-                    {formatThaiTypography(currentAd.title)}
-                  </h1>
-                )}
-                {currentAd?.subtitle && (
-                  <p 
-                    lang="th"
-                    className="thai-subtitle font-medium text-white/95 mt-2 sm:mt-2.5 drop-shadow-xl max-w-4xl line-clamp-2"
-                  >
-                    {formatThaiTypography(currentAd.subtitle)}
-                  </p>
-                )}
-              </div>
-
-              {/* Bottom Right Slide Navigation Dots (Minimal Floating Dots & Active Pill) */}
-              {activeAds.length > 1 && (
+            >
+              <div className="flex items-center gap-3 sm:gap-4 pointer-events-auto">
+                {branchLogo ? (
+                  <img 
+                    src={formatDirectImageUrl(branchLogo) || branchLogo}
+                    alt={branchDisplayName}
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="clinic-brand-logo object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 pointer-events-none select-none"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
                 <div 
-                  className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0 self-start md:self-end pb-2 z-40 select-none"
-                  onTouchStart={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
+                  className={`clinic-brand-logo flex items-center justify-center text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}
                 >
-                  {activeAds.map((_, idx) => {
-                    const isActive = idx === currentSlideIndex;
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          transitionToSlide(idx);
-                        }}
-                        className="py-1 px-0.5 sm:py-1.5 sm:px-1 rounded-full flex items-center justify-center cursor-pointer group transition-transform active:scale-90"
-                        aria-label={`Go to slide ${idx + 1}`}
-                      >
-                        <span 
-                          className={`block rounded-full transition-all duration-300 ease-out ${
-                            isActive 
-                              ? 'w-6 h-2 sm:w-7 sm:h-2.5 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.6)]' 
-                              : 'w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white/45 group-hover:bg-white/75 shadow-[0_1px_4px_rgba(0,0,0,0.5)]'
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
+                  <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-rose-400 fill-rose-400/30" />
                 </div>
-              )}
+                <div className="min-w-0 flex-1">
+                  <h2 className="clinic-brand-title text-white tracking-wide drop-shadow-md truncate">
+                    {branchDisplayName}
+                  </h2>
+                  <p className="clinic-brand-subtitle text-white/85 font-light truncate mt-0.5">
+                    {branchSubtitle}
+                  </p>
+                </div>
+              </div>
             </div>
           );
         })()}
+
+        {/* Top-Right Fixed Clock (Permanently Fixed Coordinates & High Readability White Icon) */}
+        <div 
+          className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-7 md:right-8 z-30 pointer-events-auto shrink-0 select-none"
+          style={{
+            transform: `translate3d(${pixelShiftClock.x}px, ${pixelShiftClock.y}px, 0)`,
+            transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+            willChange: 'transform'
+          }}
+        >
+          <div className="px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-2xl sm:rounded-3xl bg-black/60 backdrop-blur-md border border-white/25 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap">
+            <Clock className="w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9 text-white shrink-0 stroke-[2.2]" />
+            <span className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black font-mono tabular-nums tracking-wide leading-none text-white drop-shadow-lg inline-flex items-center">
+              <span>{String(clockTime.getHours()).padStart(2, '0')}</span>
+              <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${clockTime.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-20'}`}>
+                :
+              </span>
+              <span>{String(clockTime.getMinutes()).padStart(2, '0')}</span>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* ============================================================== */}
@@ -1390,7 +1704,14 @@ export default function CustomerDisplay({
         <div className="w-full h-full flex flex-col p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
           {/* Top Info Bar */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-200 shrink-0">
-            <div className="flex items-center gap-3.5">
+            <div 
+              className="flex items-center gap-3.5"
+              style={{
+                transform: `translate3d(${pixelShiftLogo.x}px, ${pixelShiftLogo.y}px, 0)`,
+                transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                willChange: 'transform'
+              }}
+            >
               {branchLogo ? (
                 <img 
                   src={formatDirectImageUrl(branchLogo) || branchLogo}
@@ -1425,10 +1746,21 @@ export default function CustomerDisplay({
                   กำลังคิดเงิน
                 </span>
               </div>
-              <div className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-slate-100 border border-slate-200/80 text-slate-700 flex items-center gap-2 shadow-2xs">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 shrink-0" />
-                <span className="text-base sm:text-xl font-bold font-mono text-slate-800">
-                  {clockTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+              <div 
+                className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-100 border border-slate-200/90 text-slate-800 flex items-center gap-2 sm:gap-2.5 shadow-2xs"
+                style={{
+                  transform: `translate3d(${pixelShiftClock.x}px, ${pixelShiftClock.y}px, 0)`,
+                  transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  willChange: 'transform'
+                }}
+              >
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600 shrink-0" />
+                <span className="text-lg sm:text-2xl font-black font-mono text-slate-800 tracking-wide inline-flex items-center">
+                  <span>{String(clockTime.getHours()).padStart(2, '0')}</span>
+                  <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${clockTime.getSeconds() % 2 === 0 ? 'opacity-100' : 'opacity-20'}`}>
+                    :
+                  </span>
+                  <span>{String(clockTime.getMinutes()).padStart(2, '0')}</span>
                 </span>
               </div>
             </div>
@@ -1651,24 +1983,24 @@ export default function CustomerDisplay({
           onClick={() => setAdminModalOpen(false)}
         >
           <div 
-            className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[min(90vh,680px)] flex flex-col text-slate-800 kanit-text overflow-hidden"
+            className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md max-h-[min(88dvh,540px)] flex flex-col text-slate-800 kanit-text overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header (Fixed) */}
-            <div className="flex items-center justify-between p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 shrink-0 bg-white">
+            <div className="flex items-center justify-between p-3.5 sm:p-4 pb-3 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Settings className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Settings className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-800 leading-tight">ตั้งค่าจอแสดงผล (Admin Mode)</h3>
-                  <p className="text-xs text-slate-400 font-normal">กำหนดเคาน์เตอร์และระบบเสียง</p>
+                  <h3 className="font-bold text-sm sm:text-base text-slate-800 leading-tight">ตั้งค่าจอแสดงผล (Admin Mode)</h3>
+                  <p className="text-[11px] text-slate-400 font-normal">กำหนดเคาน์เตอร์และระบบเสียง</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setAdminModalOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors shrink-0"
+                className="w-7 h-7 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
                 title="ปิด"
               >
                 <X className="w-4 h-4" />
@@ -1676,25 +2008,38 @@ export default function CustomerDisplay({
             </div>
 
             {/* Scrollable Content Body */}
-            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4 overscroll-contain">
-              {/* Station Selection */}
+            <div className="p-3.5 sm:p-4 overflow-y-auto flex-1 space-y-3.5 overscroll-contain">
+              {/* Prominent Fullscreen Button (โดดเด่นสะดุดตา ใช้งานง่าย) */}
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                className={`w-full py-2.5 sm:py-3 px-4 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-md transition-all active:scale-[0.98] cursor-pointer ${
+                  isFullscreen
+                    ? 'bg-slate-800 hover:bg-slate-700 text-white shadow-slate-800/20'
+                    : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white shadow-emerald-600/30'
+                }`}
+              >
+                <Maximize className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span>{isFullscreen ? 'ออกจากโหมดเต็มจอ (Exit Fullscreen)' : 'เปิดโหมดเต็มจอ (Enter Fullscreen)'}</span>
+              </button>
+
+              {/* Station Selection (Compact 4-column row) */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   เลือกจุดเคาน์เตอร์ (Station)
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-4 gap-1.5">
                   {['station_1', 'station_2', 'station_3', 'station_4'].map(st => (
                     <button
                       key={st}
                       type="button"
                       onClick={() => setTempStationId(st)}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+                      className={`py-2 px-1 rounded-xl border text-xs font-semibold text-center transition-all cursor-pointer ${
                         tempStationId === st
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-2xs font-bold'
                           : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      <Radio className="w-3.5 h-3.5" />
                       <span>เคาน์เตอร์ {st.replace('station_', '')}</span>
                     </button>
                   ))}
@@ -1709,7 +2054,7 @@ export default function CustomerDisplay({
                 <select
                   value={tempBranchId}
                   onChange={(e) => setTempBranchId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-emerald-500"
                 >
                   <option value="b1">สาขา 1 (สำนักงานใหญ่)</option>
                   {(branchesData || []).filter(b => (b.id || b.branch_id) !== 'b1').map(b => (
@@ -1720,112 +2065,86 @@ export default function CustomerDisplay({
                 </select>
               </div>
 
-              {/* Toggles */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              {/* Toggles & Keep Awake Card */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-700 flex items-center gap-2">
+                  <span className="text-xs text-slate-700 flex items-center gap-2 font-medium">
                     <Volume2 className="w-4 h-4 text-emerald-600" />
                     <span>เสียงเตือน Chime เมื่อชำระสำเร็จ</span>
                   </span>
                   <button
+                    type="button"
                     onClick={() => {
                       setIsChimeEnabled(!isChimeEnabled);
                       if (!isChimeEnabled) playGentleChime();
                     }}
-                    className={`w-10 h-6 rounded-full transition-colors relative ${
+                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
                       isChimeEnabled ? 'bg-emerald-600' : 'bg-slate-300'
                     }`}
                   >
                     <div 
-                      className={`w-4 h-4 rounded-full bg-white transition-transform absolute top-1 ${
-                        isChimeEnabled ? 'left-5' : 'left-1'
+                      className={`w-3.5 h-3.5 rounded-full bg-white transition-transform absolute top-0.5 ${
+                        isChimeEnabled ? 'left-4.5' : 'left-0.5'
                       }`} 
                     />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                  <span className="text-xs text-slate-700 flex items-center gap-2">
-                    <Volume2 className="w-4 h-4 text-sky-600" />
-                    <span>เสียงวิดีโอโฆษณา (Video Audio)</span>
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                    ตามที่ตั้งค่าในระบบจัดการโฆษณา
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                  <span className="text-xs text-slate-700 flex items-center gap-2">
-                    <Maximize className="w-4 h-4 text-slate-500" />
-                    <span>โหมดเต็มจอ (Fullscreen)</span>
-                  </span>
-                  <button
-                    onClick={toggleFullscreen}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-xs text-slate-700 transition-colors shadow-2xs"
-                  >
-                    {isFullscreen ? 'ออกจากเต็มจอ' : 'เปิดเต็มจอ'}
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2 pt-2 border-t border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-700 flex items-center gap-2">
+                <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-700 flex items-center gap-1.5 font-medium">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      <span>โหมดจอไม่ดับ (Always-on Display)</span>
+                      <span>โหมดจอไม่ดับ (Always-On)</span>
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
-                        (wakeLockActive || keepAwakeType !== 'none')
-                          ? 'bg-emerald-100 text-emerald-700' 
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${(wakeLockActive || keepAwakeType !== 'none') ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                        {keepAwakeType === 'native' ? 'Wake Lock API' : keepAwakeType === 'video' ? 'Video Loop (iPad/HTTP)' : keepAwakeType === 'audio' ? 'Audio Session' : 'แตะเพื่อเปิด'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => activateKeepAwake(true)}
-                        className="px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-[11px] font-medium transition-colors flex items-center gap-1 shadow-2xs"
-                        title="บังคับเปิดโหมดจอไม่ดับซ้ำ"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        เปิดซ้ำ
-                      </button>
-                    </div>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      {keepAwakeType === 'native' ? 'Wake Lock API' : keepAwakeType === 'video' ? 'Video Loop (iPad)' : 'ระบบล็อกจอเปิดทำงาน'}
+                    </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-light pl-6">
-                    iPad / แท็บเล็ต: ระบบใช้ Triple-Engine ป้องกันหน้าจอดับอัตโนมัติทั้งบน LAN HTTP และ HTTPS
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                      (wakeLockActive || keepAwakeType !== 'none')
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${(wakeLockActive || keepAwakeType !== 'none') ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                      {(wakeLockActive || keepAwakeType !== 'none') ? 'เปิดอยู่' : 'ยังไม่เปิด'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => activateKeepAwake(true)}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium transition-colors shadow-2xs cursor-pointer"
+                      title="บังคับเปิดโหมดจอไม่ดับซ้ำ"
+                    >
+                      ล็อกจอเปิด
+                    </button>
                   </div>
                 </div>
               </div>
 
               {/* Secret Gesture info and iPad recommendations for staff */}
-              <div className="space-y-2">
-                <div className="p-3 rounded-xl bg-sky-50/70 border border-sky-100 text-[11px] text-sky-900 leading-relaxed font-light">
-                  🚀 <strong>เปิดเต็มจอ 100% บน iPad (แนะนำ):</strong> กดปุ่ม <strong>แชร์ (Share)</strong> ที่แถบบนของ Safari &gt; เลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong> จะเปิดเป็นแอปเต็มจอไร้แถบ URL ถาวร
+              <div className="space-y-1.5 text-[10.5px]">
+                <div className="p-2.5 rounded-xl bg-sky-50/70 border border-sky-100 text-sky-900 leading-relaxed font-light">
+                  🚀 <strong>เต็มจอ 100% บน iPad:</strong> กดปุ่มแชร์ Safari &gt; <strong>"เพิ่มไปยังหน้าจอโฮม"</strong>
                 </div>
-                <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-800 leading-relaxed font-light">
-                  💡 <strong>วิธีเปิดหน้าต่างนี้ในอนาคต:</strong> บน iPad ใช้นิ้ว <strong>3 นิ้วแตะพร้อมกัน 5 ครั้ง</strong> ที่ใดก็ได้บนจอ หรือบน PC กดคีย์ลัด <strong>Ctrl + Alt + S</strong>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 text-[11px] text-amber-800 leading-relaxed font-light">
-                  📱 <strong>แนะนำสำหรับการใช้งาน iPad ในคลินิก:</strong> เพื่อความเสถียร 100% ตลอดทั้งวัน ให้ไปที่ <strong>Settings &gt; Display &amp; Brightness &gt; Auto-Lock</strong> และเลือก <strong>Never</strong> เพื่อให้หน้าจอไม่ดับถาวร
+                <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-emerald-800 leading-relaxed font-light">
+                  💡 <strong>เปิดหน้าต่างนี้:</strong> บน iPad ใช้ <strong>3 นิ้วแตะ 5 ครั้ง</strong> หรือบน PC กด <strong>Ctrl + Alt + S</strong>
                 </div>
               </div>
             </div>
 
             {/* Sticky Footer */}
-            <div className="p-4 sm:p-5 pt-3 sm:pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0 bg-slate-50/50">
+            <div className="p-3 sm:p-4 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0 bg-slate-50/50">
               <button
                 type="button"
                 onClick={() => setAdminModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 text-xs transition-colors"
+                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 text-xs transition-colors cursor-pointer"
               >
                 ยกเลิก
               </button>
               <button
                 type="button"
                 onClick={handleSaveAdminConfig}
-                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all"
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
               >
                 บันทึกการตั้งค่า
               </button>

@@ -2463,45 +2463,47 @@ const POSSystem = ({
       {/* แก้ไข: เพิ่ม z-[70] เมื่อเปิดตะกร้าบนมือถือ เพื่อยกเลเยอร์ให้ลอยข้าม Header และ Navbar */}
       <div className={`absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in ${isMobileCartOpen ? 'z-[70]' : ''}`}>
         
-        {/* Header ของ POS */}
-        <div className="pos-header flex flex-row justify-between items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
-          <div className="flex flex-col items-start">
+        {/* Header ของ POS (Responsive: 2 แถวบน Mobile เพื่อความเป็นระเบียบ ไม่เบียดกัน) */}
+        <div className="pos-header flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2 leading-none">
               <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500 shrink-0" /> 
               <span>ระบบ POS</span>
-              {/* แสดงผลแนวนอนบน Desktop */}
-              <span className="hidden sm:inline-flex text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">จุดรับชำระเงิน</span>
+              <span className="inline-flex text-xs sm:text-sm font-medium text-slate-400 bg-slate-100 px-2 py-0.5 sm:py-1 rounded-lg">จุดรับชำระเงิน</span>
             </h1>
-            {/* แสดงผลบรรทัดล่างบน Mobile */}
-            <span className="sm:hidden text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md mt-1.5 ml-7">จุดรับชำระเงิน</span>
           </div>
           
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Action Buttons: 3 ปุ่มเท่ากันบน Mobile เรียงเป็นแถวที่ 2 เป็นระเบียบ */}
+          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto shrink-0">
             {/* ปุ่มตั้งค่าเคาน์เตอร์ & จอลูกค้า */}
             <button
               type="button"
               onClick={() => setIsStationModalOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
               title="ตั้งค่าเคาน์เตอร์และเชื่อมต่อจอแสดงผลฝั่งลูกค้า"
             >
-              <Monitor size={16} className="sm:w-[18px] sm:h-[18px] text-emerald-600" />
-              <span className="hidden sm:inline">เคาน์เตอร์ {posStationId.replace('station_', '')}</span>
-              <span className="sm:hidden">จอ {posStationId.replace('station_', '')}</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-0.5" />
-              <ChevronDown size={14} className="text-emerald-600/70" />
+              <Monitor size={15} className="sm:w-[18px] sm:h-[18px] text-emerald-600 shrink-0" />
+              <span className="truncate">เคาน์เตอร์ {posStationId.replace('station_', '')}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0 ml-0.5" />
+              <ChevronDown size={13} className="text-emerald-600/70 shrink-0 hidden sm:inline" />
             </button>
             <button
+              type="button"
               onClick={handleOpenDailySummaryModal}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 hover:text-blue-800 hover:bg-blue-100 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 hover:text-blue-800 hover:bg-blue-100 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
               title="สรุปยอดขายประจำวัน & ส่งแจ้งเตือนเข้า LINE / Discord"
             >
-              <BarChart3 size={16} className="sm:w-[18px] sm:h-[18px] text-blue-600" /> <span className="hidden sm:inline">สรุปยอดวันนี้</span><span className="sm:hidden">สรุปยอด</span>
+              <BarChart3 size={15} className="sm:w-[18px] sm:h-[18px] text-blue-600 shrink-0" /> 
+              <span className="truncate"><span className="hidden sm:inline">สรุปยอดวันนี้</span><span className="sm:hidden">สรุปยอด</span></span>
             </button>
             <button
+              type="button"
               onClick={() => historyModal.open()}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-sm kanit-text text-[11px] sm:text-sm font-medium"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
+              title="ประวัติการขาย"
             >
-              <History size={16} className="sm:w-[18px] sm:h-[18px]" /> <span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span>
+              <History size={15} className="sm:w-[18px] sm:h-[18px] shrink-0" /> 
+              <span className="truncate"><span className="hidden sm:inline">ประวัติการขาย</span><span className="sm:hidden">ประวัติ</span></span>
             </button>
           </div>
         </div>

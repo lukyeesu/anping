@@ -11,7 +11,34 @@ import { formatDirectImageUrl } from '../lib/notificationHub';
 import { formatMediaUrl, preloadAllAdsMedia } from '../lib/customerDisplayMediaCache';
 import { createAdsSyncHub } from '../lib/customerDisplaySync';
 import { rAFThrottle } from '../global/helpers';
-import { formatThaiTypography, TAG_STYLE_CATEGORIES, ALL_TAG_SHADES, getTagBadgeStyle, getTagBadgeClass } from '../utils/thaiTypography';
+import { formatThaiTypography, TAG_STYLE_CATEGORIES, ALL_TAG_SHADES, getTagBadgeStyle, getTagBadgeClass, TAG_TEXT_COLOR_SWATCHES, TAG_TEXT_STROKE_OPTIONS, TAG_TEXT_SHADOW_OPTIONS } from '../utils/thaiTypography';
+
+// iOS-style Smooth Toggle Switch Component
+const ToggleSwitch = ({ checked, onChange, disabled = false, size = 'md', activeColor = 'bg-sky-500' }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!disabled) onChange(!checked);
+    }}
+    className={`relative inline-flex shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+      size === 'sm' ? 'h-5 w-9' : 'h-6 w-11'
+    } ${checked ? activeColor : 'bg-slate-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+  >
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none inline-block rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+        size === 'sm' 
+          ? `h-4 w-4 mt-0.5 transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}` 
+          : `h-5 w-5 mt-0.5 transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`
+      }`}
+    />
+  </button>
+);
 
 // Default curated promotional set for Anping Clinic
 export const DEFAULT_CLINIC_ADS = [
@@ -142,6 +169,9 @@ export default function DisplayAdsManager({
     subtitle: '',
     tag: 'โปรโมชั่น',
     tagColor: 'gold_royal_metallic',
+    customTextColor: '',
+    customTextStroke: 'none',
+    customTextShadow: 'none',
     url: '',
     duration: 8,
     autoVideoEnd: true,
@@ -463,6 +493,9 @@ export default function DisplayAdsManager({
       subtitle: '',
       tag: 'โปรโมชั่น',
       tagColor: 'gold_royal_metallic',
+      customTextColor: '',
+      customTextStroke: 'none',
+      customTextShadow: 'none',
       url: '',
       duration: 8,
       autoVideoEnd: true,
@@ -487,6 +520,9 @@ export default function DisplayAdsManager({
       subtitle: ad.subtitle || '',
       tag: ad.tag || '',
       tagColor: chosenTagColor,
+      customTextColor: ad.customTextColor || '',
+      customTextStroke: ad.customTextStroke || 'none',
+      customTextShadow: ad.customTextShadow || 'none',
       url: ad.url || '',
       duration: ad.duration || 8,
       autoVideoEnd: ad.autoVideoEnd ?? true,
@@ -494,7 +530,8 @@ export default function DisplayAdsManager({
       showBottomOverlay: ad.showBottomOverlay ?? true,
       showBrandHeader: ad.showBrandHeader ?? true,
       enableAudio: ad.enableAudio ?? false,
-      isActive: ad.isActive ?? true
+      isActive: ad.isActive ?? true,
+      applyToAllBranches: false
     });
     // Sync category tab with the ad's tagColor
     const parentCat = TAG_STYLE_CATEGORIES.find(c => c.shades.some(s => s.id === chosenTagColor));
@@ -609,6 +646,9 @@ export default function DisplayAdsManager({
         title: modalForm.title.trim(),
         subtitle: modalForm.subtitle.trim(),
         tagColor: modalForm.tagColor || 'gold_royal_metallic',
+        customTextColor: modalForm.customTextColor || '',
+        customTextStroke: modalForm.customTextStroke || 'none',
+        customTextShadow: modalForm.customTextShadow || 'none',
         showBottomOverlay: modalForm.showBottomOverlay ?? true,
         showBrandHeader: modalForm.showBrandHeader ?? true,
         enableAudio: modalForm.type === 'video' ? (modalForm.enableAudio ?? false) : false
@@ -622,6 +662,9 @@ export default function DisplayAdsManager({
         title: modalForm.title.trim(),
         subtitle: modalForm.subtitle.trim(),
         tagColor: modalForm.tagColor || 'gold_royal_metallic',
+        customTextColor: modalForm.customTextColor || '',
+        customTextStroke: modalForm.customTextStroke || 'none',
+        customTextShadow: modalForm.customTextShadow || 'none',
         showBottomOverlay: modalForm.showBottomOverlay ?? true,
         showBrandHeader: modalForm.showBrandHeader ?? true,
         enableAudio: modalForm.type === 'video' ? (modalForm.enableAudio ?? false) : false,
@@ -904,7 +947,7 @@ export default function DisplayAdsManager({
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
                           {ad.tag && (() => {
-                            const badge = getTagBadgeStyle(ad.tagColor);
+                            const badge = getTagBadgeStyle(ad);
                             return (
                               <span 
                                 className={`text-[10px] font-bold px-2 py-0.5 rounded-md inline-block shadow-xs transition-all ${badge.className}`}
@@ -1166,7 +1209,7 @@ export default function DisplayAdsManager({
                           <div className="absolute bottom-3.5 left-4 right-4 text-white z-20" lang="th">
                             <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                               {currentAd?.tag && (() => {
-                                const badge = getTagBadgeStyle(currentAd.tagColor);
+                                const badge = getTagBadgeStyle(currentAd);
                                 return (
                                   <span 
                                     className={`text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full inline-block kanit-text shadow-sm transition-all ${badge.className}`}
@@ -1261,7 +1304,7 @@ export default function DisplayAdsManager({
       {/* Add / Edit Ad Modal */}
       {modalOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-3 sm:p-5 md:p-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-5xl overflow-hidden max-h-[92vh] flex flex-col">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-6xl overflow-hidden max-h-[92vh] sm:max-h-[88vh] flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div className="flex items-center gap-3">
@@ -1396,7 +1439,8 @@ export default function DisplayAdsManager({
                         <>
                           {modalForm.type === 'video' ? (
                             <video
-                              src={formatMediaUrl(modalForm.url)}
+                              key={modalForm.url}
+                              src={formatMediaUrl(modalForm.url, 'video')}
                               autoPlay
                               loop
                               muted={!modalForm.enableAudio}
@@ -1431,7 +1475,7 @@ export default function DisplayAdsManager({
                           {/* Floating text & tag badge preview */}
                           <div className="absolute bottom-2.5 left-2.5 right-2.5 z-10">
                             {modalForm.tag?.trim() && (() => {
-                              const liveBadge = getTagBadgeStyle(modalForm.tagColor);
+                              const liveBadge = getTagBadgeStyle(modalForm);
                               return (
                                 <div className="mb-1">
                                   <span 
@@ -1482,38 +1526,33 @@ export default function DisplayAdsManager({
                     </div>
 
                     <div className="flex flex-col justify-end">
-                      <label className="flex items-center gap-2 cursor-pointer pb-2">
-                        <input
-                          type="checkbox"
-                          checked={modalForm.isActive}
-                          onChange={(e) => setModalForm(prev => ({ ...prev, isActive: e.target.checked }))}
-                          className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
-                        />
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200">
                         <span className="text-xs font-bold text-slate-700">เปิดใช้งานทันที</span>
-                      </label>
+                        <ToggleSwitch
+                          checked={modalForm.isActive}
+                          onChange={(val) => setModalForm(prev => ({ ...prev, isActive: val }))}
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* Apply to All Branches option (if clinic has multiple branches) */}
                   {branchesData && branchesData.length > 1 && (
-                    <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 transition-all">
-                      <label className="flex items-start justify-between gap-3 cursor-pointer">
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5 kanit-text">
-                            <Building2 className="w-4 h-4 text-amber-600" />
-                            <span>นำไปใช้กับทุกสาขาด้วย</span>
-                          </span>
-                          <p className="text-[11px] text-amber-700/80 font-light leading-relaxed kanit-text">
-                            เปิดเพื่อให้สื่อนี้แสดงในทุกสาขาพร้อมกัน หรือปิดเพื่อแสดงเฉพาะใน {activeBranchName}
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={modalForm.applyToAllBranches ?? false}
-                          onChange={(e) => setModalForm(prev => ({ ...prev, applyToAllBranches: e.target.checked }))}
-                          className="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 shrink-0 cursor-pointer"
-                        />
-                      </label>
+                    <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/80 transition-all flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5 kanit-text">
+                          <Building2 className="w-4 h-4 text-amber-600" />
+                          <span>นำไปใช้กับทุกสาขาด้วย</span>
+                        </span>
+                        <p className="text-[11px] text-amber-700/80 font-light leading-relaxed kanit-text">
+                          เปิดเพื่อให้สื่อนี้แสดงในทุกสาขาพร้อมกัน หรือปิดเพื่อแสดงเฉพาะใน {activeBranchName}
+                        </p>
+                      </div>
+                      <ToggleSwitch
+                        checked={modalForm.applyToAllBranches ?? false}
+                        onChange={(val) => setModalForm(prev => ({ ...prev, applyToAllBranches: val }))}
+                        activeColor="bg-amber-500"
+                      />
                     </div>
                   )}
                 </div>
@@ -1587,7 +1626,7 @@ export default function DisplayAdsManager({
                       {/* Live Badge Preview */}
                       <div className="shrink-0">
                         {(() => {
-                          const liveBadge = getTagBadgeStyle(modalForm.tagColor);
+                          const liveBadge = getTagBadgeStyle(modalForm);
                           return (
                             <span 
                               className={`text-xs font-bold px-3 py-1 rounded-full inline-block kanit-text shadow-sm transition-all ${liveBadge.className}`}
@@ -1679,71 +1718,156 @@ export default function DisplayAdsManager({
                         </div>
                       );
                     })()}
+
+                    {/* Typography & Text Style Customization (ขอบตัวหนังสือ, สีตัวหนังสือ, เงาตัวหนังสือ) */}
+                    <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
+                          <Sliders className="w-3.5 h-3.5 text-sky-600" />
+                          <span>ปรับแต่งตัวหนังสือเพิ่มเติม (Typography & Effects)</span>
+                        </span>
+                        {(modalForm.customTextColor || (modalForm.customTextStroke && modalForm.customTextStroke !== 'none') || (modalForm.customTextShadow && modalForm.customTextShadow !== 'none')) && (
+                          <button
+                            type="button"
+                            onClick={() => setModalForm(prev => ({
+                              ...prev,
+                              customTextColor: '',
+                              customTextStroke: 'none',
+                              customTextShadow: 'none'
+                            }))}
+                            className="text-[11px] text-rose-500 hover:text-rose-600 font-medium cursor-pointer"
+                          >
+                            คืนค่าเริ่มต้นของสไตล์
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* 1. Text Color */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+                            สีตัวหนังสือ (Text Color)
+                          </label>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {TAG_TEXT_COLOR_SWATCHES.map((swatch, idx) => {
+                              const isSelected = (modalForm.customTextColor || '') === swatch.value;
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setModalForm(prev => ({ ...prev, customTextColor: swatch.value }))}
+                                  title={swatch.label}
+                                  className={`h-6 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 border transition-all cursor-pointer ${
+                                    isSelected 
+                                      ? 'border-sky-500 ring-2 ring-sky-400/40 shadow-xs' 
+                                      : 'border-slate-200 hover:border-slate-300'
+                                  }`}
+                                  style={{
+                                    backgroundColor: swatch.value || '#f1f5f9',
+                                    color: swatch.value ? (swatch.value === '#000000' || swatch.value === '#2E1700' ? '#ffffff' : '#0f172a') : '#64748b'
+                                  }}
+                                >
+                                  {swatch.value ? (
+                                    <span>{swatch.label}</span>
+                                  ) : (
+                                    <span>เริ่มต้น</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 2. Text Stroke */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+                            ขอบตัวหนังสือ (Stroke / Outline)
+                          </label>
+                          <select
+                            value={modalForm.customTextStroke || 'none'}
+                            onChange={(e) => setModalForm(prev => ({ ...prev, customTextStroke: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-sky-500 font-medium"
+                          >
+                            {TAG_TEXT_STROKE_OPTIONS.map(opt => (
+                              <option key={opt.id} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 3. Text Shadow */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+                            เงาตัวหนังสือ (Drop Shadow)
+                          </label>
+                          <select
+                            value={modalForm.customTextShadow || 'none'}
+                            onChange={(e) => setModalForm(prev => ({ ...prev, customTextShadow: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-sky-500 font-medium"
+                          >
+                            {TAG_TEXT_SHADOW_OPTIONS.map(opt => (
+                              <option key={opt.id} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Display Presentation Options */}
                   <div className="space-y-2.5">
                     {/* Bottom Gradient Overlay Toggle */}
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
-                      <label className="flex items-start justify-between gap-3 cursor-pointer">
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
-                            <span>เงาดำไล่ระดับด้านล่าง (Bottom Gradient Overlay)</span>
-                          </span>
-                          <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                            เปิดเพื่อไล่ระดับเงาสีดำจากล่างขึ้นบนพอดีกับข้อความ (+5%) ช่วยให้อ่านหัวข้อชัดเจนขึ้นบนภาพสว่าง หรือปิดได้หากต้องการโชว์ภาพเต็ม 100% โดยไม่มีเงาดำ
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={modalForm.showBottomOverlay ?? true}
-                          onChange={(e) => setModalForm(prev => ({ ...prev, showBottomOverlay: e.target.checked }))}
-                          className="w-4 h-4 mt-0.5 rounded text-sky-600 focus:ring-sky-500 shrink-0 cursor-pointer"
-                        />
-                      </label>
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
+                          <span>เงาดำไล่ระดับด้านล่าง (Bottom Gradient Overlay)</span>
+                        </span>
+                        <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
+                          เปิดเพื่อไล่ระดับเงาสีดำจากล่างขึ้นบนพอดีกับข้อความ (+5%) ช่วยให้อ่านหัวข้อชัดเจนขึ้นบนภาพสว่าง หรือปิดได้หากต้องการโชว์ภาพเต็ม 100% โดยไม่มีเงาดำ
+                        </p>
+                      </div>
+                      <ToggleSwitch
+                        checked={modalForm.showBottomOverlay ?? true}
+                        onChange={(val) => setModalForm(prev => ({ ...prev, showBottomOverlay: val }))}
+                      />
                     </div>
 
                     {/* Show/Hide Brand Header (Logo & Clinic Name) Toggle */}
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
-                      <label className="flex items-start justify-between gap-3 cursor-pointer">
-                        <div className="space-y-0.5">
-                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
-                            <ImageIcon className="w-4 h-4 text-emerald-600" />
-                            <span>แสดง LOGO และชื่อคลินิกมุมซ้ายบน</span>
-                          </span>
-                          <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                            เปิดเพื่อแสดงโลโก้และชื่อคลินิกที่มุมซ้ายบน หรือปิดหากภาพโฆษณานี้มีโลโก้/ชื่อคลินิกอยู่แล้ว เพื่อไม่ให้แสดงซ้ำซ้อน
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={modalForm.showBrandHeader ?? true}
-                          onChange={(e) => setModalForm(prev => ({ ...prev, showBrandHeader: e.target.checked }))}
-                          className="w-4 h-4 mt-0.5 rounded text-sky-600 focus:ring-sky-500 shrink-0 cursor-pointer"
-                        />
-                      </label>
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
+                          <ImageIcon className="w-4 h-4 text-emerald-600" />
+                          <span>แสดง LOGO และชื่อคลินิกมุมซ้ายบน</span>
+                        </span>
+                        <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
+                          เปิดเพื่อแสดงโลโก้และชื่อคลินิกที่มุมซ้ายบน หรือปิดหากภาพโฆษณานี้มีโลโก้/ชื่อคลินิกอยู่แล้ว เพื่อไม่ให้แสดงซ้ำซ้อน
+                        </p>
+                      </div>
+                      <ToggleSwitch
+                        checked={modalForm.showBrandHeader ?? true}
+                        onChange={(val) => setModalForm(prev => ({ ...prev, showBrandHeader: val }))}
+                      />
                     </div>
 
                     {/* Video Audio Sound Toggle (Only for Video) */}
                     {modalForm.type === 'video' && (
-                      <div className="p-3.5 rounded-2xl bg-sky-50/60 border border-sky-200/80 transition-all">
-                        <label className="flex items-start justify-between gap-3 cursor-pointer">
-                          <div className="space-y-0.5">
-                            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 kanit-text">
-                              <Volume2 className="w-4 h-4 text-sky-600" />
-                              <span>เปิดเสียงวิดีโอ (Video Audio)</span>
-                            </span>
-                            <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                              เปิดเพื่อให้วิดีโอเล่นเสียงออกลำโพงเมื่อเริ่มฉายบนหน้าจอ หรือปิดเพื่อเล่นแบบไม่มีเสียงเงียบๆ สบายๆ ในคลินิก
-                            </p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={modalForm.enableAudio ?? false}
-                            onChange={(e) => setModalForm(prev => ({ ...prev, enableAudio: e.target.checked }))}
-                            className="w-4 h-4 mt-0.5 rounded text-sky-600 focus:ring-sky-500 shrink-0 cursor-pointer"
-                          />
-                        </label>
+                      <div className="p-3.5 rounded-2xl bg-sky-50/60 border border-sky-200/80 transition-all flex items-start justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 kanit-text">
+                            <Volume2 className="w-4 h-4 text-sky-600" />
+                            <span>เปิดเสียงวิดีโอ (Video Audio)</span>
+                          </span>
+                          <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
+                            เปิดเพื่อให้วิดีโอเล่นเสียงออกลำโพงเมื่อเริ่มฉายบนหน้าจอ หรือปิดเพื่อเล่นแบบไม่มีเสียงเงียบๆ สบายๆ ในคลินิก
+                          </p>
+                        </div>
+                        <ToggleSwitch
+                          checked={modalForm.enableAudio ?? false}
+                          onChange={(val) => setModalForm(prev => ({ ...prev, enableAudio: val }))}
+                        />
                       </div>
                     )}
                   </div>
