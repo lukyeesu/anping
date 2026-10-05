@@ -10,7 +10,8 @@ import {
   getCachedOrDirectMediaUrl, 
   preloadAllAdsMedia, 
   formatMediaUrl,
-  isMediaVideo
+  isMediaVideo,
+  addMediaCacheListener
 } from '../lib/customerDisplayMediaCache';
 import { 
   createCustomerDisplaySubscriber, 
@@ -585,7 +586,7 @@ export default function CustomerDisplay({
     };
   }, [branchId, stationId]);
 
-  // Pause all background videos when not in STANDBY_ADS to free GPU/CPU and eliminate jitter
+  // Pause all background videos when not in STANDBY_ADS or inactive layer to free GPU/CPU
   useEffect(() => {
     if (displayMode === 'STANDBY_ADS') {
       if (activeLayer === 'A') {
@@ -605,24 +606,34 @@ export default function CustomerDisplay({
     }
   }, [displayMode, activeLayer, layerAData?.type, layerBData?.type]);
 
-  // Automatically pause keep-alive video when an ad video is actively playing.
-  // Playing an ad video natively prevents the screen from sleeping across all browsers (iOS/Android/PC).
-  // Pausing keepAliveVideoRef frees 100% of the GPU hardware video decoder, completely preventing
-  // dual-decoder starvation, micro-stutters, and periodic slow-motion/catch-up frame drops.
+  // Seamlessly adopt newly cached IndexedDB blob for active playing media
   useEffect(() => {
-    const keepVid = keepAliveVideoRef.current;
-    if (!keepVid) return;
-
-    if (isAdVideoPlaying) {
-      if (!keepVid.paused) {
-        keepVid.pause();
+    const unsub = addMediaCacheListener((cachedUrl, objectUrl) => {
+      const currentLayer = activeLayerRef.current;
+      const currentAd = (currentLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndexRef.current];
+      if (currentAd && currentAd.url === cachedUrl) {
+        console.log('[CustomerDisplay] Seamlessly adopting newly cached IndexedDB blob for active media:', cachedUrl);
+        if (currentLayer === 'A') {
+          setLayerAData(prev => prev ? { ...prev, resolvedUrl: objectUrl } : prev);
+          if (videoRefA.current && videoRefA.current.src !== objectUrl) {
+            const currentPos = videoRefA.current.currentTime || 0;
+            videoRefA.current.src = objectUrl;
+            videoRefA.current.currentTime = currentPos;
+            videoRefA.current.play().catch(() => {});
+          }
+        } else {
+          setLayerBData(prev => prev ? { ...prev, resolvedUrl: objectUrl } : prev);
+          if (videoRefB.current && videoRefB.current.src !== objectUrl) {
+            const currentPos = videoRefB.current.currentTime || 0;
+            videoRefB.current.src = objectUrl;
+            videoRefB.current.currentTime = currentPos;
+            videoRefB.current.play().catch(() => {});
+          }
+        }
       }
-    } else {
-      if (keepVid.paused) {
-        keepVid.play().catch(() => {});
-      }
-    }
-  }, [isAdVideoPlaying]);
+    });
+    return unsub;
+  }, [layerAData, layerBData, activeAds]);
 
   // 3. Screen Keep-Awake Engine (Triple-Engine: Native Wake Lock + Rendered Video Loop + Silent Web Audio)
   // Guarantees iPad/Android tablets remain in Always-On Display mode without sleeping, even on LAN HTTP.
@@ -1660,7 +1671,6 @@ export default function CustomerDisplay({
                     className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     autoPlay
                     muted={activeLayer === 'A' ? isVideoMuted : true}
-                    loop={activeAds.length <= 1}
                     playsInline
                     webkit-playsinline="true"
                     disablePictureInPicture
@@ -1696,7 +1706,6 @@ export default function CustomerDisplay({
                     className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     autoPlay
                     muted={activeLayer === 'B' ? isVideoMuted : true}
-                    loop={activeAds.length <= 1}
                     playsInline
                     webkit-playsinline="true"
                     disablePictureInPicture

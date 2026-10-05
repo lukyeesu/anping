@@ -112,6 +112,28 @@ export async function clearIndexedDB() {
 
 const blobUrlMap = new Map(); // Reuses created ObjectURLs across slides to avoid memory leaks
 const pendingDownloads = new Map(); // Deduplicates concurrent downloads for the same URL
+const cacheListeners = new Set();
+
+/**
+ * Subscribe to media cache events (invoked when a media file finishes downloading into IndexedDB)
+ */
+export function addMediaCacheListener(listener) {
+  if (typeof listener === 'function') {
+    cacheListeners.add(listener);
+    return () => cacheListeners.delete(listener);
+  }
+  return () => {};
+}
+
+function notifyMediaCached(url, objectUrl) {
+  cacheListeners.forEach(listener => {
+    try {
+      listener(url, objectUrl);
+    } catch (e) {
+      console.warn('[MediaCache] Listener error:', e);
+    }
+  });
+}
 
 /**
  * Check if a media item is a video
@@ -209,6 +231,7 @@ export async function downloadAndCacheMedia(rawUrl, type = null) {
       // Create ObjectURL for instant local zero-latency playback
       const objectUrl = URL.createObjectURL(blob);
       blobUrlMap.set(trimmed, objectUrl);
+      notifyMediaCached(trimmed, objectUrl);
       return objectUrl;
     } catch (err) {
       console.warn(`[MediaCache] Download whole file failed for ${trimmed}, fallback to direct URL:`, err.message || err);
