@@ -182,6 +182,8 @@ export default function DisplayAdsManager({
     objectFit: 'cover',
     showBottomOverlay: true,
     showBrandHeader: true,
+    showLogo: true,
+    showClinicName: true,
     showClock: true,
     enableAudio: false,
     isActive: true,
@@ -507,6 +509,8 @@ export default function DisplayAdsManager({
       objectFit: 'cover',
       showBottomOverlay: true,
       showBrandHeader: true,
+      showLogo: true,
+      showClinicName: true,
       showClock: true,
       enableAudio: false,
       isActive: true,
@@ -535,6 +539,8 @@ export default function DisplayAdsManager({
       objectFit: ad.objectFit || 'cover',
       showBottomOverlay: ad.showBottomOverlay ?? true,
       showBrandHeader: ad.showBrandHeader ?? true,
+      showLogo: ad.showLogo ?? (ad.showBrandHeader ?? true),
+      showClinicName: ad.showClinicName ?? (ad.showBrandHeader ?? true),
       showClock: ad.showClock ?? true,
       enableAudio: ad.enableAudio ?? false,
       isActive: ad.isActive ?? true,
@@ -658,6 +664,8 @@ export default function DisplayAdsManager({
         customTextShadow: modalForm.customTextShadow || 'none',
         showBottomOverlay: modalForm.showBottomOverlay ?? true,
         showBrandHeader: modalForm.showBrandHeader ?? true,
+        showLogo: modalForm.showLogo ?? true,
+        showClinicName: modalForm.showClinicName ?? true,
         showClock: modalForm.showClock ?? true,
         enableAudio: modalForm.type === 'video' ? (modalForm.enableAudio ?? false) : false
       } : a);
@@ -675,6 +683,8 @@ export default function DisplayAdsManager({
         customTextShadow: modalForm.customTextShadow || 'none',
         showBottomOverlay: modalForm.showBottomOverlay ?? true,
         showBrandHeader: modalForm.showBrandHeader ?? true,
+        showLogo: modalForm.showLogo ?? true,
+        showClinicName: modalForm.showClinicName ?? true,
         showClock: modalForm.showClock ?? true,
         enableAudio: modalForm.type === 'video' ? (modalForm.enableAudio ?? false) : false,
         order: ads.length + 1
@@ -1004,11 +1014,19 @@ export default function DisplayAdsManager({
                               ปิดเงาดำ
                             </span>
                           )}
-                          {ad.showBrandHeader === false && (
+                          {ad.showBrandHeader === false || (ad.showLogo === false && ad.showClinicName === false) ? (
                             <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 font-medium">
-                              ซ่อนโลโก้
+                              ซ่อนแบรนด์
                             </span>
-                          )}
+                          ) : ad.showLogo === false ? (
+                            <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 font-medium">
+                              ซ่อนเฉพาะโลโก้
+                            </span>
+                          ) : ad.showClinicName === false ? (
+                            <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 font-medium">
+                              ซ่อนเฉพาะชื่อ
+                            </span>
+                          ) : null}
                           {ad.showClock === false && (
                             <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/60 font-medium flex items-center gap-0.5">
                               <Clock className="w-2.5 h-2.5" /> ซ่อนนาฬิกา
@@ -1183,23 +1201,25 @@ export default function DisplayAdsManager({
 
                           {/* Top Header Mockup */}
                           <div className="absolute top-3 left-4 right-4 flex items-center justify-between text-white/90 z-20">
-                            {currentAd?.showBrandHeader !== false ? (
+                            {currentAd?.showBrandHeader !== false && (currentAd?.showLogo !== false || currentAd?.showClinicName !== false) ? (
                               <div className="flex items-center gap-2.5">
-                                {activeBranchLogo ? (
+                                {currentAd?.showLogo !== false && activeBranchLogo ? (
                                   <img 
                                     src={formatDirectImageUrl(activeBranchLogo) || activeBranchLogo} 
                                     alt="" 
                                     className="w-7 h-7 sm:w-8 sm:h-8 object-contain drop-shadow-sm shrink-0" 
                                   />
                                 ) : null}
-                                <div>
-                                  <span className="text-xs sm:text-sm font-extrabold tracking-wide block leading-tight text-white drop-shadow-sm kanit-text">
-                                    {activeClinicName}
-                                  </span>
-                                  <span className="text-[10px] text-white/80 block font-normal kanit-text">
-                                    {activeBranchName}
-                                  </span>
-                                </div>
+                                {currentAd?.showClinicName !== false ? (
+                                  <div>
+                                    <span className="text-xs sm:text-sm font-extrabold tracking-wide block leading-tight text-white drop-shadow-sm kanit-text">
+                                      {activeClinicName}
+                                    </span>
+                                    <span className="text-[10px] text-white/80 block font-normal kanit-text">
+                                      {activeBranchName}
+                                    </span>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : (
                               <div className="flex-1" />
@@ -1516,14 +1536,18 @@ export default function DisplayAdsManager({
                           )}
 
                           {/* Brand header preview if enabled */}
-                          {modalForm.showBrandHeader && (
-                            <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 bg-black/30 backdrop-blur-xs px-2 py-1 rounded-lg">
-                              {activeBranchLogo ? (
-                                <img src={activeBranchLogo} alt="Logo" className="w-4 h-4 object-contain" />
-                              ) : (
-                                <div className="w-4 h-4 rounded bg-sky-500 text-white text-[9px] flex items-center justify-center font-bold">AP</div>
+                          {(modalForm.showBrandHeader ?? true) && (modalForm.showLogo !== false || modalForm.showClinicName !== false) && (
+                            <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 bg-black/40 backdrop-blur-xs px-2 py-1 rounded-lg">
+                              {modalForm.showLogo !== false && (
+                                activeBranchLogo ? (
+                                  <img src={activeBranchLogo} alt="Logo" className="w-4 h-4 object-contain" />
+                                ) : (
+                                  <div className="w-4 h-4 rounded bg-sky-500 text-white text-[9px] flex items-center justify-center font-bold">AP</div>
+                                )
                               )}
-                              <span className="text-[10px] text-white font-medium drop-shadow-xs kanit-text">{activeClinicName}</span>
+                              {modalForm.showClinicName !== false && (
+                                <span className="text-[10px] text-white font-medium drop-shadow-xs kanit-text">{activeClinicName}</span>
+                              )}
                             </div>
                           )}
 
@@ -1903,21 +1927,81 @@ export default function DisplayAdsManager({
                       />
                     </div>
 
-                    {/* Show/Hide Brand Header (Logo & Clinic Name) Toggle */}
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
-                          <ImageIcon className="w-4 h-4 text-emerald-600" />
-                          <span>แสดง LOGO และชื่อคลินิกมุมซ้ายบน</span>
-                        </span>
-                        <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                          เปิดเพื่อแสดงโลโก้และชื่อคลินิกที่มุมซ้ายบน หรือปิดหากภาพโฆษณานี้มีโลโก้/ชื่อคลินิกอยู่แล้ว เพื่อไม่ให้แสดงซ้ำซ้อน
-                        </p>
+                    {/* Show/Hide Brand Header (Logo & Clinic Name) Toggle with Sub-options */}
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 transition-all">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
+                            <Building2 className="w-4 h-4 text-emerald-600" />
+                            <span>แสดง LOGO และชื่อคลินิกมุมซ้ายบน</span>
+                          </span>
+                          <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
+                            เปิดเพื่อแสดงแถบแบรนด์มุมซ้ายบน หรือเลือกปิดเฉพาะส่วนด้านล่าง
+                          </p>
+                        </div>
+                        <ToggleSwitch
+                          checked={modalForm.showBrandHeader ?? true}
+                          onChange={(val) => {
+                            setModalForm(prev => ({
+                              ...prev,
+                              showBrandHeader: val,
+                              showLogo: val ? (prev.showLogo ?? true) : false,
+                              showClinicName: val ? (prev.showClinicName ?? true) : false
+                            }));
+                          }}
+                        />
                       </div>
-                      <ToggleSwitch
-                        checked={modalForm.showBrandHeader ?? true}
-                        onChange={(val) => setModalForm(prev => ({ ...prev, showBrandHeader: val }))}
-                      />
+
+                      {/* Sub-toggles: Selectively Toggle LOGO and Clinic Name */}
+                      {(modalForm.showBrandHeader ?? true) && (
+                        <div className="pt-2.5 border-t border-slate-200/70 space-y-2.5 pl-2 sm:pl-3 bg-white/60 p-2.5 rounded-xl border border-slate-100">
+                          {/* Sub-toggle 1: LOGO */}
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-medium text-slate-700 flex items-center gap-2 kanit-text">
+                              <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>แสดง LOGO (รูปโลโก้คลินิก)</span>
+                            </span>
+                            <ToggleSwitch
+                              size="sm"
+                              checked={modalForm.showLogo ?? true}
+                              onChange={(val) => {
+                                setModalForm(prev => {
+                                  const newLogo = val;
+                                  const newName = prev.showClinicName ?? true;
+                                  return {
+                                    ...prev,
+                                    showLogo: newLogo,
+                                    showBrandHeader: newLogo || newName
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+
+                          {/* Sub-toggle 2: Clinic Name */}
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-medium text-slate-700 flex items-center gap-2 kanit-text">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>แสดง ชื่อคลินิกและสาขา</span>
+                            </span>
+                            <ToggleSwitch
+                              size="sm"
+                              checked={modalForm.showClinicName ?? true}
+                              onChange={(val) => {
+                                setModalForm(prev => {
+                                  const newLogo = prev.showLogo ?? true;
+                                  const newName = val;
+                                  return {
+                                    ...prev,
+                                    showClinicName: newName,
+                                    showBrandHeader: newLogo || newName
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Show/Hide Clock Toggle */}

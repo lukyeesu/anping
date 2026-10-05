@@ -1874,7 +1874,10 @@ export default function CustomerDisplay({
         {(() => {
           const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
           const isBrandHeaderVisible = activeAds.length === 0 || currentAd?.showBrandHeader !== false;
-          if (!isBrandHeaderVisible) return null;
+          const isLogoVisible = isBrandHeaderVisible && (currentAd?.showLogo !== false);
+          const isNameVisible = isBrandHeaderVisible && (currentAd?.showClinicName !== false);
+
+          if (!isLogoVisible && !isNameVisible) return null;
 
           return (
             <div 
@@ -1886,32 +1889,37 @@ export default function CustomerDisplay({
               }}
             >
               <div className="flex items-center gap-3 sm:gap-4 pointer-events-auto">
-                {branchLogo ? (
-                  <img 
-                    src={formatDirectImageUrl(branchLogo) || branchLogo}
-                    alt={branchDisplayName}
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className="clinic-brand-logo object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 pointer-events-none select-none"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                <div 
-                  className={`clinic-brand-logo flex items-center justify-center text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}
-                >
-                  <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-rose-400 fill-rose-400/30" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="clinic-brand-title text-white tracking-wide drop-shadow-md truncate">
-                    {branchDisplayName}
-                  </h2>
-                  <p className="clinic-brand-subtitle text-white/85 font-light truncate mt-0.5">
-                    {branchSubtitle}
-                  </p>
-                </div>
+                {isLogoVisible && (
+                  branchLogo ? (
+                    <img 
+                      src={formatDirectImageUrl(branchLogo) || branchLogo}
+                      alt={branchDisplayName}
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="clinic-brand-logo object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 pointer-events-none select-none"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : (
+                    <div 
+                      className="clinic-brand-logo flex items-center justify-center text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0"
+                    >
+                      <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-rose-400 fill-rose-400/30" />
+                    </div>
+                  )
+                )}
+                {isNameVisible && (
+                  <div className="min-w-0 flex-1">
+                    <h2 className="clinic-brand-title text-white tracking-wide drop-shadow-md truncate">
+                      {branchDisplayName}
+                    </h2>
+                    <p className="clinic-brand-subtitle text-white/85 font-light truncate mt-0.5">
+                      {branchSubtitle}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           );
