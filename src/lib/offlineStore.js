@@ -2,7 +2,7 @@
 // Includes 5 Critical Safeguards: Multi-Tab Sync, Reconnect Catch-up, Incognito Fallback, Soft Delete Filtering & Privacy Wipeout
 
 const DB_NAME = 'ClinicHub_OfflineStore';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORES = [
   'patients',
@@ -20,6 +20,7 @@ const STORES = [
   'staff_schedules',
   'settings',
   'logs',
+  'coupons',
   'sync_metadata'
 ];
 

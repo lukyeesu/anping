@@ -1,10 +1,11 @@
 import {
   Stethoscope, Package, Pill, Briefcase, Users, Clock, CalendarDays, FileText, CreditCard, Tag,
-  Activity, Plus, List, ShoppingCart, Truck
+  Activity, Plus, List, ShoppingCart, Truck, Crown, Ticket
 } from 'lucide-react';
 
 export const POS_ICONS = {
   Stethoscope, Package, Pill, Briefcase, Users, Clock, CalendarDays, FileText, CreditCard, Tag, 
+  Crown, Ticket,
   Heart: Activity, Syringe: Plus, Scissors: Plus, 
   List, ShoppingCart, Truck
 };

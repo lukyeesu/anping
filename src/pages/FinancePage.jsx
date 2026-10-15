@@ -15,8 +15,9 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, FileSpreadsheet
+  Lock, Home, Save, UserCheck, Key, RotateCcw, FileSpreadsheet, Crown
 } from 'lucide-react';
+import { isPatientVipActive } from '../utils/couponHelpers';
 import { theme } from '../global/theme';
 import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
@@ -3011,49 +3012,91 @@ const FinancePage = ({
                                              {patientSearchQuery ? `ไม่พบข้อมูลผู้ป่วย: "${patientSearchQuery}"` : 'ไม่มีข้อมูลคนไข้'}
                                           </div>
                                        ) : (
-                                          patientSearchResults.map((p, pidx) => (
-                                             <button
-                                                key={p.id || p.hn || `p-${pidx}`}
-                                                type="button"
-                                                onMouseDown={(e) => {
-                                                   e.preventDefault();
-                                                   selectPatient(p, false);
-                                                }}
-                                                className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left cursor-pointer"
-                                             >
-                                             <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
-                                                {p.hn || p.id || 'NEW'}
-                                             </div>
-                                             <div className="flex-1 overflow-hidden">
-                                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.prefix || ''}{p.firstName || p.first_name || ''} {p.lastName || p.last_name || ''}</p>
-                                                <p className="text-[11px] text-slate-500 font-data">{p.phone || p.phone1 || p.tel || 'ไม่มีเบอร์โทร'}</p>
-                                             </div>
-                                             <ChevronRight className="text-slate-300" size={16} />
-                                          </button>
-                                          ))
+                                          patientSearchResults.map((p, pidx) => {
+                                              const isVip = isPatientVipActive(p);
+                                              return (
+                                              <button
+                                                 key={p.id || p.hn || `p-${pidx}`}
+                                                 type="button"
+                                                 onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    selectPatient(p, false);
+                                                 }}
+                                                 onClick={(e) => {
+                                                    e.preventDefault();
+                                                    selectPatient(p, false);
+                                                 }}
+                                                 className={`w-full p-4 flex items-center gap-4 transition-colors border-b last:border-0 text-left cursor-pointer ${
+                                                    isVip
+                                                      ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-300 border-l-4 border-l-amber-500 shadow-xs'
+                                                      : 'hover:bg-sky-50 border-slate-50'
+                                                 }`}
+                                              >
+                                              <div className={`min-w-[56px] h-9 px-2 rounded-xl flex items-center justify-center shrink-0 font-bold font-data text-[10px] shadow-inner border ${
+                                                 isVip
+                                                   ? 'bg-amber-200 text-amber-950 border-amber-300'
+                                                   : 'bg-slate-100 text-slate-600 border-slate-200/50'
+                                              }`}>
+                                                 {p.hn || p.id || 'NEW'}
+                                              </div>
+                                              <div className="flex-1 overflow-hidden">
+                                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <p className={`kanit-text truncate text-sm ${isVip ? 'font-bold text-amber-950' : 'font-bold text-slate-800'}`}>
+                                                       {p.prefix || ''}{p.firstName || p.first_name || ''} {p.lastName || p.last_name || ''}
+                                                    </p>
+                                                    {isVip && (
+                                                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0">
+                                                          <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                                                       </span>
+                                                    )}
+                                                 </div>
+                                                 <p className={`text-[11px] font-data ${isVip ? 'text-amber-800/80 font-medium' : 'text-slate-500'}`}>{p.phone || p.phone1 || p.tel || 'ไม่มีเบอร์โทร'}</p>
+                                              </div>
+                                              <ChevronRight className={isVip ? 'text-amber-500' : 'text-slate-300'} size={16} />
+                                           </button>
+                                           );})
                                        )}
                                     </div>
                                  </div>
                               )}
                            </div>
-                           {formData.patientId && (
-                                <div className="mt-2.5 inline-flex items-center gap-2.5 px-3.5 py-2 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl text-emerald-800 text-xs font-bold w-fit max-w-full shadow-sm animate-in fade-in zoom-in-95">
-                                   <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
-                                   <span className="font-data truncate">
-                                      {formData.patientName?.startsWith(formData.patientId)
-                                         ? formData.patientName
-                                         : `${formData.patientId} - ${formData.patientName}`}
-                                   </span>
-                                   <button 
-                                      type="button" 
-                                      onClick={() => { setFormData({...formData, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} 
-                                      className="p-1 -mr-1 text-emerald-500 hover:text-rose-500 hover:bg-emerald-100/50 rounded-lg transition-colors shrink-0 cursor-pointer ml-1"
-                                      title="ลบคนไข้ที่เลือก"
-                                   >
-                                      <X size={14} />
-                                   </button>
-                                </div>
-                           )}
+                           {formData.patientId && (() => {
+                                 const pat = (patientsData || []).find(p => p && ((p.hn && p.hn === formData.patientId) || (p.id && String(p.id) === String(formData.patientId))));
+                                 const isVip = isPatientVipActive(pat);
+                                 return (
+                                 <div className={`mt-2.5 inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold w-fit max-w-full shadow-sm animate-in fade-in zoom-in-95 ${
+                                    isVip
+                                      ? 'bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 border border-amber-300 text-amber-950'
+                                      : 'bg-emerald-50/90 border border-emerald-200/80 text-emerald-800'
+                                 }`}>
+                                    {isVip ? (
+                                       <Crown size={14} className="text-amber-600 fill-amber-300 shrink-0" />
+                                    ) : (
+                                       <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
+                                    )}
+                                    <span className="font-data truncate">
+                                       {formData.patientName?.startsWith(formData.patientId)
+                                          ? formData.patientName
+                                          : `${formData.patientId} - ${formData.patientName}`}
+                                    </span>
+                                    {isVip && (
+                                       <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white ml-1 shadow-xs">
+                                          VIP
+                                       </span>
+                                    )}
+                                    <button 
+                                       type="button" 
+                                       onClick={() => { setFormData({...formData, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} 
+                                       className={`p-1 -mr-1 rounded-lg transition-colors shrink-0 cursor-pointer ml-1 ${
+                                          isVip ? 'text-amber-700 hover:text-rose-500 hover:bg-amber-200/60' : 'text-emerald-500 hover:text-rose-500 hover:bg-emerald-100/50'
+                                       }`}
+                                       title="ลบคนไข้ที่เลือก"
+                                    >
+                                       <X size={14} />
+                                    </button>
+                                 </div>
+                                 );
+                            })()}
                         </div>
                      </div>
 
@@ -3404,7 +3447,9 @@ const FinancePage = ({
                               {patientSearchQuery ? `ไม่พบข้อมูลผู้ป่วย: "${patientSearchQuery}"` : 'ไม่มีข้อมูลคนไข้'}
                             </div>
                           ) : (
-                            patientSearchResults.map((p, pidx) => (
+                            patientSearchResults.map((p, pidx) => {
+                              const isVip = isPatientVipActive(p);
+                              return (
                             <button 
                               key={p.id || p.hn || `p-edit-${pidx}`}
                               type="button"
@@ -3412,41 +3457,81 @@ const FinancePage = ({
                                 e.preventDefault();
                                 selectPatient(p, true);
                               }}
-                              className="w-full p-4 flex items-center gap-4 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left cursor-pointer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                selectPatient(p, true);
+                              }}
+                              className={`w-full p-4 flex items-center gap-4 transition-colors border-b last:border-0 text-left cursor-pointer ${
+                                isVip
+                                  ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-300 border-l-4 border-l-amber-500 shadow-xs'
+                                  : 'hover:bg-sky-50 border-slate-50'
+                              }`}
                             >
-                              <div className="min-w-[56px] h-9 px-2 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600 shrink-0 font-bold font-data text-[10px] shadow-inner border border-slate-200/50">
+                              <div className={`min-w-[56px] h-9 px-2 rounded-xl flex items-center justify-center shrink-0 font-bold font-data text-[10px] shadow-inner border ${
+                                isVip
+                                  ? 'bg-amber-200 text-amber-950 border-amber-300'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200/50'
+                              }`}>
                                 {p.hn || p.id || 'NEW'}
                               </div>
                               <div className="flex-1 overflow-hidden">
-                                <p className="font-bold text-slate-800 kanit-text truncate text-sm">{p.prefix || ''}{p.firstName || p.first_name || ''} {p.lastName || p.last_name || ''}</p>
-                                <p className="text-[11px] text-slate-500 font-data">{p.phone || p.phone1 || p.tel || 'ไม่มีเบอร์โทร'}</p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className={`kanit-text truncate text-sm ${isVip ? 'font-bold text-amber-950' : 'font-bold text-slate-800'}`}>
+                                    {p.prefix || ''}{p.firstName || p.first_name || ''} {p.lastName || p.last_name || ''}
+                                  </p>
+                                  {isVip && (
+                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0">
+                                      <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-[11px] font-data ${isVip ? 'text-amber-800/80 font-medium' : 'text-slate-500'}`}>{p.phone || p.phone1 || p.tel || 'ไม่มีเบอร์โทร'}</p>
                               </div>
-                              <ChevronRight className="text-slate-300" size={16} />
+                              <ChevronRight className={isVip ? 'text-amber-500' : 'text-slate-300'} size={16} />
                             </button>
-                            ))
+                            );})
                           )}
                         </div>
                       </div>
                     )}
                   </div>
-                  {posEditForm.patientId && (
-                     <div className="mt-2.5 inline-flex items-center gap-2.5 px-3.5 py-2 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl text-emerald-800 text-xs font-bold w-fit max-w-full shadow-sm animate-in fade-in zoom-in-95">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
+                  {posEditForm.patientId && (() => {
+                     const pat = (patientsData || []).find(p => p && ((p.hn && p.hn === posEditForm.patientId) || (p.id && String(p.id) === String(posEditForm.patientId))));
+                     const isVip = isPatientVipActive(pat);
+                     return (
+                     <div className={`mt-2.5 inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold w-fit max-w-full shadow-sm animate-in fade-in zoom-in-95 ${
+                        isVip
+                          ? 'bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-100 border border-amber-300 text-amber-950'
+                          : 'bg-emerald-50/90 border border-emerald-200/80 text-emerald-800'
+                     }`}>
+                        {isVip ? (
+                           <Crown size={14} className="text-amber-600 fill-amber-300 shrink-0" />
+                        ) : (
+                           <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></div>
+                        )}
                         <span className="font-data truncate">
                            {posEditForm.patientName?.startsWith(posEditForm.patientId)
                               ? posEditForm.patientName
                               : `${posEditForm.patientId} - ${posEditForm.patientName}`}
                         </span>
+                        {isVip && (
+                           <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white ml-1 shadow-xs">
+                              VIP
+                           </span>
+                        )}
                         <button 
                            type="button" 
                            onClick={() => { setPosEditForm({...posEditForm, patientId: '', patientName: ''}); setPatientSearchQuery(''); }} 
-                           className="p-1 -mr-1 text-emerald-500 hover:text-rose-500 hover:bg-emerald-100/50 rounded-lg transition-colors shrink-0 cursor-pointer ml-1"
+                           className={`p-1 -mr-1 rounded-lg transition-colors shrink-0 cursor-pointer ml-1 ${
+                              isVip ? 'text-amber-700 hover:text-rose-500 hover:bg-amber-200/60' : 'text-emerald-500 hover:text-rose-500 hover:bg-emerald-100/50'
+                           }`}
                            title="ลบคนไข้ที่เลือก"
                         >
                            <X size={14} />
                         </button>
                      </div>
-                   )}
+                     );
+                  })()}
                 </div>
 
                 <div className="p-4 rounded-2xl border bg-amber-50/40 border-amber-200/80 space-y-3 mt-4">

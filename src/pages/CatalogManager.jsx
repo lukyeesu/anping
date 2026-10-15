@@ -14,7 +14,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Crown, Sparkles, Percent, Ticket
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
@@ -25,7 +25,14 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
   const [isEditFormClosing, setIsEditFormClosing] = useState(false);
   const [isProcessingProduct, setIsProcessingProduct] = useState(false);
   const [showCategorySuggest, setShowCategorySuggest] = useState(false);
-  const initialProductForm = { id: '', name: '', category: '', price: '', stockManaged: false, icon: 'Package', isCourse: false, courseSessions: 1, minStock: 5, isVatable: false, itemKind: 'service' };
+  const initialProductForm = { 
+    id: '', name: '', category: '', price: '', stockManaged: false, icon: 'Package', 
+    isCourse: false, courseSessions: 1, minStock: 5, isVatable: false, itemKind: 'service',
+    isMembership: false, membershipMonths: 1, vipBenefitType: 'coupon',
+    vipAlwaysDiscountType: 'percent', vipAlwaysDiscountValue: 10,
+    vipDiscountType: 'percent', vipDiscountValue: 10, vipCouponCount: 1,
+    vipCouponTitle: 'คูปองส่วนลดสมาชิก VIP'
+  };
   const [productForm, setProductForm] = useState(initialProductForm);
           const headerRef = React.useRef(null);
   const filterRef = React.useRef(null);
@@ -76,14 +83,23 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       }, 200);
   }, []);
 
+  const checkIsMembership = useCallback((p) => {
+      if (!p) return false;
+      return parseBool(p.isMembership) || parseBool(p.is_membership) || p.itemKind === 'membership' || p.kind === 'membership' || (typeof p.id === 'string' && p.id.toLowerCase().startsWith('vip'));
+  }, []);
+
   const handleOpenAddProduct = (defaultKind = 'service') => {
       const isStock = defaultKind === 'stock';
       const isCourse = defaultKind === 'course';
+      const isMem = defaultKind === 'membership';
       setProductForm({
         ...initialProductForm,
         itemKind: defaultKind,
         stockManaged: isStock,
-        isCourse: isCourse
+        isCourse: isCourse,
+        isMembership: isMem,
+        category: isMem ? 'สมาชิก VIP' : (isCourse ? 'คอร์ส' : (isStock ? 'สินค้า' : 'บริการ')),
+        icon: isMem ? 'Crown' : (isCourse ? 'Award' : (isStock ? 'Package' : 'Stethoscope'))
       });
       setIsEditFormOpen(true);
   };
@@ -137,8 +153,10 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       const catVal = prod.category || prod.type || '';
       const isStock = checkIsStock(prod);
       const isCourse = checkIsCourse(prod);
+      const isMem = checkIsMembership(prod);
       let kind = 'service';
-      if (isStock) kind = 'stock';
+      if (isMem) kind = 'membership';
+      else if (isStock) kind = 'stock';
       else if (isCourse) kind = 'course';
 
       setProductForm({ 
@@ -149,8 +167,17 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
         itemKind: kind,
         stockManaged: isStock,
         isCourse: isCourse, 
+        isMembership: isMem,
         courseSessions: prod.courseSessions || prod.course_sessions || 1,
-        minStock: prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)
+        minStock: prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5),
+        membershipMonths: prod.membershipMonths || prod.membership_months || 1,
+        vipBenefitType: prod.vipBenefitType || prod.vip_benefit_type || 'coupon',
+        vipAlwaysDiscountType: prod.vipAlwaysDiscountType || prod.vip_always_discount_type || 'percent',
+        vipAlwaysDiscountValue: prod.vipAlwaysDiscountValue !== undefined ? prod.vipAlwaysDiscountValue : (prod.vip_always_discount_value !== undefined ? prod.vip_always_discount_value : 10),
+        vipDiscountType: prod.vipDiscountType || prod.vip_discount_type || 'percent',
+        vipDiscountValue: prod.vipDiscountValue !== undefined ? prod.vipDiscountValue : (prod.vip_discount_value !== undefined ? prod.vip_discount_value : 10),
+        vipCouponCount: prod.vipCouponCount !== undefined ? prod.vipCouponCount : (prod.vip_coupon_count !== undefined ? prod.vip_coupon_count : 1),
+        vipCouponTitle: prod.vipCouponTitle || prod.vip_coupon_title || 'คูปองส่วนลดสมาชิก VIP'
       });
       setIsEditFormOpen(true);
   };
@@ -162,11 +189,13 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       const catVal = String(productForm.category || 'ทั่วไป').trim();
       const isStock = productForm.itemKind === 'stock';
       const isCourse = productForm.itemKind === 'course';
+      const isMem = productForm.itemKind === 'membership' || productForm.isMembership;
 
       let finalId = productForm.id;
       if (!finalId) {
           let prefix = 'serv';
-          if (isCourse) prefix = 'cour';
+          if (isMem) prefix = 'vip';
+          else if (isCourse) prefix = 'cour';
           else if (isStock) prefix = 'prod';
 
           let maxNum = 0;
@@ -192,12 +221,30 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
           stock_managed: isStock,
           isCourse: isCourse,
           is_course: isCourse,
+          isMembership: isMem,
+          is_membership: isMem,
+          membershipMonths: isMem ? (Number(productForm.membershipMonths) || 1) : 1,
+          membership_months: isMem ? (Number(productForm.membershipMonths) || 1) : 1,
+          vipBenefitType: isMem ? (productForm.vipBenefitType || 'coupon') : null,
+          vip_benefit_type: isMem ? (productForm.vipBenefitType || 'coupon') : null,
+          vipAlwaysDiscountType: isMem && (productForm.vipBenefitType === 'always_discount' || productForm.vipBenefitType === 'both') ? (productForm.vipAlwaysDiscountType || 'percent') : null,
+          vip_always_discount_type: isMem && (productForm.vipBenefitType === 'always_discount' || productForm.vipBenefitType === 'both') ? (productForm.vipAlwaysDiscountType || 'percent') : null,
+          vipAlwaysDiscountValue: isMem && (productForm.vipBenefitType === 'always_discount' || productForm.vipBenefitType === 'both') ? (Number(productForm.vipAlwaysDiscountValue) || 10) : 0,
+          vip_always_discount_value: isMem && (productForm.vipBenefitType === 'always_discount' || productForm.vipBenefitType === 'both') ? (Number(productForm.vipAlwaysDiscountValue) || 10) : 0,
+          vipDiscountType: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (productForm.vipDiscountType || 'percent') : null,
+          vip_discount_type: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (productForm.vipDiscountType || 'percent') : null,
+          vipDiscountValue: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (Number(productForm.vipDiscountValue) || 10) : 0,
+          vip_discount_value: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (Number(productForm.vipDiscountValue) || 10) : 0,
+          vipCouponCount: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (Number(productForm.vipCouponCount) || 1) : 1,
+          vip_coupon_count: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (Number(productForm.vipCouponCount) || 1) : 1,
+          vipCouponTitle: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (productForm.vipCouponTitle || 'คูปองส่วนลดสมาชิก VIP') : '',
+          vip_coupon_title: isMem && (productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') ? (productForm.vipCouponTitle || 'คูปองส่วนลดสมาชิก VIP') : '',
           price: Number(productForm.price),
           courseSessions: isCourse ? (Number(productForm.courseSessions) || 1) : 1,
           minStock: isStock ? (Number(productForm.minStock) || 0) : 0,
           isVatable: Boolean(productForm.isVatable),
           is_vatable: Boolean(productForm.isVatable),
-          icon: productForm.icon || 'Package'
+          icon: productForm.icon || (isMem ? 'Crown' : 'Package')
       };
 
       try {
@@ -286,15 +333,17 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
       const isStock = checkIsStock(p);
       const isCourse = checkIsCourse(p);
+      const isMem = checkIsMembership(p);
 
       let matchType = true;
       if (filterType === 'product') matchType = isStock;
       else if (filterType === 'course') matchType = isCourse;
-      else if (filterType === 'service') matchType = !isStock && !isCourse;
+      else if (filterType === 'membership') matchType = isMem;
+      else if (filterType === 'service') matchType = !isStock && !isCourse && !isMem;
       
       return matchSearch && matchType;
     });
-  }, [products, search, filterType, checkIsStock, checkIsCourse]);
+  }, [products, search, filterType, checkIsStock, checkIsCourse, checkIsMembership]);
 
   const categories = useMemo(() => {
     return Array.from(new Set(products.map(p => p.category || p.type).filter(Boolean)));
@@ -311,13 +360,15 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
       const isStock = checkIsStock(p);
       const isCourse = checkIsCourse(p);
+      const isMem = checkIsMembership(p);
 
       if (type === 'product') return isStock;
       if (type === 'course') return isCourse;
-      if (type === 'service') return !isStock && !isCourse;
+      if (type === 'membership') return isMem;
+      if (type === 'service') return !isStock && !isCourse && !isMem;
       return true;
     }).length;
-  }, [products, search, checkIsStock, checkIsCourse]);
+  }, [products, search, checkIsStock, checkIsCourse, checkIsMembership]);
 
   // --- [NEW] คำนวณ Ranking สินค้า/บริการขายดีจาก posHistoryData ---
   const rankings = useMemo(() => {
@@ -512,7 +563,8 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                   {value: 'all', label: `ทั้งหมด (${countFiltered('all')})`},
                   {value: 'service', label: `เฉพาะบริการ (${countFiltered('service')})`},
                   {value: 'product', label: `เฉพาะสินค้า (${countFiltered('product')})`},
-                  {value: 'course', label: `เฉพาะคอร์ส (${countFiltered('course')})`}
+                  {value: 'course', label: `เฉพาะคอร์ส (${countFiltered('course')})`},
+                  {value: 'membership', label: `เฉพาะสมาชิก VIP (${countFiltered('membership')})`}
                 ]}
                 className="w-full"
                 compact
@@ -564,6 +616,20 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                   <div className="min-w-0 relative z-10">
                     <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
                         <span className="inline-flex items-center justify-center px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold kanit-text truncate uppercase border border-slate-200 leading-none">{prod.category || prod.type || 'ทั่วไป'}</span>
+                        {checkIsMembership(prod) && (
+                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold kanit-text uppercase border border-amber-200 leading-none">
+                            <Crown size={12} className="text-amber-500" />
+                            {(() => {
+                              const bType = prod.vipBenefitType || prod.vip_benefit_type || 'coupon';
+                              const alVal = prod.vipAlwaysDiscountValue ?? prod.vip_always_discount_value ?? 10;
+                              const alType = (prod.vipAlwaysDiscountType || prod.vip_always_discount_type) === 'amount' ? '฿' : '%';
+                              const cpCount = prod.vipCouponCount ?? prod.vip_coupon_count ?? 1;
+                              if (bType === 'both') return `VIP (ลด ${alVal}${alType} + คูปอง ${cpCount} ใบ)`;
+                              if (bType === 'always_discount') return `VIP (ลด ${alVal}${alType} ทุกครั้ง)`;
+                              return `VIP (คูปอง ${cpCount} ใบ)`;
+                            })()}
+                          </span>
+                        )}
                         {checkIsStock(prod) && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-bold kanit-text uppercase border border-indigo-100 leading-none">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)})</span>}
                         {checkIsCourse(prod) && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold kanit-text uppercase border border-amber-100 leading-none">คอร์ส ({prod.courseSessions || prod.course_sessions || 1})</span>}
                         {prod.isVatable && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-sky-50 text-sky-600 rounded-lg text-[11px] font-bold kanit-text uppercase border border-sky-100 leading-none">+VAT</span>}
@@ -705,72 +771,101 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                             </div>
                         </div>
 
-                        {/* ชนิดของรายการ (3 ตัวเลือก: สต็อก, คอร์ส, บริการ) */}
+                        {/* ชนิดของรายการ (4 ตัวเลือก: บริการ, สต็อก, คอร์ส, สมาชิก VIP) */}
                         <div className="space-y-2.5 pt-2">
                           <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">
                             ประเภทรายการ <span className="text-rose-500">*</span>
                           </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {/* Option 1: สินค้า (สต็อก) */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {/* Option 1: บริการทั่วไป */}
                             <div 
-                              onClick={() => setProductForm({...productForm, itemKind: 'stock', stockManaged: true, isCourse: false})}
-                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
-                                productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse)
-                                  ? 'bg-indigo-50/80 border-indigo-500 shadow-md shadow-indigo-500/10' 
-                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse) ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                  <Package size={18} />
-                                </div>
-                                <input type="radio" checked={productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse)} readOnly className="accent-indigo-500 w-4 h-4" />
-                              </div>
-                              <div>
-                                <div className="font-bold text-slate-800 text-sm kanit-text">สินค้า (สต็อก)</div>
-                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">มีตัดนับสต็อกสินค้า</div>
-                              </div>
-                            </div>
-
-                            {/* Option 2: คอร์ส / แพ็กเกจ */}
-                            <div 
-                              onClick={() => setProductForm({...productForm, itemKind: 'course', stockManaged: false, isCourse: true})}
-                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
-                                productForm.itemKind === 'course' || productForm.isCourse
-                                  ? 'bg-amber-50/80 border-amber-500 shadow-md shadow-amber-500/10' 
-                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'course' || productForm.isCourse ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                  <Award size={18} />
-                                </div>
-                                <input type="radio" checked={productForm.itemKind === 'course' || productForm.isCourse} readOnly className="accent-amber-500 w-4 h-4" />
-                              </div>
-                              <div>
-                                <div className="font-bold text-slate-800 text-sm kanit-text">คอร์ส / แพ็กเกจ</div>
-                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">ตัดจำนวนครั้งรับบริการ</div>
-                              </div>
-                            </div>
-
-                            {/* Option 3: บริการทั่วไป */}
-                            <div 
-                              onClick={() => setProductForm({...productForm, itemKind: 'service', stockManaged: false, isCourse: false})}
-                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
-                                productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse)
+                              onClick={() => setProductForm({...productForm, itemKind: 'service', stockManaged: false, isCourse: false, isMembership: false})}
+                              className={`p-3.5 sm:p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse && !productForm.isMembership)
                                   ? 'bg-sky-50/80 border-sky-500 shadow-md shadow-sky-500/10' 
                                   : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse) ? 'bg-sky-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse && !productForm.isMembership) ? 'bg-sky-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
                                   <Stethoscope size={18} />
                                 </div>
-                                <input type="radio" checked={productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse)} readOnly className="accent-sky-500 w-4 h-4" />
+                                <input type="radio" checked={productForm.itemKind === 'service' || (!productForm.stockManaged && !productForm.isCourse && !productForm.isMembership)} readOnly className="accent-sky-500 w-4 h-4" />
                               </div>
                               <div>
                                 <div className="font-bold text-slate-800 text-sm kanit-text">บริการทั่วไป</div>
-                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">หัตถการ/บริการทั่วไป</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">หัตถการ/บริการ</div>
+                              </div>
+                            </div>
+
+                            {/* Option 2: สินค้า (สต็อก) */}
+                            <div 
+                              onClick={() => setProductForm({...productForm, itemKind: 'stock', stockManaged: true, isCourse: false, isMembership: false})}
+                              className={`p-3.5 sm:p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse && !productForm.isMembership)
+                                  ? 'bg-indigo-50/80 border-indigo-500 shadow-md shadow-indigo-500/10' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse && !productForm.isMembership) ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                  <Package size={18} />
+                                </div>
+                                <input type="radio" checked={productForm.itemKind === 'stock' || (productForm.stockManaged && !productForm.isCourse && !productForm.isMembership)} readOnly className="accent-indigo-500 w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 text-sm kanit-text">สินค้า (สต็อก)</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">ตัดนับสต็อกสินค้า</div>
+                              </div>
+                            </div>
+
+                            {/* Option 3: คอร์ส / แพ็กเกจ */}
+                            <div 
+                              onClick={() => setProductForm({...productForm, itemKind: 'course', stockManaged: false, isCourse: true, isMembership: false})}
+                              className={`p-3.5 sm:p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'course' || (productForm.isCourse && !productForm.isMembership)
+                                  ? 'bg-amber-50/80 border-amber-500 shadow-md shadow-amber-500/10' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'course' || (productForm.isCourse && !productForm.isMembership) ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                  <Award size={18} />
+                                </div>
+                                <input type="radio" checked={productForm.itemKind === 'course' || (productForm.isCourse && !productForm.isMembership)} readOnly className="accent-amber-500 w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 text-sm kanit-text">คอร์ส / แพ็กเกจ</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">ตัดรอบการรักษา</div>
+                              </div>
+                            </div>
+
+                            {/* Option 4: สมัครสมาชิก VIP */}
+                            <div 
+                              onClick={() => setProductForm({
+                                ...productForm, 
+                                itemKind: 'membership', 
+                                stockManaged: false, 
+                                isCourse: false, 
+                                isMembership: true,
+                                icon: 'Crown',
+                                category: 'สมาชิก VIP'
+                              })}
+                              className={`p-3.5 sm:p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+                                productForm.itemKind === 'membership' || productForm.isMembership
+                                  ? 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-500 shadow-md shadow-amber-500/15' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${productForm.itemKind === 'membership' || productForm.isMembership ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                  <Crown size={18} />
+                                </div>
+                                <input type="radio" checked={productForm.itemKind === 'membership' || productForm.isMembership} readOnly className="accent-amber-500 w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 text-sm kanit-text">สมาชิก VIP</div>
+                                <div className="text-[11px] text-slate-500 kanit-text mt-0.5">รับสถานะ + คูปอง</div>
                               </div>
                             </div>
                           </div>
@@ -787,6 +882,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                           </div>
                         </div>
 
+                        {/* ส่วนตั้งค่าสต็อก */}
                         {productForm.stockManaged && (
                             <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-200/60 animate-in fade-in slide-in-from-top-2">
                                 <label className="block text-sm font-bold text-indigo-700 mb-2 kanit-text">แจ้งเตือนสต็อกขั้นต่ำ <span className="text-rose-500">*</span></label>
@@ -797,12 +893,222 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                             </div>
                         )}
 
-                        {productForm.isCourse && (
+                        {/* ส่วนตั้งค่าคอร์ส */}
+                        {productForm.isCourse && !productForm.isMembership && (
                             <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-200/60 animate-in fade-in slide-in-from-top-2">
                                 <label className="block text-sm font-bold text-amber-700 mb-2 kanit-text">จำนวนครั้งทั้งหมด (Total Sessions) <span className="text-rose-500">*</span></label>
                                 <div className="flex items-center gap-3">
                                     <input required type="number" min="1" className="w-full max-w-[200px] px-4 py-3 bg-white border border-amber-200 rounded-xl outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-data font-bold text-amber-700 text-lg text-center" value={productForm.courseSessions} onChange={e => setProductForm({...productForm, courseSessions: e.target.value})} placeholder="1" />
                                     <span className="font-bold text-amber-600 kanit-text">ครั้ง</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ส่วนตั้งค่าแพ็กเกจสมาชิก VIP */}
+                        {(productForm.isMembership || productForm.itemKind === 'membership') && (
+                            <div className="p-5 sm:p-6 bg-gradient-to-br from-amber-50/80 via-yellow-50/50 to-amber-50/80 rounded-3xl border-2 border-amber-300 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2">
+                                <div className="flex items-center gap-2.5 pb-3 border-b border-amber-200/80">
+                                    <div className="p-2 rounded-xl bg-amber-500 text-white shadow-sm">
+                                        <Crown size={20} />
+                                    </div>
+                                    <div>
+                                        <h5 className="font-extrabold text-amber-900 text-base kanit-text">ตั้งค่าสิทธิประโยชน์สมาชิก VIP</h5>
+                                        <p className="text-xs text-amber-700/80">กำหนดระยะเวลาและคูปองส่วนลดที่จะได้รับเมื่อสมัคร</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {/* อายุสมาชิก */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-amber-900 mb-1.5 kanit-text">
+                                            ระยะเวลาสมาชิก (เดือน) <span className="text-rose-500">*</span>
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="number" 
+                                                min="1" 
+                                                required 
+                                                value={productForm.membershipMonths || 1} 
+                                                onChange={e => setProductForm({...productForm, membershipMonths: e.target.value})}
+                                                className="w-full px-4 py-2.5 bg-white border border-amber-300 rounded-xl font-bold font-data text-amber-900 outline-none focus:border-amber-500" 
+                                            />
+                                            <span className="text-sm font-bold text-amber-800 kanit-text shrink-0">เดือน</span>
+                                        </div>
+                                        <p className="text-[11px] text-amber-700 mt-1">
+                                            *เช่น สมัครวันที่ 1 จะหมดวันที่ 30 หรือ 31 เที่ยงคืนก่อนถึงวันที่ 1
+                                        </p>
+                                    </div>
+
+                                    {/* รูปแบบสิทธิประโยชน์ */}
+                                    <div>
+                                        <label className="block text-xs font-bold text-amber-900 mb-1.5 kanit-text">
+                                            รูปแบบสิทธิประโยชน์ <span className="text-rose-500">*</span>
+                                        </label>
+                                        <CustomSelect
+                                            value={productForm.vipBenefitType || 'coupon'}
+                                            onChange={val => setProductForm({...productForm, vipBenefitType: val})}
+                                            options={[
+                                                { value: 'coupon', label: 'แจกคูปองส่วนลดทันที' },
+                                                { value: 'always_discount', label: 'ลดทันทีทุกครั้งที่มาใช้บริการ (Always VIP)' },
+                                                { value: 'both', label: 'ทั้งแจกคูปอง + ส่วนลดทุกครั้ง (แบบผสม)' }
+                                            ]}
+                                            className="w-full bg-white border-amber-300 rounded-xl font-bold text-amber-900"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* ส่วนที่ 1: ส่วนลดทันทีทุกครั้งที่มาใช้บริการ (Always VIP) */}
+                                {(productForm.vipBenefitType === 'always_discount' || productForm.vipBenefitType === 'both') && (
+                                    <div className="p-4 bg-white/90 rounded-2xl border border-amber-300 shadow-xs space-y-3">
+                                        <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs">
+                                                    <Percent size={14} />
+                                                </div>
+                                                <span className="text-xs font-black text-amber-950 kanit-text">
+                                                    {productForm.vipBenefitType === 'both' ? 'ส่วนที่ 1: ' : ''}ส่วนลดทันทีทุกครั้งที่มาใช้บริการ (Always VIP)
+                                                </span>
+                                            </div>
+                                            <span className="text-[11px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full kanit-text">
+                                                ลดทุกบิล
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
+                                                    ประเภทส่วนลดต่อครั้ง <span className="text-rose-500">*</span>
+                                                </label>
+                                                <CustomSelect
+                                                    value={productForm.vipAlwaysDiscountType || 'percent'}
+                                                    onChange={val => setProductForm({...productForm, vipAlwaysDiscountType: val})}
+                                                    options={[
+                                                        { value: 'percent', label: 'เปอร์เซ็นต์ (%)' },
+                                                        { value: 'amount', label: 'จำนวนเงิน (บาท)' }
+                                                    ]}
+                                                    className="w-full bg-white border-amber-300 rounded-xl text-xs font-bold"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
+                                                    มูลค่าส่วนลด ({productForm.vipAlwaysDiscountType === 'percent' ? '%' : 'บาท'}) <span className="text-rose-500">*</span>
+                                                </label>
+                                                <div className="flex items-center bg-white border border-amber-300 rounded-xl overflow-hidden focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all">
+                                                    <input 
+                                                        type="number" 
+                                                        min="1" 
+                                                        value={productForm.vipAlwaysDiscountValue ?? 10} 
+                                                        onChange={e => setProductForm({...productForm, vipAlwaysDiscountValue: e.target.value})}
+                                                        className="w-full min-w-0 px-3 py-2 bg-transparent font-bold font-data text-amber-900 text-sm outline-none" 
+                                                        placeholder="เช่น 10"
+                                                    />
+                                                    <span className="px-2.5 py-2 bg-amber-50 border-l border-amber-200 text-xs font-bold text-amber-800 font-data shrink-0 select-none">
+                                                        {productForm.vipAlwaysDiscountType === 'percent' ? '%' : 'บาท'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-[11px] text-amber-800 kanit-text flex items-center gap-1.5 pt-0.5">
+                                            <Sparkles size={13} className="text-amber-500 shrink-0" />
+                                            <span>
+                                                คนไข้จะได้รับส่วนลด <b>{productForm.vipAlwaysDiscountValue || 0} {productForm.vipAlwaysDiscountType === 'percent' ? '%' : 'บาท'}</b> ทุกครั้งที่มาใช้บริการที่คลินิกตลอดอายุสมาชิก
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ส่วนที่ 2: คูปองสิทธิประโยชน์ที่จะได้รับ (VIP Coupons) */}
+                                {(productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') && (
+                                    <div className="p-4 bg-white/90 rounded-2xl border border-amber-300 shadow-xs space-y-3">
+                                        <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 rounded-lg bg-sky-500 text-white shadow-xs">
+                                                    <Ticket size={14} />
+                                                </div>
+                                                <span className="text-xs font-black text-slate-800 kanit-text">
+                                                    {productForm.vipBenefitType === 'both' ? 'ส่วนที่ 2: ' : ''}คูปองสิทธิประโยชน์ที่จะได้รับ
+                                                </span>
+                                            </div>
+                                            <span className="text-[11px] font-bold px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full kanit-text">
+                                                แจกเข้ากระเป๋าคูปอง
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
+                                                    ประเภทส่วนลดคูปอง
+                                                </label>
+                                                <CustomSelect
+                                                    value={productForm.vipDiscountType || 'percent'}
+                                                    onChange={val => setProductForm({...productForm, vipDiscountType: val})}
+                                                    options={[
+                                                        { value: 'percent', label: 'เปอร์เซ็นต์ (%)' },
+                                                        { value: 'amount', label: 'จำนวนเงิน (บาท)' }
+                                                    ]}
+                                                    className="w-full bg-white border-amber-300 rounded-xl text-xs font-bold"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
+                                                    มูลค่าส่วนลด ({productForm.vipDiscountType === 'percent' ? '%' : 'บาท'})
+                                                </label>
+                                                <div className="flex items-center bg-white border border-amber-300 rounded-xl overflow-hidden focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all">
+                                                    <input 
+                                                        type="number" 
+                                                        min="1" 
+                                                        value={productForm.vipDiscountValue ?? 10} 
+                                                        onChange={e => setProductForm({...productForm, vipDiscountValue: e.target.value})}
+                                                        className="w-full min-w-0 px-3 py-2 bg-transparent font-bold font-data text-amber-900 text-sm outline-none" 
+                                                    />
+                                                    <span className="px-2.5 py-2 bg-amber-50 border-l border-amber-200 text-xs font-bold text-amber-800 font-data shrink-0 select-none">
+                                                        {productForm.vipDiscountType === 'percent' ? '%' : 'บาท'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
+                                                    จำนวนคูปองที่แจก (ใบ)
+                                                </label>
+                                                <div className="flex items-center bg-white border border-amber-300 rounded-xl overflow-hidden focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all">
+                                                    <input 
+                                                        type="number" 
+                                                        min="1" 
+                                                        value={productForm.vipCouponCount ?? 1} 
+                                                        onChange={e => setProductForm({...productForm, vipCouponCount: e.target.value})}
+                                                        className="w-full min-w-0 px-3 py-2 bg-transparent font-bold font-data text-amber-900 text-sm outline-none" 
+                                                    />
+                                                    <span className="px-2.5 py-2 bg-amber-50 border-l border-amber-200 text-xs font-bold text-amber-800 kanit-text shrink-0 select-none">
+                                                        ใบ
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
+                                                ชื่อคูปองที่จะออกให้คนไข้
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                value={productForm.vipCouponTitle || 'คูปองส่วนลดสมาชิก VIP'} 
+                                                onChange={e => setProductForm({...productForm, vipCouponTitle: e.target.value})}
+                                                className="w-full px-3.5 py-2 bg-white border border-amber-300 rounded-xl text-sm font-medium text-slate-800 outline-none focus:border-amber-500" 
+                                                placeholder="เช่น คูปองส่วนลดสมาชิก VIP ประจำเดือน"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="p-3 bg-amber-100/60 rounded-2xl border border-amber-200/60 text-[11px] text-amber-800 kanit-text flex items-start gap-2">
+                                    <Sparkles size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                    <span>
+                                        <b>ความยืดหยุ่นของทีมการตลาด:</b> หากคลินิกมีการปรับเปลี่ยนราคาหรือเงื่อนไขโปรโมชั่นของสินค้านี้ในอนาคต ระบบจะไม่ส่งผลกระทบต่อคูปองและสิทธิ์ VIP เดิมที่คนไข้เคยได้รับไปแล้ว โดยวันหมดอายุของคูปองจะเท่ากับวันหมดอายุของรอบ VIP นั้นพอดี
+                                    </span>
                                 </div>
                             </div>
                         )}

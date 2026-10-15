@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
+    "jsbarcode": "^3.12.3",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.8.0",
     "qrcode": "^1.5.4",
@@ -28,6 +29,7 @@
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
     "eslint": "^9.39.4",

@@ -1169,6 +1169,7 @@ const SettingsManager = ({
     { id: 'records', label: 'เวชระเบียน' },
     { id: 'queue', label: 'นัดหมาย' },
     { id: 'pos', label: 'POS' },
+    { id: 'coupons', label: 'คูปอง' },
     { id: 'catalog', label: 'สินค้า/บริการ' },
     { id: 'inventory', label: 'คลังสินค้า' },
     { id: 'finance', label: 'การเงิน' },

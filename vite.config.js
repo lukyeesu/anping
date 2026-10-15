@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import apiDbHandler from './api/db.js'
 import apiTtsHandler from './api/tts.js'
 import apiLineHandler from './api/line.js'
@@ -142,13 +143,17 @@ function apiDevMiddlewarePlugin() {
   };
 }
 
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    apiDevMiddlewarePlugin()
-  ],
-  define: {
-    'import.meta.env.GOOGLE_SCRIPT_URL': JSON.stringify(process.env.GOOGLE_SCRIPT_URL || '')
-  }
+export default defineConfig(() => {
+  const useHttps = !process.argv.includes('--no-https') && process.env.HTTPS !== 'false';
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...(useHttps ? [basicSsl()] : []),
+      apiDevMiddlewarePlugin()
+    ],
+    define: {
+      'import.meta.env.GOOGLE_SCRIPT_URL': JSON.stringify(process.env.GOOGLE_SCRIPT_URL || '')
+    }
+  };
 })

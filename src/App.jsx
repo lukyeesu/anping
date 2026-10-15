@@ -18,7 +18,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard, FlaskConical
+  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard, FlaskConical, Ticket
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -38,6 +38,7 @@ import TransactionRow from './pages/TransactionRow';
 import InventoryManager from './pages/InventoryManager';
 import BranchManager from './pages/BranchManager';
 import CatalogManager from './pages/CatalogManager';
+import CouponManager from './pages/CouponManager';
 import POSSystem from './pages/POSSystem';
 import MedicalRecords from './pages/MedicalRecords';
 import PatientModal from './pages/PatientModal';
@@ -575,7 +576,8 @@ export default function App() {
         resStaff,
         resSettings,
         resStaffSchedules,
-        resCourses
+        resCourses,
+        resCoupons
       ] = await Promise.all([
         callAppScript('GET_PATIENTS_PAGINATED', 'Patients', { offset: 0, limit: 35 }).catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'POS_Transactions').catch(err => ({ status: 'error', data: [], message: err?.message })),
@@ -585,7 +587,8 @@ export default function App() {
         callAppScript('GET_DATA', 'Staff').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Settings').catch(err => ({ status: 'error', data: [], message: err?.message })),
         callAppScript('GET_DATA', 'Staff_Schedules').catch(err => ({ status: 'error', data: [], message: err?.message })),
-        callAppScript('GET_DATA', 'PatientCourses').catch(err => ({ status: 'error', data: [], message: err?.message }))
+        callAppScript('GET_DATA', 'PatientCourses').catch(err => ({ status: 'error', data: [], message: err?.message })),
+        callAppScript('GET_DATA', 'Coupons').catch(err => ({ status: 'error', data: [], message: err?.message }))
       ]);
 
       if (resPatients?.status === 'success') { 
@@ -656,6 +659,9 @@ export default function App() {
       }
       if (resCourses?.status === 'success') {
         setPatientCoursesData(Array.isArray(resCourses.data) ? resCourses.data : []);
+      }
+      if (resCoupons?.status === 'success') {
+        setCouponsData(Array.isArray(resCoupons.data) ? resCoupons.data : []);
       }
 
       const combinedFinanceData = []; // Removed global finance fetch to save Egress. FinancePage now fetches directly.
@@ -796,6 +802,7 @@ export default function App() {
     '/queue': 'queue',
     '/catalog': 'catalog',
     '/pos': 'pos',
+    '/coupons': 'coupons',
     '/finance': 'finance',
     '/inventory': 'inventory',
     '/staff': 'staff',
@@ -1030,6 +1037,7 @@ export default function App() {
   const [inventoryLogsData, setInventoryLogsData] = useState([]);
   const [posHistoryData, setPosHistoryData] = useState([]);
   const [patientCoursesData, setPatientCoursesData] = useState([]);
+  const [couponsData, setCouponsData] = useState([]);
 
   const [financeData, setFinanceData] = useState([]);
   const [pdpaQrModal, setPdpaQrModal] = useState({ isOpen: false, link: '' });
@@ -1381,10 +1389,10 @@ export default function App() {
   // --- States for clinic settings (prefixes, roles/permissions, categories) ---
   const [staffPrefixes, setStaffPrefixes] = useState(['นาย', 'นาง', 'นางสาว', 'ดร.', 'นพ.', 'พญ.', 'ทพ.', 'ทพญ.']);
   const [rolePermissions, setRolePermissions] = useState({
-    admin: ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings', 'display_ads'],
+    admin: ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'coupons', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings', 'display_ads'],
     doctor: ['dashboard', 'records', 'queue'],
     nurse: ['records', 'queue'],
-    sale: ['pos', 'catalog'],
+    sale: ['pos', 'coupons', 'catalog'],
     suspended: []
   });
   const [roleLabels, setRoleLabels] = useState({
@@ -2417,6 +2425,21 @@ export default function App() {
         }
         return [payload, ...prev];
       });
+    } else if (sheetName === 'Coupons' || sheetName === 'coupons') {
+      upsertLocalStore('coupons', [payload]).catch(() => {});
+      setCouponsData(prev => {
+        const cCode = String(payload.code || '').trim().toUpperCase();
+        const idx = prev.findIndex(c => 
+          (targetId && String(c.id || '').trim() === targetId) ||
+          (cCode && String(c.code || '').trim().toUpperCase() === cCode)
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload };
+          return next;
+        }
+        return [payload, ...prev];
+      });
     } else if (sheetName === 'Settings' || sheetName === 'settings') {
       const settingId = String(payload.id || '').trim();
       let vals = payload.values;
@@ -2472,7 +2495,9 @@ export default function App() {
       Finance_Revenue: 'finance_revenue',
       Finance_Expenses: 'finance_expenses',
       Treatments: 'treatments',
-      Settings: 'settings'
+      Settings: 'settings',
+      Coupons: 'coupons',
+      coupons: 'coupons'
     };
 
     const storeName = mapSheetToStore[sheetName];
@@ -2499,6 +2524,8 @@ export default function App() {
       setFinanceData(prev => prev.filter(f => String(f.id) !== targetId));
     } else if (sheetName === 'PatientCourses' || sheetName === 'patient_courses' || sheetName === 'Patient_Courses') {
       setPatientCoursesData(prev => prev.filter(c => String(c.id).trim() !== targetId));
+    } else if (sheetName === 'Coupons' || sheetName === 'coupons') {
+      setCouponsData(prev => prev.filter(c => String(c.id || '').trim() !== targetId && String(c.code || '').trim().toUpperCase() !== String(payload.code || '').trim().toUpperCase()));
     } else if (sheetName === 'Treatments') {
       setPatientsData(prev => prev.map(p => {
         if (p.opdRecords && p.opdRecords.some(t => String(t.id || '').trim() === targetId)) {
@@ -2738,7 +2765,8 @@ export default function App() {
             staff: 'Staff',
             staff_schedules: 'Staff_Schedules',
             settings: 'Settings',
-            patient_courses: 'PatientCourses'
+            patient_courses: 'PatientCourses',
+            coupons: 'Coupons'
           };
           const sheetName = mapTableToSheet[table];
           if (!sheetName) return;
@@ -2806,6 +2834,12 @@ export default function App() {
         if (!error && Array.isArray(data)) {
           setPatientCoursesData(data.map(rowToJS));
         }
+
+        // รีเฟรชคูปองล่าสุดแบบ Differential Sync (Zero-Waste Egress ถ้าไม่มีการเปลี่ยนแปลง)
+        const resCoupons = await callAppScript('GET_DATA', 'Coupons');
+        if (resCoupons?.status === 'success' && Array.isArray(resCoupons.data)) {
+          setCouponsData(resCoupons.data);
+        }
       } catch (err) {
         console.warn('[Focus Refresh Note]:', err);
       }
@@ -2865,6 +2899,9 @@ export default function App() {
         if (storeName === 'pos_transactions' || storeName === '*') {
           getLocalStore('pos_transactions').then(data => data && data.length && setPosHistoryData([...data].reverse()));
         }
+        if (storeName === 'coupons' || storeName === '*') {
+          getLocalStore('coupons').then(data => data && setCouponsData(data));
+        }
         // patient_courses ถูกแยกออกมาเป็น Pure Realtime ไม่โหลดจาก IndexedDB ตามคำสั่ง
       }
     });
@@ -2877,6 +2914,7 @@ export default function App() {
     { id: 'records', label: 'เวชระเบียน', icon: Users },
     { id: 'queue', label: 'นัดหมาย', icon: CalendarRange },
     { id: 'pos', label: 'POS', icon: Calculator },
+    { id: 'coupons', label: 'คูปอง', icon: Ticket },
     { id: 'catalog', label: 'สินค้า/บริการ', icon: Tag },
     { id: 'inventory', label: 'คลังสินค้า', icon: Package },
     { id: 'finance', label: 'การเงิน', icon: Banknote },
@@ -2923,7 +2961,7 @@ export default function App() {
   }, [appointmentStatuses]);
 
   const allowedTabs = useMemo(() => {
-    return rolePermissions[currentUser.role] || ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings', 'display_ads'];
+    return rolePermissions[currentUser.role] || ['dashboard', 'exec_dashboard', 'records', 'queue', 'pos', 'coupons', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'reports', 'settings', 'display_ads'];
   }, [rolePermissions, currentUser.role]);
 
   const filteredNavItems = useMemo(() => {
@@ -3508,7 +3546,7 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} integrationTokens={integrationTokens} />
+                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} couponsData={couponsData} setCouponsData={setCouponsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} integrationTokens={integrationTokens} />
                 </div>
             )}
 
@@ -3524,6 +3562,26 @@ export default function App() {
                 </div>
             )}
 
+            {currentTab === 'coupons' && (
+                <div className="w-full">
+                    <CouponManager 
+                        couponsData={couponsData}
+                        setCouponsData={setCouponsData}
+                        patientsData={patientsData}
+                        posProducts={posProducts}
+                        posHistoryData={posHistoryData}
+                        currentBranch={currentBranch}
+                        branchesData={branchesData}
+                        currentUser={currentUser}
+                        callAppScript={callAppScript}
+                        gdriveTokens={gdriveTokens}
+                        showToast={showToast}
+                        showGlobalAlert={showGlobalAlert}
+                        isGlobalLoading={isGlobalLoading}
+                    />
+                </div>
+            )}
+
             {currentTab === 'pos' && (
                 <div className="flex-1 w-full relative min-h-0 flex flex-col">
                     <POSSystem products={posProducts}
@@ -3532,6 +3590,8 @@ export default function App() {
                         setPatientsData={setPatientsData}
                         patientCoursesData={patientCoursesData}
                         setPatientCoursesData={setPatientCoursesData}
+                        couponsData={couponsData}
+                        setCouponsData={setCouponsData}
                         posHistoryData={posHistoryData}
                         setPosHistoryData={setPosHistoryData}
                         inventoryData={inventoryData}

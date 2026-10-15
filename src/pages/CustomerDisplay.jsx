@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  CheckCircle2, ShoppingBag, QrCode, CreditCard, Banknote, Clock, 
-  Sparkles, ShieldCheck, Heart, User, ChevronRight, ChevronLeft, 
+  CheckCircle2, ShoppingBag, QrCode, CreditCard, Banknote, Clock, Crown,
+  Sparkles, ShieldCheck, Heart, User, ChevronRight, ChevronLeft, Tag,
   Maximize, Minimize, Settings, Volume2, RefreshCw, X, Radio, ArrowRight, Megaphone
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -32,7 +32,7 @@ import { NO_SLEEP_MP4 } from '../lib/nosleepMedia';
 // Prevents root CustomerDisplay from re-rendering every 1000ms,
 // completely eliminating main-thread stutters / dropped frames during 60fps video playback.
 // ==============================================================
-const StandbyClock = React.memo(function StandbyClock({ pixelShift }) {
+const StandbyClock = React.memo(function StandbyClock({ pixelShift, className, compact = false }) {
   const [time, setTime] = useState(() => new Date());
 
   useEffect(() => {
@@ -48,18 +48,26 @@ const StandbyClock = React.memo(function StandbyClock({ pixelShift }) {
 
   return (
     <div 
-      className="absolute top-4 right-4 sm:top-6 sm:right-6 md:top-7 md:right-8 z-30 pointer-events-auto shrink-0 select-none"
+      className={className || "absolute top-4 right-4 sm:top-6 sm:right-6 md:top-7 md:right-8 z-30 pointer-events-auto shrink-0 select-none"}
       style={{
-        transform: `translate3d(${pixelShift.x}px, ${pixelShift.y}px, 0)`,
+        transform: pixelShift ? `translate3d(${pixelShift.x}px, ${pixelShift.y}px, 0)` : undefined,
         transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
         willChange: 'transform'
       }}
     >
-      <div className="px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-2xl sm:rounded-3xl bg-black/80 border border-white/20 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap">
-        <Clock className="w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9 text-white shrink-0 stroke-[2.2]" />
-        <span className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black font-mono tabular-nums tracking-wide leading-none text-white drop-shadow-lg inline-flex items-center">
+      <div className={`rounded-2xl sm:rounded-3xl bg-black/85 backdrop-blur-md border border-white/20 text-white shadow-2xl flex items-center gap-2.5 sm:gap-3.5 whitespace-nowrap ${
+        compact 
+          ? 'px-4 py-2 sm:px-6 sm:py-3 md:px-7 md:py-3.5' 
+          : 'px-3.5 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3'
+      }`}>
+        <Clock className={`text-white shrink-0 stroke-[2.2] ${compact ? 'w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9' : 'w-6 h-6 sm:w-8 sm:h-8 md:w-9 md:h-9'}`} />
+        <span className={`font-black font-mono tabular-nums tracking-wide leading-none text-white drop-shadow-lg inline-flex items-center ${
+          compact
+            ? 'text-2xl sm:text-4xl md:text-5xl lg:text-5xl'
+            : 'text-2xl sm:text-4xl md:text-5xl lg:text-6xl'
+        }`}>
           <span>{hours}</span>
-          <span className={`inline-block relative -top-[0.05em] transition-opacity duration-150 ${isColonVisible ? 'opacity-100' : 'opacity-20'}`}>
+          <span className={`inline-block relative -top-[0.05em] mx-0.5 transition-opacity duration-150 ${isColonVisible ? 'opacity-100' : 'opacity-20'}`}>
             :
           </span>
           <span>{minutes}</span>
@@ -494,6 +502,10 @@ export default function CustomerDisplay({
             items: payload.items || [],
             subtotal: payload.subtotal || 0,
             discount: payload.discount || 0,
+            additionalDiscount: payload.additionalDiscount || payload.discountAmount || 0,
+            couponDiscount: payload.couponDiscount || 0,
+            couponTitle: payload.couponTitle || '',
+            couponCode: payload.couponCode || '',
             grandTotal: payload.grandTotal || 0,
             patient: payload.patient || null
           });
@@ -545,12 +557,12 @@ export default function CustomerDisplay({
           playGentleChime();
         }
 
-        // Auto return to Standby Ads after 4 seconds
+        // Auto return to Standby Ads after 5 seconds
         if (successTimerRef.current) clearTimeout(successTimerRef.current);
         successTimerRef.current = setTimeout(() => {
           setDisplayMode('STANDBY_ADS');
-          setCartData({ items: [], subtotal: 0, discount: 0, grandTotal: 0, patient: null });
-        }, 4200);
+          setCartData({ items: [], subtotal: 0, discount: 0, additionalDiscount: 0, couponDiscount: 0, couponTitle: '', couponCode: '', grandTotal: 0, patient: null });
+        }, 5000);
         break;
 
       case 'STANDBY_ADS':
@@ -1421,7 +1433,11 @@ export default function CustomerDisplay({
 
   return (
     <div 
-      className={`fixed inset-0 w-screen h-screen ${displayMode === 'STANDBY_ADS' ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-800'} overflow-hidden select-none font-sans`}
+      className={`fixed inset-0 w-screen h-screen overflow-hidden select-none font-sans ${
+        displayMode === 'STANDBY_ADS' 
+          ? 'bg-slate-950 text-white p-0' 
+          : 'bg-[#f1f5f9] text-slate-800 p-3 sm:p-4 lg:p-5 flex gap-3 sm:gap-4 lg:gap-5'
+      }`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -1638,618 +1654,691 @@ export default function CustomerDisplay({
           animation: glowPulse 6s ease-in-out infinite;
         }
 
-        :root {
-          --welcome-group-scale: 1.4;
+        .welcome-headline {
+          font-size: clamp(2.8rem, 16.5cqi, 18.5rem) !important;
+          line-height: 1.05 !important;
+          white-space: nowrap !important;
         }
 
-        @media (min-width: 1536px) and (min-height: 850px) {
-          :root {
-            --welcome-group-scale: 2;
-          }
+        .welcome-clinic-name {
+          font-size: clamp(1.3rem, 5.8cqi, 6.8rem) !important;
+          line-height: 1.2 !important;
+          white-space: nowrap !important;
         }
+
+        .welcome-guidance {
+          font-size: clamp(0.95rem, 2.85cqi, 3.4rem) !important;
+          line-height: 1.55 !important;
+        }
+
+        .welcome-counter-pill {
+          font-size: clamp(0.85rem, 2.25cqi, 2.5rem) !important;
+          white-space: nowrap !important;
+        }
+
       `}</style>
 
       {/* ============================================================== */}
-      {/* 1. STANDBY ADS MODE (Bufferless Dual-Buffer A/B Crossfade)     */}
+      {/* 1. LEFT CARD (~70% in ACTIVE_CART & PAYMENT_QR, 100% in STANDBY)*/}
       {/* ============================================================== */}
       <div 
-        className={`absolute inset-0 transition-opacity duration-300 select-none ${
-          displayMode === 'STANDBY_ADS' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        className={`relative overflow-hidden select-none ${
+          displayMode === 'STANDBY_ADS' 
+            ? 'w-full h-full rounded-none border-0 shadow-none z-10' 
+            : 'flex-1 lg:flex-[7] h-full rounded-2xl sm:rounded-3xl lg:rounded-[32px] shadow-2xl bg-black border border-slate-200/80 z-10'
         }`}
-        onContextMenu={(e) => { e.preventDefault(); return false; }}
-        onMouseDown={() => setIsPausedByTouch(true)}
-        onMouseUp={() => setIsPausedByTouch(false)}
+        style={{ containerType: 'inline-size' }}
       >
-        {/* Empty Standby State when activeAds.length === 0 (Anping Clinic TCM Dark Jade Aesthetic) */}
-        {activeAds.length === 0 ? (
-          <div className="absolute inset-0 bg-[#060e09] flex flex-col items-center justify-center text-center px-6 py-12 select-none z-10 overflow-hidden">
-            {/* Ambient Herbal Jade Glows (Matched with Anping Clinic Logo #2D5A3D) */}
-            <div className="absolute w-[800px] h-[800px] bg-[#2D5A3D]/18 rounded-full blur-[160px] pointer-events-none -top-28 -left-28 animate-glow-pulse" />
-            <div className="absolute w-[750px] h-[750px] bg-[#1b3b28]/30 rounded-full blur-[140px] pointer-events-none -bottom-24 -right-24" />
-            <div className="absolute w-[500px] h-[500px] bg-[#3a6b4a]/12 rounded-full blur-[100px] pointer-events-none top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        {/* Media Player Layer */}
+        <div 
+          className={`absolute inset-0 select-none overflow-hidden ${
+            displayMode === 'PAYMENT_QR' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
+          }`}
+          onContextMenu={(e) => { e.preventDefault(); return false; }}
+          onMouseDown={() => setIsPausedByTouch(true)}
+          onMouseUp={() => setIsPausedByTouch(false)}
+        >
+          {/* Empty Standby State when activeAds.length === 0 (Anping Clinic TCM Dark Jade Aesthetic) */}
+          {activeAds.length === 0 ? (
+            <div className="absolute inset-0 bg-[#060e09] flex flex-col items-center justify-center text-center px-[3%] sm:px-[5%] py-4 sm:py-8 select-none z-10 overflow-hidden">
+              {/* Ambient Herbal Jade Glows (Matched with Anping Clinic Logo #2D5A3D) */}
+              <div className="absolute w-[800px] h-[800px] bg-[#2D5A3D]/18 rounded-full blur-[160px] pointer-events-none -top-28 -left-28 animate-glow-pulse" />
+              <div className="absolute w-[750px] h-[750px] bg-[#1b3b28]/30 rounded-full blur-[140px] pointer-events-none -bottom-24 -right-24" />
+              <div className="absolute w-[500px] h-[500px] bg-[#3a6b4a]/12 rounded-full blur-[100px] pointer-events-none top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
-            <div 
-              className="relative z-10 flex flex-col items-center max-w-5xl mx-auto px-4"
-              style={{
-                transform: `translate3d(${pixelShiftCenter.x}px, ${pixelShiftCenter.y}px, 0) scale(var(--welcome-group-scale, 2))`,
-                transformOrigin: 'center center',
-                transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                willChange: 'transform'
-              }}
-            >
-              <div className="flex flex-col items-center w-full animate-welcome-float">
-                {/* Prominent Counter Pill: จุดชำระเงิน • เคาน์เตอร์ X */}
-                <div className="inline-flex items-center gap-2.5 sm:gap-3.5 px-5 py-2.5 sm:px-7 sm:py-3.5 rounded-2xl sm:rounded-3xl bg-[#14291c]/90 border border-[#2D5A3D]/90 text-[#b5d6bd] shadow-[0_10px_36px_rgba(30,60,40,0.5)] backdrop-blur-md mb-4 sm:mb-5">
-                  <span className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-[#3fa35b] animate-pulse shadow-[0_0_16px_#3fa35b]" />
-                  <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black kanit-text tracking-wide text-white">
-                    จุดชำระเงิน • เคาน์เตอร์ {stationId.replace('station_', '')}
-                  </span>
-                </div>
-
-                {/* Prominent "ยินดีต้อนรับ" Headline */}
-                <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-black kanit-text tracking-tight mb-2 sm:mb-3 drop-shadow-[0_8px_32px_rgba(0,0,0,0.95)] animate-welcome-shimmer">
-                  ยินดีต้อนรับ
-                </h1>
-
-                {/* Clinic Name (Larger than counter station text, Herbal Sage Tone matching logo) */}
-                <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-[#a2d1aa] kanit-text tracking-wide mb-4 sm:mb-5 drop-shadow-lg">
-                  {branchDisplayName || 'อันผิงคลินิกแพทย์แผนจีน'}
-                </h2>
-
-                {/* Formal Customer Guidance Text */}
-                <p className="text-xl sm:text-3xl md:text-4xl lg:text-[42px] font-light text-slate-200/90 kanit-text max-w-5xl leading-snug tracking-normal drop-shadow-md">
-                  รายการบริการและยอดชำระเงินจะปรากฏบนหน้าจอนี้<br className="hidden sm:inline" />
-                  เมื่อเจ้าหน้าที่ทำรายการ
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Layer A */}
-            <div 
-              className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
-                activeLayer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0'
-              }`}
-              style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
-            >
-              {layerAData && (
-                isYouTubeUrl(layerAData.url) ? (
-                  <YouTubePlayer
-                    url={layerAData.url}
-                    isActive={activeLayer === 'A' && displayMode === 'STANDBY_ADS'}
-                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
-                    isMuted={isVideoMuted}
-                    isLooping={activeAds.length <= 1}
-                    objectFit={layerAData.objectFit}
-                    onEnded={() => handleVideoEnded('A')}
-                    onError={(e) => handleVideoError('A', e)}
-                    playerRef={videoRefA}
-                  />
-                ) : layerAData.type === 'video' || isMediaVideo(layerAData.url, layerAData.type) ? (
-                  <VideoJSPlayer
-                    src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
-                    isActive={activeLayer === 'A' && displayMode === 'STANDBY_ADS'}
-                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
-                    isMuted={isVideoMuted}
-                    isLooping={activeAds.length <= 1}
-                    objectFit={layerAData.objectFit}
-                    onEnded={() => handleVideoEnded('A')}
-                    onError={(e) => handleVideoError('A', e)}
-                    playerRef={videoRefA}
-                  />
-                ) : (
-                  <img
-                    src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
-                    alt={layerAData.title || 'Slide'}
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                  />
-                )
-              )}
-            </div>
-
-            {/* Layer B */}
-            <div 
-              className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
-                activeLayer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0'
-              }`}
-              style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
-            >
-              {layerBData && (
-                isYouTubeUrl(layerBData.url) ? (
-                  <YouTubePlayer
-                    url={layerBData.url}
-                    isActive={activeLayer === 'B' && displayMode === 'STANDBY_ADS'}
-                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
-                    isMuted={isVideoMuted}
-                    isLooping={activeAds.length <= 1}
-                    objectFit={layerBData.objectFit}
-                    onEnded={() => handleVideoEnded('B')}
-                    onError={(e) => handleVideoError('B', e)}
-                    playerRef={videoRefB}
-                  />
-                ) : layerBData.type === 'video' || isMediaVideo(layerBData.url, layerBData.type) ? (
-                  <VideoJSPlayer
-                    src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
-                    isActive={activeLayer === 'B' && displayMode === 'STANDBY_ADS'}
-                    isPaused={isPausedByTouch || adminModalOpen || displayMode !== 'STANDBY_ADS'}
-                    isMuted={isVideoMuted}
-                    isLooping={activeAds.length <= 1}
-                    objectFit={layerBData.objectFit}
-                    onEnded={() => handleVideoEnded('B')}
-                    onError={(e) => handleVideoError('B', e)}
-                    playerRef={videoRefB}
-                  />
-                ) : (
-                  <img
-                    src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
-                    alt={layerBData.title || 'Slide'}
-                    draggable={false}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-                  />
-                )
-              )}
-            </div>
-
-            {/* Subtle Edge Shadows - only at top for clinic badge and bottom for text, center stays 100% crystal clear */}
-            <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/45 via-black/15 to-transparent pointer-events-none z-20" />
-            {/* Dynamic Bottom Gradient Overlay (Auto-height strictly covering content + 5% above) */}
-            {(() => {
-              const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-              const hasText = !!(currentAd?.title || currentAd?.subtitle || currentAd?.tag);
-              const isOverlayEnabled = currentAd?.showBottomOverlay !== false;
-
-              if (!hasText || !isOverlayEnabled) return null;
-
-              // Estimate fallback if DOM measurement has not completed on first render frame
-              const estimateTextHeight = () => {
-                let est = 0;
-                if (currentAd?.tag) est += 36;
-                if (currentAd?.title) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 70 : 50;
-                if (currentAd?.subtitle) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 45 : 35;
-                return est;
-              };
-
-              const actualContentHeight = textBlockHeight > 0 ? textBlockHeight : estimateTextHeight();
-              const bottomOffset = (typeof window !== 'undefined' && window.innerWidth >= 640) ? 32 : 20;
-              const totalContentSpan = actualContentHeight + bottomOffset;
-              // Overlay strictly covers content and rises only 5% higher than the content
-              const totalOverlayHeight = Math.round(totalContentSpan * 1.05);
-
-              return (
-                <div 
-                  className="absolute bottom-0 left-0 right-0 pointer-events-none z-20 transition-all duration-300 ease-out"
-                  style={{
-                    height: `${totalOverlayHeight}px`,
-                    background: 'linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.35) 75%, rgba(0, 0, 0, 0.10) 92%, rgba(0, 0, 0, 0) 100%)'
-                  }}
-                />
-              );
-            })()}
-
-            {/* Floating Touch Pause Indicator (Centrally placed, never squeezes the header) */}
-            {isPausedByTouch && (
-              <div className="absolute top-18 sm:top-22 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-white/25 text-white text-xs font-medium kanit-text shadow-2xl animate-pulse pointer-events-none whitespace-nowrap flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span>แตะค้างเพื่อหยุดอ่าน</span>
-              </div>
-            )}
-
-            {/* Bottom Promos Title & Indicators */}
-            {(() => {
-              const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-              return (
-                <div className="absolute bottom-5 left-4 right-4 sm:bottom-8 sm:left-8 sm:right-8 z-30 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4 pointer-events-none">
-                  <div ref={textBlockRef} className="max-w-4xl min-w-0 flex-1">
-                    {currentAd?.tag && (() => {
-                      const badge = getTagBadgeStyle(currentAd);
-                      return (
-                        <div className="mb-2 sm:mb-2.5 flex flex-wrap items-center gap-2">
-                          <span 
-                            className={`text-xs sm:text-sm md:text-base px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full inline-block transition-all ${badge.className}`}
-                            style={badge.style}
-                          >
-                            {currentAd.tag}
-                          </span>
-                        </div>
-                      );
-                    })()}
-                    {currentAd?.title && (
-                      <h1 
-                        lang="th"
-                        className="thai-headline font-black text-white drop-shadow-2xl line-clamp-2"
-                      >
-                        {formatThaiTypography(currentAd.title)}
-                      </h1>
-                    )}
-                    {currentAd?.subtitle && (
-                      <p 
-                        lang="th"
-                        className="thai-subtitle font-medium text-white/95 mt-2 sm:mt-2.5 drop-shadow-xl max-w-4xl line-clamp-2"
-                      >
-                        {formatThaiTypography(currentAd.subtitle)}
-                      </p>
-                    )}
+              <div 
+                className="relative z-10 flex flex-col items-center w-full mx-auto"
+                style={{
+                  transform: pixelShiftCenter ? `translate3d(${pixelShiftCenter.x}px, ${pixelShiftCenter.y}px, 0)` : undefined,
+                  transformOrigin: 'center center',
+                  transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  willChange: 'transform'
+                }}
+              >
+                <div className="flex flex-col items-center w-full animate-welcome-float">
+                  {/* Prominent Counter Pill: จุดชำระเงิน • เคาน์เตอร์ X */}
+                  <div className="inline-flex items-center gap-2 sm:gap-3 rounded-full bg-[#14291c]/90 border border-[#2D5A3D]/90 text-[#b5d6bd] shadow-lg backdrop-blur-md px-5 py-2 sm:px-7 sm:py-2.5 mb-2.5 sm:mb-4">
+                    <span className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-[#3fa35b] animate-pulse shadow-[0_0_14px_#3fa35b]" />
+                    <span className="welcome-counter-pill font-extrabold kanit-text tracking-wide text-white whitespace-nowrap">
+                      จุดชำระเงิน • เคาน์เตอร์ {stationId.replace('station_', '')}
+                    </span>
                   </div>
 
-                  {/* Bottom Right Slide Navigation Dots (Minimal Floating Dots & Active Pill) */}
-                  {activeAds.length > 1 && (
-                    <div 
-                      className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0 self-start md:self-end pb-2 z-40 select-none"
-                      onTouchStart={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      {activeAds.map((_, idx) => {
-                        const isActive = idx === currentSlideIndex;
+                  {/* Prominent "ยินดีต้อนรับ" Headline (Large & Grand, Single Line Guaranteed) */}
+                  <h1 className="welcome-headline font-black kanit-text tracking-tight drop-shadow-[0_12px_48px_rgba(0,0,0,0.95)] animate-welcome-shimmer text-center whitespace-nowrap mb-2 sm:mb-3.5">
+                    ยินดีต้อนรับ
+                  </h1>
+
+                  {/* Clinic Name (Larger than counter station text, Herbal Sage Tone matching logo) */}
+                  <h2 className="welcome-clinic-name font-black text-[#a2d1aa] kanit-text tracking-wide drop-shadow-xl text-center whitespace-nowrap mb-2.5 sm:mb-4">
+                    {branchDisplayName || 'อันผิงคลินิกแพทย์แผนจีน'}
+                  </h2>
+
+                  {/* Formal Customer Guidance Text (Scaled proportionally with welcome headline) */}
+                  <p className="welcome-guidance font-light text-slate-200/90 kanit-text max-w-5xl leading-relaxed tracking-normal drop-shadow-md text-center">
+                    รายการบริการและยอดชำระเงินจะปรากฏบนหน้าจอนี้<br className="hidden sm:inline" />
+                    เมื่อเจ้าหน้าที่ทำรายการ
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Layer A */}
+              <div 
+                className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
+                  activeLayer === 'A' ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                }`}
+                style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
+              >
+                {layerAData && (
+                  isYouTubeUrl(layerAData.url) ? (
+                    <YouTubePlayer
+                      url={layerAData.url}
+                      isActive={activeLayer === 'A' && (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART')}
+                      isPaused={isPausedByTouch || adminModalOpen || (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART')}
+                      isMuted={isVideoMuted}
+                      isLooping={activeAds.length <= 1}
+                      objectFit={layerAData.objectFit}
+                      onEnded={() => handleVideoEnded('A')}
+                      onError={(e) => handleVideoError('A', e)}
+                      playerRef={videoRefA}
+                    />
+                  ) : layerAData.type === 'video' || isMediaVideo(layerAData.url, layerAData.type) ? (
+                    <VideoJSPlayer
+                      src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
+                      isActive={activeLayer === 'A' && (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART')}
+                      isPaused={isPausedByTouch || adminModalOpen || (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART')}
+                      isMuted={isVideoMuted}
+                      isLooping={activeAds.length <= 1}
+                      objectFit={layerAData.objectFit}
+                      onEnded={() => handleVideoEnded('A')}
+                      onError={(e) => handleVideoError('A', e)}
+                      playerRef={videoRefA}
+                    />
+                  ) : (
+                    <img
+                      src={layerAData.resolvedUrl || formatMediaUrl(layerAData.url, layerAData.type)}
+                      alt={layerAData.title || 'Slide'}
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className={`w-full h-full pointer-events-none select-none ${layerAData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    />
+                  )
+                )}
+              </div>
+
+              {/* Layer B */}
+              <div 
+                className={`absolute inset-0 fade-crossfade pointer-events-none select-none ${
+                  activeLayer === 'B' ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                }`}
+                style={{ transform: 'translateZ(0)', willChange: 'opacity' }}
+              >
+                {layerBData && (
+                  isYouTubeUrl(layerBData.url) ? (
+                    <YouTubePlayer
+                      url={layerBData.url}
+                      isActive={activeLayer === 'B' && (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART')}
+                      isPaused={isPausedByTouch || adminModalOpen || (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART')}
+                      isMuted={isVideoMuted}
+                      isLooping={activeAds.length <= 1}
+                      objectFit={layerBData.objectFit}
+                      onEnded={() => handleVideoEnded('B')}
+                      onError={(e) => handleVideoError('B', e)}
+                      playerRef={videoRefB}
+                    />
+                  ) : layerBData.type === 'video' || isMediaVideo(layerBData.url, layerBData.type) ? (
+                    <VideoJSPlayer
+                      src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
+                      isActive={activeLayer === 'B' && (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART')}
+                      isPaused={isPausedByTouch || adminModalOpen || (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART')}
+                      isMuted={isVideoMuted}
+                      isLooping={activeAds.length <= 1}
+                      objectFit={layerBData.objectFit}
+                      onEnded={() => handleVideoEnded('B')}
+                      onError={(e) => handleVideoError('B', e)}
+                      playerRef={videoRefB}
+                    />
+                  ) : (
+                    <img
+                      src={layerBData.resolvedUrl || formatMediaUrl(layerBData.url, layerBData.type)}
+                      alt={layerBData.title || 'Slide'}
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className={`w-full h-full pointer-events-none select-none ${layerBData.objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    />
+                  )
+                )}
+              </div>
+
+              {/* Subtle Edge Shadows */}
+              <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/45 via-black/15 to-transparent pointer-events-none z-20" />
+              {/* Dynamic Bottom Gradient Overlay */}
+              {(() => {
+                const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+                const hasText = !!(currentAd?.title || currentAd?.subtitle || currentAd?.tag);
+                const isOverlayEnabled = currentAd?.showBottomOverlay !== false;
+
+                if (!hasText || !isOverlayEnabled) return null;
+
+                const estimateTextHeight = () => {
+                  let est = 0;
+                  if (currentAd?.tag) est += 36;
+                  if (currentAd?.title) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 70 : 50;
+                  if (currentAd?.subtitle) est += (typeof window !== 'undefined' && window.innerWidth >= 1024) ? 45 : 35;
+                  return est;
+                };
+
+                const actualContentHeight = textBlockHeight > 0 ? textBlockHeight : estimateTextHeight();
+                const bottomOffset = (typeof window !== 'undefined' && window.innerWidth >= 640) ? 32 : 20;
+                const totalContentSpan = actualContentHeight + bottomOffset;
+                const totalOverlayHeight = Math.round(totalContentSpan * 1.05);
+
+                return (
+                  <div 
+                    className="absolute bottom-0 left-0 right-0 pointer-events-none z-20 transition-all duration-300 ease-out"
+                    style={{
+                      height: `${totalOverlayHeight}px`,
+                      background: 'linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.35) 75%, rgba(0, 0, 0, 0.10) 92%, rgba(0, 0, 0, 0) 100%)'
+                    }}
+                  />
+                );
+              })()}
+
+              {/* Floating Touch Pause Indicator */}
+              {isPausedByTouch && (
+                <div className="absolute top-18 sm:top-22 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-white/25 text-white text-xs font-medium kanit-text shadow-2xl animate-pulse pointer-events-none whitespace-nowrap flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span>แตะค้างเพื่อหยุดอ่าน</span>
+                </div>
+              )}
+
+              {/* Bottom Promos Title & Indicators */}
+              {(() => {
+                const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+                return (
+                  <div className="absolute bottom-5 left-4 right-4 sm:bottom-8 sm:left-8 sm:right-8 z-30 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4 pointer-events-none">
+                    <div ref={textBlockRef} className="max-w-4xl min-w-0 flex-1">
+                      {currentAd?.tag && (() => {
+                        const badge = getTagBadgeStyle(currentAd);
                         return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              transitionToSlide(idx);
-                            }}
-                            className="py-1 px-0.5 sm:py-1.5 sm:px-1 rounded-full flex items-center justify-center cursor-pointer group transition-transform active:scale-90"
-                            aria-label={`Go to slide ${idx + 1}`}
-                          >
+                          <div className="mb-2 sm:mb-2.5 flex flex-wrap items-center gap-2">
                             <span 
-                              className={`block rounded-full transition-all duration-300 ease-out ${
-                                isActive 
-                                  ? 'w-6 sm:w-8 h-2 sm:h-2.5 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.6)]' 
-                                  : 'w-2 sm:w-2.5 h-2 sm:h-2.5 bg-white/40 group-hover:bg-white/70 shadow-[0_1px_4px_rgba(0,0,0,0.4)]'
-                              }`}
-                            />
-                          </button>
+                              className={`text-xs sm:text-sm md:text-base px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full inline-block transition-all ${badge.className}`}
+                              style={badge.style}
+                            >
+                              {currentAd.tag}
+                            </span>
+                          </div>
                         );
-                      })}
+                      })()}
+                      {currentAd?.title && (
+                        <h1 
+                          lang="th"
+                          className="thai-headline font-black text-white drop-shadow-2xl line-clamp-2"
+                        >
+                          {formatThaiTypography(currentAd.title)}
+                        </h1>
+                      )}
+                      {currentAd?.subtitle && (
+                        <p 
+                          lang="th"
+                          className="thai-subtitle font-medium text-white/95 mt-2 sm:mt-2.5 drop-shadow-xl max-w-4xl line-clamp-2"
+                        >
+                          {formatThaiTypography(currentAd.subtitle)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Bottom Right Slide Navigation Dots */}
+                    {activeAds.length > 1 && (
+                      <div 
+                        className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0 self-start md:self-end pb-2 z-40 select-none"
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {activeAds.map((_, idx) => {
+                          const isActive = idx === currentSlideIndex;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                transitionToSlide(idx);
+                              }}
+                              className="py-1 px-0.5 sm:py-1.5 sm:px-1 rounded-full flex items-center justify-center cursor-pointer group transition-transform active:scale-90"
+                              aria-label={`Go to slide ${idx + 1}`}
+                            >
+                              <span 
+                                className={`block rounded-full transition-all duration-300 ease-out ${
+                                  isActive 
+                                    ? 'w-6 sm:w-8 h-2 sm:h-2.5 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.6)]' 
+                                    : 'w-2 sm:w-2.5 h-2 sm:h-2.5 bg-white/40 group-hover:bg-white/70 shadow-[0_1px_4px_rgba(0,0,0,0.4)]'
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {/* Top-Left Clinic Brand Header (Only shown during STANDBY_ADS) */}
+          {displayMode === 'STANDBY_ADS' && (() => {
+            const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+            const isBrandHeaderVisible = activeAds.length === 0 || currentAd?.showBrandHeader !== false;
+            const isLogoVisible = isBrandHeaderVisible && (currentAd?.showLogo !== false);
+            const isNameVisible = isBrandHeaderVisible && (currentAd?.showClinicName !== false);
+
+            if (!isLogoVisible && !isNameVisible) return null;
+
+            return (
+              <div 
+                className="absolute top-4 left-4 sm:top-6 sm:left-6 md:top-7 md:left-8 z-30 pointer-events-none max-w-[calc(100%-160px)] sm:max-w-[calc(100%-240px)]"
+                style={{
+                  transform: `translate3d(${pixelShiftLogo.x}px, ${pixelShiftLogo.y}px, 0)`,
+                  transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  willChange: 'transform'
+                }}
+              >
+                <div className="flex items-center gap-3 sm:gap-4 pointer-events-auto">
+                  {isLogoVisible && (
+                    branchLogo ? (
+                      <img 
+                        src={formatDirectImageUrl(branchLogo) || branchLogo}
+                        alt={branchDisplayName}
+                        draggable={false}
+                        onContextMenu={(e) => e.preventDefault()}
+                        className="clinic-brand-logo object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 pointer-events-none select-none"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : (
+                      <div 
+                        className="clinic-brand-logo flex items-center justify-center text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0"
+                      >
+                        <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-rose-400 fill-rose-400/30" />
+                      </div>
+                    )
+                  )}
+                  {isNameVisible && (
+                    <div className="min-w-0 flex-1">
+                      <h2 className="clinic-brand-title text-white tracking-wide drop-shadow-md truncate">
+                        {branchDisplayName}
+                      </h2>
+                      <p className="clinic-brand-subtitle text-white/85 font-light truncate mt-0.5">
+                        {branchSubtitle}
+                      </p>
                     </div>
                   )}
                 </div>
-              );
-            })()}
-          </>
-        )}
+              </div>
+            );
+          })()}
 
-        {/* Top-Left Clinic Brand Header (Independent Absolute Container - Never shifts clock) */}
-        {(() => {
-          const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-          const isBrandHeaderVisible = activeAds.length === 0 || currentAd?.showBrandHeader !== false;
-          const isLogoVisible = isBrandHeaderVisible && (currentAd?.showLogo !== false);
-          const isNameVisible = isBrandHeaderVisible && (currentAd?.showClinicName !== false);
+          {/* Top-Right Fixed Clock (Only shown during STANDBY_ADS) */}
+          {displayMode === 'STANDBY_ADS' && (() => {
+            const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
+            const isClockVisible = isClockEnabledGlobal && (activeAds.length === 0 || currentAd?.showClock !== false);
+            if (!isClockVisible) return null;
 
-          if (!isLogoVisible && !isNameVisible) return null;
+            return <StandbyClock pixelShift={pixelShiftClock} />;
+          })()}
 
-          return (
-            <div 
-              className="absolute top-4 left-4 sm:top-6 sm:left-6 md:top-7 md:left-8 z-30 pointer-events-none max-w-[calc(100%-160px)] sm:max-w-[calc(100%-240px)]"
-              style={{
-                transform: `translate3d(${pixelShiftLogo.x}px, ${pixelShiftLogo.y}px, 0)`,
-                transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                willChange: 'transform'
-              }}
-            >
-              <div className="flex items-center gap-3 sm:gap-4 pointer-events-auto">
-                {isLogoVisible && (
-                  branchLogo ? (
-                    <img 
-                      src={formatDirectImageUrl(branchLogo) || branchLogo}
-                      alt={branchDisplayName}
-                      draggable={false}
-                      onContextMenu={(e) => e.preventDefault()}
-                      className="clinic-brand-logo object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0 pointer-events-none select-none"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : (
-                    <div 
-                      className="clinic-brand-logo flex items-center justify-center text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.65)] shrink-0"
-                    >
-                      <Heart className="w-8 h-8 sm:w-10 sm:h-10 text-rose-400 fill-rose-400/30" />
-                    </div>
-                  )
-                )}
-                {isNameVisible && (
-                  <div className="min-w-0 flex-1">
-                    <h2 className="clinic-brand-title text-white tracking-wide drop-shadow-md truncate">
-                      {branchDisplayName}
-                    </h2>
-                    <p className="clinic-brand-subtitle text-white/85 font-light truncate mt-0.5">
-                      {branchSubtitle}
-                    </p>
+          {/* Top-Left Clock ("เวลา" per layout-หน้าคิดเงินใหม่.jpg) - During ACTIVE_CART */}
+          {displayMode === 'ACTIVE_CART' && isClockEnabledGlobal && (
+            <StandbyClock 
+              pixelShift={pixelShiftClock}
+              compact={true}
+              className="absolute top-4 left-4 sm:top-5 sm:left-5 lg:top-6 lg:left-6 z-30 pointer-events-auto shrink-0 select-none"
+            />
+          )}
+        </div>
+
+        {/* ============================================================== */}
+        {/* ULTRA-LARGE PROMPTPAY QR DISPLAY (Inside Left Card in PAYMENT_QR) */}
+        {/* ============================================================== */}
+        {displayMode === 'PAYMENT_QR' && (
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white flex flex-col items-center justify-center p-6 lg:p-10 z-20 overflow-hidden">
+            {/* Ambient Herbal Jade Glow */}
+            <div className="absolute w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[140px] pointer-events-none" />
+
+            {/* Top-Left Clock ("เวลา" per layout-หน้าคิดเงินใหม่.jpg) */}
+            {isClockEnabledGlobal && (
+              <StandbyClock 
+                pixelShift={pixelShiftClock} 
+                compact={true}
+                className="absolute top-4 left-4 sm:top-5 sm:left-5 lg:top-6 lg:left-6 z-30 pointer-events-auto shrink-0 select-none"
+              />
+            )}
+
+            <div className="relative z-10 flex flex-col items-center max-w-xl w-full text-center">
+              {/* Header Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-emerald-300 font-semibold text-xs sm:text-sm mb-3">
+                <QrCode className="w-4 h-4 text-emerald-400" />
+                <span>Thai QR Payment / พร้อมเพย์</span>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-black text-white kanit-text tracking-tight mb-1">
+                สแกน QR Code เพื่อชำระเงิน
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 kanit-text mb-4 font-light">
+                สามารถเปิดแอปธนาคารใดก็ได้เพื่อสแกนชำระเงินได้ทันที
+              </p>
+
+              {/* Giant QR Code Frame */}
+              <div className="p-4 sm:p-5 bg-white rounded-3xl shadow-2xl border-4 border-emerald-400/30 flex flex-col items-center relative">
+                {qrPaymentData.qrUrl ? (
+                  <img
+                    src={qrPaymentData.qrUrl}
+                    alt="Payment QR"
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80 object-contain rounded-xl select-none"
+                  />
+                ) : (
+                  <div className="w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80 flex items-center justify-center text-slate-400">
+                    <RefreshCw className="w-10 h-10 animate-spin text-emerald-600" />
                   </div>
                 )}
+                <div className="mt-2 text-center">
+                  <span className="text-[10px] font-bold tracking-widest text-slate-400 font-mono uppercase block">PROMPTPAY QR</span>
+                  {qrPaymentData.accountNumber && (
+                    <span className="text-xs font-bold text-slate-700 font-mono mt-0.5 block">
+                      {formatAccountNumber(qrPaymentData.accountNumber)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Account Details Box */}
+              <div className="mt-3 px-5 py-2.5 bg-black/40 backdrop-blur-md rounded-2xl border border-white/10 text-xs text-slate-200 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                <div>ชื่อบัญชี: <strong className="text-white">{qrPaymentData.accountName || 'คลินิกการแพทย์แผนจีนอันผิง'}</strong></div>
+                {qrPaymentData.bankName && <div>ธนาคาร: <strong className="text-white">{qrPaymentData.bankName}</strong></div>}
+                {qrPaymentData.bankAccountNumber && <div>เลขที่บัญชี: <strong className="font-mono text-emerald-300">{qrPaymentData.bankAccountNumber}</strong></div>}
+              </div>
+
+              {/* Prominent Amount Pill */}
+              <div className="mt-3 px-6 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-mono font-bold text-lg">
+                ยอดชำระ: {Number(qrPaymentData.amount || cartData.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท
               </div>
             </div>
-          );
-        })()}
-
-        {/* Top-Right Fixed Clock (Permanently Fixed Coordinates & High Readability White Icon) */}
-        {(() => {
-          const currentAd = (activeLayer === 'A' ? layerAData : layerBData) || activeAds[currentSlideIndex];
-          const isClockVisible = isClockEnabledGlobal && (activeAds.length === 0 || currentAd?.showClock !== false);
-          if (!isClockVisible) return null;
-
-          return <StandbyClock pixelShift={pixelShiftClock} />;
-        })()}
+          </div>
+        )}
       </div>
 
       {/* ============================================================== */}
-      {/* 2. ACTIVE CART MODE (Clean Minimal Clinic Aesthetic)           */}
+      {/* 2. RIGHT-SIDE COLUMN (30% split in ACTIVE_CART & PAYMENT_QR)   */}
       {/* ============================================================== */}
-      <div 
-        className={`absolute inset-0 bg-[#f8fafc] text-slate-800 transition-opacity duration-200 ${
-          displayMode === 'ACTIVE_CART' ? 'opacity-100 pointer-events-auto z-20' : 'opacity-0 pointer-events-none z-0'
-        }`}
-      >
-        <div className="w-full h-full flex flex-col p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
-          {/* Top Info Bar */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 shrink-0">
-            <div 
-              className="flex items-center gap-3.5"
-              style={{
-                transform: `translate3d(${pixelShiftLogo.x}px, ${pixelShiftLogo.y}px, 0)`,
-                transition: 'transform 2.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                willChange: 'transform'
-              }}
-            >
+      {(displayMode === 'ACTIVE_CART' || displayMode === 'PAYMENT_QR') && (
+        <div className="w-full lg:w-[30%] min-w-[340px] max-w-[460px] h-full flex flex-col gap-3 sm:gap-4 shrink-0 z-20">
+          {/* Card 1: TOP CARD ("LOGO" box per layout image) */}
+          <div className="rounded-2xl sm:rounded-3xl bg-white p-3.5 sm:p-4 shadow-xl border border-slate-200/80 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
               {branchLogo ? (
                 <img 
                   src={formatDirectImageUrl(branchLogo) || branchLogo}
                   alt={branchDisplayName}
                   draggable={false}
                   onContextMenu={(e) => e.preventDefault()}
-                  className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl object-cover border border-slate-200 shadow-sm bg-white shrink-0 pointer-events-none select-none"
+                  className="w-12 h-12 rounded-2xl object-cover border border-slate-200/80 shadow-xs bg-white shrink-0 pointer-events-none select-none"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
                   }}
                 />
               ) : null}
-              <div className={`w-13 h-13 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shadow-sm shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}>
-                <ShoppingBag className="w-6 h-6 sm:w-8 sm:h-8" />
+              <div className={`w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shadow-xs shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}>
+                <ShoppingBag className="w-6 h-6" />
               </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 kanit-text tracking-tight">
-                  รายการรับบริการ & ชำระเงิน
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-bold text-slate-800 kanit-text tracking-tight leading-tight truncate">
+                  {branchDisplayName || 'อันผิงคลินิกแพทย์แผนจีน'}
                 </h2>
-                <p className="text-xs sm:text-sm md:text-base text-slate-500 kanit-text mt-0.5">
-                  <span className="font-semibold text-slate-700">{branchDisplayName}</span> • {branchSubtitle} • เคาน์เตอร์ {String(stationId || '1').replace('station_', '')}
+                <p className="text-xs text-slate-500 kanit-text mt-0.5 truncate">
+                  จุดชำระเงิน • เคาน์เตอร์ {String(stationId || '1').replace('station_', '')}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-              <div className="text-right">
-                <span className="text-[11px] text-slate-400 block kanit-text">สถานะ</span>
-                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  กำลังคิดเงิน
-                </span>
+            <div className="shrink-0 pl-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{displayMode === 'PAYMENT_QR' ? 'รอสแกนชำระ' : 'กำลังคิดเงิน'}</span>
               </div>
-              <CartClock pixelShift={pixelShiftClock} />
             </div>
           </div>
 
-          {/* Patient Welcome & Course Balance Card */}
-          {cartData?.patient && (
-            <div className="my-3 sm:my-4 p-4 rounded-2xl bg-white border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                  <User className="w-5 h-5" />
+          {/* Card 2: BOTTOM CARD (Cart & Items box per layout image) */}
+          <div className="flex-1 rounded-2xl sm:rounded-3xl bg-white p-4 sm:p-5 shadow-xl border border-slate-200/80 flex flex-col min-h-0 overflow-hidden">
+            {/* Header: Patient Info (Show ONLY when a patient is selected - "ลูกค้าทั่วไป" ไม่ต้องโชว์) */}
+            {cartData?.patient ? (
+              <div className="pb-3 border-b border-slate-100 shrink-0">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
+                    ข้อมูลผู้รับบริการ
+                  </span>
+                  {cartData?.patient?.isVip && (
+                    <span className="text-[10px] sm:text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0">
+                      <Crown size={11} className="fill-amber-200 text-white" /> VIP
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-emerald-700 tracking-wide kanit-text">ยินดีต้อนรับ</span>
-                    <span className="text-xs font-mono font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
-                      {cartData.patient.hn || '-'}
+
+                <div className={`p-2.5 rounded-xl flex flex-col gap-1.5 transition-all ${
+                  cartData?.patient?.isVip
+                    ? 'border-amber-300/90 border-l-4 border-l-amber-500 bg-gradient-to-r from-amber-100/90 via-yellow-50/90 to-amber-100/80 shadow-xs'
+                    : 'bg-slate-50 border border-slate-200/80'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        cartData?.patient?.isVip 
+                          ? 'bg-amber-200/80 text-amber-900 border border-amber-300/70'
+                          : 'bg-emerald-100/70 text-emerald-700'
+                      }`}>
+                        {cartData?.patient?.isVip ? (
+                          <Crown className="w-4 h-4 text-amber-600 fill-amber-300" />
+                        ) : (
+                          <User className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`text-xs sm:text-sm font-bold kanit-text truncate ${
+                          cartData?.patient?.isVip ? 'text-amber-950 font-black' : 'text-slate-800'
+                        }`}>
+                          {cartData.patient.name}
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md border shrink-0 ${
+                      cartData?.patient?.isVip
+                        ? 'bg-amber-50/90 text-amber-950 border-amber-300/80 font-bold'
+                        : 'bg-white text-slate-600 border-slate-200'
+                    }`}>
+                      HN: {cartData.patient.hn || '-'}
                     </span>
                   </div>
-                  <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text">
-                    {cartData.patient.name}
-                  </h3>
-                </div>
-              </div>
 
-              {/* Remaining Courses Transparency */}
-              {Array.isArray(cartData.patient.remainingCourses) && cartData.patient.remainingCourses.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {cartData.patient.remainingCourses.map((c, i) => (
-                    <div 
-                      key={c?.id || i}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium kanit-text flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{c?.name || 'คอร์ส'}: คงเหลือ <strong>{c?.remaining ?? 0}</strong> ครั้ง</span>
+                  {/* Remaining Courses */}
+                  {Array.isArray(cartData.patient.remainingCourses) && cartData.patient.remainingCourses.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-slate-200/60">
+                      {cartData.patient.remainingCourses.map((c, i) => (
+                        <div 
+                          key={c?.id || i}
+                          className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-medium kanit-text flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[200px]">{c?.name || 'คอร์ส'}: เหลือ <strong>{c?.remaining ?? 0}</strong> ครั้ง</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Itemized Table */}
-          <div className="flex-1 overflow-hidden bg-white rounded-2xl border border-slate-200/90 shadow-xs flex flex-col my-1">
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <table className="customer-cart-table w-full text-left sarabun-text">
-                <thead className="sticky top-0 z-10 bg-slate-50">
-                  <tr className="bg-slate-50 text-slate-600 text-xs sm:text-sm font-semibold kanit-text">
-                    <th className="py-3 px-4 sm:px-5 bg-slate-50 border-b border-slate-200">ลำดับ</th>
-                    <th className="py-3 px-4 sm:px-5 bg-slate-50 border-b border-slate-200">รายการสินค้า / บริการ</th>
-                    <th className="py-3 px-4 sm:px-5 bg-slate-50 border-b border-slate-200 text-center">จำนวน</th>
-                    <th className="py-3 px-4 sm:px-5 bg-slate-50 border-b border-slate-200 text-right">ราคา/หน่วย</th>
-                    <th className="py-3 px-4 sm:px-5 bg-slate-50 border-b border-slate-200 text-right">รวมเงิน (บาท)</th>
-                  </tr>
-                </thead>
-                <tbody className="text-xs sm:text-sm md:text-base text-slate-700">
-                  {(Array.isArray(cartData?.items) ? cartData.items : []).map((item, index) => {
-                    if (!item) return null;
-                    const itemName = item.name || item.product?.name || 'รายการสินค้า / บริการ';
-                    const itemQty = Number(item.quantity || 1);
-                    const itemPrice = Number(item.price || item.product?.price || 0);
-                    const itemTotal = Number(item.total !== undefined ? item.total : (itemQty * itemPrice));
-                    return (
-                      <tr 
-                        key={item.id || item.product?.id || `item_${index}`} 
-                        className={`customer-cart-row hover:bg-slate-50/80 ${index > 0 ? 'border-t border-slate-100' : ''}`}
-                      >
-                        <td className="py-3 px-4 sm:px-5 text-slate-400 font-mono text-xs sm:text-sm">{index + 1}</td>
-                        <td className="py-3 px-4 sm:px-5 font-semibold text-slate-800">{itemName}</td>
-                        <td className="py-3 px-4 sm:px-5 text-center font-mono font-bold text-slate-700">{itemQty}</td>
-                        <td className="py-3 px-4 sm:px-5 text-right font-mono text-slate-600">
-                          {itemPrice.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 px-4 sm:px-5 text-right font-mono font-bold text-slate-900">
-                          {itemTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Cart Summary Bottom Bar */}
-          <div className="mt-2.5 p-3.5 sm:p-5 border border-slate-200/90 bg-white rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-            <div className="flex items-center gap-5 sm:gap-7 text-xs sm:text-sm md:text-base text-slate-600 kanit-text">
-              {Number(cartData?.discount || 0) > 0 ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 font-medium">ส่วนลดพิเศษ:</span>
-                  <span className="font-mono text-rose-600 font-bold text-sm sm:text-lg">
-                    -{Number(cartData.discount).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
-                  </span>
-                </div>
-              ) : (
-                <div />
-              )}
-            </div>
-
-            <div className="flex items-center gap-3 sm:gap-3.5">
-              <span className="text-sm sm:text-lg md:text-xl font-bold text-slate-700 kanit-text">ยอดชำระสุทธิ:</span>
-              <div className="px-5 py-2 sm:px-7 sm:py-2.5 rounded-2xl bg-emerald-600 text-white font-mono font-black text-2xl sm:text-3xl md:text-4xl shadow-md tracking-tight flex items-baseline gap-1.5">
-                <span>{Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
-                <span className="text-sm sm:text-base font-normal opacity-90">บาท</span>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================================== */}
-      {/* 3. PAYMENT QR MODE (Clean Minimal Clinic Aesthetic)           */}
-      {/* ============================================================== */}
-      <div 
-        className={`absolute inset-0 bg-[#f8fafc] text-slate-800 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-200 ${
-          displayMode === 'PAYMENT_QR' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-      >
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl p-6 sm:p-10 max-w-lg w-full flex flex-col items-center text-center">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <QrCode className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-semibold tracking-wider text-emerald-700 uppercase kanit-text">
-              Thai QR Payment / พร้อมเพย์
-            </span>
-          </div>
-
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text mb-4">
-            สแกน QR Code เพื่อชำระเงิน
-          </h2>
-
-          {/* Dynamic QR Code Card */}
-          <div className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200/90 mb-5 flex flex-col items-center">
-            <span className="text-[11px] font-bold tracking-widest text-slate-400 font-mono mb-2 uppercase">
-              PROMPTPAY QR
-            </span>
-            {qrPaymentData.qrUrl ? (
-              <img
-                src={qrPaymentData.qrUrl}
-                alt="Payment QR"
-                draggable={false}
-                onContextMenu={(e) => e.preventDefault()}
-                className="w-56 h-56 sm:w-64 sm:h-64 object-contain rounded-lg select-none"
-              />
             ) : (
-              <div className="w-56 h-56 flex items-center justify-center text-slate-400">
-                <RefreshCw className="w-8 h-8 animate-spin text-emerald-600" />
+              <div className="pb-2.5 border-b border-slate-100 shrink-0 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
+                  รายการสินค้า / บริการ
+                </span>
+                <span className="text-xs font-mono font-semibold text-slate-500">
+                  {Array.isArray(cartData?.items) ? cartData.items.length : 0} รายการ
+                </span>
               </div>
             )}
-          </div>
 
-          {/* Account Details */}
-          <div className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-4 mb-5 text-left kanit-text space-y-1.5">
-            <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
-              <span>ชื่อบัญชี:</span>
-              <span className="font-semibold text-slate-800">{qrPaymentData.accountName || 'คลินิกการแพทย์แผนจีนอันผิง'}</span>
+            {/* Scrollable Items List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 py-2 pr-1 min-h-0">
+              {(Array.isArray(cartData?.items) ? cartData.items : []).map((item, index) => {
+                if (!item) return null;
+                const itemName = item.name || item.product?.name || 'รายการสินค้า / บริการ';
+                const itemQty = Number(item.quantity || 1);
+                const itemPrice = Number(item.price || item.product?.price || 0);
+                const itemTotal = Number(item.total !== undefined ? item.total : (itemQty * itemPrice));
+                return (
+                  <div 
+                    key={item.id || item.product?.id || `item_${index}`} 
+                    className={`flex items-start justify-between gap-2.5 py-2 ${index > 0 ? 'border-t border-slate-100' : ''}`}
+                  >
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 font-mono text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs sm:text-sm font-semibold text-slate-800 leading-snug line-clamp-2">
+                          {itemName}
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                          {itemQty} x {itemPrice.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right font-mono font-bold text-slate-900 text-xs sm:text-sm whitespace-nowrap shrink-0">
+                      {itemTotal.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Itemized Discounts (Displayed directly below items list) */}
+              {(() => {
+                const cDiscount = Number(cartData?.couponDiscount || 0);
+                const aDiscount = Number(cartData?.additionalDiscount || 0);
+                const totalDisc = cDiscount + aDiscount || Number(cartData?.discount || 0);
+
+                if (totalDisc <= 0 && cDiscount <= 0 && aDiscount <= 0) return null;
+
+                return (
+                  <div className="pt-2.5 mt-2.5 border-t-2 border-dashed border-slate-200 space-y-2">
+                    {/* Coupon Discount Line */}
+                    {cDiscount > 0 && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-emerald-800 text-xs font-semibold shadow-2xs">
+                        <div className="flex items-center gap-1.5 truncate pr-2">
+                          <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="truncate">
+                            คูปองส่วนลด {cartData.couponTitle ? `${cartData.couponTitle} ` : ''}{cartData.couponCode ? `(${cartData.couponCode})` : ''}
+                          </span>
+                        </div>
+                        <span className="font-mono font-bold text-emerald-600 whitespace-nowrap shrink-0">
+                          -{cDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Additional Discount Line */}
+                    {aDiscount > 0 && (
+                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-amber-900 text-xs font-semibold shadow-2xs">
+                        <div className="flex items-center gap-1.5 truncate pr-2">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>ส่วนลดเพิ่มเติม:</span>
+                        </div>
+                        <span className="font-mono font-bold text-amber-700 whitespace-nowrap shrink-0">
+                          {cartData?.discountType === 'percent' && cartData?.discountValue
+                            ? `${cartData.discountValue}% (${aDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿)`
+                            : `-${aDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Total Discount Line */}
+                    <div className="flex items-center justify-between px-1 text-xs font-bold text-slate-700 pt-1">
+                      <span className="kanit-text">รวมส่วนลด:</span>
+                      <span className="font-mono text-rose-600 font-extrabold text-sm">
+                        -{totalDisc.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-            {qrPaymentData.bankAccountNumber && (
-              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
-                <span className="font-medium text-slate-700">เลขที่บัญชี:</span>
-                <span className="font-mono font-bold text-slate-900 tracking-wider text-sm sm:text-base">
-                  {qrPaymentData.bankAccountNumber}
-                </span>
-              </div>
-            )}
-            {qrPaymentData.accountNumber && (
-              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
-                <span>
-                  {qrPaymentData.bankAccountNumber
-                    ? (String(qrPaymentData.accountNumber).replace(/[^0-9]/g, '').length === 15 ? 'เลขอ้างอิงพร้อมเพย์:' : 'พร้อมเพย์:')
-                    : (String(qrPaymentData.accountNumber).replace(/[^0-9]/g, '').length === 15 ? 'เลขอ้างอิงพร้อมเพย์ (15 หลัก):' : 'หมายเลขบัญชี / พร้อมเพย์:')}
-                </span>
-                <span className="font-mono font-bold text-emerald-700">
-                  {formatAccountNumber(qrPaymentData.accountNumber)}
-                </span>
-              </div>
-            )}
-            {qrPaymentData.bankName && (
-              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-500">
-                <span>ธนาคาร:</span>
-                <span className="text-slate-700 font-medium">{qrPaymentData.bankName}</span>
-              </div>
-            )}
-          </div>
 
-          {/* Total Amount Banner */}
-          <div className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-emerald-600 text-white shadow-md">
-            <span className="text-sm sm:text-base md:text-lg font-bold kanit-text">ยอดชำระสุทธิ</span>
-            <span className="text-2xl sm:text-3xl md:text-4xl font-mono font-black">
-              {Number(qrPaymentData.amount || cartData.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
-            </span>
+            {/* Cart Summary Bottom Bar: Net Payable (Ultra-Prominent Grand Total) */}
+            <div className="pt-3.5 pb-1 border-t-2 border-slate-200/80 shrink-0 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs sm:text-sm font-semibold text-slate-500 block kanit-text leading-tight">ยอดชำระสุทธิ</span>
+                <span className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight">Net Payable</span>
+              </div>
+              <div className="px-5 py-2.5 sm:px-6 sm:py-3.5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white font-mono font-black text-2xl sm:text-3xl lg:text-4xl shadow-xl tracking-tight flex items-baseline gap-2 shrink-0">
+                <span className="drop-shadow-sm font-black">{Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
+                <span className="text-sm sm:text-base font-semibold opacity-95 font-sans">บาท</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ============================================================== */}
-      {/* 4. PAYMENT SUCCESS MODE (Clean Minimal Clinic Aesthetic)       */}
+      {/* 4. PAYMENT SUCCESS SCREEN (5-second auto return)                */}
       {/* ============================================================== */}
       <div 
-        className={`absolute inset-0 bg-[#f8fafc] text-slate-800 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-[#06140e]/95 backdrop-blur-xl text-white flex items-center justify-center p-6 z-50 ${
           displayMode === 'PAYMENT_SUCCESS' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="bg-white rounded-3xl border border-emerald-100 shadow-xl p-8 sm:p-12 max-w-lg w-full flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-          <div className="w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 mb-5 shadow-xs animate-bounce">
+        <div className="bg-gradient-to-b from-slate-900 to-[#0c2419] rounded-3xl border border-emerald-500/30 shadow-2xl p-8 sm:p-12 max-w-lg w-full flex flex-col items-center text-center">
+          <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mb-5 shadow-[0_0_40px_rgba(16,185,129,0.35)] animate-bounce">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text mb-2">
-            ชำระเงินสำเร็จเรียบร้อย
+          <h2 className="text-2xl sm:text-3xl font-black text-white kanit-text mb-2">
+            ชำระเงินสำเร็จ
           </h2>
-          <p className="text-sm sm:text-base text-slate-500 kanit-text mb-6 font-light">
-            ขอบพระคุณที่ไว้วางใจให้คลินิกการแพทย์แผนจีนอันผิงดูแลสุขภาพของท่าน
+          <p className="text-sm sm:text-base text-emerald-200/90 kanit-text mb-6 font-light leading-relaxed">
+            ขอบพระคุณที่ไว้วางใจให้อันผิงคลินิกดูแลสุขภาพของท่านค่ะ 🙏
           </p>
 
-          <div className="w-full bg-slate-50 rounded-2xl border border-slate-100 p-5 mb-4 text-center">
+          <div className="w-full bg-white/5 rounded-2xl border border-white/10 p-5 mb-4 text-center">
             <span className="text-xs text-slate-400 block kanit-text mb-1">ยอดเงินที่ชำระ</span>
-            <span className="text-3xl sm:text-4xl font-mono font-bold text-emerald-600">
-              {Number(successData.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })} <span className="text-base font-normal">บาท</span>
+            <span className="text-3xl sm:text-4xl font-mono font-bold text-emerald-400">
+              {Number(successData.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })} <span className="text-base font-normal text-slate-300">บาท</span>
             </span>
             {successData.receiptId && (
               <span className="text-xs text-slate-400 block font-mono mt-2">
@@ -2259,7 +2348,7 @@ export default function CustomerDisplay({
           </div>
 
           <span className="text-xs text-slate-400 kanit-text">
-            กำลังกลับสู่หน้าประชาสัมพันธ์...
+            กำลังกลับสู่หน้าประชาสัมพันธ์ใน 5 วินาที...
           </span>
         </div>
       </div>

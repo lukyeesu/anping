@@ -18,9 +18,21 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, Copy, Check, RefreshCw, Monitor, Radio, Sparkles
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Copy, Check, RefreshCw, Monitor, Radio, Sparkles,
+  Ticket, Crown, Zap
 } from 'lucide-react';
+import jsQR from 'jsqr';
 import QRCode from 'qrcode';
+import { 
+  calculateCouponDiscount, 
+  isCouponUsable,
+  isPatientVipActive,
+  calculateVipExpiry,
+  generateCouponCode,
+  sortCouponsByBestValue,
+  findBestCoupon,
+  getCouponExpiryTimestamp
+} from '../utils/couponHelpers';
 import { theme } from '../global/theme';
 import { dispatchClinicNotification, calculateDailySalesSummary } from '../lib/notificationHub';
 import { getBankInfo, formatAccountNumber, generatePromptPayQrDataUrl } from '../lib/promptpay';
@@ -30,6 +42,7 @@ const POSSystem = ({
     products = [], setProducts, 
     patientsData = [], setPatientsData, 
     patientCoursesData = [], setPatientCoursesData,
+    couponsData = [], setCouponsData,
     posHistoryData = [], setPosHistoryData, 
     inventoryData = [], setInventoryData,
     setInventoryLogsData,
@@ -46,6 +59,11 @@ const POSSystem = ({
     posQrSettings = { accounts: [] }
 }) => {
   const [cart, setCart] = useState([]);
+  // ยอดรวมก่อนหักส่วนลด (Subtotal) คำนวณจากรายการสินค้าในตะกร้า
+  const subtotal = useMemo(() => {
+    return cart.reduce((sum, item) => sum + ((Number(item?.product?.price) || 0) * (Number(item?.quantity) || 0)), 0);
+  }, [cart]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('ทั้งหมด');
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -53,6 +71,86 @@ const POSSystem = ({
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [isFetchingOpd, setIsFetchingOpd] = useState(false);
   const [discount, setDiscount] = useState(0);
+
+  // State สำหรับระบบคูปอง (Coupons & Discounts)
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [useCouponThisTime, setUseCouponThisTime] = useState(true);
+  const [isCouponSelectorModalOpen, setIsCouponSelectorModalOpen] = useState(false);
+  const [manualCouponInput, setManualCouponInput] = useState('');
+  const [couponAlertModal, setCouponAlertModal] = useState(null);
+  const isApplyingCouponRef = useRef(false);
+  // Ref สำหรับจดจำว่าแคชเชียร์จงใจกดยกเลิกการใช้คูปองหรือไม่ (ป้องกันการเด้ง auto-apply ซ้ำขณะเลือกสินค้า)
+  const userDismissedCouponRef = useRef(false);
+
+  // State และ Refs สำหรับการสแกน QR Code คูปองผ่านกล้อง
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [scannerActive, setScannerActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState('environment');
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const qrVideoRef = useRef(null);
+  const qrCanvasRef = useRef(null);
+  const qrScanLoopRef = useRef(null);
+  const qrMediaStreamRef = useRef(null);
+  const cameraSessionIdRef = useRef(0);
+  const cameraFacingRef = useRef('environment');
+
+  // ข้อมูลคนไข้ที่เลือกในปัจจุบัน
+  const selectedPatientObj = useMemo(() => {
+    if (!selectedPatientId) return null;
+    return (patientsData || []).find(p => p && ((p.id && String(p.id) === String(selectedPatientId)) || (p.hn && String(p.hn) === String(selectedPatientId)))) || null;
+  }, [selectedPatientId, patientsData]);
+
+  // รายการคูปองที่ยังไม่ถูกใช้ของคนไข้ที่กำลังเลือก จัดเรียงตามความคุ้มค่าสูงสุด (Best Value First)
+  const patientCoupons = useMemo(() => {
+    if (!selectedPatientId) return [];
+    const normPid = String(selectedPatientId).trim().toLowerCase();
+    const pObj = selectedPatientObj;
+    const normHn = pObj?.hn ? String(pObj.hn).trim().toLowerCase() : '';
+    const rawList = (couponsData || []).filter(c => {
+      if (!c || c.status === 'used' || c.isDeleted || c.is_deleted) return false;
+      const cPid = String(c.patientId || c.patient_id || c.patientHn || c.patient_hn || '').trim().toLowerCase();
+      return cPid === normPid || (normHn && cPid === normHn);
+    });
+    return sortCouponsByBestValue(rawList, subtotal, selectedPatientId, currentBranch);
+  }, [selectedPatientId, selectedPatientObj, couponsData, subtotal, currentBranch]);
+
+  // --- [AUTO-APPLY] ระบบเลือกและปรับใช้คูปองที่ดีที่สุดให้อัตโนมัติ (Best Coupon Auto-Apply) ---
+  useEffect(() => {
+    // 1. ตรวจสอบเงื่อนไขพื้นฐาน: มีคนไข้, ตะกร้าไม่ว่าง, และแคชเชียร์ไม่ได้กดยกเลิกคูปองด้วยตนเอง
+    if (!selectedPatientId || subtotal <= 0 || userDismissedCouponRef.current) {
+      return;
+    }
+
+    // 2. หากมีคูปองที่ใช้อยู่แล้ว ตรวจสอบว่ายังเข้าเกณฑ์หรือไม่
+    if (appliedCoupon) {
+      if (!isCouponUsable(appliedCoupon, subtotal, selectedPatientId, currentBranch)) {
+        // หากคูปองเดิมใช้ไม่ได้แล้ว (เช่น ลดจำนวนสินค้าจนต่ำกว่าขั้นต่ำ)
+        const nextBest = findBestCoupon(patientCoupons, subtotal, selectedPatientId, currentBranch);
+        if (nextBest && (nextBest.id || nextBest.code) !== (appliedCoupon.id || appliedCoupon.code)) {
+          setAppliedCoupon(nextBest);
+          setUseCouponThisTime(true);
+          const disc = calculateCouponDiscount(nextBest, subtotal);
+          showToast(`✨ ปรับเปลี่ยนเป็นคูปอง "${nextBest.code}" ให้อัตโนมัติ (ลด ฿${Number(disc).toLocaleString()})`, 'info');
+        } else {
+          setAppliedCoupon(null);
+          setUseCouponThisTime(false);
+          showToast(`⚠️ ยอดซื้อไม่ถึงเกณฑ์ของคูปอง "${appliedCoupon.code || appliedCoupon.title}" ระบบจึงยกเลิกการใช้คูปองนี้`, 'warning');
+        }
+      }
+      return;
+    }
+
+    // 3. กรณียังไม่มีคูปองถูกเลือก -> ค้นหาคูปองที่ดีที่สุด (ลดเยอะสุด + ใกล้หมดอายุที่สุด) แล้วปรับใช้ให้อัตโนมัติ
+    const bestCoupon = findBestCoupon(patientCoupons, subtotal, selectedPatientId, currentBranch);
+    if (bestCoupon) {
+      setAppliedCoupon(bestCoupon);
+      setUseCouponThisTime(true);
+      const disc = calculateCouponDiscount(bestCoupon, subtotal);
+      showToast(`✨ ปรับใช้คูปองที่คุ้มค่าที่สุดให้อัตโนมัติ: "${bestCoupon.code}" (ลด ฿${Number(disc).toLocaleString()})`, 'info');
+    }
+  }, [selectedPatientId, subtotal, patientCoupons, appliedCoupon, currentBranch, showToast]);
 
   // State สำหรับระบบจอแสดงผลฝั่งลูกค้า (Customer-Facing Display: CFD)
   const [posStationId, setPosStationId] = useState(() => {
@@ -369,11 +467,25 @@ const POSSystem = ({
   const hoverTimerRef = useRef(null);
   const touchTimerRef = useRef(null);
 
+  const clearCourseTooltip = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+    setActiveCourseTooltip(null);
+  }, []);
+
   const calculateTooltipPosition = (target, courseInfo) => {
     try {
       if (!target || typeof target.getBoundingClientRect !== 'function') return null;
+      // หาก element หลุดออกจาก DOM แล้ว (เช่น modal ปิดตัวลง) หรือถูกซ่อน ไม่ต้องแสดง tooltip
+      if (!target.isConnected) return null;
       const rect = target.getBoundingClientRect();
-      if (!rect) return null;
+      if (!rect || (rect.width === 0 && rect.height === 0)) return null;
       const midX = rect.left + rect.width / 2;
       const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
       const maxTooltipWidth = Math.min(200, screenWidth - 32);
@@ -396,32 +508,61 @@ const POSSystem = ({
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     const target = e.currentTarget;
     hoverTimerRef.current = setTimeout(() => {
+      if (!target || !target.isConnected) return;
       const pos = calculateTooltipPosition(target, courseInfo);
       if (pos) setActiveCourseTooltip(pos);
-    }, 1000); // หน่วงเวลา 1.0s ตอน hover
+    }, 800); // หน่วงเวลา 0.8s ตอน hover
   };
 
   const handleCourseMouseLeave = () => {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    setActiveCourseTooltip(null);
+    clearCourseTooltip();
   };
 
   const handleCourseTouchStart = (e, courseInfo) => {
     if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
     const target = e.currentTarget;
     touchTimerRef.current = setTimeout(() => {
+      if (!target || !target.isConnected) return;
       const pos = calculateTooltipPosition(target, courseInfo);
       if (pos) {
         setActiveCourseTooltip(pos);
-        setTimeout(() => setActiveCourseTooltip(null), 3000);
       }
-    }, 1000); // หน่วงเวลา 1.0s สำหรับการกดแตะค้างบนมือถือ
+    }, 800); // หน่วงเวลา 0.8s สำหรับการกดแตะค้างบนมือถือ
   };
 
   const handleCourseTouchEnd = () => {
-    // หากแตะธรรมดาเพื่อเลือกคอร์ส หรือปล่อยนิ้วก่อน 2.5s ให้ยกเลิกการโชว์ Tooltip ทันที
     if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
   };
+
+  // ปิด Tooltip อัตโนมัติเมื่อคลิกที่ไหนก็ได้, เลื่อนหน้าจอ, หรือครบ 2 วินาที
+  useEffect(() => {
+    if (!activeCourseTooltip) return;
+    const timer = setTimeout(() => {
+      setActiveCourseTooltip(null);
+    }, 2000);
+
+    const dismiss = () => {
+      clearCourseTooltip();
+    };
+
+    window.addEventListener('click', dismiss);
+    window.addEventListener('touchstart', dismiss);
+    window.addEventListener('scroll', dismiss, true);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('click', dismiss);
+      window.removeEventListener('touchstart', dismiss);
+      window.removeEventListener('scroll', dismiss, true);
+    };
+  }, [activeCourseTooltip, clearCourseTooltip]);
+
+  // ปิด Tooltip ทันทีเมื่อปิด Modal ใช้คอร์สแชร์
+  useEffect(() => {
+    if (!isShareCourseModalOpen) {
+      clearCourseTooltip();
+    }
+  }, [isShareCourseModalOpen, clearCourseTooltip]);
 
 
   // --- [NEW] State สำหรับระบบรีเฟรช QR Code ---
@@ -832,10 +973,24 @@ const POSSystem = ({
 
   // --- ฟังก์ชันเมื่อเลือกคนไข้ ให้ดึงประวัติล่าสุดมาใส่ตะกร้า ---
   const handleSelectPatient = (patientId, patientLabel) => {
+    userDismissedCouponRef.current = false;
     setSelectedPatientId(patientId);
     setPatientSearchTerm(patientLabel);
     setIsPatientDropdownOpen(false);
     loadPatientOpdToCart(patientId, patientLabel);
+
+    if (patientId) {
+      const p = (patientsData || []).find(x => x && ((x.id && String(x.id) === String(patientId)) || (x.hn && String(x.hn) === String(patientId))));
+      if (p && isPatientVipActive(p)) {
+        const alVal = Number(p.vipAlwaysDiscountValue ?? p.vip_always_discount_value);
+        const alType = (p.vipAlwaysDiscountType || p.vip_always_discount_type) === 'amount' ? 'amount' : 'percent';
+        if (alVal > 0) {
+          setDiscount(alVal);
+          setDiscountType(alType);
+          showToast(`👑 ตรวจพบสมาชิก VIP: ปรับใช้ส่วนลด ${alVal}${alType === 'amount' ? ' บาท' : '%'} ให้อัตโนมัติ`, 'info');
+        }
+      }
+    }
   };
 
   // ดึงรายการหมวดหมู่ที่มีทั้งหมดจากข้อมูล Products
@@ -963,6 +1118,9 @@ const POSSystem = ({
   const clearCart = () => {
     setCart([]);
     setDiscount(0); // ล้างเฉพาะมูลค่าส่วนลด
+    setAppliedCoupon(null);
+    setUseCouponThisTime(true);
+    userDismissedCouponRef.current = false;
     setSelectedPatientId('');
     setPatientSearchTerm('');
     // นำการรีเซ็ต setTaxMode และ setVatRate ออก เพื่อให้จำค่าเดิมไว้ใช้กับบิลถัดไป
@@ -971,9 +1129,320 @@ const POSSystem = ({
   };
 
   // --- คำนวณยอดเงินและภาษีแบบละเอียด (แยก Vatable / Non-Vatable) ---
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * (Number(item.quantity) || 0)), 0);
-  const discountAmount = discountType === 'percent' ? (subtotal * (discount / 100)) : Number(discount);
-  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const additionalDiscount = discountType === 'percent' ? (subtotal * (discount / 100)) : Number(discount);
+  const couponDiscount = (appliedCoupon && useCouponThisTime) ? calculateCouponDiscount(appliedCoupon, subtotal) : 0;
+  const totalDiscount = additionalDiscount + couponDiscount;
+  const discountAmount = additionalDiscount; // คงตัวแปรเดิมไว้เพื่อความเข้ากันได้
+  const afterDiscount = Math.max(0, subtotal - totalDiscount);
+
+  // ฟังก์ชันใช้คูปองด้วยรหัส (รองรับทั้งการพิมพ์รหัสและการสแกนจาก QR Code)
+  const handleApplyCouponByCode = useCallback((rawCode) => {
+    if (isApplyingCouponRef.current) return false;
+    isApplyingCouponRef.current = true;
+    setTimeout(() => { isApplyingCouponRef.current = false; }, 800);
+
+    if (!rawCode || !String(rawCode).trim()) {
+      setCouponAlertModal({
+        title: 'กรุณาระบุรหัสคูปอง',
+        message: 'ไม่พบข้อมูลรหัสคูปอง กรุณากรอกรหัสหรือสแกน QR Code ใหม่อีกครั้ง',
+        code: '',
+        type: 'warning'
+      });
+      return false;
+    }
+
+    let clean = String(rawCode).trim();
+    const urlMatch = clean.match(/[?&]code=([^&#]+)/i);
+    if (urlMatch && urlMatch[1]) {
+      clean = decodeURIComponent(urlMatch[1]).trim();
+    }
+    clean = clean.toUpperCase();
+
+    const matched = (couponsData || []).find(c => c && String(c.code || '').trim().toUpperCase() === clean);
+    if (!matched) {
+      setCouponAlertModal({
+        title: 'ไม่พบรหัสคูปองในระบบ',
+        message: `ไม่พบคูปองรหัส "${clean}" ในฐานข้อมูลระบบ กรุณาตรวจสอบความถูกต้องของรหัสหรือเงื่อนไขกับลูกค้าอีกครั้ง`,
+        code: clean,
+        type: 'danger'
+      });
+      return false;
+    }
+
+    if (matched.status === 'used' || matched.isUsed) {
+      setCouponAlertModal({
+        title: 'รหัสคูปองนี้ถูกใช้งานไปแล้ว',
+        message: `คูปองรหัส "${clean}" (${matched.title || 'คูปองส่วนลด'}) ได้ถูกใช้สิทธิ์ในระบบไปเรียบร้อยแล้ว ไม่สามารถนำกลับมาใช้ซ้ำได้`,
+        code: clean,
+        type: 'warning'
+      });
+      return false;
+    }
+
+    if (matched.isDeleted || matched.is_deleted || matched.status === 'cancelled' || matched.status === 'revoked') {
+      setCouponAlertModal({
+        title: 'รหัสนี้ถูกยกเลิกสิทธิ์การใช้งาน',
+        message: `คูปองรหัส "${clean}" (${matched.title || 'คูปองส่วนลด'}) ถูกยกเลิกหรือระงับสิทธิ์การใช้งานในระบบแล้ว`,
+        code: clean,
+        type: 'danger'
+      });
+      return false;
+    }
+
+    const isLifetime = Boolean(matched.isLifetime ?? matched.is_lifetime);
+    if (!isLifetime) {
+      const expireDate = matched.expireDate || matched.expire_date;
+      if (expireDate) {
+        const exp = new Date(expireDate);
+        exp.setHours(23, 59, 59, 999);
+        if (exp.getTime() < Date.now()) {
+          setCouponAlertModal({
+            title: 'รหัสคูปองนี้หมดอายุแล้ว',
+            message: `คูปองรหัส "${clean}" (${matched.title || 'คูปองส่วนลด'}) หมดอายุการใช้งานไปแล้วเมื่อวันที่ ${formatDate(expireDate)} ไม่สามารถใช้สิทธิ์ได้`,
+            code: clean,
+            type: 'warning'
+          });
+          return false;
+        }
+      }
+    }
+
+    if (subtotal <= 0) {
+      setCouponAlertModal({
+        title: 'ยังไม่มีรายการสินค้าในตะกร้า',
+        message: 'กรุณาเพิ่มรายการสินค้าหรือบริการลงในตะกร้าก่อนทำการใช้คูปองส่วนลด',
+        code: clean,
+        type: 'warning'
+      });
+      return false;
+    }
+
+    const minSpend = Number(matched.minSpend ?? matched.min_spend ?? 0);
+    if (minSpend > 0 && subtotal > 0 && subtotal < minSpend) {
+      const diff = minSpend - subtotal;
+      setCouponAlertModal({
+        title: 'ยอดซื้อไม่ถึงเกณฑ์ขั้นต่ำ',
+        message: `คูปองนี้กำหนดยอดซื้อขั้นต่ำ ฿${minSpend.toLocaleString()} (ยอดซื้อปัจจุบัน ฿${subtotal.toLocaleString()} ขาดอีก ฿${diff.toLocaleString()})`,
+        code: clean,
+        type: 'warning'
+      });
+      return false;
+    }
+
+    const targetBranch = matched.branchScope || matched.branch_scope || matched.branchId || matched.branch_id || 'all';
+    const allowedBranchList = Array.isArray(targetBranch)
+      ? targetBranch
+      : String(targetBranch).split(',').map(s => s.trim()).filter(Boolean);
+
+    if (!allowedBranchList.includes('all') && currentBranch && currentBranch !== 'all' && !allowedBranchList.includes(currentBranch)) {
+      const allowedNames = allowedBranchList.map(id => (branchesData || []).find(b => b.id === id)?.name || id).join(', ');
+      const currentBranchName = (branchesData || []).find(b => b.id === currentBranch)?.name || currentBranch;
+      setCouponAlertModal({
+        title: 'คูปองไม่ตรงกับสาขาที่ให้บริการ',
+        message: `คูปองรหัส "${clean}" สามารถใช้ได้เฉพาะที่สาขา "${allowedNames}" เท่านั้น (สาขาปัจจุบัน: ${currentBranchName})`,
+        code: clean,
+        type: 'warning'
+      });
+      return false;
+    }
+
+    const targetPatientId = matched.patientId || matched.patient_id || matched.patientHn || matched.patient_hn;
+    if (targetPatientId && selectedPatientId) {
+      const cleanTarget = String(targetPatientId).trim().toLowerCase();
+      const cleanCurrent = String(selectedPatientId).trim().toLowerCase();
+      const currentPatientHn = selectedPatientObj?.hn ? String(selectedPatientObj.hn).trim().toLowerCase() : '';
+      if (cleanTarget !== cleanCurrent && cleanTarget !== currentPatientHn) {
+        setCouponAlertModal({
+          title: 'คูปองนี้เป็นสิทธิ์เฉพาะบุคคล',
+          message: `คูปองรหัส "${clean}" ถูกออกให้แก่คนไข้อื่นโดยเฉพาะ ไม่สามารถนำมาใช้กับบิลของลูกค้าท่านนี้ได้`,
+          code: clean,
+          type: 'warning'
+        });
+        return false;
+      }
+    }
+
+    const disc = calculateCouponDiscount(matched, subtotal);
+    userDismissedCouponRef.current = false;
+    setAppliedCoupon({ ...matched, _isManual: true });
+    setUseCouponThisTime(true);
+    setManualCouponInput('');
+    setIsCouponSelectorModalOpen(false);
+    showToast(`ใช้คูปอง "${matched.code}" สำเร็จ (ลด ฿${Number(disc).toLocaleString()})`, 'success');
+    return true;
+  }, [couponsData, subtotal, selectedPatientId, selectedPatientObj, currentBranch, branchesData, showToast]);
+
+  const handleRemoveCoupon = useCallback(() => {
+    userDismissedCouponRef.current = true;
+    setAppliedCoupon(null);
+    setUseCouponThisTime(false);
+    showToast('ยกเลิกการใช้คูปองแล้ว', 'info');
+  }, [showToast]);
+
+  // ฟังก์ชันควบคุมกล้องสแกน QR Code คูปอง
+  const stopQrCamera = useCallback(() => {
+    cameraSessionIdRef.current++;
+    if (qrScanLoopRef.current) {
+      cancelAnimationFrame(qrScanLoopRef.current);
+      qrScanLoopRef.current = null;
+    }
+    if (qrMediaStreamRef.current) {
+      try {
+        qrMediaStreamRef.current.getTracks().forEach(t => t.stop());
+      } catch (_) {}
+      qrMediaStreamRef.current = null;
+    }
+    if (qrVideoRef.current) {
+      try {
+        qrVideoRef.current.srcObject = null;
+      } catch (_) {}
+    }
+    setTorchOn(false);
+    setScannerActive(false);
+  }, []);
+
+  const startQrCamera = useCallback(async (facing = cameraFacingRef.current) => {
+    const sessionId = ++cameraSessionIdRef.current;
+    try {
+      setScannerActive(true);
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        showToast('อุปกรณ์หรือเบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาพิมพ์รหัสคูปองแทน', 'warning');
+        setScannerActive(false);
+        return;
+      }
+      if (qrMediaStreamRef.current) {
+        try { qrMediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch (_) {}
+        qrMediaStreamRef.current = null;
+      }
+      if (qrVideoRef.current) {
+        try { qrVideoRef.current.srcObject = null; } catch (_) {}
+      }
+
+      let stream = null;
+      // พยายามเปิดด้วย facingMode ที่ต้องการ (ideal) ก่อน เพื่อป้องกัน OverconstrainedError บนอุปกรณ์ที่มีกล้องเดียว
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+      } catch (idealErr) {
+        console.warn('[POS] Ideal facingMode getUserMedia failed, fallback to basic video constraint:', idealErr);
+        // Fallback: เปิดกล้องใดๆ ที่มีในเครื่อง
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true
+        });
+      }
+
+      // หากมีการเริ่ม session อื่นไประหว่างรอ ให้หยุด stream นี้ทันที
+      if (sessionId !== cameraSessionIdRef.current) {
+        if (stream) {
+          try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        }
+        return;
+      }
+
+      qrMediaStreamRef.current = stream;
+      if (qrVideoRef.current) {
+        qrVideoRef.current.srcObject = stream;
+        qrVideoRef.current.setAttribute('playsinline', 'true');
+        await qrVideoRef.current.play().catch(() => {});
+      }
+      const track = stream.getVideoTracks()[0];
+      const cap = track?.getCapabilities ? track.getCapabilities() : {};
+      setHasTorch(Boolean(cap?.torch));
+
+      const tick = () => {
+        if (sessionId !== cameraSessionIdRef.current) return;
+        const video = qrVideoRef.current;
+        if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+          const canvas = qrCanvasRef.current || document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imgData.data, imgData.width, imgData.height, {
+              inversionAttempts: 'dontInvert'
+            });
+            if (code && code.data) {
+              stopQrCamera();
+              setIsQrScannerOpen(false);
+              handleApplyCouponByCode(code.data);
+              return;
+            }
+          }
+        }
+        qrScanLoopRef.current = requestAnimationFrame(tick);
+      };
+      qrScanLoopRef.current = requestAnimationFrame(tick);
+    } catch (err) {
+      if (sessionId !== cameraSessionIdRef.current) return;
+      console.warn('[POS] QR Camera error:', err);
+      showToast('ไม่สามารถเปิดกล้องได้ กรุณาพิมพ์รหัสคูปองแทน', 'warning');
+      setScannerActive(false);
+    }
+  }, [handleApplyCouponByCode, showToast, stopQrCamera]);
+
+  const toggleQrTorch = async () => {
+    if (!qrMediaStreamRef.current) return;
+    const track = qrMediaStreamRef.current.getVideoTracks()[0];
+    if (track && track.applyConstraints) {
+      try {
+        await track.applyConstraints({ advanced: [{ torch: !torchOn }] });
+        setTorchOn(!torchOn);
+      } catch (e) {
+        console.warn('[POS] Torch failed', e);
+      }
+    }
+  };
+
+  const flipCamera = useCallback(async () => {
+    if (isSwitchingCamera) return;
+    setIsSwitchingCamera(true);
+
+    try {
+      // ตรวจสอบจำนวนกล้องของอุปกรณ์
+      if (navigator?.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevs = devices.filter(d => d.kind === 'videoinput');
+          if (videoDevs.length === 1) {
+            showToast('อุปกรณ์นี้มีกล้องเพียงตัวเดียว ไม่สามารถสลับได้', 'info');
+            setIsSwitchingCamera(false);
+            return;
+          }
+        } catch (_) {}
+      }
+
+      const nextFacing = cameraFacingRef.current === 'environment' ? 'user' : 'environment';
+      cameraFacingRef.current = nextFacing;
+      setCameraFacing(nextFacing);
+
+      // หยุดกล้องเดิมและรอให้ฮาร์ดแวร์ปล่อยทรัพยากรกล้องสักครู่ (150ms) ป้องกัน NotReadableError
+      stopQrCamera();
+      await new Promise(r => setTimeout(r, 150));
+      await startQrCamera(nextFacing);
+    } catch (err) {
+      console.warn('[POS] flipCamera failed:', err);
+    } finally {
+      setIsSwitchingCamera(false);
+    }
+  }, [isSwitchingCamera, showToast, startQrCamera, stopQrCamera]);
+
+  useEffect(() => {
+    if (isQrScannerOpen) {
+      startQrCamera(cameraFacingRef.current);
+    } else {
+      stopQrCamera();
+    }
+    return () => {
+      stopQrCamera();
+    };
+  }, [isQrScannerOpen, startQrCamera, stopQrCamera]);
 
   let totalVatable = 0;
   let totalNonVatable = 0;
@@ -987,7 +1456,7 @@ const POSSystem = ({
   });
 
   const vatableRatio = subtotal > 0 ? (totalVatable / subtotal) : 0;
-  const vatableDiscount = discountAmount * vatableRatio;
+  const vatableDiscount = totalDiscount * vatableRatio;
   const netVatable = Math.max(0, totalVatable - vatableDiscount);
 
   let vatAmount = 0;
@@ -1047,7 +1516,11 @@ const POSSystem = ({
   displayStateRef.current = {
     cart,
     subtotal,
-    discountAmount,
+    discountAmount: additionalDiscount,
+    discountType,
+    discount,
+    couponDiscount,
+    appliedCoupon,
     grandTotal,
     selectedPatientId,
     patientsData,
@@ -1083,6 +1556,8 @@ const POSSystem = ({
           hn: patient.hn || patient.id || '-',
           name: getPatientFullName(patient),
           nickname: (patient.nickname || patient.nickName || patient.nick_name || '').trim(),
+          isVip: isPatientVipActive(patient),
+          vipTier: patient.vipTier || 'VIP',
           remainingCourses: activeCourses.map(c => ({
             id: c.id,
             name: c.courseName || c.course_name || c.name,
@@ -1104,7 +1579,13 @@ const POSSystem = ({
     return {
       items,
       subtotal: s.subtotal,
-      discount: s.discountAmount,
+      discount: (s.discountAmount || 0) + (s.couponDiscount || 0),
+      additionalDiscount: s.discountAmount || 0,
+      discountType: s.discountType,
+      discountValue: s.discount,
+      couponDiscount: s.couponDiscount || 0,
+      couponTitle: s.appliedCoupon?.title || s.appliedCoupon?.name || '',
+      couponCode: s.appliedCoupon?.code || '',
       grandTotal: s.grandTotal,
       patient: patientInfo
     };
@@ -1201,7 +1682,7 @@ const POSSystem = ({
   // ซิงก์การเปลี่ยนแปลงตะกร้าและหน้าต่างชำระเงินแบบเรียลไทม์ทันที
   useEffect(() => {
     syncCustomerDisplay();
-  }, [cart, subtotal, discountAmount, grandTotal, selectedPatientId, checkoutModal.isOpen, paymentMethod, isQrConfirmed, dynamicQrUrl, syncCustomerDisplay]);
+  }, [cart, subtotal, discountAmount, couponDiscount, appliedCoupon, grandTotal, selectedPatientId, checkoutModal.isOpen, paymentMethod, isQrConfirmed, dynamicQrUrl, syncCustomerDisplay]);
 
   // สร้าง QR Code สำหรับจับคู่ iPad กับเคาน์เตอร์นี้
   useEffect(() => {
@@ -1238,6 +1719,21 @@ const POSSystem = ({
       return;
     }
 
+    // ตรวจสอบกรณีมีแพ็กเกจสมาชิก VIP ในตะกร้า ต้องเลือกคนไข้ก่อนเพื่อผูกสิทธิ์และออกคูปอง
+    const hasMembershipInCart = cart.some(item => {
+      const p = item.product;
+      return Boolean(
+        p?.isMembership || p?.is_membership || 
+        p?.itemKind === 'membership' || p?.kind === 'membership' || 
+        (typeof p?.id === 'string' && p?.id.toLowerCase().startsWith('vip'))
+      );
+    });
+
+    if (hasMembershipInCart && !selectedPatientId) {
+      showToast('กรุณาเลือกคนไข้ก่อนชำระเงิน สำหรับการสมัครสมาชิก VIP', 'warning');
+      return;
+    }
+
     // ตรวจสอบสต็อกคงเหลือจริงของทุกสินค้าในตะกร้า
     for (const item of cart) {
       if (isStockManaged(item.product)) {
@@ -1262,6 +1758,8 @@ const POSSystem = ({
 
   // แก้ไข: เปลี่ยนเป็นการทำงานแบบ Asynchronous และส่งข้อมูลไปบันทึกผ่าน API
   const confirmPayment = async () => {
+    if (isProcessingPayment) return;
+
     if (paymentMethod === 'transfer' && activeQrAccounts.length > 1 && !isQrConfirmed) {
       showToast('กรุณาเลือกบัญชีรับเงินและกดแสดง QR Code ก่อน', 'warning');
       return;
@@ -1275,6 +1773,20 @@ const POSSystem = ({
           showToast(`⚠️ "${item.product.name}" สต็อกไม่พอ (เหลือ ${available} ${item.product.unit || 'ชิ้น'})`, 'danger');
           return;
         }
+      }
+    }
+
+    // ตรวจสอบคูปองล่าสุดอีกครั้งก่อนบันทึกเงิน ป้องกันการใช้คูปองซ้ำซ้อนพร้อมกันหลายอุปกรณ์ (Anti-Double Spending)
+    if (appliedCoupon && useCouponThisTime) {
+      const currentLatest = (couponsData || []).find(c => 
+        (appliedCoupon.id && c.id === appliedCoupon.id) || 
+        (appliedCoupon.code && String(c.code).trim().toUpperCase() === String(appliedCoupon.code).trim().toUpperCase())
+      );
+      if (currentLatest && (currentLatest.status === 'used' || currentLatest.isUsed || currentLatest.is_used)) {
+        showToast(`⚠️ คูปอง "${appliedCoupon.code}" ถูกใช้งานไปแล้วจากเครื่องอื่น กรุณาลบคูปองออกก่อนชำระเงิน`, 'danger');
+        setIsProcessingPayment(false);
+        handleRemoveCoupon();
+        return;
       }
     }
 
@@ -1426,7 +1938,14 @@ const POSSystem = ({
         subtotal: subtotal,
         discountValue: discount,
         discountType: discountType,
-        discountAmount: discountAmount,
+        discountAmount: additionalDiscount,
+        coupon_id: (appliedCoupon && useCouponThisTime) ? appliedCoupon.id : null,
+        couponCode: (appliedCoupon && useCouponThisTime) ? appliedCoupon.code : null,
+        coupon_code: (appliedCoupon && useCouponThisTime) ? appliedCoupon.code : null,
+        couponTitle: (appliedCoupon && useCouponThisTime) ? (appliedCoupon.title || appliedCoupon.name || null) : null,
+        coupon_title: (appliedCoupon && useCouponThisTime) ? (appliedCoupon.title || appliedCoupon.name || null) : null,
+        couponDiscount: couponDiscount,
+        coupon_discount: couponDiscount,
         totalVatable: totalVatable,
         netVatable: netVatable,
         taxMode: taxMode,
@@ -1435,7 +1954,7 @@ const POSSystem = ({
         grandTotal: grandTotal,
         totalAmount: subtotal,
         netAmount: grandTotal,
-        discount: discountAmount,
+        discount: totalDiscount,
         paymentMethod: paymentMethod,
         paymentAccount: paymentMethod === 'transfer' && currentQrAccount ? {
           name: currentQrAccount.name,
@@ -1454,6 +1973,35 @@ const POSSystem = ({
         
         // --- เริ่มปรับปรุง: รวบรวม API Calls สำหรับสต็อกและคอร์สไว้ยิงพร้อมกัน (Promise.all) ---
         const backgroundTasks = [];
+
+        // 1. ตัดคูปองออกจากฐานข้อมูล (ถ้ามีการใช้คูปองในบิลนี้)
+        if (appliedCoupon && useCouponThisTime) {
+          const updatedCoupon = {
+            ...appliedCoupon,
+            status: 'used',
+            isUsed: true,
+            is_used: true,
+            usedAt: new Date().toISOString(),
+            used_at: new Date().toISOString(),
+            usedInBranch: currentBranch,
+            used_in_branch: currentBranch,
+            usedInReceipt: receiptId,
+            used_in_receipt: receiptId,
+            usedByPatientId: selectedPatientId || '',
+            used_by_patient_id: selectedPatientId || ''
+          };
+          backgroundTasks.push(
+            callAppScript('SAVE_DATA', 'Coupons', updatedCoupon).then(() => {
+              if (setCouponsData) {
+                setCouponsData(prev => prev.map(c => {
+                  const matchId = appliedCoupon.id && c.id && String(c.id) === String(appliedCoupon.id);
+                  const matchCode = appliedCoupon.code && c.code && String(c.code).trim().toUpperCase() === String(appliedCoupon.code).trim().toUpperCase();
+                  return (matchId || matchCode) ? updatedCoupon : c;
+                }));
+              }
+            }).catch(e => console.warn('[POS] Error saving used coupon:', e))
+          );
+        }
         
         // --- ระบบตัดสต็อกอัตโนมัติ (Automatic Stock Deduction - Atomic RPC / Client FEFO Fallback) ---
         const targetBranch = currentBranch === 'all' ? 'b1' : currentBranch;
@@ -1684,6 +2232,154 @@ const POSSystem = ({
             }
         });
 
+        // 3. ระบบจัดการสมาชิก VIP และออกคูปองสิทธิประโยชน์อัตโนมัติ (ตาราง Patients และ Coupons)
+        const membershipItems = cart.filter(item => {
+          const p = item.product;
+          return Boolean(
+            p?.isMembership || p?.is_membership || 
+            p?.itemKind === 'membership' || p?.kind === 'membership' || 
+            (typeof p?.id === 'string' && p?.id.toLowerCase().startsWith('vip'))
+          );
+        });
+
+        const newVipCouponsToSave = [];
+        let updatedPatientToSave = null;
+
+        if (membershipItems.length > 0 && selectedPatientId) {
+          const patientObj = (patientsData || []).find(p => (p.id || p.hn) === selectedPatientId);
+          if (patientObj) {
+            let totalMonths = 0;
+            const couponConfigList = [];
+            let alwaysDiscountType = null;
+            let alwaysDiscountValue = null;
+
+            membershipItems.forEach(item => {
+              const p = item.product;
+              const qty = Number(item.quantity) || 1;
+              const months = Number(p.membershipMonths || p.membership_months) || 1;
+              totalMonths += (months * qty);
+
+              const benefitType = p.vipBenefitType || p.vip_benefit_type || 'coupon';
+
+              // หากสิทธิประโยชน์รวมถึงส่วนลดทันทีทุกครั้ง ('always_discount' หรือ 'both')
+              if (benefitType === 'always_discount' || benefitType === 'both') {
+                alwaysDiscountType = p.vipAlwaysDiscountType || p.vip_always_discount_type || 'percent';
+                alwaysDiscountValue = Number(p.vipAlwaysDiscountValue ?? p.vip_always_discount_value ?? 10);
+              }
+
+              // หากสิทธิประโยชน์รวมถึงการแจกคูปอง ('coupon' หรือ 'both')
+              if (benefitType === 'coupon' || benefitType === 'both') {
+                const countPerItem = Number(p.vipCouponCount ?? p.vip_coupon_count) || 1;
+                const totalCoupons = countPerItem * qty;
+                const discType = p.vipDiscountType || p.vip_discount_type || 'percent';
+                const discVal = Number(p.vipDiscountValue ?? p.vip_discount_value ?? 10);
+                const title = p.vipCouponTitle || p.vip_coupon_title || 'คูปองส่วนลดสมาชิก VIP';
+
+                couponConfigList.push({
+                  title,
+                  count: totalCoupons,
+                  discountType: discType,
+                  discountValue: discVal
+                });
+              }
+            });
+
+            // คำนวณวันหมดอายุ VIP โดยใช้ calculateVipExpiry (ต่ออายุเพิ่มจากวันหมดอายุเดิมถ้ายังไม่หมดอายุ)
+            const existingExp = patientObj.vipExpireDate || patientObj.vip_expire_date || null;
+            const expResult = calculateVipExpiry(existingExp, Math.max(1, totalMonths));
+            const newVipExpireDateStr = expResult.expireDateStr;
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            // รักษาสิทธิ์ส่วนลดสูงสุด: หากของเดิมมีส่วนลดสูงกว่า หรือของใหม่สูงกว่า ให้คงส่วนลดที่สูงที่สุดไว้เสมอ
+            const existingDiscountVal = Number(patientObj.vipAlwaysDiscountValue ?? patientObj.vip_always_discount_value ?? 0);
+            const finalAlwaysDiscountVal = alwaysDiscountValue !== null ? Math.max(alwaysDiscountValue, existingDiscountVal) : existingDiscountVal;
+            const finalAlwaysDiscountType = alwaysDiscountType || patientObj.vipAlwaysDiscountType || patientObj.vip_always_discount_type || 'percent';
+
+            updatedPatientToSave = {
+              ...patientObj,
+              isVip: true,
+              is_vip: true,
+              vipStartDate: patientObj.vipStartDate || patientObj.vip_start_date || todayStr,
+              vip_start_date: patientObj.vipStartDate || patientObj.vip_start_date || todayStr,
+              vipExpireDate: newVipExpireDateStr,
+              vip_expire_date: newVipExpireDateStr,
+              vipTier: 'VIP',
+              vip_tier: 'VIP',
+              vipAlwaysDiscountType: finalAlwaysDiscountType,
+              vip_always_discount_type: finalAlwaysDiscountType,
+              vipAlwaysDiscountValue: finalAlwaysDiscountVal,
+              vip_always_discount_value: finalAlwaysDiscountVal,
+              vipNotes: `สมัคร/ต่ออายุสมาชิก VIP ผ่าน POS ใบเสร็จ ${receiptId}`
+            };
+
+            // บันทึกอัปเดตข้อมูลคนไข้เป็น VIP
+            backgroundTasks.push(
+              callAppScript('SAVE_DATA', 'Patients', updatedPatientToSave)
+                .catch(err => console.warn('[POS] Error updating patient VIP status:', err))
+            );
+
+            // บันทึกสร้างคูปอง VIP เข้าตาราง Coupons (กรณีมีสิทธิ์แจกคูปอง)
+            couponConfigList.forEach(cConfig => {
+              const batchId = `VIP_BATCH_${Date.now()}`;
+              for (let i = 0; i < cConfig.count; i++) {
+                const code = generateCouponCode('VIP', patientObj.hn || patientObj.id);
+                const newCoupon = {
+                  id: `CP_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
+                  code: code,
+                  title: cConfig.title,
+                  description: `สิทธิประโยชน์สมาชิก VIP (ใบเสร็จ ${receiptId})`,
+                  discountType: cConfig.discountType,
+                  discount_type: cConfig.discountType,
+                  discountValue: cConfig.discountValue,
+                  discount_value: cConfig.discountValue,
+                  minSpend: 0,
+                  min_spend: 0,
+                  maxDiscount: null,
+                  max_discount: null,
+                  patientId: patientObj.id || selectedPatientId,
+                  patient_id: patientObj.id || selectedPatientId,
+                  patientName: cleanPatientName,
+                  patient_name: cleanPatientName,
+                  branchId: 'all',
+                  branch_id: 'all',
+                  branchScope: 'all',
+                  branch_scope: 'all',
+                  bgImage: null,
+                  bg_image: null,
+                  templateType: 'card',
+                  template_type: 'card',
+                  themeColor: 'gold',
+                  theme_color: 'gold',
+                  isLifetime: false,
+                  is_lifetime: false,
+                  expireDate: newVipExpireDateStr,
+                  expire_date: newVipExpireDateStr,
+                  status: 'active',
+                  source: 'pos_membership',
+                  isVipBenefit: true,
+                  is_vip_benefit: true,
+                  receiptNo: receiptId,
+                  receipt_no: receiptId,
+                  batchId: batchId,
+                  batch_id: batchId,
+                  batchName: `ชุดคูปองสมาชิก VIP (${cleanPatientName})`,
+                  batch_name: `ชุดคูปองสมาชิก VIP (${cleanPatientName})`,
+                  batchTotal: cConfig.count,
+                  batch_total: cConfig.count,
+                  createdAt: new Date().toISOString(),
+                  created_at: new Date().toISOString()
+                };
+
+                backgroundTasks.push(
+                  callAppScript('SAVE_DATA', 'Coupons', newCoupon)
+                    .catch(err => console.warn('[POS] Error saving auto VIP coupon:', err))
+                );
+                newVipCouponsToSave.push(newCoupon);
+              }
+            });
+          }
+        }
+
         // ประมวลผล Task ทั้งหมดพร้อมกัน (ช่วยให้ทำรายการเสร็จเร็วขึ้นหลายเท่าตัว)
         if (backgroundTasks.length > 0) {
             await Promise.all(backgroundTasks);
@@ -1709,6 +2405,17 @@ const POSSystem = ({
                 return next;
             });
         }
+        if (updatedPatientToSave && setPatientsData) {
+            setPatientsData(prev => prev.map(p => 
+                ((p.id && String(p.id) === String(updatedPatientToSave.id)) || 
+                 (p.hn && String(p.hn) === String(updatedPatientToSave.hn)))
+                    ? updatedPatientToSave 
+                    : p
+            ));
+        }
+        if (newVipCouponsToSave.length > 0 && setCouponsData) {
+            setCouponsData(prev => [...newVipCouponsToSave, ...prev]);
+        }
 
         // อัปเดต State ประวัติการขายทันทีเพื่อให้แสดงใน Modal
         if (setPosHistoryData) {
@@ -1732,6 +2439,11 @@ const POSSystem = ({
                 { name: '💳 ช่องทางชำระ', value: payMethodStr, inline: true },
                 { name: '👩‍💼 ผู้ทำรายการ', value: currentUser?.name || currentUser?.username || 'เจ้าหน้าที่', inline: true },
                 { name: '📦 รายการสินค้า', value: `${cart.length} รายการ`, inline: true },
+                ...(updatedPatientToSave ? [{ 
+                    name: '👑 สมาชิก VIP', 
+                    value: `สถานะ VIP ถึง ${updatedPatientToSave.vipExpireDate}${newVipCouponsToSave.length > 0 ? ` (แจกคูปอง ${newVipCouponsToSave.length} ใบ)` : ' (ส่วนลดต่อครั้ง)'}`, 
+                    inline: false 
+                }] : []),
                 ...(patientPhone ? [{ name: '📞 เบอร์ติดต่อ', value: patientPhone, inline: true }] : [])
             ],
             rawPayload: {
@@ -1776,7 +2488,15 @@ const POSSystem = ({
           });
         }
 
-        showToast('ทำรายการชำระเงินและบันทึกข้อมูลสำเร็จ', 'success');
+        if (updatedPatientToSave) {
+          if (newVipCouponsToSave.length > 0) {
+            showToast(`ทำรายการสำเร็จ! สมัครสมาชิก VIP ให้คุณ ${cleanPatientName} เรียบร้อย (หมดอายุ ${updatedPatientToSave.vipExpireDate}) พร้อมสร้างคูปอง ${newVipCouponsToSave.length} ใบ`, 'success');
+          } else {
+            showToast(`ทำรายการสำเร็จ! สมัครสมาชิก VIP ให้คุณ ${cleanPatientName} เรียบร้อย (หมดอายุ ${updatedPatientToSave.vipExpireDate}) สิทธิ์ส่วนลดต่อครั้งเปิดใช้งานแล้ว`, 'success');
+          }
+        } else {
+          showToast('ทำรายการชำระเงินและบันทึกข้อมูลสำเร็จ', 'success');
+        }
     } catch (error) {
         console.error("POS Transaction Error:", error);
         setIsProcessingPayment(false);
@@ -2334,6 +3054,7 @@ const POSSystem = ({
         const pHn = String(p.hn || '').trim().toLowerCase();
         const stat = (pId && todayPatientsStatus.get(pId)) || (pHn && todayPatientsStatus.get(pHn));
         const isWaiting = !!(stat?.hasOpd && !stat?.isPaid);
+        const isVip = isPatientVipActive(p);
         const hnDisplay = p.hn || p.id || '-';
         const nameDisplay = getPatientFullName(p);
         const nickDisplay = (p.nickname || p.nickName || p.nick_name || '').trim();
@@ -2346,6 +3067,7 @@ const POSSystem = ({
           label: `${hnDisplay} - ${nameDisplay}`,
           phone: p.phone || p.phone1 || '',
           isWaiting,
+          isVip,
           raw: p
         };
       })
@@ -2709,28 +3431,56 @@ const POSSystem = ({
           <div className={`flex-[4] md:flex-none md:min-h-0 w-full md:w-[280px] lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden md:flex'}`}>
           
             {/* Mobile Cart Header (แสดงเฉพาะบนมือถือเมื่อเปิดตะกร้า) */}
-            <div className="md:hidden p-5 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
-               <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-3 text-xl">
-                 <ShoppingCart className="text-sky-500" /> ตะกร้าสินค้า
+            <div className="md:hidden p-4 sm:p-5 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
+               <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
+                 <ShoppingCart className="text-sky-500 w-5 h-5" /> ตะกร้าสินค้า
                </h2>
-               <button onClick={() => setIsMobileCartOpen(false)} className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"><X size={24}/></button>
+               <div className="flex items-center gap-2">
+                 <button
+                   type="button"
+                   onClick={() => setIsQrScannerOpen(true)}
+                   title="สแกน QR Code คูปอง"
+                   className="p-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-600 border border-sky-200 transition-all active:scale-95 shadow-2xs"
+                 >
+                   <QrCode size={18} className="text-sky-600" />
+                 </button>
+                 <button onClick={() => setIsMobileCartOpen(false)} className="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"><X size={20}/></button>
+               </div>
             </div>
 
             {/* Cart Header & Patient Select */}
             <div className="p-4 sm:p-5 border-b border-slate-100 bg-white md:bg-slate-50/50 shrink-0">
-              <h2 className="hidden md:flex font-bold text-slate-800 kanit-text items-center gap-2 mb-3 sm:mb-4 text-base sm:text-lg">
-                <ShoppingCart className="w-5 h-5 text-sky-500" /> รายการบิล
-            </h2>
+              <div className="hidden md:flex items-center justify-between mb-3 sm:mb-4">
+                <h2 className="font-bold text-slate-800 kanit-text items-center gap-2 text-base sm:text-lg flex">
+                  <ShoppingCart className="w-5 h-5 text-sky-500" /> รายการบิล
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setIsQrScannerOpen(true)}
+                  title="สแกน QR Code คูปอง"
+                  className="p-1.5 sm:p-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-600 border border-sky-200 transition-all active:scale-95 shadow-2xs hover:shadow-xs ml-auto"
+                >
+                  <QrCode size={18} className="text-sky-600" />
+                </button>
+              </div>
             <div className="relative w-full">
-              <div className="flex items-center w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 transition-all shadow-sm">
+              <div className={`flex items-center w-full px-4 py-3 border rounded-2xl focus-within:ring-2 transition-all shadow-sm ${
+                selectedPatientId && selectedPatientObj && isPatientVipActive(selectedPatientObj)
+                  ? 'border-amber-300/90 border-l-4 border-l-amber-500 bg-gradient-to-r from-amber-100/90 via-yellow-50/90 to-amber-100/80 ring-2 ring-amber-400/20'
+                  : 'border-slate-200 bg-white focus-within:ring-sky-500/20 focus-within:border-sky-500'
+              }`}>
                 {isFetchingOpd || posIsSearching ? (
                   <Loader2 className="w-5 h-5 animate-spin text-sky-500 shrink-0 mr-3" />
+                ) : selectedPatientId && selectedPatientObj && isPatientVipActive(selectedPatientObj) ? (
+                  <Crown className="w-5 h-5 text-amber-500 fill-amber-300 shrink-0 mr-2.5 animate-pulse" />
                 ) : (
                   <Search className="w-5 h-5 text-slate-400 shrink-0 mr-3" />
                 )}
                 <input 
                   type="text"
-                  className="w-full bg-transparent outline-none text-sm sm:text-base font-data text-slate-700"
+                  className={`w-full bg-transparent outline-none text-sm sm:text-base font-data ${
+                    selectedPatientId && selectedPatientObj && isPatientVipActive(selectedPatientObj) ? 'text-amber-950 font-bold' : 'text-slate-700'
+                  }`}
                   placeholder="ค้นหาชื่อ, ชื่อเล่น, เบอร์โทร หรือ HN ลูกค้า..."
                   value={patientSearchTerm}
                   onChange={(e) => {
@@ -2744,6 +3494,7 @@ const POSSystem = ({
                   }}
                   onBlur={() => setTimeout(() => setIsPatientDropdownOpen(false), 200)}
                 />
+
                 {selectedPatientId ? (
                   <button 
                     onClick={() => { 
@@ -2753,7 +3504,7 @@ const POSSystem = ({
                       setCart([]);
                       showToast('เริ่มบิลสำหรับลูกค้าทั่วไป (ล้างตะกร้าแล้ว)', 'info');
                     }} 
-                    className="text-slate-400 hover:text-rose-500 ml-2 shrink-0 p-1 hover:bg-slate-100 rounded-full transition-all"
+                    className="text-slate-400 hover:text-rose-500 ml-1 shrink-0 p-1 hover:bg-slate-100 rounded-full transition-all"
                     title="ยกเลิกการเลือกคนไข้"
                   >
                     <X className="w-5 h-5" />
@@ -2764,7 +3515,7 @@ const POSSystem = ({
                     onClick={() => { 
                       setPatientSearchTerm(''); 
                     }} 
-                    className="text-slate-400 hover:text-slate-600 ml-2 shrink-0 p-1 hover:bg-slate-100 rounded-full transition-all"
+                    className="text-slate-400 hover:text-slate-600 ml-1 shrink-0 p-1 hover:bg-slate-100 rounded-full transition-all"
                     title="ล้างข้อความ"
                   >
                     <X className="w-4 h-4" />
@@ -2809,32 +3560,47 @@ const POSSystem = ({
                                }
                                handleSelectPatient(opt.value, opt.label); 
                             }}
-                            className={`px-3.5 sm:px-4 py-2.5 sm:py-3 hover:bg-sky-50/80 cursor-pointer border-b border-slate-100 last:border-0 font-data transition-colors flex flex-col gap-1.5 ${selectedPatientId === opt.value ? 'bg-sky-50 text-sky-700 font-bold' : 'text-slate-700'} ${opt.isWaiting ? 'bg-amber-50/40' : ''}`}
+                            className={`px-3.5 sm:px-4 py-2.5 sm:py-3 cursor-pointer border-b border-slate-100 last:border-0 font-data transition-all flex flex-col gap-1.5 ${
+                              opt.isVip
+                                ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-200/80 border-l-4 border-l-amber-500 shadow-xs'
+                                : selectedPatientId === opt.value
+                                  ? 'bg-sky-50 text-sky-700 font-bold'
+                                  : opt.isWaiting
+                                    ? 'bg-amber-50/40 hover:bg-amber-50/70 text-slate-700'
+                                    : 'hover:bg-sky-50/80 text-slate-700'
+                            }`}
                         >
                             {/* แถวบน: รหัส HN เป็นข้อความธรรมดา (ไม่ใส่แท็ก เพื่อให้ขนาดฟอนต์เท่ากันทั้งบน PC และมือถือ) + แท็กสถานะ */}
                             <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <span className="font-bold text-sky-600 text-sm sm:text-base tracking-tight">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    {opt.isVip && (
+                                      <Crown size={15} className="text-amber-500 fill-amber-300 shrink-0" />
+                                    )}
+                                    <span className={`font-bold text-sm sm:text-base tracking-tight ${opt.isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>
                                         {opt.hn || 'HN-'}
                                     </span>
                                     {opt.phone && (
-                                        <span className="text-xs sm:text-sm text-slate-400 font-normal truncate">
+                                        <span className={`text-xs sm:text-sm font-normal truncate ${opt.isVip ? 'text-amber-800/80 font-medium' : 'text-slate-400'}`}>
                                             • {opt.phone}
                                         </span>
                                     )}
                                 </div>
-                                {opt.isWaiting && (
-                                  <span className="text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded-full shrink-0 kanit-text border border-amber-300 shadow-xs flex items-center gap-1.5 whitespace-nowrap">
-                                    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" /> รอชำระเงิน
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                                    {opt.isWaiting && (
+                                      <span className="text-[10px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded-full shrink-0 kanit-text border border-amber-300 shadow-xs flex items-center gap-1.5 whitespace-nowrap">
+                                        <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" /> รอชำระเงิน
+                                      </span>
+                                    )}
+                                </div>
                             </div>
 
                             {/* แถวล่าง: ชื่อ-นามสกุล คนไข้ + ชื่อเล่น (ถ้ามี) แสดงเด่นชัด ไม่โดนแท็กเบียดหรือตัดนามสกุล */}
-                            <div className="text-sm sm:text-base font-semibold text-slate-800 leading-snug break-words flex items-center flex-wrap gap-1.5">
-                                <span>{opt.name || opt.label}</span>
+                            <div className="text-sm sm:text-base font-semibold leading-snug break-words flex items-center flex-wrap gap-1.5 text-slate-800">
+                                <span className={opt.isVip ? 'text-amber-950 font-bold' : ''}>{opt.name || opt.label}</span>
                                 {opt.nickname && (
-                                    <span className="text-xs sm:text-sm font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-lg border border-sky-200/80">
+                                    <span className={`text-xs sm:text-sm font-semibold px-2 py-0.5 rounded-lg border ${
+                                      opt.isVip ? 'text-amber-900 bg-amber-200/60 border-amber-300/80' : 'text-sky-600 bg-sky-50 border-sky-200/80'
+                                    }`}>
                                         ({opt.nickname})
                                     </span>
                                 )}
@@ -2866,17 +3632,29 @@ const POSSystem = ({
                   <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                   <span className="text-[10px] font-bold text-indigo-700 kanit-text uppercase tracking-wider">คอร์สที่ใช้ได้</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShareOwnerSearch('');
-                    setSelectedOwnerPatient(null);
-                    setIsShareCourseModalOpen(true);
-                  }}
-                  className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold kanit-text flex items-center gap-1 transition-all shadow-sm active:scale-95 shrink-0"
-                >
-                  <Users size={11} /> + ใช้คอร์สแชร์
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {patientCoupons.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCouponSelectorModalOpen(true)}
+                      className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold kanit-text flex items-center gap-1 transition-all shadow-sm active:scale-95 shrink-0 animate-pulse"
+                      title="เลือกคูปองส่วนลดของคนไข้ท่านนี้"
+                    >
+                      <Ticket size={11} /> คูปองคนไข้ ({patientCoupons.length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShareOwnerSearch('');
+                      setSelectedOwnerPatient(null);
+                      setIsShareCourseModalOpen(true);
+                    }}
+                    className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold kanit-text flex items-center gap-1 transition-all shadow-sm active:scale-95 shrink-0"
+                  >
+                    <Users size={11} /> + ใช้คอร์สแชร์
+                  </button>
+                </div>
               </div>
               <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">
                 {(() => {
@@ -2909,6 +3687,7 @@ const POSSystem = ({
                         onTouchStart={(e) => handleCourseTouchStart(e, { name: courseName, rem, total })}
                         onTouchEnd={handleCourseTouchEnd}
                         onClick={() => {
+                          clearCourseTooltip();
                           if (isAlreadyInCart) {
                             showToast('รายการนี้อยู่ในตะกร้าแล้ว', 'info');
                             return;
@@ -3175,6 +3954,113 @@ const POSSystem = ({
                     <span className="font-bold">{formatCurrency(subtotal)}</span>
                   </div>
 
+                  {/* คูปองส่วนลด */}
+                  <div className="flex justify-between items-center">
+                    <span className="kanit-text font-medium text-slate-700 flex items-center gap-1.5">
+                      <span>คูปองส่วนลด</span>
+                      {appliedCoupon ? (
+                        <span className="text-sky-600 font-bold text-[10px] sm:text-xs truncate max-w-[120px]">
+                          ({appliedCoupon.code || appliedCoupon.title})
+                        </span>
+                      ) : (
+                        patientCoupons.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCouponSelectorModalOpen(true)}
+                            className="px-1.5 py-0.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-md text-[10px] font-bold kanit-text transition-colors flex items-center gap-1 shadow-2xs"
+                            title="เลือกคูปองของคนไข้"
+                          >
+                            <Ticket size={11} className="text-sky-500" />
+                            <span>({patientCoupons.length})</span>
+                          </button>
+                        )
+                      )}
+                    </span>
+
+                    {appliedCoupon ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-rose-500 font-bold font-data text-xs sm:text-sm">
+                          - {formatCurrency(couponDiscount)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoupon}
+                          title="ยกเลิกการใช้คูปอง"
+                          className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={manualCouponInput}
+                          onChange={(e) => setManualCouponInput(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (manualCouponInput.trim()) {
+                                handleApplyCouponByCode(manualCouponInput);
+                              }
+                            }
+                          }}
+                          placeholder="รหัสคูปอง"
+                          className="w-20 sm:w-24 px-2 py-1 text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 font-data transition-colors uppercase placeholder:font-normal placeholder:normal-case placeholder:text-[11px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (manualCouponInput.trim()) {
+                              handleApplyCouponByCode(manualCouponInput);
+                            }
+                          }}
+                          disabled={!manualCouponInput.trim()}
+                          className="h-[26px] sm:h-[28px] px-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-40 text-white rounded-lg text-[10px] sm:text-xs font-bold kanit-text transition-all shrink-0 active:scale-95 flex items-center justify-center"
+                        >
+                          ใช้
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsQrScannerOpen(true)}
+                          title="สแกน QR Code คูปอง"
+                          className="h-[26px] sm:h-[28px] px-2 bg-sky-50 hover:bg-sky-100 text-sky-600 border border-sky-200 rounded-lg transition-all shrink-0 active:scale-95 flex items-center justify-center shadow-2xs"
+                        >
+                          <QrCode size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* แถบแจ้งเตือน/ปุ่มด่วนสิทธิ์ส่วนลดสมาชิก VIP */}
+                  {selectedPatientObj && isPatientVipActive(selectedPatientObj) && Number(selectedPatientObj.vipAlwaysDiscountValue ?? selectedPatientObj.vip_always_discount_value) > 0 && (
+                    <div className="flex items-center justify-between p-2 sm:p-2.5 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 border border-amber-300/80 rounded-xl">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Crown size={14} className="text-amber-500 fill-amber-300 shrink-0" />
+                        <span className="text-[11px] sm:text-xs font-bold text-amber-950 kanit-text truncate">
+                          สิทธิ์ VIP: ลด {selectedPatientObj.vipAlwaysDiscountValue ?? selectedPatientObj.vip_always_discount_value}{(selectedPatientObj.vipAlwaysDiscountType || selectedPatientObj.vip_always_discount_type) === 'amount' ? ' บาท' : '%'} ทุกครั้ง
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Number(selectedPatientObj.vipAlwaysDiscountValue ?? selectedPatientObj.vip_always_discount_value);
+                          const type = (selectedPatientObj.vipAlwaysDiscountType || selectedPatientObj.vip_always_discount_type) === 'amount' ? 'amount' : 'percent';
+                          setDiscount(val);
+                          setDiscountType(type);
+                          showToast(`ปรับใช้ส่วนลดสมาชิก VIP ${val}${type === 'amount' ? ' บาท' : '%'} เรียบร้อย`, 'success');
+                        }}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-lg kanit-text transition-all shrink-0 shadow-xs ${
+                          discount === Number(selectedPatientObj.vipAlwaysDiscountValue ?? selectedPatientObj.vip_always_discount_value)
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-amber-500 hover:bg-amber-600 text-white active:scale-95'
+                        }`}
+                      >
+                        {discount === Number(selectedPatientObj.vipAlwaysDiscountValue ?? selectedPatientObj.vip_always_discount_value) ? '✓ ใช้งานอยู่' : 'กดใช้สิทธิ์'}
+                      </button>
+                    </div>
+                  )}
+
                   {/* ส่วนลดเพิ่มเติม */}
                   <div className="flex justify-between items-center">
                     <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
@@ -3182,7 +4068,7 @@ const POSSystem = ({
                       {discount > 0 && (
                          <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
                             {discountType === 'percent' 
-                               ? `(${formatCurrency(discountAmount)} บาท)` 
+                               ? `(${formatCurrency(additionalDiscount)} บาท)` 
                                : `(${Number(((Number(discount) || 0) * 100 / (subtotal || 1)).toFixed(2))}%)`}
                          </span>
                       )}
@@ -3204,10 +4090,10 @@ const POSSystem = ({
                     </div>
                   </div>
 
-                  {/* ส่วนลดรวมทั้งหมด */}
+                  {/* รวมส่วนลด */}
                   <div className="flex justify-between items-center text-rose-500 font-medium">
-                    <span className="kanit-text">ส่วนลดรวมทั้งหมด</span>
-                    <span className="font-bold">- {formatCurrency(discountAmount)}</span>
+                    <span className="kanit-text">รวมส่วนลด</span>
+                    <span className="font-bold">- {formatCurrency(totalDiscount)}</span>
                   </div>
 
                   <div className="h-px w-full bg-slate-200/60 my-1.5"></div>
@@ -4418,6 +5304,7 @@ const POSSystem = ({
                                   onTouchStart={(e) => handleCourseTouchStart(e, { name: courseName, rem, total, owner: ownerFullName })}
                                   onTouchEnd={handleCourseTouchEnd}
                                   onClick={() => {
+                                    clearCourseTooltip();
                                     const courseProduct = products.find(p => p.id === course.productId) || {
                                       id: course.productId,
                                       name: courseName,
@@ -4688,6 +5575,381 @@ const POSSystem = ({
           {activeCourseTooltip.placement !== 'bottom' && (
             <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-md rotate-45 mx-auto -mt-1.5 border-r border-b border-indigo-100/80 shadow-2xs"></div>
           )}
+        </div>,
+        document.body
+      )}
+
+      {/* Modal เลือกคูปองของคนไข้ที่กำลังคิดเงิน */}
+      {typeof document !== 'undefined' && isCouponSelectorModalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <Ticket className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-slate-800 kanit-text leading-tight">
+                    คูปองส่วนลดของคนไข้
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-light">
+                    คนไข้: <strong className="text-slate-700">{selectedPatientObj ? getPatientFullName(selectedPatientObj) : selectedPatientId}</strong> ({patientCoupons.length} ใบที่ใช้ได้)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCouponSelectorModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Coupons List */}
+            <div className="p-4 space-y-2.5 overflow-y-auto custom-scrollbar flex-1">
+              {patientCoupons.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 kanit-text text-xs">
+                  <Ticket className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-[1.5]" />
+                  ไม่มีคูปองที่ใช้ได้สำหรับคนไข้ท่านนี้
+                </div>
+              ) : (
+                patientCoupons.map((coupon, index) => {
+                  const isSelected = appliedCoupon?.code === coupon.code || appliedCoupon?.id === coupon.id;
+                  const discountVal = Number(coupon.discountValue ?? coupon.discount_value ?? 0);
+                  const isPercent = (coupon.discountType || coupon.discount_type) === 'percent';
+                  const minSpend = Number(coupon.minSpend ?? coupon.min_spend ?? 0);
+                  const isMinSpendMet = minSpend <= 0 || subtotal >= minSpend;
+                  const couponDisc = subtotal > 0 ? calculateCouponDiscount(coupon, subtotal) : 0;
+                  const isBest = isMinSpendMet && couponDisc > 0 && index === 0;
+
+                  // ตรวจสอบวันหมดอายุ และแจ้งเตือนหากใกล้หมดอายุ (ภายใน 7 วัน)
+                  const expTimestamp = getCouponExpiryTimestamp(coupon);
+                  const isExpiringSoon = expTimestamp !== Infinity && (expTimestamp - Date.now()) <= (7 * 24 * 60 * 60 * 1000) && (expTimestamp >= Date.now());
+                  const daysRemaining = isExpiringSoon ? Math.max(1, Math.ceil((expTimestamp - Date.now()) / (24 * 60 * 60 * 1000))) : null;
+
+                  return (
+                    <div
+                      key={coupon.id || coupon.code}
+                      className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'border-amber-400 bg-amber-50/50 ring-2 ring-amber-400/30'
+                          : isBest
+                            ? 'border-emerald-300 bg-emerald-50/30 hover:border-emerald-400'
+                            : isMinSpendMet
+                              ? 'border-slate-200 hover:border-amber-300 bg-white hover:bg-slate-50/50'
+                              : 'border-slate-200 bg-slate-50 opacity-60'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className="font-bold text-xs sm:text-sm text-slate-800 kanit-text truncate">
+                            {coupon.title || 'คูปองส่วนลด'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px] font-data">
+                            {coupon.code}
+                          </span>
+                          {isBest && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px] kanit-text flex items-center gap-0.5 shadow-2xs">
+                              <Sparkles className="w-3 h-3 text-emerald-600" /> คุ้มค่าที่สุด
+                            </span>
+                          )}
+                          {isExpiringSoon && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 font-semibold text-[10px] kanit-text flex items-center gap-0.5">
+                              <Clock className="w-2.5 h-2.5 text-rose-500" /> เหลือ {daysRemaining} วัน
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-amber-600 font-bold font-data flex items-center gap-1.5 flex-wrap">
+                          <span>{isPercent ? `ลด ${discountVal}%` : `ลด ฿${discountVal.toLocaleString()}`}</span>
+                          {subtotal > 0 && isMinSpendMet && couponDisc > 0 && (
+                            <span className="text-emerald-700 font-bold text-[11px] kanit-text bg-emerald-100/70 px-1.5 py-0.5 rounded">
+                              (ลดจริง ฿{couponDisc.toLocaleString()})
+                            </span>
+                          )}
+                          {minSpend > 0 && (
+                            <span className="text-[11px] text-slate-400 font-normal kanit-text">
+                              (ยอดขั้นต่ำ ฿{minSpend.toLocaleString()})
+                            </span>
+                          )}
+                        </div>
+                        {coupon.expireDate && (
+                          <div className="text-[10px] text-slate-400 kanit-text mt-0.5">
+                            หมดอายุ: {formatDate(coupon.expireDate)}
+                          </div>
+                        )}
+                        {!isMinSpendMet && (
+                          <div className="text-[10px] text-rose-500 font-medium kanit-text mt-1">
+                            ⚠️ ยอดซื้อยังไม่ถึงขั้นต่ำ (ขาดอีก ฿{(minSpend - subtotal).toLocaleString()})
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={!isMinSpendMet}
+                        onClick={() => {
+                          if (isSelected) {
+                            handleRemoveCoupon();
+                          } else {
+                            userDismissedCouponRef.current = false;
+                            handleApplyCouponByCode(coupon.code);
+                          }
+                        }}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all kanit-text active:scale-95 shrink-0 ${
+                          isSelected
+                            ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                            : isMinSpendMet
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs'
+                              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {isSelected ? 'ยกเลิก' : 'ใช้คูปอง'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer: กรอกรหัสคูปองด้วยตนเอง พร้อมปุ่มสแกน QR */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2.5">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (manualCouponInput) {
+                    handleApplyCouponByCode(manualCouponInput);
+                  }
+                }}
+                className="flex items-center gap-2 flex-1"
+              >
+                <div className="relative flex-1">
+                  <Ticket className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={manualCouponInput}
+                    onChange={(e) => setManualCouponInput(e.target.value.toUpperCase())}
+                    placeholder="พิมพ์รหัสคูปอง เช่น CP-XXXX หรือยิงบาร์โค้ด"
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-500 uppercase font-data"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!manualCouponInput.trim()}
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all kanit-text shrink-0"
+                >
+                  ใช้รหัสนี้
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCouponSelectorModalOpen(false);
+                  setIsQrScannerOpen(true);
+                }}
+                title="สแกน QR Code คูปองผ่านกล้อง"
+                className="p-2 bg-sky-50 hover:bg-sky-100 text-sky-600 border border-sky-200 rounded-xl transition-all shrink-0 shadow-2xs"
+              >
+                <QrCode size={16} />
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: QR CAMERA SCANNER FOR COUPONS (Portal z-[200])                     */}
+      {/* ========================================================================= */}
+      {isQrScannerOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              stopQrCamera();
+              setIsQrScannerOpen(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-3xl w-full max-w-md max-h-[94dvh] shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-blue-50/50 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-sky-500 text-white shadow-xs">
+                  <QrCode size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base kanit-text">สแกน QR Code คูปอง</h3>
+                  <p className="text-[11px] text-slate-500 kanit-text">ส่องกล้องไปที่ QR Code บนคูปองของลูกค้า</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  stopQrCamera();
+                  setIsQrScannerOpen(false);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+              {/* Camera Preview */}
+              <div className="relative w-full aspect-square bg-black rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
+                <video ref={qrVideoRef} className={`w-full h-full object-cover ${!scannerActive ? 'hidden' : ''}`} />
+                <canvas ref={qrCanvasRef} className="hidden" />
+
+                {!scannerActive && (
+                  <div className="text-center p-6 text-white space-y-3">
+                    <Camera size={44} className="mx-auto text-slate-500 animate-pulse" />
+                    <p className="text-xs text-slate-300 kanit-text">กำลังเริ่มต้นกล้อง...</p>
+                  </div>
+                )}
+
+                {scannerActive && (
+                  /* Aiming Reticle Overlay */
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                    <div className="w-[70%] max-w-[260px] aspect-square border-2 border-dashed border-sky-400/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-sky-400 rounded-tl-lg" />
+                      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-sky-400 rounded-tr-lg" />
+                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-sky-400 rounded-bl-lg" />
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-sky-400 rounded-br-lg" />
+                      {/* Scanning Laser Animation */}
+                      <div className="absolute inset-x-2 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_8px_#38bdf8] animate-bounce" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Fallback Manual Input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (manualCouponInput.trim()) {
+                    stopQrCamera();
+                    setIsQrScannerOpen(false);
+                    handleApplyCouponByCode(manualCouponInput);
+                  }
+                }}
+                className="space-y-1.5"
+              >
+                <label className="text-xs font-bold text-slate-600 kanit-text flex items-center gap-1">
+                  <Ticket size={13} className="text-sky-500" /> หรือพิมพ์รหัสคูปอง
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manualCouponInput}
+                    onChange={(e) => setManualCouponInput(e.target.value.toUpperCase())}
+                    placeholder="เช่น CP-XXXX หรือ URL คูปอง"
+                    className="flex-1 px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 uppercase font-data outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!manualCouponInput.trim()}
+                    className="px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold kanit-text transition-all shrink-0 shadow-xs"
+                  >
+                    ใช้รหัส
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Footer: Camera Action Toolbar (แทนปุ่มปิดหน้าต่างเดิม จัดเรียงเป็นระเบียบ) */}
+            <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3 shrink-0">
+              {hasTorch && (
+                <button
+                  type="button"
+                  onClick={toggleQrTorch}
+                  className={`flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 border transition-all shadow-xs ${
+                    torchOn
+                      ? 'bg-amber-400 border-amber-500 text-slate-900 shadow-amber-200'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                  }`}
+                >
+                  <Zap size={16} className={torchOn ? 'fill-slate-900 text-slate-900' : 'text-amber-500'} />
+                  <span>{torchOn ? 'ปิดแฟลช' : 'เปิดแฟลช'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={flipCamera}
+                disabled={!scannerActive || isSwitchingCamera}
+                className="flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={16} className={`text-sky-500 ${isSwitchingCamera ? 'animate-spin' : ''}`} />
+                <span>{isSwitchingCamera ? 'กำลังสลับกล้อง...' : 'สลับกล้อง'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: COUPON FAILURE ALERT POPUP (Portal z-[250])                       */}
+      {/* ========================================================================= */}
+      {couponAlertModal && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setCouponAlertModal(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-sm sm:max-w-md w-full shadow-2xl border border-slate-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-150">
+            {/* Top Icon Badge */}
+            <div
+              className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-xs border ${
+                couponAlertModal.type === 'danger'
+                  ? 'bg-rose-50 border-rose-200/80 text-rose-500'
+                  : 'bg-amber-50 border-amber-200/80 text-amber-500'
+              }`}
+            >
+              {couponAlertModal.type === 'danger' ? (
+                <XCircle size={34} />
+              ) : (
+                <AlertCircle size={34} />
+              )}
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl sm:text-2xl font-black text-slate-800 kanit-text mb-2">
+              {couponAlertModal.title}
+            </h3>
+
+            {/* Scanned / Entered Code Badge (if present) */}
+            {couponAlertModal.code && (
+              <div className="mb-3.5 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-700 font-data uppercase tracking-wider max-w-full">
+                <Ticket size={14} className="text-sky-500 shrink-0" />
+                <span className="truncate">{couponAlertModal.code}</span>
+              </div>
+            )}
+
+            {/* Message Box */}
+            <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs sm:text-sm font-medium text-slate-600 kanit-text leading-relaxed mb-6 text-center">
+              {couponAlertModal.message}
+            </div>
+
+            {/* Action Button */}
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setCouponAlertModal(null)}
+              className={`w-full py-3.5 rounded-2xl text-sm font-bold kanit-text text-white shadow-md transition-all active:scale-98 ${
+                couponAlertModal.type === 'danger'
+                  ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/25'
+                  : 'bg-slate-800 hover:bg-slate-900 shadow-slate-800/20'
+              }`}
+            >
+              เข้าใจแล้ว
+            </button>
+          </div>
         </div>,
         document.body
       )}

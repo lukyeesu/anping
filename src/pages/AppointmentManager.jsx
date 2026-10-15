@@ -14,8 +14,9 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Crown
 } from 'lucide-react';
+import { isPatientVipActive } from '../utils/couponHelpers';
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 import { dispatchClinicNotification } from '../lib/notificationHub';
@@ -166,12 +167,16 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
              if (supabase) {
                  const { data, error } = await supabase.from('patients')
-                      .select('id, prefix, first_name, last_name, name, nickname, id_card, phone, created_at, updated_at')
+                      .select('id, prefix, first_name, last_name, name, nickname, id_card, phone, is_vip, vip_expire_date, created_at, updated_at')
                       .or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,name.ilike.%${s}%,id.ilike.%${s}%,id_card.ilike.%${s}%,phone.ilike.%${s}%,nickname.ilike.%${s}%`)
                       .order('updated_at', { ascending: false })
                       .limit(10);
                  if (!error && data) {
-                     results = data;
+                     results = data.map(d => ({
+                         ...d,
+                         isVip: Boolean(d.is_vip ?? d.isVip),
+                         vipExpireDate: d.vip_expire_date || d.vipExpireDate
+                     }));
                  } else if (error) {
                      console.warn("Supabase patient search query warning:", error.message);
                  }
@@ -1002,18 +1007,37 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         const datePart = dtParts[0] || '-';
         const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
 
+        const patientObj = (patientsData || []).find(p => {
+          const pid = getPatientId(p);
+          return pid === appt.hn || (p.hn && p.hn === appt.hn) || (p.id && String(p.id) === String(appt.hn));
+        });
+        const isVip = isPatientVipActive(patientObj);
+
         return (
-        <tr key={`${appt.id || 'appt'}-${index}`} onClick={() => handleOpenApptEdit(appt, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group font-data space-row-animation">
-            <td className="py-4 pl-6 text-slate-700 font-medium text-left">
+        <tr 
+          key={`${appt.id || 'appt'}-${index}`} 
+          onClick={() => handleOpenApptEdit(appt, true)} 
+          className={
+            isVip
+              ? "border-b border-amber-300/80 bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 transition-all duration-200 text-sm align-middle cursor-pointer group font-data space-row-animation shadow-xs"
+              : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group font-data space-row-animation"
+          }
+        >
+            <td className={`py-4 pl-6 font-medium text-left ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-slate-700'}`}>
                 <div className="flex flex-col items-start gap-1">
                 <span>{datePart}</span>
-                {timePart && <span className="text-sm text-slate-500 font-medium">{timePart}</span>}
+                {timePart && <span className={`text-sm font-medium ${isVip ? 'text-amber-800/80' : 'text-slate-500'}`}>{timePart}</span>}
                 </div>
             </td>
-            <td className="py-4 text-sky-600 font-medium text-center kanit-text">{appt.hn}</td>
-            <td className="py-4 text-slate-700 text-left px-2">
+            <td className={`py-4 font-medium text-center kanit-text ${isVip ? 'text-amber-950 font-bold' : 'text-sky-600'}`}>{appt.hn}</td>
+            <td className="py-4 text-left px-2">
                 <div className="flex items-center flex-wrap gap-2">
-                    <span className="font-bold">{appt.patientName}</span>
+                    <span className={`font-bold ${isVip ? 'text-amber-950' : 'text-slate-700'}`}>{appt.patientName}</span>
+                    {isVip && (
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
+                        <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                      </span>
+                    )}
                     {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}
                 </div>
             </td>
@@ -1049,7 +1073,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         </tr>
         )
     });
-  }, [filteredData, visibleCount]); // 3. Virtualization Concept: โหลดเท่าที่จำเป็น (ตามค่า visibleCount)
+  }, [filteredData, visibleCount, patientsData]); // 3. Virtualization Concept: โหลดเท่าที่จำเป็น (ตามค่า visibleCount)
 
   const memoizedApptMobileCards = useMemo(() => {
     return filteredData.slice(0, visibleCount).map((appt, index) => {
@@ -1057,13 +1081,33 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         const dtParts = effectiveDt.split(' ');
         const datePart = dtParts[0] || '-';
         const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
+        const patientObj = (patientsData || []).find(p => {
+          const pid = getPatientId(p);
+          return pid === appt.hn || (p.hn && p.hn === appt.hn) || (p.id && String(p.id) === String(appt.hn));
+        });
+        const isVip = isPatientVipActive(patientObj);
+
         return (
-            <div key={`mobile-appt-${appt.id || index}`} onClick={() => handleOpenApptEdit(appt, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
+            <div 
+              key={`mobile-appt-${appt.id || index}`} 
+              onClick={() => handleOpenApptEdit(appt, true)} 
+              className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all space-row-animation active:scale-[0.98] ${
+                isVip
+                  ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
+                  : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
+              }`} 
+              style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}
+            >
                 
                 {/* แถวที่ 1: รหัส HN, สถานะ และปุ่มจัดการ */}
                 <div className="flex justify-between items-center mb-1.5">
                     <div className="flex items-center gap-3">
-                        <span className="font-black text-sky-600 text-base kanit-text tracking-wide">{appt.hn}</span>
+                        <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{appt.hn}</span>
+                        {isVip && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
+                            <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                          </span>
+                        )}
                         {(() => {
                           const info = getStatusInfo(getEffectiveApptStatus(appt));
                           return (
@@ -1088,7 +1132,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                 </div>
 
                 {/* แถวที่ 3: ข้อมูลนัดหมาย (จัดกลุ่มในกล่องสีเทาให้อ่านง่าย) */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                <div className={`p-3 rounded-xl border flex flex-col gap-2 ${isVip ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' : 'bg-slate-50 border-slate-100'}`}>
                     <div className="flex items-center gap-2 text-xs">
                         <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
                         <div className="min-w-0 flex-1 truncate">
@@ -1546,13 +1590,39 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                  ) : (
                                     <>
                                        {serverPatientResults.length > 0 ? (
-                                          serverPatientResults.map((p, i) => (
-                                             <div key={i} onMouseDown={() => selectPatient(p)} className="px-4 py-3 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 flex flex-col">
-                                                <span className="font-semibold text-slate-800 text-sm font-data">{getPatientId(p)} - {getPatientFullName(p)}</span>
-                                                <span className="text-xs text-slate-500 font-data flex items-center gap-1">{p.phone || p.phone1 ? <><Phone size={12} className="text-sky-500" /> {p.phone || p.phone1}</> : 'ไม่มีเบอร์โทรศัพท์'}</span>
-                                             </div>
-                                          ))
-                                       ) : (
+                                           serverPatientResults.map((p, i) => {
+                                              const fullPatient = (patientsData || []).find(pat => {
+     const pId = getPatientId(pat);
+     return pId === p.id || (pat.hn && pat.hn === p.id) || (pat.id && String(pat.id) === String(p.id));
+   }) || p;
+   const isVip = isPatientVipActive(fullPatient);
+                                              return (
+                                              <div 
+                                                key={i} 
+                                                onMouseDown={() => selectPatient(p)} 
+                                                className={`px-4 py-3 cursor-pointer border-b last:border-0 flex flex-col transition-all ${
+                                                  isVip
+                                                    ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-200/80 border-l-4 border-l-amber-500 shadow-xs'
+                                                    : 'hover:bg-sky-50 border-slate-50'
+                                                }`}
+                                              >
+                                                 <div className="flex items-center justify-between gap-2">
+                                                    <span className={`font-semibold text-sm font-data flex items-center gap-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-800'}`}>
+                                                       {isVip && <Crown size={14} className="text-amber-500 fill-amber-300 shrink-0" />}
+                                                       <span>{getPatientId(p)} - {getPatientFullName(p)}</span>
+                                                    </span>
+                                                    {isVip && (
+                                                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0">
+                                                          <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                                                       </span>
+                                                    )}
+                                                 </div>
+                                                 <span className={`text-xs font-data flex items-center gap-1 mt-0.5 ${isVip ? 'text-amber-800/80 font-medium' : 'text-slate-500'}`}>
+                                                    {p.phone || p.phone1 ? <><Phone size={12} className={isVip ? 'text-amber-600' : 'text-sky-500'} /> {p.phone || p.phone1}</> : 'ไม่มีเบอร์โทรศัพท์'}
+                                                 </span>
+                                              </div>
+                                           );})
+                                        ) : (
                                           <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2 kanit-text">
                                              <Plus size={16} className="text-sky-500" /> สร้างเป็นผู้ป่วยใหม่: "{formData.searchPatient}"
                                           </div>

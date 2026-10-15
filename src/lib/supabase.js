@@ -52,10 +52,17 @@ const TABLE_MAP = {
   'Treatments': 'treatments',
   'PatientCourses': 'patient_courses',
   'Patient_Courses': 'patient_courses',
-  'patient_courses': 'patient_courses'
+  'patient_courses': 'patient_courses',
+  'Coupons': 'coupons',
+  'coupons': 'coupons',
+  'Coupon_Templates': 'coupon_templates',
+  'coupon_templates': 'coupon_templates'
 };
 
 const TABLE_COLUMNS = {
+  coupon_templates: [
+    'id', 'name', 'details', 'created_at', 'updated_at', 'is_deleted'
+  ],
   patients: [
     'id', 'prefix', 'first_name', 'last_name', 'name', 'nickname', 'id_card', 'phone', 
     'gender', 'dob', 'age', 'blood_group', 'religion', 'nationality', 'ethnicity', 'occupation',
@@ -67,7 +74,15 @@ const TABLE_COLUMNS = {
     'informed_consent_status', 'informed_consent_timestamp', 'informed_consent_ip_address', 'informed_consent_user_agent',
     'informed_consent_signer_type', 'informed_consent_representative_name', 'informed_consent_representative_relation',
     'informed_consent_risk_agreed', 'informed_consent_voluntary_agreed', 'informed_consent_signature_url', 'informed_consent_doc_id',
-    'branch_id', 'created_at', 'updated_at', 'is_deleted'
+    'notes', 'branch_id', 'created_at', 'updated_at', 'is_deleted'
+  ],
+  coupons: [
+    'id', 'code', 'batch_id', 'batch_name', 'batch_total', 'title', 'description', 
+    'discount_type', 'discount_value', 'min_spend', 'max_discount', 'patient_id', 
+    'patient_name', 'branch_id', 'bg_image', 'logo_url', 'template_type', 'theme_color', 
+    'qr_config', 'is_lifetime', 'expire_date', 'status', 'is_used', 'used_at', 
+    'used_in_branch', 'used_in_receipt', 'used_by_patient_id', 'source', 'notes', 
+    'created_at', 'updated_at', 'is_deleted'
   ],
   patient_courses: [
     'id', 'patient_id', 'patient_name', 'product_id', 'course_name', 
@@ -85,11 +100,18 @@ const TABLE_COLUMNS = {
     'staff_name', 'staff_id', 'staff_commission',
     'doctor_id', 'doctor_name', 'doctor_commission',
     'seller_id', 'seller_name', 'seller_commission',
+    'coupon_id', 'coupon_code', 'coupon_discount',
     'date', 'time', 'status', 'transaction_type', 'created_at', 'updated_at', 'is_deleted'
   ],
   inventory: ['id', 'code', 'product_id', 'product_name', 'name', 'category', 'unit', 'cost_price', 'selling_price', 'stock_quantity', 'min_stock', 'lot_no', 'expire_date', 'receive_date', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
   inventory_logs: ['id', 'item_id', 'item_name', 'change_type', 'quantity', 'staff_name', 'notes', 'created_at', 'updated_at', 'lot_no', 'expire_date', 'receive_date', 'product_id', 'branch_id', 'type', 'amount', 'balance', 'reason'],
-  setting_pos: ['id', 'code', 'name', 'category', 'price', 'unit', 'icon', 'stock_managed', 'is_course', 'course_sessions', 'min_stock', 'is_vatable', 'is_active', 'created_at', 'updated_at', 'is_deleted'],
+  setting_pos: [
+    'id', 'code', 'name', 'category', 'price', 'unit', 'icon', 'stock_managed',
+    'is_course', 'course_sessions', 'min_stock', 'is_vatable', 'is_active',
+    'is_membership', 'membership_months', 'vip_benefit_type', 'vip_discount_type',
+    'vip_discount_value', 'vip_coupon_count', 'vip_coupon_title',
+    'created_at', 'updated_at', 'is_deleted'
+  ],
   finance_revenue: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   finance_expenses: ['id', 'date', 'amount', 'category', 'description', 'branch_id', 'items', 'subtotal', 'discount_value', 'discount_type', 'discount_amount', 'tax_mode', 'vat_rate', 'vat_amount', 'method', 'status', 'is_auto', 'patient_id', 'patient_name', 'created_at', 'updated_at', 'is_deleted'],
   staff: [
@@ -338,6 +360,110 @@ export function rowToJS(row) {
     jsObj.ot_rate = v;
   }
 
+  // VIP Membership and Coupon Mappings
+  if (row.is_vip !== undefined || row.isVip !== undefined) {
+    jsObj.isVip = parseBool(row.is_vip ?? row.isVip);
+    jsObj.is_vip = jsObj.isVip;
+  }
+  if (row.vip_start_date !== undefined || row.vipStartDate !== undefined) {
+    jsObj.vipStartDate = row.vip_start_date || row.vipStartDate || '';
+    jsObj.vip_start_date = jsObj.vipStartDate;
+  }
+  if (row.vip_expire_date !== undefined || row.vipExpireDate !== undefined) {
+    jsObj.vipExpireDate = row.vip_expire_date || row.vipExpireDate || '';
+    jsObj.vip_expire_date = jsObj.vipExpireDate;
+  }
+  if (row.vip_tier !== undefined || row.vipTier !== undefined) {
+    jsObj.vipTier = row.vip_tier || row.vipTier || 'VIP';
+    jsObj.vip_tier = jsObj.vipTier;
+  }
+  if (row.vip_notes !== undefined || row.vipNotes !== undefined) {
+    jsObj.vipNotes = row.vip_notes || row.vipNotes || '';
+    jsObj.vip_notes = jsObj.vipNotes;
+  }
+
+  // Fallback: If is_vip is not present as a table column, parse VIP metadata stored in notes
+  if (!jsObj.isVip && typeof jsObj.notes === 'string' && jsObj.notes.includes('[VIP:')) {
+    try {
+      const match = jsObj.notes.match(/\[VIP:(\{.*?\})\]/);
+      if (match && match[1]) {
+        const vMeta = JSON.parse(match[1]);
+        if (vMeta.isVip) {
+          jsObj.isVip = true;
+          jsObj.is_vip = true;
+          jsObj.vipStartDate = vMeta.vipStartDate || '';
+          jsObj.vip_start_date = jsObj.vipStartDate;
+          jsObj.vipExpireDate = vMeta.vipExpireDate || '';
+          jsObj.vip_expire_date = jsObj.vipExpireDate;
+          jsObj.vipTier = vMeta.vipTier || 'VIP';
+          jsObj.vip_tier = jsObj.vipTier;
+          jsObj.vipNotes = vMeta.vipNotes || '';
+          jsObj.vip_notes = jsObj.vipNotes;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Setting POS VIP Package Mappings
+  if (row.is_membership !== undefined || row.isMembership !== undefined) {
+    jsObj.isMembership = parseBool(row.is_membership ?? row.isMembership);
+    jsObj.is_membership = jsObj.isMembership;
+  }
+  if (row.membership_months !== undefined || row.membershipMonths !== undefined) {
+    jsObj.membershipMonths = Number((row.membership_months !== undefined ? row.membership_months : row.membershipMonths) || 1);
+    jsObj.membership_months = jsObj.membershipMonths;
+  }
+  if (row.vip_benefit_type !== undefined || row.vipBenefitType !== undefined) {
+    jsObj.vipBenefitType = row.vip_benefit_type || row.vipBenefitType || 'coupon';
+    jsObj.vip_benefit_type = jsObj.vipBenefitType;
+  }
+  if (row.vip_discount_type !== undefined || row.vipDiscountType !== undefined) {
+    jsObj.vipDiscountType = row.vip_discount_type || row.vipDiscountType || 'percent';
+    jsObj.vip_discount_type = jsObj.vipDiscountType;
+  }
+  if (row.vip_discount_value !== undefined || row.vipDiscountValue !== undefined) {
+    jsObj.vipDiscountValue = Number((row.vip_discount_value !== undefined ? row.vip_discount_value : row.vipDiscountValue) || 0);
+    jsObj.vip_discount_value = jsObj.vipDiscountValue;
+  }
+  if (row.vip_coupon_count !== undefined || row.vipCouponCount !== undefined) {
+    jsObj.vipCouponCount = Number((row.vip_coupon_count !== undefined ? row.vip_coupon_count : row.vipCouponCount) || 1);
+    jsObj.vip_coupon_count = jsObj.vipCouponCount;
+  }
+  if (row.vip_coupon_title !== undefined || row.vipCouponTitle !== undefined) {
+    jsObj.vipCouponTitle = row.vip_coupon_title || row.vipCouponTitle || '';
+    jsObj.vip_coupon_title = jsObj.vipCouponTitle;
+  }
+
+  // Coupon Fields
+  if (row.is_lifetime !== undefined || row.isLifetime !== undefined) {
+    jsObj.isLifetime = parseBool(row.is_lifetime ?? row.isLifetime);
+    jsObj.is_lifetime = jsObj.isLifetime;
+  }
+  if (row.discount_type !== undefined || row.discountType !== undefined) {
+    jsObj.discountType = row.discount_type || row.discountType || 'percent';
+    jsObj.discount_type = jsObj.discountType;
+  }
+  if (row.discount_value !== undefined || row.discountValue !== undefined) {
+    jsObj.discountValue = Number((row.discount_value !== undefined ? row.discount_value : row.discountValue) || 0);
+    jsObj.discount_value = jsObj.discountValue;
+  }
+  if (row.min_spend !== undefined || row.minSpend !== undefined) {
+    jsObj.minSpend = Number((row.min_spend !== undefined ? row.min_spend : row.minSpend) || 0);
+    jsObj.min_spend = jsObj.minSpend;
+  }
+  if (row.max_discount !== undefined || row.maxDiscount !== undefined) {
+    jsObj.maxDiscount = Number((row.max_discount !== undefined ? row.max_discount : row.maxDiscount) || 0);
+    jsObj.max_discount = jsObj.maxDiscount;
+  }
+  if (row.template_type !== undefined || row.templateType !== undefined) {
+    jsObj.templateType = row.template_type || row.templateType || 'standard';
+    jsObj.template_type = jsObj.templateType;
+  }
+  if (row.theme_color !== undefined || row.themeColor !== undefined) {
+    jsObj.themeColor = row.theme_color || row.themeColor || 'emerald';
+    jsObj.theme_color = jsObj.themeColor;
+  }
+
   return jsObj;
 }
 
@@ -513,6 +639,23 @@ export function jsToRow(payload, tableName = '') {
     const noteVal = String(payload.notes || payload.note || payload.reason || '').trim();
     rawRow.notes = noteVal;
     rawRow.reason = noteVal;
+  }
+  if (tableName === 'patients') {
+    let currentNotes = String(rawRow.notes || payload.notes || '').trim();
+    currentNotes = currentNotes.replace(/\[VIP:\{.*?\}\]\s*/g, '').trim();
+    const isVip = Boolean(payload.isVip ?? payload.is_vip);
+    if (isVip) {
+      const vipMeta = {
+        isVip: true,
+        vipStartDate: payload.vipStartDate || payload.vip_start_date || '',
+        vipExpireDate: payload.vipExpireDate || payload.vip_expire_date || '',
+        vipTier: payload.vipTier || payload.vip_tier || 'VIP',
+        vipNotes: payload.vipNotes || payload.vip_notes || ''
+      };
+      rawRow.notes = `${currentNotes ? currentNotes + ' ' : ''}[VIP:${JSON.stringify(vipMeta)}]`.trim();
+    } else {
+      rawRow.notes = currentNotes;
+    }
   }
   if (payload.amount !== undefined || payload.quantity !== undefined || payload.balance !== undefined) {
     const amt = Number((payload.amount ?? payload.quantity) || 0);
@@ -730,6 +873,33 @@ export async function differentialSyncTable(tableName, selectCols = '*', options
       console.error("Direct fetch settings exception:", err);
       return { status: 'error', data: [], message: err.message };
     }
+  }
+
+  // Pure Realtime Bypass พร้อม Local Cache Fallback สำหรับ coupons
+  if (tableName === 'coupons') {
+    if (!supabase) {
+      const localData = (await getLocalStore('coupons')) || [];
+      return { status: 'success', data: localData.map(rowToJS) };
+    }
+    try {
+      const explicitCols = (TABLE_COLUMNS.coupons || []).join(',') || '*';
+      const { data, error } = await supabase
+        .from('coupons')
+        .select(explicitCols)
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        const formatted = data.map(rowToJS);
+        await upsertLocalStore('coupons', formatted, { broadcast: false });
+        return { status: 'success', data: formatted };
+      } else if (error) {
+        console.warn("Supabase coupons fetch fallback:", error.message);
+      }
+    } catch (err) {
+      console.warn("Supabase coupons fetch exception:", err.message);
+    }
+    const localData = (await getLocalStore('coupons')) || [];
+    return { status: 'success', data: localData.map(rowToJS) };
   }
 
   const { scopeFilterFn = null, customManifestQuery = null, scopeCol = null, scopeVal = null, scopeVals = null } = options;
@@ -983,20 +1153,38 @@ export async function callSupabase(action, sheetName, payload = null) {
       // 1. ดึงตรงจาก Supabase แบบแบ่งหน้า (Server-side range pagination) ดึงเฉพาะ 35 แถว ไม่ดึง 82 แถว
       if (supabase) {
         try {
-          let query = supabase
-            .from('patients')
-            .select(selectCols, { count: 'exact' })
-            .or('is_deleted.is.null,is_deleted.eq.false');
+          const buildQuery = (cols) => {
+            let q = supabase
+              .from('patients')
+              .select(cols, { count: 'exact' })
+              .or('is_deleted.is.null,is_deleted.eq.false');
 
-          if (search) {
-            query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,name.ilike.%${search}%,nickname.ilike.%${search}%,id.ilike.%${search}%,hn.ilike.%${search}%,phone.ilike.%${search}%,id_card.ilike.%${search}%`);
+            if (search) {
+              q = q.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,name.ilike.%${search}%,nickname.ilike.%${search}%,id.ilike.%${search}%,phone.ilike.%${search}%,id_card.ilike.%${search}%`);
+            }
+
+            return q
+              .order(colSort, { ascending: sortDir === 'asc' })
+              .range(offset, offset + limit - 1);
+          };
+
+          let { data, count, error } = await buildQuery(selectCols);
+
+          // If undefined column error (e.g. 42703), fallback to minimal guaranteed columns
+          if (error && error.code === '42703') {
+            console.warn('Undefined column in patients query, falling back to guaranteed base columns:', error.message);
+            const fallbackCols = [
+              'id', 'prefix', 'first_name', 'last_name', 'name', 'nickname', 'id_card', 'phone', 
+              'gender', 'dob', 'age', 'blood_group', 'religion', 'nationality', 'ethnicity', 'occupation',
+              'address', 'moo', 'sub_district', 'district', 'province', 'zipcode', 'road',
+              'allergies', 'drug_allergy', 'underlying_disease', 'medical_history', 'chief_complaint',
+              'pdpa_status', 'notes', 'branch_id', 'created_at', 'updated_at', 'is_deleted'
+            ].join(',');
+            const retryRes = await buildQuery(fallbackCols);
+            data = retryRes.data;
+            count = retryRes.count;
+            error = retryRes.error;
           }
-
-          query = query
-            .order(colSort, { ascending: sortDir === 'asc' })
-            .range(offset, offset + limit - 1);
-
-          const { data, count, error } = await query;
           if (!error && Array.isArray(data)) {
             const formatted = data.map(rowToJS);
             
@@ -1797,10 +1985,31 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       const row = jsToRow(payload, tableName);
-      const { data: upsertData, error } = await supabase.from(tableName).upsert(row, { onConflict: 'id' }).select();
-      if (error) {
-        console.error("🔥 SUPABASE UPSERT ERROR:", error);
-        throw error;
+      let upsertData = null;
+      const { data: resData, error: upsertErr } = await supabase.from(tableName).upsert(row, { onConflict: 'id' }).select();
+      if (upsertErr) {
+        if (tableName === 'coupons') {
+          console.warn("Supabase upsert coupons notice (table may need migration script, saved locally):", upsertErr.message);
+        } else if (tableName === 'patients' && upsertErr.code === '42703') {
+          console.warn("Undefined column on patients upsert, stripping extra fields and retrying:", upsertErr.message);
+          const safeRow = { ...row };
+          delete safeRow.is_vip;
+          delete safeRow.vip_start_date;
+          delete safeRow.vip_expire_date;
+          delete safeRow.vip_tier;
+          delete safeRow.vip_notes;
+          const { data: retryData, error: retryErr } = await supabase.from(tableName).upsert(safeRow, { onConflict: 'id' }).select();
+          if (retryErr) {
+            console.error("🔥 SUPABASE RETRY ERROR:", retryErr);
+            throw retryErr;
+          }
+          upsertData = retryData;
+        } else {
+          console.error("🔥 SUPABASE UPSERT ERROR:", upsertErr);
+          throw upsertErr;
+        }
+      } else {
+        upsertData = resData;
       }
 
       // ซิงค์สร้าง/แก้ไขพนักงานไปยังระบบ Supabase Auth (auth.users) ผ่าน Backend API แบบเบื้องหลัง

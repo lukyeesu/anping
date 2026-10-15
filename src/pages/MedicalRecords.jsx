@@ -13,14 +13,15 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Crown, Ticket, Sparkles
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
 import { subscribeStoreUpdates } from '../lib/offlineStore';
 import { dispatchClinicNotification } from '../lib/notificationHub';
+import { isPatientVipActive, getPatientVipStatus, calculateVipExpiry } from '../utils/couponHelpers';
 
-const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats, integrationTokens = {} }) => {
+const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, couponsData = [], setCouponsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats, integrationTokens = {} }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
@@ -401,7 +402,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     curAddress: '', curMoo: '', curRoad: '', curSubDistrict: '', curDistrict: '', curProvince: '', curZipcode: '', 
     phones: [''], emName: '', emRelation: '', emPhone: '', emAddress: '', 
     bloodGroup: '', chiefComplaint: '', allergies: '', underlyingDisease: '', createdAt: '', opdRecords: [],
-    courses: []
+    courses: [],
+    isVip: false, vipStartDate: '', vipExpireDate: '', vipTier: 'VIP', vipNotes: ''
   };
   
   const [formData, setFormData] = useState(initialFormState);
@@ -1508,6 +1510,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       gender: patient.gender || parsed.gender,
       phones: loadedPhones,
       courses: patientCourses.length > 0 ? patientCourses : (patient.courses || []),
+      isVip: Boolean(patient.isVip ?? patient.is_vip),
+      vipStartDate: patient.vipStartDate || patient.vip_start_date || '',
+      vipExpireDate: patient.vipExpireDate || patient.vip_expire_date || '',
+      vipTier: patient.vipTier || patient.vip_tier || 'VIP',
+      vipNotes: patient.vipNotes || patient.vip_notes || '',
       createdAt: patient.createdAt || new Date().toISOString(), opdRecords: sortedOpd
     });
     setShowOpdForm(false); setEditingOpdIndex(null); setIsViewMode(isView); medModal.open();
@@ -2255,20 +2262,35 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const memoizedPatientTableRows = useMemo(() => {
     return sortedPatients.map((patient, index) => {
       const txCount = getPatientTreatmentCount(patient);
+      const isVip = isPatientVipActive(patient);
       return (
-        <tr key={`${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation">
-          <td className="py-4 pl-6 font-medium text-sky-600 kanit-text">{getPatientId(patient)}</td>
-          <td className="py-4 text-slate-700 font-medium font-data">{getPatientFullName(patient)}</td>
-          <td className="py-4 text-slate-600 font-medium font-data">{patient.nickname || '-'}</td>
-          <td className="py-4 text-slate-500">{patient.gender || '-'}</td><td className="py-4 text-slate-500">{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
-          <td className="py-4 text-slate-500">{patient.idCard || '-'}</td><td className="py-4 text-slate-500">{patient.phone || patient.phone1 || '-'}</td>
-          <td className="py-4 text-slate-500">{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
-          <td className="py-4 text-center text-slate-700 font-bold font-data">{txCount}</td>
+        <tr 
+          key={`${getPatientId(patient)}-${index}`} 
+          onClick={() => handleOpenEdit(patient, true)} 
+          className={
+            isVip 
+              ? "border-b border-amber-300 bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 transition-all duration-200 group cursor-pointer text-sm font-data space-row-animation shadow-xs" 
+              : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation"
+          }
+        >
+          <td className={`py-4 pl-6 font-medium kanit-text ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-sky-600'}`}>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={isVip ? "font-bold text-amber-950 tracking-wide" : ""}>{getPatientId(patient)}</span>
+            </div>
+          </td>
+          <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{getPatientFullName(patient)}</td>
+          <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-900' : 'text-slate-600'}`}>{patient.nickname || '-'}</td>
+          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.gender || '-'}</td>
+          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
+          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.idCard || '-'}</td>
+          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.phone || patient.phone1 || '-'}</td>
+          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
+          <td className={`py-4 text-center font-bold font-data ${isVip ? 'text-amber-950 font-black' : 'text-slate-700'}`}>{txCount}</td>
           <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
           <td className="py-4 text-right pr-4">
             <div className="flex justify-end gap-2 transition-opacity">
-              <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="p-2 text-sky-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
-              <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไขข้อมูล"><Pencil size={18} /></button>
+              <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-sky-400 hover:text-sky-500 hover:bg-sky-50'}`} title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
+              <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'}`} title="แก้ไขข้อมูล"><Pencil size={18} /></button>
               <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
             </div>
           </td>
@@ -2285,85 +2307,161 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         
         const txCount = getPatientTreatmentCount(patient);
         const isNewPatient = txCount === 0;
+        const isVip = isPatientVipActive(patient);
         
         return (
-            <div key={`mobile-${getPatientId(patient)}-${index}`} onClick={() => handleOpenEdit(patient, true)} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]" style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}>
+            <div 
+              key={`mobile-${getPatientId(patient)}-${index}`} 
+              onClick={() => handleOpenEdit(patient, true)} 
+              className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all space-row-animation active:scale-[0.98] ${
+                isVip
+                  ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
+                  : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
+              }`} 
+              style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}
+            >
                 
                 {/* แถวที่ 1: รหัส HN, ป้ายสถานะ และปุ่มจัดการ */}
                 <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center flex-wrap gap-2.5">
-                        <span className="font-black text-sky-600 text-base kanit-text tracking-wide">{getPatientId(patient)}</span>
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${isNewPatient ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'}`}>
+                    <div className="flex items-center flex-wrap gap-2">
+                        <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{getPatientId(patient)}</span>
+                        {isVip && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white border border-amber-300/80 shadow-xs flex items-center gap-1">
+                            <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                          </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${
+                          isNewPatient 
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                            : isVip 
+                              ? 'bg-amber-100/90 text-amber-950 border border-amber-300' 
+                              : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                        }`}>
                             {isNewPatient ? 'ผู้ป่วยใหม่' : 'ผู้ป่วยเก่า'}
                         </span>
                     </div>
-                    <div className="text-right whitespace-nowrap bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 shrink-0 ml-2">
-                        <span className="font-medium text-slate-500 text-[10px] sm:text-xs kanit-text">รับการรักษา</span>
-                        <span className="font-bold text-sky-600 text-xs sm:text-sm font-data mx-1">{txCount}</span>
-                        <span className="font-medium text-slate-500 text-[10px] sm:text-xs kanit-text">ครั้ง</span>
+                    <div className={`text-right whitespace-nowrap px-2 py-1 rounded-lg border shrink-0 ml-2 ${isVip ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-bold' : 'bg-slate-50 border-slate-100'}`}>
+                        <span className={`font-medium text-[10px] sm:text-xs kanit-text ${isVip ? 'text-amber-900' : 'text-slate-500'}`}>รับการรักษา</span>
+                        <span className={`font-bold text-xs sm:text-sm font-data mx-1 ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{txCount}</span>
+                        <span className={`font-medium text-[10px] sm:text-xs kanit-text ${isVip ? 'text-amber-900' : 'text-slate-500'}`}>ครั้ง</span>
                     </div>
                 </div>
 
                 {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
                 <div className="mb-3">
-                    <h4 className="font-bold text-slate-800 text-lg font-data leading-tight">{getPatientFullName(patient)} {patient.nickname && <span className="text-sm font-medium text-sky-600 font-data ml-1">({patient.nickname})</span>}</h4>
+                    <h4 className={`font-bold text-lg font-data leading-tight ${isVip ? 'text-amber-950 font-bold' : 'text-slate-800'}`}>
+                      {getPatientFullName(patient)} {patient.nickname && <span className={`text-sm font-medium font-data ml-1 ${isVip ? 'text-amber-800' : 'text-sky-600'}`}>({patient.nickname})</span>}
+                    </h4>
                     <div className="mt-1.5">
                         {phoneNum ? (
-                            <a href={`tel:${phoneNum}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
-                                <Phone size={12} className="text-sky-500" /> {phoneNum}
+                            <a 
+                              href={`tel:${phoneNum}`} 
+                              onClick={(e)=>e.stopPropagation()} 
+                              className={`inline-flex items-center gap-1.5 font-medium font-data text-[11px] sm:text-xs px-2 py-1 rounded-lg border w-fit transition-colors ${
+                                isVip 
+                                  ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border-amber-300 font-bold' 
+                                  : 'text-slate-600 hover:text-sky-600 bg-slate-50 border-slate-100'
+                              }`}
+                            >
+                                <Phone size={12} className={isVip ? 'text-amber-700' : 'text-sky-500'} /> {phoneNum}
                             </a>
-                        ) : <span className="text-[10px] text-slate-400 block">- ไม่มีเบอร์ติดต่อ -</span>}
+                        ) : <span className={`text-[10px] block ${isVip ? 'text-amber-800/70' : 'text-slate-400'}`}>- ไม่มีเบอร์ติดต่อ -</span>}
                     </div>
                 </div>
 
-                {/* แถวที่ 3: ข้อมูลส่วนตัวอื่นๆ (จัดกลุ่มในกล่องสีเทาให้เหมือนกล่องนัดหมาย) */}
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                {/* แถวที่ 3: ข้อมูลส่วนตัวอื่นๆ (ไม่ใช้สีขาวทึบบังสีทอง) */}
+                <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
+                  isVip 
+                    ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' 
+                    : 'bg-slate-50 border-slate-100'
+                }`}>
                     <div className="flex items-center gap-2 text-xs">
-                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><User size={10} /></div>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                          isVip 
+                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                        }`}><User size={10} /></div>
                         <div className="min-w-0 flex-1 truncate">
-                            <span className="font-medium text-slate-500">เพศ:</span>
-                            <span className="font-bold text-slate-700 ml-1.5">{patient.gender || '-'}</span>
-                            <span className="text-slate-300 mx-2">|</span>
-                            <span className="font-medium text-slate-500">อายุ:</span>
-                            <span className="font-bold text-slate-700 ml-1.5">{ageStr}</span>
+                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>เพศ:</span>
+                            <span className={`font-bold ml-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{patient.gender || '-'}</span>
+                            <span className={`mx-2 ${isVip ? 'text-amber-300' : 'text-slate-300'}`}>|</span>
+                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>อายุ:</span>
+                            <span className={`font-bold ml-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{ageStr}</span>
                         </div>
                     </div>
                     {patient.idCard && (
                     <div className="flex items-center gap-2 text-xs">
-                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><CreditCard size={10} /></div>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                          isVip 
+                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                        }`}><CreditCard size={10} /></div>
                         <div className="min-w-0 flex-1 truncate">
-                            <span className="font-medium text-slate-500">เลขบัตรฯ:</span>
-                            <span className="font-bold text-slate-700 ml-1.5 font-data">{patient.idCard}</span>
+                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>เลขบัตรฯ:</span>
+                            <span className={`font-bold ml-1.5 font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{patient.idCard}</span>
                         </div>
                     </div>
                     )}
                     <div className="flex items-center gap-2 text-xs">
-                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                          isVip 
+                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                        }`}><Clock size={10} /></div>
                         <div className="min-w-0 flex-1 truncate">
-                            <span className="font-medium text-slate-500">รับบริการล่าสุด:</span>
-                            <span className="font-bold text-sky-600 ml-1.5 font-data">{lastVisitStr}</span>
+                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>รับบริการล่าสุด:</span>
+                            <span className={`font-bold ml-1.5 font-data ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{lastVisitStr}</span>
                         </div>
                     </div>
                     
                     {/* แถวที่ 3.5: สถานะ PDPA */}
-                    <div className="flex items-center gap-2 text-xs mt-1 pt-2 border-t border-slate-200">
-                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><ShieldCheck size={10} /></div>
+                    <div className={`flex items-center gap-2 text-xs mt-1 pt-2 border-t ${
+                      isVip ? 'border-amber-300/70' : 'border-slate-200'
+                    }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                          isVip 
+                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                        }`}><ShieldCheck size={10} /></div>
                         <div className="min-w-0 flex-1 flex items-center gap-2">
-                            <span className="font-medium text-slate-500">PDPA:</span>
+                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>PDPA:</span>
                             {renderPdpaButton(patient)}
                         </div>
                     </div>
                 </div>
 
-                {/* แถวที่ 4: ปุ่มจัดการ (แก้ไขเป็น grid-cols-3 และเพิ่มปุ่มพิมพ์) */}
-                <div className="mt-3 grid grid-cols-3 gap-2 pt-3 border-t border-slate-100">
-                    <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                {/* แถวที่ 4: ปุ่มจัดการ (ปุ่มทองสวยเข้าชุดเมื่อเป็น VIP) */}
+                <div className={`mt-3 grid grid-cols-3 gap-2 pt-3 border-t ${
+                  isVip ? 'border-amber-300/70' : 'border-slate-100'
+                }`}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} 
+                      className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                        isVip 
+                          ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
+                          : 'text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50'
+                      }`}
+                    >
                         <Printer size={16} /> พิมพ์
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} 
+                      className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                        isVip 
+                          ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
+                          : 'text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50'
+                      }`}
+                    >
                         <Pencil size={16} /> แก้ไข
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} 
+                      className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                        isVip 
+                          ? 'bg-amber-100/80 hover:bg-rose-100 text-amber-950 hover:text-rose-600 border border-amber-300/70 font-bold shadow-2xs' 
+                          : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50'
+                      }`}
+                    >
                         <Trash2 size={16} /> ลบ
                     </button>
                 </div>
@@ -2642,8 +2740,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         </div>
       </div>
 
-      {medModal.isOpen && (
-        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      {medModal.isOpen && typeof document !== 'undefined' && createPortal(
+        <div className={`fixed inset-0 z-[9999] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${medModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             {/* ส่วนหัว Modal เวชระเบียน - ดีไซน์พรีเมียม สวยงามทั้ง Mobile และ Desktop */}
             <div className="p-3.5 sm:p-5 border-b border-slate-100 bg-white shrink-0 z-10">
@@ -2663,6 +2761,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 border border-sky-200/60 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-semibold kanit-text shrink-0">
                           <Activity size={11} className="text-sky-500" />
                           การรักษา {formData.opdRecords ? formData.opdRecords.length : 0} ครั้ง
+                        </span>
+                      )}
+                      {isPatientVipActive(formData) && (
+                        <span className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-100 to-orange-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold kanit-text shrink-0 shadow-2xs">
+                          <Crown size={12} className="text-amber-600 fill-amber-400" /> สมาชิก {formData.vipTier || 'VIP'} ({formData.vipExpireDate ? `หมดอายุ ${formatDate(formData.vipExpireDate)}` : 'ตลอดชีพ'})
                         </span>
                       )}
                       <span className="text-xs sm:text-sm text-slate-500 kanit-text truncate">
@@ -3071,7 +3174,168 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">โรคประจำตัว (ถ้ามี)</label><textarea rows="2" className={`${theme.input} resize-none font-data`} value={formData.underlyingDisease} onChange={(e) => setFormData({...formData, underlyingDisease: e.target.value})}></textarea></div>
                   </div>
                 </div>
-                </fieldset>
+
+                {/* VIP Membership Form Section */}
+                <div className="bg-gradient-to-br from-amber-50/70 via-yellow-50/30 to-amber-50/70 p-4 sm:p-6 rounded-2xl border-2 border-amber-300/80 shadow-sm relative z-10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-amber-200/60 gap-2">
+                    <h4 className="text-lg font-bold text-amber-900 flex items-center gap-2 kanit-text">
+                      <span className="p-1.5 rounded-xl bg-amber-500 text-white shadow-sm">
+                        <Crown size={18} className="fill-amber-200" />
+                      </span>
+                      สมาชิก VIP (VIP Membership)
+                    </h4>
+                    <div className="flex items-center gap-3 select-none">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(formData.isVip)}
+                        disabled={isViewMode}
+                        onClick={() => {
+                          const next = !formData.isVip;
+                          const today = new Date().toISOString().split('T')[0];
+                          const expObj = next ? calculateVipExpiry(formData.vipExpireDate, 1) : null;
+                          const expStr = expObj ? expObj.expireDateStr : '';
+                          setFormData({
+                            ...formData,
+                            isVip: next,
+                            vipStartDate: next ? (formData.vipStartDate || today) : '',
+                            vipExpireDate: next ? (formData.vipExpireDate || expStr) : '',
+                            vipTier: formData.vipTier || 'VIP'
+                          });
+                        }}
+                        className={`relative inline-flex h-6 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${
+                          formData.isVip ? 'bg-gradient-to-r from-amber-500 to-amber-600 shadow-sm' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out ${
+                            formData.isVip ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className="text-xs font-bold text-amber-900 kanit-text min-w-[70px]">
+                        {formData.isVip ? 'เปิดสถานะ VIP' : 'ปิด (ไม่ใช่ VIP)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Smooth Expandable Accordion Body */}
+                  <div
+                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                      formData.isVip ? 'max-h-[700px] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0 pointer-events-none'
+                    }`}
+                  >
+                    <div className="space-y-4 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-amber-900 mb-1.5 kanit-text">
+                            ระดับสมาชิก (Tier)
+                          </label>
+                          <input
+                            type="text"
+                            disabled={isViewMode}
+                            value={formData.vipTier || 'VIP'}
+                            onChange={(e) => setFormData({ ...formData, vipTier: e.target.value })}
+                            placeholder="เช่น VIP, Gold, Platinum"
+                            className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl outline-none focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 font-data text-xs text-slate-800 transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-amber-900 mb-1.5 kanit-text">
+                            วันที่เริ่มสมาชิก
+                          </label>
+                          <input
+                            type="date"
+                            disabled={isViewMode}
+                            value={formData.vipStartDate || ''}
+                            onChange={(e) => setFormData({ ...formData, vipStartDate: e.target.value })}
+                            className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl outline-none focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 font-data text-xs text-slate-800 transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-amber-900 mb-1.5 kanit-text">
+                            วันหมดอายุสมาชิก (เที่ยงคืน)
+                          </label>
+                          <input
+                            type="date"
+                            disabled={isViewMode}
+                            value={typeof formData.vipExpireDate === 'object' && formData.vipExpireDate !== null ? (formData.vipExpireDate.expireDateStr || '') : (formData.vipExpireDate || '')}
+                            onChange={(e) => setFormData({ ...formData, vipExpireDate: e.target.value })}
+                            className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl outline-none focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 font-data text-xs text-amber-900 font-bold transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {!isViewMode && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[11px] font-bold text-amber-900 kanit-text mr-1">
+                            ปรับวันหมดอายุเร็ว:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const exp = calculateVipExpiry(formData.vipExpireDate, 1);
+                              setFormData({ ...formData, isVip: true, vipExpireDate: exp.expireDateStr, vipStartDate: formData.vipStartDate || new Date().toISOString().split('T')[0] });
+                            }}
+                            className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold border border-amber-300 shadow-2xs transition-all active:scale-95"
+                          >
+                            +1 เดือน (สิ้นเดือน)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const exp = calculateVipExpiry(formData.vipExpireDate, 3);
+                              setFormData({ ...formData, isVip: true, vipExpireDate: exp.expireDateStr, vipStartDate: formData.vipStartDate || new Date().toISOString().split('T')[0] });
+                            }}
+                            className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold border border-amber-300 shadow-2xs transition-all active:scale-95"
+                          >
+                            +3 เดือน
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const exp = calculateVipExpiry(formData.vipExpireDate, 12);
+                              setFormData({ ...formData, isVip: true, vipExpireDate: exp.expireDateStr, vipStartDate: formData.vipStartDate || new Date().toISOString().split('T')[0] });
+                            }}
+                            className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 rounded-xl text-xs font-bold border border-amber-300 shadow-2xs transition-all active:scale-95"
+                          >
+                            +1 ปี
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, isVip: true, vipExpireDate: '2099-12-31', vipStartDate: formData.vipStartDate || new Date().toISOString().split('T')[0] });
+                            }}
+                            className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-all active:scale-95"
+                          >
+                            ตลอดชีพ
+                          </button>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-xs font-bold text-amber-900 mb-1.5 kanit-text">
+                          หมายเหตุสมาชิก VIP
+                        </label>
+                        <input
+                          type="text"
+                          disabled={isViewMode}
+                          value={formData.vipNotes || ''}
+                          onChange={(e) => setFormData({ ...formData, vipNotes: e.target.value })}
+                          placeholder="เช่น สมัครจากแพ็กเกจประจำเดือน, โปรโมชั่นสาขา"
+                          className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl outline-none focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 font-data text-xs text-slate-800 transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {!formData.isVip && (
+                    <div className="mt-3 p-3 bg-amber-100/50 rounded-xl border border-amber-200 text-xs text-amber-800 kanit-text flex items-center gap-2">
+                      <Sparkles size={14} className="text-amber-600 shrink-0" />
+                      <span>เปิดสถานะ VIP เพื่อให้คนไข้ได้รับสิทธิประโยชน์และแสดงสัญลักษณ์พิเศษในทุกระบบ</span>
+                    </div>
+                  )}
+                </div>
 
                 {/* Consent Status Section (Only visible if editing an existing record) */}
                 {editingId && (() => {
@@ -3224,6 +3488,91 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                             </div>
                         </div>
                     );
+                })()}
+
+                {/* Patient's Coupons Section (Visible when editing or viewing existing patient) */}
+                {editingId && (() => {
+                  const normPid = String(formData.hn || formData.id || editingId).trim().toLowerCase();
+                  const pCoupons = (couponsData || []).filter(c => {
+                    if (!c) return false;
+                    const cPid = String(c.patientId || c.patient_id || c.patientHn || c.patient_hn || '').trim().toLowerCase();
+                    return cPid === normPid;
+                  });
+                  const activeCoupons = pCoupons.filter(c => {
+                    const isUsable = (c.status || 'active') === 'active';
+                    const isExpired = c.expireDate ? (new Date(c.expireDate).setHours(23, 59, 59, 999) < Date.now()) : false;
+                    return isUsable && !isExpired;
+                  });
+
+                  return (
+                    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10 mt-6 sm:mt-8">
+                      <div className="border-b border-sky-100 pb-3 mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text">
+                          <Ticket size={20} className="text-sky-500" /> คูปองและสิทธิประโยชน์ส่วนลดของคนไข้
+                        </h4>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-50 text-sky-600 border border-sky-200 font-data">
+                          ทั้งหมด {pCoupons.length} ใบ (พร้อมใช้ {activeCoupons.length} ใบ)
+                        </span>
+                      </div>
+
+                      {pCoupons.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {pCoupons.map((coupon, idx) => {
+                            const isUsed = coupon.status === 'used';
+                            const isExpired = coupon.expireDate ? (new Date(coupon.expireDate).setHours(23, 59, 59, 999) < Date.now()) : false;
+                            const isUsable = !isUsed && !isExpired;
+
+                            return (
+                              <div
+                                key={coupon.id || `cpn-${idx}`}
+                                className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between ${
+                                  isUsable
+                                    ? 'bg-gradient-to-br from-white to-sky-50/50 border-sky-200 shadow-2xs hover:shadow-md'
+                                    : 'bg-slate-50 border-slate-200 opacity-60'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex justify-between items-start gap-2 mb-1.5">
+                                    <span className="font-mono text-xs font-bold text-sky-700 bg-sky-100/80 px-2 py-0.5 rounded-md">
+                                      {coupon.code}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      isUsable
+                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                        : isUsed
+                                        ? 'bg-slate-200 text-slate-600'
+                                        : 'bg-rose-100 text-rose-600'
+                                    }`}>
+                                      {isUsable ? 'พร้อมใช้' : isUsed ? 'ใช้แล้ว' : 'หมดอายุ'}
+                                    </span>
+                                  </div>
+                                  <h5 className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">
+                                    {coupon.title}
+                                  </h5>
+                                  <p className="text-xs text-sky-600 font-bold font-data mt-0.5">
+                                    ส่วนลด {coupon.discountType === 'percent' ? `${coupon.discountValue}%` : `฿${coupon.discountValue}`}
+                                  </p>
+                                </div>
+                                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-data">
+                                  <span>หมดอายุ: {coupon.expireDate ? formatDate(coupon.expireDate) : 'ตลอดชีพ'}</span>
+                                  {coupon.isVipBenefit && (
+                                    <span className="flex items-center gap-0.5 text-amber-600 font-bold text-[10px]">
+                                      <Crown size={10} className="fill-amber-400" /> VIP
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                          <Ticket size={24} className="mx-auto text-slate-300 mb-1.5" />
+                          <p className="text-slate-400 kanit-text text-sm italic">ยังไม่มีคูปองสำหรับคนไข้รายนี้</p>
+                        </div>
+                      )}
+                    </div>
+                  );
                 })()}
 
                 <div ref={opdSectionRef} className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10 mt-6 sm:mt-8">
@@ -3683,6 +4032,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 border-dashed kanit-text"><FileText size={32} className="mx-auto mb-2 text-slate-300" /><p className="text-sm">ยังไม่มีประวัติการรักษา</p></div>
                   )}
                 </div>
+                </fieldset>
               </form>
             </div>
 
@@ -3712,11 +4062,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showCalendar && (
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      {showCalendar && typeof document !== 'undefined' && createPortal(
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeMedCalendar}></div>
           <div 
             ref={medCalSwipeProps.ref} 
@@ -3750,12 +4101,13 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* --- ปฏิทินประวัติการรักษา (OPD Calendar) --- */}
-      {showOpdCalendar && (
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      {showOpdCalendar && typeof document !== 'undefined' && createPortal(
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeMedOpdCalendar}></div>
           <div 
             ref={medOpdCalSwipeProps.ref} 
@@ -3851,7 +4203,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal สำหรับกล้อง (Medical Records Scanner) */}

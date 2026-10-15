@@ -1322,6 +1322,9 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
     // 🌟 Robust Amount & Tax Calculation
     let subtotal = Number(txn.rawTx?.subtotal ?? txn.subtotal ?? 0);
     let discountAmount = Number(txn.rawTx?.discountAmount ?? txn.discountAmount ?? txn.discount_amount ?? 0);
+    let couponDiscount = Number(txn.rawTx?.couponDiscount ?? txn.couponDiscount ?? txn.coupon_discount ?? 0);
+    let couponCode = txn.rawTx?.couponCode || txn.couponCode || txn.coupon_code || '';
+    let couponTitle = txn.rawTx?.couponTitle || txn.couponTitle || txn.coupon_title || '';
     let vatAmount = Number(txn.rawTx?.vatAmount ?? txn.vatAmount ?? txn.vat_amount ?? 0);
     let grandTotal = Number(txn.rawTx?.grandTotal ?? txn.grandTotal ?? txn.amount ?? 0);
     const taxMode = txn.rawTx?.taxMode || txn.taxMode || txn.tax_mode || 'none';
@@ -1333,7 +1336,8 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
         subtotal = itemsSum > 0 ? itemsSum : (grandTotal || Number(txn.amount || 0));
     }
 
-    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const totalDiscountAll = discountAmount + couponDiscount;
+    const afterDiscount = Math.max(0, subtotal - totalDiscountAll);
 
     if (taxMode === 'include') {
         if (!grandTotal) grandTotal = afterDiscount || Number(txn.amount || 0);
@@ -1533,7 +1537,9 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                     </div>
                     <div class="summary-right">
                         <div class="sum-row"><span>รวมเป็นเงิน</span><span>${formatCurPrint(subtotal)} บาท</span></div>
-                        <div class="sum-row"><span>ส่วนลดเพิ่มเติม</span><span>${formatCurPrint(discountAmount)} บาท</span></div>
+                        ${couponDiscount > 0 ? `<div class="sum-row" style="color: #059669;"><span>ส่วนลดคูปอง ${couponTitle ? `${couponTitle} ` : ''}${couponCode ? `(${couponCode})` : ''}</span><span>-${formatCurPrint(couponDiscount)} บาท</span></div>` : ''}
+                        ${discountAmount > 0 ? `<div class="sum-row" style="color: #ea580c;"><span>ส่วนลดเพิ่มเติม</span><span>-${formatCurPrint(discountAmount)} บาท</span></div>` : ''}
+                        ${(couponDiscount > 0 && discountAmount > 0) ? `<div class="sum-row font-bold" style="color: #0f172a;"><span>รวมส่วนลด</span><span>-${formatCurPrint(totalDiscountAll)} บาท</span></div>` : ''}
                         <div class="sum-row" style="margin-bottom: 8px;"><span>จำนวนเงินหลังหักส่วนลด</span><span>${formatCurPrint(afterDiscount)} บาท</span></div>
                         
                         <div class="sum-row grand-total" style="margin-top: 5px;">
@@ -1637,7 +1643,9 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                 <div class="divider-thick"></div>
                 
                 <div class="summary-row"><span>รวมเป็นเงิน:</span><span>${formatCurPrint(subtotal)}</span></div>
-                ${discountAmount > 0 ? `<div class="summary-row"><span>ส่วนลด:</span><span>-${formatCurPrint(discountAmount)}</span></div>` : ''}
+                ${couponDiscount > 0 ? `<div class="summary-row" style="color: #059669;"><span>ส่วนลดคูปอง ${couponTitle ? `${couponTitle} ` : ''}${couponCode ? `(${couponCode})` : ''}:</span><span>-${formatCurPrint(couponDiscount)}</span></div>` : ''}
+                ${discountAmount > 0 ? `<div class="summary-row" style="color: #ea580c;"><span>ส่วนลดเพิ่มเติม:</span><span>-${formatCurPrint(discountAmount)}</span></div>` : ''}
+                ${(couponDiscount > 0 && discountAmount > 0) ? `<div class="summary-row font-bold"><span>รวมส่วนลด:</span><span>-${formatCurPrint(totalDiscountAll)}</span></div>` : ''}
                 ${taxMode !== 'none' && vatAmount > 0 ? `<div class="summary-row"><span>ภาษี (${vatRate}%):</span><span>${formatCurPrint(vatAmount)}</span></div>` : ''}
                 
                 <div class="summary-row total"><span>ยอดสุทธิ:</span><span>${formatCurPrint(grandTotal)}</span></div>
