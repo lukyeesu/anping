@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS public.coupons (
     template_type VARCHAR DEFAULT 'standard',               -- 'standard' (ดีไซน์ระบบ) หรือ 'custom_image' (ภาพคูปองอัปโหลดเอง)
     theme_color VARCHAR DEFAULT 'emerald',                  -- 'emerald', 'sky', 'rose', 'gold', 'purple', 'slate'
     qr_config JSONB,                                        -- การตั้งค่า QR Code
+    expiry_config JSONB,                                    -- การตั้งค่าตำแหน่งและรูปแบบวันหมดอายุ
+    design_config JSONB,                                    -- การตั้งค่าเลเยอร์และข้อความดีไซน์
     is_lifetime BOOLEAN DEFAULT FALSE,                      -- คูปองตลอดชีพ หรือไม่มีวันหมดอายุ
     expire_date DATE,                                       -- วันหมดอายุ (ถ้าไม่ใช่ตลอดชีพ)
     status VARCHAR DEFAULT 'active',                        -- 'active' (พร้อมใช้), 'used' (ใช้แล้ว), 'expired' (หมดอายุ), 'cancelled' (ยกเลิก)
@@ -43,6 +45,8 @@ ADD COLUMN IF NOT EXISTS batch_id VARCHAR,
 ADD COLUMN IF NOT EXISTS batch_name VARCHAR,
 ADD COLUMN IF NOT EXISTS batch_total INT DEFAULT 1,
 ADD COLUMN IF NOT EXISTS qr_config JSONB,
+ADD COLUMN IF NOT EXISTS expiry_config JSONB,
+ADD COLUMN IF NOT EXISTS design_config JSONB,
 ADD COLUMN IF NOT EXISTS is_used BOOLEAN DEFAULT FALSE;
 
 -- สร้าง Indexes เพื่อความรวดเร็วในการค้นหาและสแกนคูปอง

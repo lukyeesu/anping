@@ -959,17 +959,17 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
                                 {/* ส่วนที่ 1: ส่วนลดทันทีทุกครั้งที่มาใช้บริการ (Always VIP) */}
                                 {(productForm.vipBenefitType === 'always_discount' || productForm.vipBenefitType === 'both') && (
-                                    <div className="p-4 bg-white/90 rounded-2xl border border-amber-300 shadow-xs space-y-3">
-                                        <div className="flex items-center justify-between border-b border-amber-100 pb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs">
+                                    <div className="p-3.5 sm:p-4 bg-white/90 rounded-2xl border border-amber-300/90 shadow-2xs space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-amber-100/90 pb-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="p-1.5 rounded-lg bg-amber-500 text-white shadow-xs shrink-0">
                                                     <Percent size={14} />
                                                 </div>
-                                                <span className="text-xs font-black text-amber-950 kanit-text">
+                                                <span className="text-xs sm:text-sm font-extrabold text-amber-950 kanit-text truncate">
                                                     {productForm.vipBenefitType === 'both' ? 'ส่วนที่ 1: ' : ''}ส่วนลดทันทีทุกครั้งที่มาใช้บริการ (Always VIP)
                                                 </span>
                                             </div>
-                                            <span className="text-[11px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full kanit-text">
+                                            <span className="self-start sm:self-auto text-[10px] sm:text-[11px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full kanit-text shrink-0 whitespace-nowrap">
                                                 ลดทุกบิล
                                             </span>
                                         </div>
@@ -1021,17 +1021,17 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
                                 {/* ส่วนที่ 2: คูปองสิทธิประโยชน์ที่จะได้รับ (VIP Coupons) */}
                                 {(productForm.vipBenefitType === 'coupon' || productForm.vipBenefitType === 'both') && (
-                                    <div className="p-4 bg-white/90 rounded-2xl border border-amber-300 shadow-xs space-y-3">
-                                        <div className="flex items-center justify-between border-b border-amber-100 pb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 rounded-lg bg-sky-500 text-white shadow-xs">
+                                    <div className="p-3.5 sm:p-4 bg-white/90 rounded-2xl border border-amber-300/90 shadow-2xs space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-amber-100/90 pb-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="p-1.5 rounded-lg bg-sky-500 text-white shadow-xs shrink-0">
                                                     <Ticket size={14} />
                                                 </div>
-                                                <span className="text-xs font-black text-slate-800 kanit-text">
+                                                <span className="text-xs sm:text-sm font-extrabold text-slate-800 kanit-text truncate">
                                                     {productForm.vipBenefitType === 'both' ? 'ส่วนที่ 2: ' : ''}คูปองสิทธิประโยชน์ที่จะได้รับ
                                                 </span>
                                             </div>
-                                            <span className="text-[11px] font-bold px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full kanit-text">
+                                            <span className="self-start sm:self-auto text-[10px] sm:text-[11px] font-bold px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full kanit-text shrink-0 whitespace-nowrap">
                                                 แจกเข้ากระเป๋าคูปอง
                                             </span>
                                         </div>

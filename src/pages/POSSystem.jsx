@@ -4,6 +4,7 @@ import Skeleton from './Skeleton';
 import CustomSelect from './CustomSelect';
 import CatalogManager from './CatalogManager';
 import CalendarDay from './CalendarDay';
+import QrScannerModal from '../components/QrScannerModal';
 import { POS_ICONS } from '../global/constants';
 import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore } from '../lib/offlineStore';
@@ -82,19 +83,8 @@ const POSSystem = ({
   // Ref สำหรับจดจำว่าแคชเชียร์จงใจกดยกเลิกการใช้คูปองหรือไม่ (ป้องกันการเด้ง auto-apply ซ้ำขณะเลือกสินค้า)
   const userDismissedCouponRef = useRef(false);
 
-  // State และ Refs สำหรับการสแกน QR Code คูปองผ่านกล้อง
+  // State สำหรับการสแกน QR Code คูปองผ่านกล้อง
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-  const [scannerActive, setScannerActive] = useState(false);
-  const [cameraFacing, setCameraFacing] = useState('environment');
-  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
-  const [hasTorch, setHasTorch] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
-  const qrVideoRef = useRef(null);
-  const qrCanvasRef = useRef(null);
-  const qrScanLoopRef = useRef(null);
-  const qrMediaStreamRef = useRef(null);
-  const cameraSessionIdRef = useRef(0);
-  const cameraFacingRef = useRef('environment');
 
   // ข้อมูลคนไข้ที่เลือกในปัจจุบัน
   const selectedPatientObj = useMemo(() => {
@@ -1279,170 +1269,7 @@ const POSSystem = ({
     showToast('ยกเลิกการใช้คูปองแล้ว', 'info');
   }, [showToast]);
 
-  // ฟังก์ชันควบคุมกล้องสแกน QR Code คูปอง
-  const stopQrCamera = useCallback(() => {
-    cameraSessionIdRef.current++;
-    if (qrScanLoopRef.current) {
-      cancelAnimationFrame(qrScanLoopRef.current);
-      qrScanLoopRef.current = null;
-    }
-    if (qrMediaStreamRef.current) {
-      try {
-        qrMediaStreamRef.current.getTracks().forEach(t => t.stop());
-      } catch (_) {}
-      qrMediaStreamRef.current = null;
-    }
-    if (qrVideoRef.current) {
-      try {
-        qrVideoRef.current.srcObject = null;
-      } catch (_) {}
-    }
-    setTorchOn(false);
-    setScannerActive(false);
-  }, []);
 
-  const startQrCamera = useCallback(async (facing = cameraFacingRef.current) => {
-    const sessionId = ++cameraSessionIdRef.current;
-    try {
-      setScannerActive(true);
-      if (!navigator?.mediaDevices?.getUserMedia) {
-        showToast('อุปกรณ์หรือเบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาพิมพ์รหัสคูปองแทน', 'warning');
-        setScannerActive(false);
-        return;
-      }
-      if (qrMediaStreamRef.current) {
-        try { qrMediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch (_) {}
-        qrMediaStreamRef.current = null;
-      }
-      if (qrVideoRef.current) {
-        try { qrVideoRef.current.srcObject = null; } catch (_) {}
-      }
-
-      let stream = null;
-      // พยายามเปิดด้วย facingMode ที่ต้องการ (ideal) ก่อน เพื่อป้องกัน OverconstrainedError บนอุปกรณ์ที่มีกล้องเดียว
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: facing },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-      } catch (idealErr) {
-        console.warn('[POS] Ideal facingMode getUserMedia failed, fallback to basic video constraint:', idealErr);
-        // Fallback: เปิดกล้องใดๆ ที่มีในเครื่อง
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true
-        });
-      }
-
-      // หากมีการเริ่ม session อื่นไประหว่างรอ ให้หยุด stream นี้ทันที
-      if (sessionId !== cameraSessionIdRef.current) {
-        if (stream) {
-          try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
-        }
-        return;
-      }
-
-      qrMediaStreamRef.current = stream;
-      if (qrVideoRef.current) {
-        qrVideoRef.current.srcObject = stream;
-        qrVideoRef.current.setAttribute('playsinline', 'true');
-        await qrVideoRef.current.play().catch(() => {});
-      }
-      const track = stream.getVideoTracks()[0];
-      const cap = track?.getCapabilities ? track.getCapabilities() : {};
-      setHasTorch(Boolean(cap?.torch));
-
-      const tick = () => {
-        if (sessionId !== cameraSessionIdRef.current) return;
-        const video = qrVideoRef.current;
-        if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-          const canvas = qrCanvasRef.current || document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imgData.data, imgData.width, imgData.height, {
-              inversionAttempts: 'dontInvert'
-            });
-            if (code && code.data) {
-              stopQrCamera();
-              setIsQrScannerOpen(false);
-              handleApplyCouponByCode(code.data);
-              return;
-            }
-          }
-        }
-        qrScanLoopRef.current = requestAnimationFrame(tick);
-      };
-      qrScanLoopRef.current = requestAnimationFrame(tick);
-    } catch (err) {
-      if (sessionId !== cameraSessionIdRef.current) return;
-      console.warn('[POS] QR Camera error:', err);
-      showToast('ไม่สามารถเปิดกล้องได้ กรุณาพิมพ์รหัสคูปองแทน', 'warning');
-      setScannerActive(false);
-    }
-  }, [handleApplyCouponByCode, showToast, stopQrCamera]);
-
-  const toggleQrTorch = async () => {
-    if (!qrMediaStreamRef.current) return;
-    const track = qrMediaStreamRef.current.getVideoTracks()[0];
-    if (track && track.applyConstraints) {
-      try {
-        await track.applyConstraints({ advanced: [{ torch: !torchOn }] });
-        setTorchOn(!torchOn);
-      } catch (e) {
-        console.warn('[POS] Torch failed', e);
-      }
-    }
-  };
-
-  const flipCamera = useCallback(async () => {
-    if (isSwitchingCamera) return;
-    setIsSwitchingCamera(true);
-
-    try {
-      // ตรวจสอบจำนวนกล้องของอุปกรณ์
-      if (navigator?.mediaDevices?.enumerateDevices) {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevs = devices.filter(d => d.kind === 'videoinput');
-          if (videoDevs.length === 1) {
-            showToast('อุปกรณ์นี้มีกล้องเพียงตัวเดียว ไม่สามารถสลับได้', 'info');
-            setIsSwitchingCamera(false);
-            return;
-          }
-        } catch (_) {}
-      }
-
-      const nextFacing = cameraFacingRef.current === 'environment' ? 'user' : 'environment';
-      cameraFacingRef.current = nextFacing;
-      setCameraFacing(nextFacing);
-
-      // หยุดกล้องเดิมและรอให้ฮาร์ดแวร์ปล่อยทรัพยากรกล้องสักครู่ (150ms) ป้องกัน NotReadableError
-      stopQrCamera();
-      await new Promise(r => setTimeout(r, 150));
-      await startQrCamera(nextFacing);
-    } catch (err) {
-      console.warn('[POS] flipCamera failed:', err);
-    } finally {
-      setIsSwitchingCamera(false);
-    }
-  }, [isSwitchingCamera, showToast, startQrCamera, stopQrCamera]);
-
-  useEffect(() => {
-    if (isQrScannerOpen) {
-      startQrCamera(cameraFacingRef.current);
-    } else {
-      stopQrCamera();
-    }
-    return () => {
-      stopQrCamera();
-    };
-  }, [isQrScannerOpen, startQrCamera, stopQrCamera]);
 
   let totalVatable = 0;
   let totalNonVatable = 0;
@@ -5760,135 +5587,18 @@ const POSSystem = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: QR CAMERA SCANNER FOR COUPONS (Portal z-[200])                     */}
+      {/* MODAL: QR CAMERA SCANNER FOR COUPONS (Shared QrScannerModal)              */}
       {/* ========================================================================= */}
-      {isQrScannerOpen && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              stopQrCamera();
-              setIsQrScannerOpen(false);
-            }
-          }}
-        >
-          <div className="bg-white rounded-3xl w-full max-w-md max-h-[94dvh] shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-blue-50/50 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-sky-500 text-white shadow-xs">
-                  <QrCode size={18} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base kanit-text">สแกน QR Code คูปอง</h3>
-                  <p className="text-[11px] text-slate-500 kanit-text">ส่องกล้องไปที่ QR Code บนคูปองของลูกค้า</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  stopQrCamera();
-                  setIsQrScannerOpen(false);
-                }}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
-              {/* Camera Preview */}
-              <div className="relative w-full aspect-square bg-black rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
-                <video ref={qrVideoRef} className={`w-full h-full object-cover ${!scannerActive ? 'hidden' : ''}`} />
-                <canvas ref={qrCanvasRef} className="hidden" />
-
-                {!scannerActive && (
-                  <div className="text-center p-6 text-white space-y-3">
-                    <Camera size={44} className="mx-auto text-slate-500 animate-pulse" />
-                    <p className="text-xs text-slate-300 kanit-text">กำลังเริ่มต้นกล้อง...</p>
-                  </div>
-                )}
-
-                {scannerActive && (
-                  /* Aiming Reticle Overlay */
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-[70%] max-w-[260px] aspect-square border-2 border-dashed border-sky-400/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
-                      <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-sky-400 rounded-tl-lg" />
-                      <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-sky-400 rounded-tr-lg" />
-                      <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-sky-400 rounded-bl-lg" />
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-sky-400 rounded-br-lg" />
-                      {/* Scanning Laser Animation */}
-                      <div className="absolute inset-x-2 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_8px_#38bdf8] animate-bounce" />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Fallback Manual Input */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (manualCouponInput.trim()) {
-                    stopQrCamera();
-                    setIsQrScannerOpen(false);
-                    handleApplyCouponByCode(manualCouponInput);
-                  }
-                }}
-                className="space-y-1.5"
-              >
-                <label className="text-xs font-bold text-slate-600 kanit-text flex items-center gap-1">
-                  <Ticket size={13} className="text-sky-500" /> หรือพิมพ์รหัสคูปอง
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={manualCouponInput}
-                    onChange={(e) => setManualCouponInput(e.target.value.toUpperCase())}
-                    placeholder="เช่น CP-XXXX หรือ URL คูปอง"
-                    className="flex-1 px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 uppercase font-data outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!manualCouponInput.trim()}
-                    className="px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold kanit-text transition-all shrink-0 shadow-xs"
-                  >
-                    ใช้รหัส
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Footer: Camera Action Toolbar (แทนปุ่มปิดหน้าต่างเดิม จัดเรียงเป็นระเบียบ) */}
-            <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3 shrink-0">
-              {hasTorch && (
-                <button
-                  type="button"
-                  onClick={toggleQrTorch}
-                  className={`flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 border transition-all shadow-xs ${
-                    torchOn
-                      ? 'bg-amber-400 border-amber-500 text-slate-900 shadow-amber-200'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
-                  }`}
-                >
-                  <Zap size={16} className={torchOn ? 'fill-slate-900 text-slate-900' : 'text-amber-500'} />
-                  <span>{torchOn ? 'ปิดแฟลช' : 'เปิดแฟลช'}</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={flipCamera}
-                disabled={!scannerActive || isSwitchingCamera}
-                className="flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw size={16} className={`text-sky-500 ${isSwitchingCamera ? 'animate-spin' : ''}`} />
-                <span>{isSwitchingCamera ? 'กำลังสลับกล้อง...' : 'สลับกล้อง'}</span>
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <QrScannerModal
+        isOpen={isQrScannerOpen}
+        onClose={() => setIsQrScannerOpen(false)}
+        onScan={(code) => handleApplyCouponByCode(code)}
+        showToast={showToast}
+        title="สแกน QR Code คูปอง"
+        subtitle="ส่องกล้องไปที่ QR Code บนคูปองของลูกค้า"
+        actionButtonText="ใช้รหัส"
+        placeholder="เช่น CP-XXXX หรือ URL คูปอง"
+      />
 
       {/* ========================================================================= */}
       {/* MODAL: COUPON FAILURE ALERT POPUP (Portal z-[250])                       */}

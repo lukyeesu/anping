@@ -2116,12 +2116,11 @@ const FinancePage = ({
                   setIsModalOpen(false);
                   setIsStatementModalOpen(true);
                 }} 
-                className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-xs transition-transform active:scale-95 shrink-0 bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 sticky-header-btn px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm kanit-text"
+                className="flex items-center justify-center rounded-xl sm:rounded-2xl font-semibold shadow-xs transition-transform active:scale-95 shrink-0 bg-white border border-slate-200/90 hover:bg-emerald-50 hover:border-emerald-200 text-slate-700 sticky-header-btn p-2 sm:p-3"
                 title="ออกรายการเดินบัญชีการเงินคลินิก (Bank Statement Style)"
+                aria-label="พิมพ์ Statement คลินิก"
               >
-                <FileSpreadsheet size={18} className="text-emerald-600" />
-                <span className="hidden sm:inline">พิมพ์ Statement คลินิก</span>
-                <span className="sm:hidden">Statement</span>
+                <FileSpreadsheet size={20} className="text-emerald-600" />
               </button>
 
               <button type="button" onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn px-4 py-2 sm:px-6 sm:py-3`}>
@@ -2193,8 +2192,8 @@ const FinancePage = ({
 
       {/* --- 3. Filter Component --- */}
       <div ref={filterRef} className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt">
-        <div className="w-full mx-auto pointer-events-none relative h-[76px] sm:h-[92px] z-50">
-          <div className={`absolute top-[6px] left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col gap-2 px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all duration-300 ${showMobileFilters ? 'ease-out' : 'ease-in'}`}>
+        <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
+          <div className={`absolute top-0 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col px-4 md:px-8 2xl:px-12 py-2.5 sm:py-3 transition-all duration-300 ${showMobileFilters ? 'ease-out' : 'ease-in'}`}>
             <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 w-full">
                <div className="relative flex-1 min-w-0 w-full">
                   <input 
@@ -2202,7 +2201,7 @@ const FinancePage = ({
                     placeholder="ค้นหารายการ, หมวดหมู่..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-9 sm:pl-11 sm:pr-10 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:bg-white focus:border-sky-400 shadow-inner font-data truncate"
+                    className="w-full pl-10 pr-9 sm:pl-11 sm:pr-10 py-2 sm:py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:bg-white focus:border-sky-400 shadow-inner font-data truncate"
                   />
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3 sm:left-4 top-1/2 -translate-y-1/2" />
                   {search && (
@@ -2301,7 +2300,7 @@ const FinancePage = ({
 
             <div className={`lg:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-500' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-300'}`}>
                <div className={showMobileFilters ? 'overflow-visible' : 'overflow-hidden'}>
-                 <div className={`flex flex-col gap-2 pt-3 mt-1 border-t border-slate-100 relative z-[60] transition-transform ${showMobileFilters ? 'translate-y-0 ease-out duration-500' : '-translate-y-4 ease-in duration-300'}`}>
+                 <div className={`flex flex-col gap-2 pt-2.5 mt-2.5 border-t border-slate-100 relative z-[60] transition-transform ${showMobileFilters ? 'translate-y-0 ease-out duration-500' : '-translate-y-4 ease-in duration-300'}`}>
                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                      <div className="relative">
                        <CustomSelect value={filterType} onChange={(val) => setFilterType(val)} options={[{value: 'all', label: 'ทั้งหมด'}, {value: 'income', label: 'รายรับ'}, {value: 'expense', label: 'รายจ่าย'}, {value: 'pos', label: 'POS'}, {value: 'manual', label: 'Manual'}]} compact fullWidth className="w-full" />

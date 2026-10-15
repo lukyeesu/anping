@@ -4,10 +4,11 @@ import QRCode from 'qrcode';
 import jsQR from 'jsqr';
 import JsBarcode from 'jsbarcode';
 import CustomSelect from './CustomSelect';
+import QrScannerModal from '../components/QrScannerModal';
 import { 
   Ticket, Plus, Search, Filter, Printer, QrCode, Camera, 
   CheckCircle2, AlertCircle, Calendar, User, Trash2, Layers, 
-  RefreshCw, X, ChevronRight, ChevronLeft, ArrowUpDown, Eye, Sparkles, 
+  RefreshCw, X, ChevronRight, ChevronLeft, ChevronUp, ArrowUpDown, Eye, Sparkles, 
   Tag, ShieldCheck, Clock, Scissors, FileText, Check, 
   AlertTriangle, Crown, Hash, Copy, Download, Sliders,
   RotateCcw, Image as ImageIcon, Bookmark, ArrowRight, ExternalLink,
@@ -253,10 +254,32 @@ const DEFAULT_PRESET_TEMPLATES = [
 // รูปแบบคูปองตัวอย่างเริ่มต้น (สำหรับทดสอบจัดตำแหน่ง QR Code ทันที)
 const DEFAULT_SAMPLE_VOUCHER_ART = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="856" height="540" viewBox="0 0 856 540"><defs><linearGradient id="vbg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2318181b"/><stop offset="50%" stop-color="%23222226"/><stop offset="100%" stop-color="%232a2a30"/></linearGradient><pattern id="pdots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="%23ffffff" fill-opacity="0.08"/></pattern></defs><rect width="856" height="540" rx="32" fill="url(%23vbg)"/><rect width="856" height="540" rx="32" fill="url(%23pdots)"/><rect x="28" y="28" width="800" height="484" rx="22" fill="none" stroke="%23f59e0b" stroke-width="2.5" stroke-dasharray="10 6" stroke-opacity="0.7"/><circle cx="110" cy="110" r="42" fill="%23f59e0b" fill-opacity="0.15"/><polygon points="110,80 120,105 145,108 126,125 132,150 110,136 88,150 94,125 75,108 100,105" fill="%23fbbf24"/><text x="175" y="108" font-family="sans-serif" font-weight="900" font-size="32" fill="%23ffffff" letter-spacing="2">ANPING CLINIC</text><text x="175" y="138" font-family="sans-serif" font-weight="600" font-size="16" fill="%23cbd5e1" letter-spacing="1">SPECIAL PRIVILEGE VOUCHER</text><text x="60" y="260" font-family="sans-serif" font-weight="900" font-size="52" fill="%23fbbf24">DISCOUNT ฿500</text><text x="60" y="310" font-family="sans-serif" font-weight="500" font-size="22" fill="%23f8fafc">บัตรกำนัลส่วนลดแทนเงินสดสำหรับโปรแกรมการรักษา</text><text x="60" y="440" font-family="sans-serif" font-weight="400" font-size="16" fill="%2394a3b8">เงื่อนไข: ใช้ได้ที่อันผิงคลินิกทุกสาขา | โปรดแสดง QR Code แก่เจ้าหน้าที่</text></svg>';
 
+// ฟังก์ชันดึงการตั้งค่าวันหมดอายุของคูปอง (ดึงจาก expiryConfig, expiry_config หรือ qrConfig.expiryConfig)
+const getCouponExpiryConfig = (coupon) => {
+  if (!coupon) return null;
+  const cfg = coupon.expiryConfig 
+    || coupon.expiry_config 
+    || coupon.qrConfig?.expiryConfig 
+    || coupon.qr_config?.expiryConfig;
+  return cfg || {
+    enabled: true,
+    xPercent: 32,
+    yPercent: 90.5,
+    sizePercent: 16,
+    color: '#0f172a',
+    bgStyle: 'none',
+    format: 'numeric',
+    prefix: '',
+    fontFamily: 'Inter',
+    fontWeight: 'normal',
+    align: 'center'
+  };
+};
+
 // ฟังก์ชันจัดรูปแบบวันหมดอายุสำหรับดีไซน์คูปองแบบกำหนดเอง (Story Artwork)
-const formatCustomExpiryDate = (dateStr, format = 'eng', isLifetime = false, prefix = 'EXP: ') => {
-  if (isLifetime) return '✨ ตลอดชีพ';
-  const cleanPrefix = prefix !== undefined ? prefix : 'EXP: ';
+const formatCustomExpiryDate = (dateStr, format = 'numeric', isLifetime = false, prefix = '') => {
+  if (isLifetime) return 'ไม่มีวันหมดอายุ';
+  const cleanPrefix = prefix !== undefined ? prefix : '';
   const engMonthsUpper = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
   if (!dateStr) {
@@ -286,7 +309,6 @@ const formatCustomExpiryDate = (dateStr, format = 'eng', isLifetime = false, pre
   if (format === 'thai_full') {
     return `${cleanPrefix}${d.getDate()} ${THAI_MONTHS[monthIdx]} ${yearBE}`;
   }
-  // Default: eng (International Standard Product Format: e.g. EXP: 31 OCT 2026)
   return `${cleanPrefix}${day} ${engMonthsUpper[monthIdx]} ${yearAD}`;
 };
 
@@ -691,29 +713,58 @@ const StoryArtworkEditorModal = ({
   // Local state for Expiry Date
   const [localExpiryConfig, setLocalExpiryConfig] = useState(() => ({
     enabled: true,
-    xPercent: 25,
-    yPercent: 82,
-    sizePercent: 18,
-    color: '#ffffff',
+    xPercent: 32,
+    yPercent: 90.5,
+    sizePercent: 16,
+    color: '#0f172a',
     bgStyle: 'none',
-    format: 'eng',
-    prefix: 'EXP: ',
+    format: 'numeric',
+    prefix: '',
     fontFamily: 'Inter',
-    fontWeight: 'light',
+    fontWeight: 'normal',
+    align: 'center',
     ...(initialExpiryConfig || {})
   }));
+
+  // Effective background image URL (supports either direct upload or image saved in template/form)
+  const effectiveArtwork = uploadedArtworkUrl || initialDesignConfig?.customImageUrl;
+
+  // Preload natural dimensions of uploaded artwork so editor canvas ratio matches 1:1 with generator
+  const [artworkNaturalDimensions, setArtworkNaturalDimensions] = useState(null);
+
+  useEffect(() => {
+    if (effectiveArtwork) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          setArtworkNaturalDimensions({
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            aspectRatio: `${img.naturalWidth} / ${img.naturalHeight}`
+          });
+        }
+      };
+      img.src = effectiveArtwork;
+    } else {
+      setArtworkNaturalDimensions(null);
+    }
+  }, [effectiveArtwork]);
 
   // Editable Layer State: restored from initialDesignConfig if previously edited!
   const [designConfig, setDesignConfig] = useState(() => {
     if (initialDesignConfig) {
       return {
         ...initialDesignConfig,
-        // Ensure bgType doesn't default to image unless user explicitly has an uploaded image
-        bgType: (initialDesignConfig.bgType === 'image' && !uploadedArtworkUrl) ? 'gradient' : (initialDesignConfig.bgType || 'gradient')
+        // Ensure bgType doesn't revert to gradient if an artwork URL is available
+        bgType: (initialDesignConfig.bgType === 'image' && !effectiveArtwork)
+          ? 'gradient'
+          : (initialDesignConfig.bgType || (effectiveArtwork ? 'image' : 'gradient')),
+        logoEnabled: initialDesignConfig.logoEnabled ?? false
       };
     }
     return {
-      bgType: uploadedArtworkUrl ? 'image' : 'gradient', // 'gradient' | 'solid' | 'image'
+      bgType: effectiveArtwork ? 'image' : 'gradient', // 'gradient' | 'solid' | 'image'
       gradientKey: themeColor || 'emerald',
       gradientColor1: '#064e3b',
       gradientColor2: '#047857',
@@ -721,8 +772,8 @@ const StoryArtworkEditorModal = ({
       sheenEnabled: true,
       borderEnabled: true,
 
-      // Clinic Logo Layer
-      logoEnabled: true,
+      // Clinic Logo Layer (default to false: do not show logo at start)
+      logoEnabled: false,
       logoX: 6,
       logoY: 12,
       logoSize: 11,
@@ -1055,7 +1106,7 @@ const StoryArtworkEditorModal = ({
   const handleSave = async () => {
     let renderedCustomImgUrl = null;
 
-    if (designConfig.bgType !== 'image' || !uploadedArtworkUrl) {
+    if (designConfig.bgType !== 'image' || !effectiveArtwork) {
       try {
         if (typeof document !== 'undefined' && document.fonts) {
           await document.fonts.ready;
@@ -1236,7 +1287,7 @@ const StoryArtworkEditorModal = ({
     onSave({
       qrConfig: localQrConfig,
       expiryConfig: localExpiryConfig,
-      customImageUrl: renderedCustomImgUrl || uploadedArtworkUrl || null,
+      customImageUrl: renderedCustomImgUrl || effectiveArtwork || null,
       designConfig
     });
     onClose();
@@ -1257,25 +1308,25 @@ const StoryArtworkEditorModal = ({
     });
     setLocalExpiryConfig({
       enabled: true,
-      xPercent: 25,
-      yPercent: 82,
-      sizePercent: 18,
-      color: '#ffffff',
+      xPercent: 32,
+      yPercent: 90.5,
+      sizePercent: 16,
+      color: '#0f172a',
       bgStyle: 'none',
-      format: 'eng',
-      prefix: 'EXP: ',
+      format: 'numeric',
+      prefix: '',
       fontFamily: 'Inter',
-      fontWeight: 'light'
+      fontWeight: 'normal'
     });
     setDesignConfig({
-      bgType: uploadedArtworkUrl ? 'image' : 'gradient',
+      bgType: effectiveArtwork ? 'image' : 'gradient',
       gradientKey: themeColor || 'emerald',
       gradientColor1: '#064e3b',
       gradientColor2: '#047857',
       solidColor: '#064e3b',
       sheenEnabled: true,
       borderEnabled: true,
-      logoEnabled: true,
+      logoEnabled: false,
       logoX: 6,
       logoY: 12,
       logoSize: 11,
@@ -1304,12 +1355,17 @@ const StoryArtworkEditorModal = ({
   const curCodeDistance = localQrConfig.codeDistance ?? 3.5;
   const codeFontPx = Math.max(6, Math.min(32, Math.round(cardWidthPx * (curCodeFontSize * 0.009))));
   const codeMarginTopPx = Math.max(0, Math.round(cardWidthPx * (curCodeDistance / 100)));
-  const expFontPx = Math.max(9, Math.min(48, Math.round(previewDims.width * (localExpiryConfig.sizePercent || 18) * 0.002)));
+  const expFontPx = Math.max(9, Math.round(previewDims.width * (localExpiryConfig.sizePercent || 18) * 0.002));
 
   const headerFontPx = Math.max(9, Math.round(previewDims.width * (designConfig.headerFontSize * 0.0028)));
   const discountFontPx = Math.max(14, Math.round(previewDims.width * (designConfig.discountFontSize * 0.0038)));
   const termsFontPx = Math.max(8, Math.round(previewDims.width * (designConfig.termsFontSize * 0.0028)));
   const logoSizePx = Math.max(20, Math.round((designConfig.logoSize / 100) * previewDims.width));
+
+  // Dynamic canvas aspect ratio: dynamically preserves uploaded Canva artwork ratio
+  const canvasAspectRatio = (designConfig.bgType === 'image' && artworkNaturalDimensions)
+    ? artworkNaturalDimensions.aspectRatio
+    : '85.6 / 54';
 
   // Photoshop Color Picker selection value
   const colorPickerInitialColor = 
@@ -1324,7 +1380,7 @@ const StoryArtworkEditorModal = ({
 
   // Gradient CSS helper
   const getGradientCss = () => {
-    if (designConfig.bgType === 'image' && uploadedArtworkUrl) return 'transparent';
+    if (designConfig.bgType === 'image' && effectiveArtwork) return 'transparent';
     if (designConfig.bgType === 'solid') return designConfig.solidColor || '#064e3b';
     const preset = STUDIO_GRADIENT_PRESETS.find(p => p.id === designConfig.gradientKey);
     if (preset) return `linear-gradient(135deg, ${preset.c1} 0%, ${preset.c2} 50%, ${preset.c3} 100%)`;
@@ -1393,24 +1449,26 @@ const StoryArtworkEditorModal = ({
             <button
               type="button"
               onClick={handleReset}
-              className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold kanit-text text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
+              className="p-1.5 sm:px-3 sm:py-2 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold kanit-text text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0"
               title="รีเซ็ตค่ามาตรฐาน"
             >
-              <RotateCcw size={13} className="text-zinc-400" />
+              <RotateCcw size={14} className="text-zinc-400 shrink-0" />
               <span className="hidden sm:inline">รีเซ็ต</span>
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="px-4 sm:px-5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold kanit-text text-xs sm:text-sm transition-all shadow-md shadow-emerald-900/30 flex items-center gap-1.5 active:scale-95"
+              className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold kanit-text text-xs sm:text-sm transition-all shadow-md shadow-emerald-900/30 flex items-center gap-1.5 active:scale-95 shrink-0"
             >
-              <Check size={16} />
-              <span>บันทึกดีไซน์ & ตำแหน่ง</span>
+              <Check size={16} className="shrink-0" />
+              <span className="hidden sm:inline">บันทึกดีไซน์ & ตำแหน่ง</span>
+              <span className="sm:hidden">บันทึก</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors ml-1"
+              className="p-1.5 sm:p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
+              title="ปิด"
             >
               <X size={18} />
             </button>
@@ -1418,10 +1476,10 @@ const StoryArtworkEditorModal = ({
         </div>
 
         {/* Studio Workspace Layout */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
           
           {/* LEFT 70%: Interactive High-Precision Canvas Area */}
-          <div className={`flex-1 bg-[#101012] flex flex-col items-center justify-center p-3 sm:p-5 md:p-6 lg:p-8 overflow-hidden select-none ${
+          <div className={`flex-1 min-h-0 bg-[#101012] flex flex-col items-center justify-center p-3 sm:p-5 md:p-6 lg:p-8 overflow-hidden select-none ${
             viewMode === 'controls' ? 'hidden lg:flex' : 'flex'
           }`}>
             
@@ -1443,23 +1501,23 @@ const StoryArtworkEditorModal = ({
               </span>
             </div>
 
-            {/* 85.6 x 54 mm Aspect Ratio Canvas Wrapper */}
+            {/* Proportional Aspect Ratio Canvas Wrapper: matches uploaded image natural ratio or 85.6 x 54 mm */}
             <div
               ref={canvasRef}
               onClick={() => { setActiveSticker(null); setInlineEditingLayer(null); }}
               className="relative w-full max-w-[960px] rounded-2xl overflow-hidden shadow-2xl border border-zinc-800 select-none transition-shadow"
               style={{
-                aspectRatio: '85.6 / 54',
+                aspectRatio: canvasAspectRatio,
                 background: getGradientCss(),
                 boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)'
               }}
             >
-              {/* Optional Custom Background Image from File Upload */}
-              {designConfig.bgType === 'image' && uploadedArtworkUrl && (
+              {/* Optional Custom Background Image from File Upload or Template */}
+              {designConfig.bgType === 'image' && effectiveArtwork && (
                 <img
-                  src={uploadedArtworkUrl}
+                  src={effectiveArtwork}
                   alt="Custom Background"
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                  className="absolute inset-0 w-full h-full object-fill pointer-events-none select-none"
                 />
               )}
 
@@ -1773,10 +1831,12 @@ const StoryArtworkEditorModal = ({
                   style={{
                     left: `${localExpiryConfig.xPercent}%`,
                     top: `${localExpiryConfig.yPercent}%`,
-                    transform: 'translate(-50%, -50%)',
+                    transform: localExpiryConfig.align === 'left'
+                      ? 'translate(0, -50%)'
+                      : (localExpiryConfig.align === 'right' ? 'translate(-100%, -50%)' : 'translate(-50%, -50%)'),
                     touchAction: 'none',
                     userSelect: 'none',
-                    padding: localExpiryConfig.bgStyle !== 'none' ? `${Math.round(expFontPx * 0.35)}px ${Math.round(expFontPx * 0.7)}px` : '2px 6px'
+                    padding: localExpiryConfig.bgStyle !== 'none' ? `${Math.round(expFontPx * 0.35)}px ${Math.round(expFontPx * 0.7)}px` : '0px'
                   }}
                 >
                   <span
@@ -1785,9 +1845,10 @@ const StoryArtworkEditorModal = ({
                       color: localExpiryConfig.bgStyle === 'dark_pill' ? '#ffffff' : (localExpiryConfig.color || '#ffffff'),
                       fontFamily: getExpiryFontFamily(localExpiryConfig.fontFamily),
                       fontWeight: localExpiryConfig.fontWeight === 'bold' ? 700 : (localExpiryConfig.fontWeight === 'normal' ? 400 : 300),
-                      lineHeight: 1.1,
+                      lineHeight: 1,
                       whiteSpace: 'nowrap',
-                      display: 'inline-block'
+                      display: 'inline-block',
+                      textAlign: localExpiryConfig.align || 'center'
                     }}
                   >
                     {formattedExpiryDisplay}
@@ -1808,67 +1869,72 @@ const StoryArtworkEditorModal = ({
           </div>
 
           {/* RIGHT 30%: Photoshop & Canva Control Panel */}
-          <div className={`w-full lg:w-[32%] xl:w-[30%] bg-[#141416] border-t lg:border-t-0 lg:border-l border-zinc-800/90 flex flex-col shrink-0 overflow-hidden ${
+          <div className={`w-full flex-1 lg:flex-none min-h-0 lg:w-[32%] xl:w-[30%] h-full bg-[#141416] border-t lg:border-t-0 lg:border-l border-zinc-800/90 flex flex-col overflow-hidden ${
             viewMode === 'canvas' ? 'hidden lg:flex' : 'flex'
           }`}>
             
-            {/* Scrollable Control Settings with custom sleek scrollbar */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-4 [scrollbar-width:thin] [scrollbar-color:#3f3f46_#141416]">
-              <div className="w-full space-y-3">
-                
-                {/* Layer Navigation Tabs (5 Grid Columns - NO SCROLLBAR, ZERO OVERFLOW) */}
-                <div className="grid grid-cols-5 gap-1 p-1 bg-[#101012] rounded-xl border border-zinc-800/90 select-none overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('text'); setActiveSticker('discount'); setActiveTextLayer('discount'); }}
-                    className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
-                      activeTab === 'text' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Type size={12} className="shrink-0" />
-                    <span className="truncate">ข้อความ</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('bg'); setActiveSticker('bg'); }}
-                    className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
-                      activeTab === 'bg' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Palette size={12} className="shrink-0" />
-                    <span className="truncate">พื้นหลัง</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('logo'); setActiveSticker('logo'); }}
-                    className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
-                      activeTab === 'logo' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Sparkles size={12} className="shrink-0" />
-                    <span className="truncate">โลโก้</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('qr'); setActiveSticker('qr'); }}
-                    className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
-                      activeTab === 'qr' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <QrCode size={12} className="shrink-0" />
-                    <span className="truncate">QR/Bar</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setActiveTab('expiry'); setActiveSticker('expiry'); }}
-                    className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
-                      activeTab === 'expiry' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
-                    }`}
-                  >
-                    <Calendar size={12} className="shrink-0" />
-                    <span className="truncate">หมดอายุ</span>
-                  </button>
-                </div>
+            {/* Top Fixed Layer Navigation Tabs (Pinned Header - NEVER SCROLLS AWAY) */}
+            <div className="p-2 sm:p-3 pb-2 border-b border-zinc-800/80 bg-[#121214] shrink-0 select-none">
+              <div className="grid grid-cols-5 gap-1 p-1 bg-[#101012] rounded-xl border border-zinc-800/90 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('text'); setActiveSticker('discount'); setActiveTextLayer('discount'); }}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
+                    activeTab === 'text' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <Type size={12} className="shrink-0" />
+                  <span className="truncate">ข้อความ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('bg'); setActiveSticker('bg'); }}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
+                    activeTab === 'bg' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <Palette size={12} className="shrink-0" />
+                  <span className="truncate">พื้นหลัง</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('logo'); setActiveSticker('logo'); }}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
+                    activeTab === 'logo' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <Sparkles size={12} className="shrink-0" />
+                  <span className="truncate">โลโก้</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('qr'); setActiveSticker('qr'); }}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
+                    activeTab === 'qr' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <QrCode size={12} className="shrink-0" />
+                  <span className="truncate">QR/Bar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('expiry'); setActiveSticker('expiry'); }}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 py-1.5 px-0.5 rounded-lg text-[10px] sm:text-xs font-semibold kanit-text transition-all truncate ${
+                    activeTab === 'expiry' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                  }`}
+                >
+                  <Calendar size={12} className="shrink-0" />
+                  <span className="truncate">หมดอายุ</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Control Settings with custom sleek scrollbar and momentum touch scrolling */}
+            <div 
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-4 [scrollbar-width:thin] [scrollbar-color:#3f3f46_#141416] touch-pan-y"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              <div className="w-full space-y-3 pb-6">
 
                 {/* TAB 1: ✍️ ข้อความ (Custom Text Layers) - DIRECT & PROMINENT EDITING */}
                 {activeTab === 'text' && (
@@ -2206,26 +2272,58 @@ const StoryArtworkEditorModal = ({
                 {/* TAB 2: 🎨 พื้นหลัง (Background / Gradient) */}
                 {activeTab === 'bg' && (
                   <div className="space-y-3 animate-in fade-in duration-100">
-                    <div className="grid grid-cols-2 gap-1 bg-[#101012] p-1 rounded-xl border border-zinc-800 select-none">
-                      <button
-                        type="button"
-                        onClick={() => setDesignConfig(p => ({ ...p, bgType: 'gradient' }))}
-                        className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
-                          designConfig.bgType === 'gradient' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        ไล่เฉดสี (Gradient)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDesignConfig(p => ({ ...p, bgType: 'solid' }))}
-                        className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
-                          designConfig.bgType === 'solid' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        สีเดี่ยว (Solid)
-                      </button>
-                    </div>
+                    {effectiveArtwork ? (
+                      <div className="grid grid-cols-3 gap-1 bg-[#101012] p-1 rounded-xl border border-zinc-800 select-none">
+                        <button
+                          type="button"
+                          onClick={() => setDesignConfig(p => ({ ...p, bgType: 'image' }))}
+                          className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
+                            designConfig.bgType === 'image' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          รูปที่อัปโหลด
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDesignConfig(p => ({ ...p, bgType: 'gradient' }))}
+                          className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
+                            designConfig.bgType === 'gradient' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          ไล่เฉดสี
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDesignConfig(p => ({ ...p, bgType: 'solid' }))}
+                          className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
+                            designConfig.bgType === 'solid' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          สีเดี่ยว
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-1 bg-[#101012] p-1 rounded-xl border border-zinc-800 select-none">
+                        <button
+                          type="button"
+                          onClick={() => setDesignConfig(p => ({ ...p, bgType: 'gradient' }))}
+                          className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
+                            designConfig.bgType === 'gradient' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          ไล่เฉดสี (Gradient)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDesignConfig(p => ({ ...p, bgType: 'solid' }))}
+                          className={`py-1.5 text-xs font-semibold rounded-lg kanit-text transition-all text-center ${
+                            designConfig.bgType === 'solid' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          สีเดี่ยว (Solid)
+                        </button>
+                      </div>
+                    )}
 
                     {designConfig.bgType === 'gradient' && (
                       <div className="space-y-2.5">
@@ -2799,6 +2897,31 @@ const StoryArtworkEditorModal = ({
                           </div>
                         </div>
 
+                        {/* 5.5 Text Alignment (การจัดชิดข้อความ) */}
+                        <div className="space-y-1.5 pt-1 border-t border-zinc-800/80">
+                          <label className="text-xs font-semibold text-zinc-300 kanit-text block">การจัดชิดข้อความ:</label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {[
+                              { id: 'left', name: 'ชิดซ้าย' },
+                              { id: 'center', name: 'กึ่งกลาง' },
+                              { id: 'right', name: 'ชิดขวา' }
+                            ].map(a => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                onClick={() => setLocalExpiryConfig(prev => ({ ...prev, align: a.id }))}
+                                className={`py-1.5 text-xs rounded-lg border text-center transition-all ${
+                                  (localExpiryConfig.align || 'center') === a.id
+                                    ? 'bg-zinc-700 text-white border-zinc-500 shadow-sm font-bold'
+                                    : 'bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:text-white'
+                                }`}
+                              >
+                                {a.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         {/* 6. Text Color (สีตัวหนังสือ) */}
                         <div className="flex items-center justify-between p-2.5 bg-zinc-900/50 rounded-xl border border-zinc-800">
                           <span className="text-xs text-zinc-300 kanit-text">สีตัวหนังสือ:</span>
@@ -3098,19 +3221,30 @@ const CouponManager = ({
   const [viewMode, setViewMode] = useState('batches'); // 'batches' | 'all_cards'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'used', 'expired'
   const [searchTerm, setSearchTerm] = useState('');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Modals State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createProgress, setCreateProgress] = useState(null); // Real-time animated coupon creation progress { active, current, total, percent, status, message, title }
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [activeDrillDownBatch, setActiveDrillDownBatch] = useState(null);
-  const [printModalConfig, setPrintModalConfig] = useState(null);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [previewCouponModal, setPreviewCouponModal] = useState(null); // ดูตัวอย่างคูปองก่อนส่งลูกค้า
 
   // Sticky Header & Sticky Search/Filter Bar Refs
   const headerRef = useRef(null);
   const filterRef = useRef(null);
+
+  // Manage 'filter-expanded' imperatively to match Finance & Appointment managers
+  useEffect(() => {
+    if (filterRef.current) {
+      if (showMobileFilters) {
+        filterRef.current.classList.add('filter-expanded');
+      } else {
+        filterRef.current.classList.remove('filter-expanded');
+      }
+    }
+  }, [showMobileFilters]);
 
   // Excel Export Modal States
   const [isExportExcelModalOpen, setIsExportExcelModalOpen] = useState(false);
@@ -3119,18 +3253,6 @@ const CouponManager = ({
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportStatusFilter, setExportStatusFilter] = useState('all'); // 'all', 'active', 'used', 'expired'
-
-  // QR Scanning States
-  const [scannerActive, setScannerActive] = useState(false);
-  const [manualCodeInput, setManualCodeInput] = useState('');
-  const [cameraFacing, setCameraFacing] = useState('environment');
-  const [hasTorch, setHasTorch] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
-  const [scannedResultCoupon, setScannedResultCoupon] = useState(null);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const scanLoopRef = useRef(null);
-  const mediaStreamRef = useRef(null);
 
   // Debounce Action Lock
   const isActionLockedRef = useRef(false);
@@ -3172,15 +3294,16 @@ const CouponManager = ({
     // Custom Expiry Date Visual Positioning Editor
     expiryConfig: {
       enabled: true,
-      xPercent: 25,
-      yPercent: 82,
-      sizePercent: 18,
+      xPercent: 32,
+      yPercent: 90.5,
+      sizePercent: 16,
       color: '#0f172a',
       bgStyle: 'none',
-      format: 'eng',
-      prefix: 'EXP: ',
+      format: 'numeric',
+      prefix: '',
       fontFamily: 'Inter',
-      fontWeight: 'light'
+      fontWeight: 'normal',
+      align: 'center'
     },
     quantity: 10
   });
@@ -3193,6 +3316,7 @@ const CouponManager = ({
   const [qrCodeDataUrls, setQrCodeDataUrls] = useState({});
   const [isUploadingArtwork, setIsUploadingArtwork] = useState(false);
   const pendingArtworkFileRef = useRef(null); // Deferred artwork file upload
+  const artworkUploadPromiseRef = useRef(null); // Non-blocking background upload promise
   const artworkFileInputRef = useRef(null);
 
   // Calendar Picker States
@@ -3464,6 +3588,8 @@ const CouponManager = ({
       const bId = cp.batchId || cp.batch_id || `SINGLE_${cp.id}`;
       const bName = cp.batchName || cp.batch_name || cp.title || 'ชุดคูปองทั่วไป';
 
+      const cpImg = cp.bgImage || cp.bg_image || cp.designConfig?.customImageUrl || cp.design_config?.customImageUrl || cp.designConfig?.bgImage || cp.design_config?.bgImage || '';
+
       if (!map.has(bId)) {
         map.set(bId, {
           batchId: bId,
@@ -3475,7 +3601,7 @@ const CouponManager = ({
           minSpend: cp.minSpend ?? cp.min_spend ?? 0,
           themeColor: cp.themeColor || cp.theme_color || 'emerald',
           templateType: cp.templateType || cp.template_type || 'card',
-          bgImage: cp.bgImage || cp.bg_image || '',
+          bgImage: cpImg,
           qrConfig: cp.qrConfig || cp.qr_config || null,
           isLifetime: Boolean(cp.isLifetime ?? cp.is_lifetime),
           expireDate: cp.expireDate || cp.expire_date,
@@ -3489,6 +3615,9 @@ const CouponManager = ({
       }
 
       const grp = map.get(bId);
+      if (!grp.bgImage && cpImg) {
+        grp.bgImage = cpImg;
+      }
       grp.coupons.push(cp);
       grp.total++;
 
@@ -3644,6 +3773,44 @@ const CouponManager = ({
     if (!tplName || !tplName.trim()) return;
 
     try {
+      let effectiveArt = form.customImageUrl || form.userUploadedImage || form.designConfig?.customImageUrl || form.designConfig?.bgImage || '';
+
+      // Non-blocking UX Item 5: Await pending Google Drive upload if still in progress
+      if (artworkUploadPromiseRef.current) {
+        showToast('กำลังรออัปโหลดรูปภาพขึ้น Google Drive สักครู่...', 'info');
+        const uploadedUrl = await artworkUploadPromiseRef.current;
+        if (uploadedUrl) effectiveArt = uploadedUrl;
+      }
+
+      // If effectiveArt is still a Base64 string, upload to Google Drive now to prevent storing Base64 in templates
+      if (effectiveArt && effectiveArt.startsWith('data:image/') && typeof callAppScript === 'function') {
+        try {
+          setIsUploadingArtwork(true);
+          const matchMime = effectiveArt.match(/data:(image\/[a-zA-Z0-9.+_-]+);base64,/);
+          const mimeType = matchMime ? matchMime[1] : 'image/png';
+          const base64Data = effectiveArt.split(',')[1];
+          const res = await callAppScript('UPLOAD_FILE', 'Settings', {
+            fileName: `COUPON_TPL_${Date.now()}.png`,
+            mimeType,
+            data: base64Data,
+            folderId: gdriveTokens?.generalDriveFolderId || undefined
+          });
+          if (res?.status === 'success' && res.fileUrl) {
+            effectiveArt = formatDirectImageUrl(res.fileUrl);
+            setForm(prev => ({
+              ...prev,
+              customImageUrl: effectiveArt,
+              userUploadedImage: effectiveArt,
+              designConfig: prev.designConfig ? { ...prev.designConfig, customImageUrl: effectiveArt, bgImage: effectiveArt } : prev.designConfig
+            }));
+          }
+        } catch (uplErr) {
+          console.warn('[Coupon] Template artwork upload fallback:', uplErr);
+        } finally {
+          setIsUploadingArtwork(false);
+        }
+      }
+
       const templatePayload = {
         id: `TPL_${Date.now()}`,
         name: tplName.trim(),
@@ -3653,10 +3820,13 @@ const CouponManager = ({
           discountType: form.discountType,
           discountValue: form.discountValue,
           minSpend: form.minSpend,
-          isLifetime: form.isLifetime,
-          templateType: form.templateType,
+          isLifetime: Boolean(form.isLifetime || !form.expireDate),
+          templateType: effectiveArt ? 'custom_image' : form.templateType,
           themeColor: form.themeColor,
-          customImageUrl: form.customImageUrl,
+          customImageUrl: effectiveArt,
+          userUploadedImage: effectiveArt,
+          bgImage: effectiveArt,
+          designConfig: form.designConfig ? { ...form.designConfig, customImageUrl: effectiveArt, bgImage: effectiveArt } : null,
           qrConfig: form.qrConfig,
           expiryConfig: form.expiryConfig
         },
@@ -3676,7 +3846,33 @@ const CouponManager = ({
     }
   };
 
-  // Upload Custom Artwork (Photoshop/Canva): Instant local preview + deferred Google Drive upload
+  // Delete Template from Supabase / Library
+  const handleDeleteTemplate = (tpl) => {
+    if (!tpl) return;
+    showGlobalAlert({
+      type: 'warning',
+      title: 'ยืนยันการลบแม่แบบ?',
+      text: `คุณต้องการลบแม่แบบ "${tpl.name}" ใช่หรือไม่? หากลบแล้วจะไม่สามารถกู้คืนได้`,
+      onConfirm: async () => {
+        try {
+          if (supabase && tpl.id && !String(tpl.id).startsWith('preset_')) {
+            const { error } = await supabase.from('coupon_templates').update({ is_deleted: true, updated_at: new Date().toISOString() }).eq('id', tpl.id);
+            if (error) {
+              console.warn('[Coupon] Soft delete template fallback to hard delete:', error.message);
+              await supabase.from('coupon_templates').delete().eq('id', tpl.id);
+            }
+          }
+          setTemplatesList(prev => prev.filter(t => t.id !== tpl.id));
+          showToast(`ลบแม่แบบ "${tpl.name}" เรียบร้อยแล้ว`, 'success');
+        } catch (err) {
+          console.error('[Coupon] Delete template error:', err);
+          showToast('เกิดข้อผิดพลาดในการลบแม่แบบ', 'error');
+        }
+      }
+    });
+  };
+
+  // Upload Custom Artwork (Photoshop/Canva): Instant 0ms local preview + Non-blocking background Google Drive upload
   const handleCustomArtworkUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -3691,11 +3887,11 @@ const CouponManager = ({
       return;
     }
 
-    // Instant local preview (0ms lag, deferred Google Drive upload)
+    // 1. Instant local preview (0ms lag, non-blocking) - พนักงานสามารถเริ่มจัดตำแหน่ง QR และวันหมดอายุได้ทันที!
     const reader = new FileReader();
     reader.onload = (uploadEvent) => {
-      const dataUrl = uploadEvent.target?.result;
-      if (!dataUrl) {
+      const localDataUrl = uploadEvent.target?.result;
+      if (!localDataUrl) {
         showToast('ไม่สามารถอ่านไฟล์ได้', 'error');
         return;
       }
@@ -3703,12 +3899,48 @@ const CouponManager = ({
       setForm(prev => ({
         ...prev,
         templateType: 'custom_image',
-        userUploadedImage: dataUrl,
-        customImageUrl: dataUrl,
+        userUploadedImage: localDataUrl,
+        customImageUrl: localDataUrl,
         designConfig: prev.designConfig ? { ...prev.designConfig, bgType: 'image' } : null
       }));
       setIsQrEditorOpen(true);
       showToast('โหลดรูปภาพสำเร็จ! เปิดเครื่องมือจัดตำแหน่ง QR และวันหมดอายุ', 'success');
+
+      // 2. Concurrently start background upload to Google Drive
+      setIsUploadingArtwork(true);
+      const base64Data = localDataUrl.split(',')[1];
+      if (typeof callAppScript === 'function' && base64Data) {
+        const sanitized = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const fileName = `COUPON_ART_${Date.now()}_${sanitized}`;
+        const folderId = gdriveTokens?.generalDriveFolderId || undefined;
+
+        const uploadPromise = callAppScript('UPLOAD_FILE', 'Settings', {
+          fileName,
+          mimeType: file.type,
+          data: base64Data,
+          folderId
+        }).then(res => {
+          if (res?.status === 'success' && res.fileUrl) {
+            const directUrl = formatDirectImageUrl(res.fileUrl);
+            setForm(prev => ({
+              ...prev,
+              customImageUrl: directUrl,
+              userUploadedImage: directUrl,
+              designConfig: prev.designConfig ? { ...prev.designConfig, customImageUrl: directUrl, bgImage: directUrl } : prev.designConfig
+            }));
+            return directUrl;
+          }
+          return localDataUrl;
+        }).catch(err => {
+          console.warn('[Coupon] Background Google Drive upload warning:', err);
+          return localDataUrl;
+        }).finally(() => {
+          setIsUploadingArtwork(false);
+          artworkUploadPromiseRef.current = null;
+        });
+
+        artworkUploadPromiseRef.current = uploadPromise;
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -3747,48 +3979,62 @@ const CouponManager = ({
       message: 'กำลังเตรียมข้อมูลและจัดสร้างชุดคูปอง...'
     });
 
-    // Deferred artwork upload to Google Drive if a local file is pending
-    let finalImageUrl = form.customImageUrl;
-    if (form.templateType === 'custom_image' && pendingArtworkFileRef.current) {
+    // 1. Resolve Final Artwork URL (Google Drive CDN URL)
+    let finalImageUrl = form.customImageUrl || form.userUploadedImage || form.designConfig?.customImageUrl || form.designConfig?.bgImage || '';
+
+    // Non-blocking UX Item 5: If background Google Drive upload is still in progress, smoothly await it
+    if (artworkUploadPromiseRef.current) {
       try {
         setCreateProgress(prev => ({
           ...(prev || {}),
           status: 'uploading',
-          message: 'กำลังอัปโหลดรูปภาพแม่แบบคูปองไปยังคลาวด์...'
+          message: 'กำลังรอการบันทึกภาพต้นฉบับขึ้น Google Drive...'
+        }));
+        const uploadedUrl = await artworkUploadPromiseRef.current;
+        if (uploadedUrl) finalImageUrl = uploadedUrl;
+      } catch (e) {
+        console.warn('[Coupon] Pending artwork upload error:', e);
+      }
+    }
+
+    // If finalImageUrl is still a Base64 string (e.g. from legacy template), upload to Google Drive once now!
+    if (finalImageUrl && finalImageUrl.startsWith('data:image/') && typeof callAppScript === 'function') {
+      try {
+        setCreateProgress(prev => ({
+          ...(prev || {}),
+          status: 'uploading',
+          message: 'กำลังแปลงรูปภาพและส่งขึ้น Google Drive...'
         }));
         setIsUploadingArtwork(true);
-        const file = pendingArtworkFileRef.current;
-        const base64Data = await new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result?.split(',')[1]);
-          r.onerror = reject;
-          r.readAsDataURL(file);
+        const matchMime = finalImageUrl.match(/data:(image\/[a-zA-Z0-9.+_-]+);base64,/);
+        const mimeType = matchMime ? matchMime[1] : 'image/png';
+        const base64Data = finalImageUrl.split(',')[1];
+        const res = await callAppScript('UPLOAD_FILE', 'Settings', {
+          fileName: `COUPON_ART_${Date.now()}.png`,
+          mimeType,
+          data: base64Data,
+          folderId: gdriveTokens?.generalDriveFolderId || undefined
         });
-
-        if (typeof callAppScript === 'function' && base64Data) {
-          const sanitized = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-          const fileName = `COUPON_ART_${Date.now()}_${sanitized}`;
-          const folderId = gdriveTokens?.generalDriveFolderId || undefined;
-
-          const res = await callAppScript('UPLOAD_FILE', 'Settings', {
-            fileName,
-            mimeType: file.type,
-            data: base64Data,
-            folderId
-          });
-
-          if (res?.status === 'success' && res.fileUrl) {
-            finalImageUrl = formatDirectImageUrl(res.fileUrl);
-            setForm(prev => ({ ...prev, customImageUrl: finalImageUrl }));
-          }
+        if (res?.status === 'success' && res.fileUrl) {
+          finalImageUrl = formatDirectImageUrl(res.fileUrl);
+          setForm(prev => ({
+            ...prev,
+            customImageUrl: finalImageUrl,
+            userUploadedImage: finalImageUrl,
+            designConfig: prev.designConfig ? { ...prev.designConfig, customImageUrl: finalImageUrl, bgImage: finalImageUrl } : prev.designConfig
+          }));
         }
-        pendingArtworkFileRef.current = null;
       } catch (uploadErr) {
-        console.warn('[Coupon] Deferred artwork upload failed, falling back to data URL:', uploadErr);
+        console.warn('[Coupon] Creation artwork upload error:', uploadErr);
       } finally {
         setIsUploadingArtwork(false);
       }
     }
+
+    pendingArtworkFileRef.current = null;
+    artworkUploadPromiseRef.current = null;
+
+    const effectiveTemplateType = finalImageUrl ? 'custom_image' : form.templateType;
 
     const newCoupons = [];
     for (let i = 0; i < count; i++) {
@@ -3818,18 +4064,19 @@ const CouponManager = ({
         branch_scope: effectiveBranchScope,
         bgImage: finalImageUrl || null,
         bg_image: finalImageUrl || null,
-        templateType: form.templateType,
-        template_type: form.templateType,
+        templateType: effectiveTemplateType,
+        template_type: effectiveTemplateType,
         themeColor: form.themeColor,
-        theme_color: form.themeColor,
-        qrConfig: form.qrConfig,
-        qr_config: form.qrConfig,
+        qrConfig: { ...form.qrConfig, expiryConfig: form.expiryConfig },
+        qr_config: { ...form.qrConfig, expiryConfig: form.expiryConfig },
         expiryConfig: form.expiryConfig,
         expiry_config: form.expiryConfig,
-        isLifetime: Boolean(form.isLifetime),
-        is_lifetime: Boolean(form.isLifetime),
-        expireDate: form.isLifetime ? null : form.expireDate,
-        expire_date: form.isLifetime ? null : form.expireDate,
+        designConfig: form.designConfig ? { ...form.designConfig, customImageUrl: finalImageUrl || form.designConfig.customImageUrl } : null,
+        design_config: form.designConfig ? { ...form.designConfig, customImageUrl: finalImageUrl || form.designConfig.customImageUrl } : null,
+        isLifetime: Boolean(form.isLifetime || !form.expireDate),
+        is_lifetime: Boolean(form.isLifetime || !form.expireDate),
+        expireDate: (form.isLifetime || !form.expireDate) ? null : form.expireDate,
+        expire_date: (form.isLifetime || !form.expireDate) ? null : form.expireDate,
         status: 'active',
         source: form.patientId ? 'vip_manual' : 'manual',
         batchId: batchId,
@@ -3845,27 +4092,31 @@ const CouponManager = ({
       newCoupons.push(couponObj);
     }
 
+    // Optimistic UI Update: แสดงการ์ดชุดคูปองพร้อมรูปพื้นหลังบนหน้าจอทันที ไม่ต้องรอกดรีเฟรช
+    setCouponsData(prev => [...newCoupons, ...prev]);
+
     try {
-      for (let i = 0; i < newCoupons.length; i++) {
-        const cp = newCoupons[i];
-        const currentNum = i + 1;
-        const percent = Math.round((currentNum / count) * 100);
+      setCreateProgress(prev => ({
+        ...(prev || {}),
+        status: 'saving',
+        current: 0,
+        total: count,
+        percent: 60,
+        message: `กำลังบันทึกชุดคูปอง "${batchName}" จำนวน ${count} ใบลงระบบ...`
+      }));
 
-        setCreateProgress(prev => ({
-          ...(prev || {}),
-          status: 'saving',
-          current: currentNum,
-          total: count,
-          percent: percent,
-          message: `กำลังผลิตและบันทึกคูปองใบที่ ${currentNum} จาก ${count} ใบ (${cp.code})`
-        }));
-
-        if (typeof callAppScript === 'function') {
-          await callAppScript('SAVE_DATA', 'Coupons', cp);
-        } else {
-          // In development or when offline, small delay to provide smooth progress feedback
-          await new Promise(r => setTimeout(r, 60));
+      // High Performance Bulk Insert: บันทึกทั้งชุด 10-100 ใบใน 1 คำสั่ง (เสร็จใน 0.2 วินาที)
+      if (typeof callAppScript === 'function') {
+        try {
+          await callAppScript('SAVE_BATCH', 'Coupons', newCoupons);
+        } catch (batchErr) {
+          console.warn('[Coupon] SAVE_BATCH failed, falling back to individual save:', batchErr);
+          for (let i = 0; i < newCoupons.length; i++) {
+            await callAppScript('SAVE_DATA', 'Coupons', newCoupons[i]);
+          }
         }
+      } else {
+        await new Promise(r => setTimeout(r, 60));
       }
 
       setCreateProgress(prev => ({
@@ -3876,7 +4127,12 @@ const CouponManager = ({
         message: `สร้างชุดคูปอง "${batchName}" เสร็จสมบูรณ์แล้ว!`
       }));
 
-      setCouponsData(prev => [...newCoupons, ...prev]);
+      // Ensure state holds the fully-formed coupons with intact artwork
+      setCouponsData(prev => {
+        const idSet = new Set(newCoupons.map(c => c.id));
+        const filteredPrev = (prev || []).filter(c => !idSet.has(c.id));
+        return [...newCoupons, ...filteredPrev];
+      });
 
       // Brief delay to showcase 100% completion checkmark
       await new Promise(r => setTimeout(r, 700));
@@ -3913,15 +4169,15 @@ const CouponManager = ({
         },
         expiryConfig: {
           enabled: true,
-          xPercent: 25,
-          yPercent: 82,
-          sizePercent: 18,
+          xPercent: 32,
+          yPercent: 90.5,
+          sizePercent: 16,
           color: '#0f172a',
           bgStyle: 'none',
-          format: 'eng',
-          prefix: 'EXP: ',
+          format: 'numeric',
+          prefix: '',
           fontFamily: 'Inter',
-          fontWeight: 'light'
+          fontWeight: 'normal'
         },
         quantity: 10
       });
@@ -3985,32 +4241,61 @@ const CouponManager = ({
     isActionLockedRef.current = true;
     setTimeout(() => { isActionLockedRef.current = false; }, 800);
 
-    const cleanCode = String(codeToRedeem || manualCodeInput || '').trim().toUpperCase();
+    let cleanCode = String(codeToRedeem || '').trim();
+    const urlMatch = cleanCode.match(/[?&]code=([^&#]+)/i);
+    if (urlMatch && urlMatch[1]) {
+      try {
+        cleanCode = decodeURIComponent(urlMatch[1]).trim();
+      } catch (_) {
+        cleanCode = urlMatch[1].trim();
+      }
+    }
+    cleanCode = cleanCode.toUpperCase();
+
     if (!cleanCode) {
       showToast('กรุณาระบุรหัสคูปอง', 'warning');
       return;
     }
 
-    const target = (couponsData || []).find(c => String(c.code || '').trim().toUpperCase() === cleanCode);
+    const target = (couponsData || []).find(c => c && String(c.code || '').trim().toUpperCase() === cleanCode);
     if (!target) {
-      showToast(`ไม่พบคูปองรหัส "${cleanCode}" ในระบบ`, 'warning');
+      showGlobalAlert({
+        type: 'warning',
+        title: 'ไม่พบคูปองในระบบ',
+        text: `ไม่พบคูปองรหัส "${cleanCode}" ในระบบ กรุณาตรวจสอบรหัสหรือเงื่อนไขกับลูกค้าอีกครั้ง`
+      });
       return;
     }
 
-    if (target.status === 'used') {
-      showToast(`คูปองรหัส "${cleanCode}" ถูกใช้งานไปแล้วเมื่อ ${formatDate(target.usedAt || target.used_at)}`, 'warning');
-      setScannedResultCoupon(target);
+    if (target.status === 'used' || target.isUsed || target.is_used) {
+      showGlobalAlert({
+        type: 'warning',
+        title: 'คูปองนี้ถูกใช้งานไปแล้ว',
+        text: `คูปองรหัส "${cleanCode}" (${target.title || 'คูปองส่วนลด'}) ถูกใช้งานไปแล้วเมื่อ ${formatDate(target.usedAt || target.used_at || target.updatedAt)} โดยสาขา ${target.usedInBranch || target.used_in_branch || '-'}`
+      });
       return;
     }
 
-    const isLifetime = target.isLifetime ?? target.is_lifetime;
+    if (target.isDeleted || target.is_deleted || target.status === 'cancelled' || target.status === 'revoked') {
+      showGlobalAlert({
+        type: 'danger',
+        title: 'รหัสนี้ถูกยกเลิกสิทธิ์',
+        text: `คูปองรหัส "${cleanCode}" (${target.title || 'คูปองส่วนลด'}) ถูกยกเลิกหรือระงับสิทธิ์การใช้งานในระบบแล้ว`
+      });
+      return;
+    }
+
+    const isLifetime = Boolean(target.isLifetime ?? target.is_lifetime);
     const expDate = target.expireDate || target.expire_date;
     if (!isLifetime && expDate) {
       const exp = new Date(expDate);
       exp.setHours(23, 59, 59, 999);
       if (exp.getTime() < Date.now()) {
-        showToast(`คูปองรหัส "${cleanCode}" หมดอายุไปแล้ว`, 'warning');
-        setScannedResultCoupon(target);
+        showGlobalAlert({
+          type: 'warning',
+          title: 'คูปองนี้หมดอายุแล้ว',
+          text: `คูปองรหัส "${cleanCode}" (${target.title || 'คูปองส่วนลด'}) หมดอายุการใช้งานไปแล้วเมื่อวันที่ ${formatDate(expDate)}`
+        });
         return;
       }
     }
@@ -4018,7 +4303,7 @@ const CouponManager = ({
     showGlobalAlert({
       type: 'info',
       title: 'ยืนยันการตัดคูปอง?',
-      text: `ต้องการตัดคูปองรหัส "${target.code}" (${target.title}) ใช่หรือไม่?`,
+      text: `ต้องการตัดคูปองรหัส "${target.code}" (${target.title || 'คูปองส่วนลด'}) ใช่หรือไม่?`,
       onConfirm: async () => {
         try {
           const updated = {
@@ -4052,8 +4337,6 @@ const CouponManager = ({
             };
           });
 
-          setScannedResultCoupon(updated);
-          setManualCodeInput('');
           showToast(`ตัดคูปอง ${target.code} เรียบร้อยแล้ว`, 'success');
 
           if (typeof callAppScript === 'function') {
@@ -4110,9 +4393,6 @@ const CouponManager = ({
           });
 
           showToast(`คืนสิทธิ์คูปอง ${coupon.code} สำเร็จ`, 'success');
-          if (scannedResultCoupon?.id === coupon.id || scannedResultCoupon?.code === coupon.code) {
-            setScannedResultCoupon(updated);
-          }
 
           if (typeof callAppScript === 'function') {
             await callAppScript('SAVE_DATA', 'Coupons', updated);
@@ -4123,91 +4403,6 @@ const CouponManager = ({
       }
     });
   };
-
-  // Camera QR Scanner with Torch & Flip
-  const startCamera = async () => {
-    try {
-      setScannerActive(true);
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showToast('อุปกรณ์ไม่รองรับการเปิดกล้อง', 'warning');
-        setScannerActive(false);
-        return;
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: cameraFacing, width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-      mediaStreamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        await videoRef.current.play().catch(() => {});
-      }
-      const track = stream.getVideoTracks()[0];
-      const cap = track?.getCapabilities ? track.getCapabilities() : {};
-      setHasTorch(Boolean(cap.torch));
-
-      const tick = () => {
-        const video = videoRef.current;
-        if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-          const canvas = canvasRef.current || document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imgData.data, imgData.width, imgData.height, {
-              inversionAttempts: 'dontInvert'
-            });
-            if (code && code.data) {
-              stopCamera();
-              handleRedeemCoupon(code.data);
-              return;
-            }
-          }
-        }
-        scanLoopRef.current = requestAnimationFrame(tick);
-      };
-      scanLoopRef.current = requestAnimationFrame(tick);
-    } catch (err) {
-      console.warn('[Coupon] Camera error:', err);
-      showToast('ไม่สามารถเปิดกล้องได้ กรุณาพิมพ์รหัสคูปองแทน', 'warning');
-      setScannerActive(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (scanLoopRef.current) cancelAnimationFrame(scanLoopRef.current);
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
-    }
-    setTorchOn(false);
-    setScannerActive(false);
-  };
-
-  const toggleTorch = async () => {
-    if (!mediaStreamRef.current) return;
-    const track = mediaStreamRef.current.getVideoTracks()[0];
-    if (track && track.applyConstraints) {
-      try {
-        await track.applyConstraints({ advanced: [{ torch: !torchOn }] });
-        setTorchOn(!torchOn);
-      } catch (e) {
-        console.warn('Torch failed', e);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (!isScanModalOpen) {
-      stopCamera();
-      setScannedResultCoupon(null);
-    }
-  }, [isScanModalOpen]);
 
   // Phone number resolver for coupon printing
   const getCouponPhone = useCallback((coupon) => {
@@ -4221,9 +4416,9 @@ const CouponManager = ({
 
   // Formatter for print expiry date
   const formatPrintExpDate = (coupon) => {
-    if (coupon.isLifetime ?? coupon.is_lifetime) return 'ตลอดชีพ (ไม่มีวันหมดอายุ)';
+    if (coupon.isLifetime ?? coupon.is_lifetime) return 'ไม่มีวันหมดอายุ';
     const d = coupon.expireDate || coupon.expire_date;
-    if (!d) return 'ไม่ระบุ';
+    if (!d) return 'ไม่มีวันหมดอายุ';
     return formatDate(d);
   };
 
@@ -4290,6 +4485,20 @@ const CouponManager = ({
     const theme = PRINT_THEMES[themeKey] || PRINT_THEMES.emerald;
     const customImg = coupon.bgImage || coupon.bg_image || coupon.customImageUrl;
     const isCustomImage = Boolean(customImg) && (coupon.templateType === 'custom_image' || coupon.template_type === 'custom_image');
+
+    if (typeof document !== 'undefined' && document.fonts) {
+      try {
+        await document.fonts.ready;
+        const expCfg = getCouponExpiryConfig(coupon);
+        if (expCfg?.fontFamily) {
+          const fontFamily = getExpiryFontFamily(expCfg.fontFamily);
+          const fontWeight = expCfg.fontWeight === 'bold' ? '700' : (expCfg.fontWeight === 'normal' ? '400' : '300');
+          await document.fonts.load(`${fontWeight} 24px ${fontFamily}`);
+        }
+      } catch (e) {
+        console.warn('[Coupon] Font loading check warning:', e);
+      }
+    }
 
     const canvas = document.createElement('canvas');
     let width = isStrip ? 2362 : 1011;
@@ -4459,10 +4668,8 @@ const CouponManager = ({
       }
 
       // 3. Draw Expiry Date according to expiryConfig
-      const expCfg = coupon.expiryConfig || coupon.expiry_config || {
-        enabled: true, xPercent: 25, yPercent: 82, sizePercent: 18, color: '#0f172a', bgStyle: 'none', format: 'eng', prefix: 'EXP: ', fontFamily: 'Inter', fontWeight: 'light'
-      };
-      if (expCfg.enabled !== false) {
+      const expCfg = getCouponExpiryConfig(coupon);
+      if (expCfg && expCfg.enabled !== false) {
         const expText = formatCustomExpiryDate(
           coupon.expireDate || coupon.expire_date,
           expCfg.format,
@@ -4471,32 +4678,39 @@ const CouponManager = ({
         );
         // Expiry font size scales proportionally with canvas width: 0.2% per sizePercent unit
         const expFontSize = Math.max(12, Math.round((expCfg.sizePercent || 18) * 0.002 * width));
-        const fontWeight = expCfg.fontWeight === 'normal' ? '400' : '300';
-        ctx.font = `${fontWeight} ${expFontSize}px ${getExpiryFontFamily(expCfg.fontFamily)}`;
+        const fontWeight = expCfg.fontWeight === 'bold' ? '700' : (expCfg.fontWeight === 'normal' ? '400' : '300');
+        const fontFamily = getExpiryFontFamily(expCfg.fontFamily);
+        ctx.font = `${fontWeight} ${expFontSize}px ${fontFamily}`;
         const expX = Math.round((expCfg.xPercent / 100) * width);
         const expY = Math.round((expCfg.yPercent / 100) * height);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        const textAlign = expCfg.align || 'center';
+        ctx.textAlign = textAlign;
+
+        const textMetrics = ctx.measureText(expText);
 
         if (expCfg.bgStyle === 'white_pill' || expCfg.bgStyle === 'dark_pill') {
-          const textMetrics = ctx.measureText(expText);
           const pillW = textMetrics.width + (expFontSize * 1.2);
           const pillH = expFontSize * 1.6;
           const pillR = pillH / 2;
+          const pillX = textAlign === 'left'
+            ? expX - (expFontSize * 0.6)
+            : (textAlign === 'right' ? expX - pillW + (expFontSize * 0.6) : expX - (pillW / 2));
           ctx.save();
           ctx.fillStyle = expCfg.bgStyle === 'dark_pill' ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)';
           ctx.shadowColor = 'rgba(0,0,0,0.15)';
           ctx.shadowBlur = 6;
           ctx.beginPath();
-          ctx.roundRect(expX - (pillW / 2), expY - (pillH / 2), pillW, pillH, pillR);
+          ctx.roundRect(pillX, expY - (pillH / 2), pillW, pillH, pillR);
           ctx.fill();
           ctx.restore();
         }
 
-        ctx.fillStyle = expCfg.bgStyle === 'dark_pill' ? '#ffffff' : (expCfg.color || '#0f172a');
-        ctx.fillText(expText, expX, expY);
-        ctx.textAlign = 'left';
+        // Exact visual vertical center correction matching CSS translate(-50%, -50%)
+        const glyphMid = (textMetrics.actualBoundingBoxAscent - textMetrics.actualBoundingBoxDescent) / 2;
         ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = expCfg.bgStyle === 'dark_pill' ? '#ffffff' : (expCfg.color || '#0f172a');
+        ctx.fillText(expText, expX, expY + glyphMid);
+        ctx.textAlign = 'left';
       }
     } else {
       // 🌟 Redesigned Premium Standard Colored Templates (Card 1011x638 or Strip 2362x638)
@@ -4522,7 +4736,7 @@ const CouponManager = ({
 
 
       // Right Stub Accent Section & Tear Line
-      const stubWidth = isStrip ? 580 : 340;
+      const stubWidth = isStrip ? 600 : 340;
       const stubX = width - stubWidth;
       const stubGrad = ctx.createLinearGradient(stubX, 0, width, height);
       stubGrad.addColorStop(0, theme.primaryDark);
@@ -4561,9 +4775,9 @@ const CouponManager = ({
       }
 
       // Draw Brand Receipt-Style Header
-      const logoSize = isStrip ? 76 : 56;
+      const logoSize = isStrip ? 88 : 56;
       const logoX = isStrip ? 60 : 42;
-      const logoY = isStrip ? 42 : 32;
+      const logoY = isStrip ? 36 : 32;
       const headerTextX = logoX + logoSize + (isStrip ? 22 : 16);
 
       if (logoImg) {
@@ -4651,25 +4865,25 @@ const CouponManager = ({
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${isStrip ? '28' : '22'}px "Kanit", sans-serif`;
+      ctx.font = `bold ${isStrip ? '34' : '22'}px "Kanit", sans-serif`;
       ctx.fillText(clinicName, headerTextX, logoY + (isStrip ? 4 : 2));
 
       // Multiline Address (No Ellipsis Truncation, fits up to 3-5 lines)
       const maxHeaderW = stubX - 35 - headerTextX;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = `${isStrip ? '16' : '13'}px "Kanit", sans-serif`;
+      ctx.font = `${isStrip ? '18' : '13'}px "Kanit", sans-serif`;
       const addrLines = wrapCanvasLines(ctx, clinicAddress || '', maxHeaderW);
-      const addrLineH = isStrip ? 22 : 17;
-      const addrStartY = logoY + (isStrip ? 38 : 28);
+      const addrLineH = isStrip ? 24 : 17;
+      const addrStartY = logoY + (isStrip ? 40 : 28);
       addrLines.slice(0, 3).forEach((line, idx) => {
         ctx.fillText(line, headerTextX, addrStartY + (idx * addrLineH));
       });
 
       // Contact Line (Phone)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.font = `${isStrip ? '15' : '12'}px "Kanit", sans-serif`;
+      ctx.font = `${isStrip ? '17' : '12'}px "Kanit", sans-serif`;
       const contactInfo = `โทร: ${clinicPhone || '-'}`;
-      const contactY = addrStartY + (Math.min(addrLines.length, 3) * addrLineH) + (isStrip ? 4 : 2);
+      const contactY = addrStartY + (Math.min(addrLines.length, 3) * addrLineH) + (isStrip ? 6 : 2);
       ctx.fillText(contactInfo, headerTextX, contactY);
 
       // Delicate Hairline Divider below Header
@@ -4697,7 +4911,8 @@ const CouponManager = ({
       const noteText = 'กรุณาแสดงบัตรกำนัลนี้แก่เจ้าหน้าที่';
 
       // 🌟 HERO TITLE: Pure Responsive Font Sizing with Thai Vowel / Tone Mark Safe Zone
-      const maxTitleW = stubX - 25 - logoX; // Right edge touches right near dashed line
+      // Strip title expands right up to the dashed divider line per user request
+      const maxTitleW = isStrip ? (stubX - 35 - logoX) : (stubX - 25 - logoX);
       const rawTitle = (coupon.title || 'บัตรกำนัลส่วนลดพิเศษ').trim();
       const hasThai = /[\u0E00-\u0E7F]/.test(rawTitle);
 
@@ -4708,9 +4923,9 @@ const CouponManager = ({
       // Calculate the font size where text naturally expands to fill maxTitleW
       let autoFontSize = Math.floor(100 * (maxTitleW / Math.max(1, w100)));
 
-      // Allow single line title to expand near edge of dashed line (up to 150px)
-      const maxAllowedSize = isStrip ? 120 : 150;
-      const minSingleLineSize = isStrip ? 50 : 44;
+      // Allow single line title to expand near edge of dashed line (up to 180px on Strip)
+      const maxAllowedSize = isStrip ? 180 : 150;
+      const minSingleLineSize = isStrip ? 48 : 44;
 
       let titleBottomY = 0;
       let titleCenterY = isStrip ? 230 : 220;
@@ -4765,7 +4980,7 @@ const CouponManager = ({
         const w2 = ctx.measureText(line2).width;
         const maxLineW = Math.max(w1, w2);
         let multiSize = Math.floor(100 * (maxTitleW / Math.max(1, maxLineW)));
-        multiSize = Math.max(isStrip ? 34 : 26, Math.min(isStrip ? 74 : 66, multiSize));
+        multiSize = Math.max(isStrip ? 42 : 26, Math.min(isStrip ? 88 : 66, multiSize));
 
         ctx.font = `900 ${multiSize}px "Kanit", sans-serif`;
         // Generous line spacing for Thai tone marks on line 2 and lower vowels on line 1
@@ -4783,13 +4998,13 @@ const CouponManager = ({
 
       // Spacing and font sizing based on number of condition lines
       const firstTermsOffset = isStrip 
-        ? (numTerms > 2 ? 24 : (numTerms > 1 ? 28 : 34)) 
+        ? (numTerms > 2 ? 30 : (numTerms > 1 ? 36 : 42)) 
         : (numTerms > 3 ? 18 : (numTerms > 2 ? 22 : (numTerms > 1 ? 26 : 32)));
       const termsLineH = isStrip 
-        ? (numTerms > 2 ? 24 : 30) 
+        ? (numTerms > 2 ? 34 : 40) 
         : (numTerms > 3 ? 22 : (numTerms > 2 ? 25 : 29));
       let baseTermsFontSize = isStrip 
-        ? (numTerms === 1 ? 26 : (numTerms === 2 ? 22 : (numTerms === 3 ? 19 : 17)))
+        ? (numTerms === 1 ? 34 : (numTerms === 2 ? 30 : (numTerms === 3 ? 26 : 22)))
         : (numTerms === 1 ? 24 : (numTerms === 2 ? 21 : (numTerms === 3 ? 18 : 16)));
 
       ctx.save();
@@ -4805,14 +5020,14 @@ const CouponManager = ({
 
         let curFontSize = baseTermsFontSize;
         ctx.font = `600 ${curFontSize}px "Kanit", sans-serif`;
-        while (ctx.measureText(tLine).width > maxTermsW && curFontSize > 13) {
+        while (ctx.measureText(tLine).width > maxTermsW && curFontSize > (isStrip ? 16 : 13)) {
           curFontSize -= 0.5;
           ctx.font = `600 ${curFontSize}px "Kanit", sans-serif`;
         }
 
         // ข้อความต่อท้ายแบบวงเล็บ เช่น (ไม่สามารถโอนสิทธิ์ให้ผู้อื่นได้) ให้ขยับเว้นวรรคเข้าด้านในให้ตรงกับเนื้อความหลังดอกจัน
         const isSubClause = tLine.trim().startsWith('(');
-        const drawX = isSubClause ? logoX + 16 : logoX;
+        const drawX = isSubClause ? logoX + (isStrip ? 24 : 16) : logoX;
         ctx.fillStyle = isSubClause ? 'rgba(255, 255, 255, 0.88)' : 'rgba(255, 255, 255, 0.95)';
 
         ctx.fillText(tLine.trim(), drawX, curY);
@@ -4821,12 +5036,12 @@ const CouponManager = ({
 
       const termsBottomY = lastTermsY + (termsLineH * 0.45);
 
-      // 🌟 "ขอบคุณที่ไว้วางใจให้อันผิงดูแลคุณ" - กึ่งกลางในพื้นที่ที่เหลืออย่างพอดี (ดันลงตามจำนวนเงื่อนไข)
+      // 🌟 "ขอบคุณที่ไว้วางใจให้อันผิงดูแลคุณ" - ขยายใหญ่และเลื่อนลงมาด้านล่าง
       const thanksText = 'ขอบคุณที่ไว้วางใจให้อันผิงดูแลคุณ';
       const leftCenterX = logoX + ((stubX - 22 - logoX) / 2);
-      const promptY = height - (isStrip ? 92 : 82);
+      const promptY = height - (isStrip ? 76 : 82);
       const thanksY = isStrip 
-        ? Math.round(termsBottomY + 44) 
+        ? (promptY - 48)
         : Math.round(termsBottomY + Math.max(18, (promptY - termsBottomY) / 2));
 
       ctx.save();
@@ -4834,9 +5049,9 @@ const CouponManager = ({
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#ffffff';
 
-      let thanksFontSize = isStrip ? 38 : (numTerms > 3 ? 32 : (numTerms > 2 ? 35 : 42));
+      let thanksFontSize = isStrip ? 56 : (numTerms > 3 ? 32 : (numTerms > 2 ? 35 : 42));
       ctx.font = `900 ${thanksFontSize}px "Kanit", sans-serif`;
-      while (ctx.measureText(thanksText).width > (stubX - 35 - logoX) && thanksFontSize > 22) {
+      while (ctx.measureText(thanksText).width > (stubX - 35 - logoX) && thanksFontSize > (isStrip ? 28 : 22)) {
         thanksFontSize -= 1;
         ctx.font = `900 ${thanksFontSize}px "Kanit", sans-serif`;
       }
@@ -4846,20 +5061,20 @@ const CouponManager = ({
       ctx.fillText(thanksText, leftCenterX, thanksY);
       ctx.restore();
 
-      // Bottom Section: Instructions & Clean Expiry Date (No Pill Badge)
+      // Bottom Section: Instructions & Clean Expiry Date (ขยายขนาดให้สมส่วนกับแถบยาว 200mm)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = `${isStrip ? '18' : '14'}px "Kanit", sans-serif`;
+      ctx.font = `${isStrip ? '24' : '14'}px "Kanit", sans-serif`;
       ctx.fillText(noteText, logoX, promptY);
 
-      const expY = height - (isStrip ? 52 : 46);
+      const expY = height - (isStrip ? 34 : 46);
       ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${isStrip ? '20' : '16'}px "Kanit", sans-serif`;
+      ctx.font = `bold ${isStrip ? '30' : '16'}px "Kanit", sans-serif`;
       ctx.fillText(`วันหมดอายุ: ${expCleanStr}`, logoX, expY);
 
       // 🌟 RIGHT STUB: Discount on Top, QR in Middle, Large Phone on Bottom
       let qrUrl = qrCodeDataUrls[coupon.code];
       if (!qrUrl) {
-        qrUrl = await QRCode.toDataURL(coupon.code, { width: 350, margin: 1 });
+        qrUrl = await QRCode.toDataURL(coupon.code, { width: 450, margin: 1 });
       }
       if (qrUrl) {
         const qrImg = new Image();
@@ -4871,7 +5086,7 @@ const CouponManager = ({
 
         const stubCenter = stubX + (stubWidth / 2);
 
-        // 1. Discount at Top of Stub (คำว่าลดใหญ่ 78px, เลขและ % ขนาดเท่ากันชิดล่าง)
+        // 1. Discount at Top of Stub: คำว่า "ลด" เพิ่ม 2 เท่า (isStrip: 125px)
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -4880,8 +5095,8 @@ const CouponManager = ({
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 3;
 
-        ctx.font = `bold ${isStrip ? '70' : '78'}px "Kanit", sans-serif`;
-        ctx.fillText('ลด', stubCenter, isStrip ? 56 : 74);
+        ctx.font = `bold ${isStrip ? '76' : '78'}px "Kanit", sans-serif`;
+        ctx.fillText('ลด', stubCenter, isStrip ? 45 : 74);
         ctx.restore();
 
         // Discount: Number is large, and % or บาท is half-size and bottom-aligned
@@ -4899,25 +5114,25 @@ const CouponManager = ({
           unitStr = 'บาท';
         }
 
-        let numFont = isStrip ? 104 : 136;
+        let numFont = isStrip ? 145 : 136;
         if (numStr.length >= 4) {
-          numFont = isStrip ? 66 : 84;
+          numFont = isStrip ? 95 : 84;
         } else if (numStr.length === 3) {
-          numFont = isStrip ? 86 : 110;
+          numFont = isStrip ? 120 : 110;
         }
-        // Unit is half the size of the number (เป็นครึ่งหนึ่งของตัวเลข)
-        const unitFont = Math.round(numFont * 0.50);
+        // Unit is half the size of the number
+        const unitFont = isStrip ? Math.round(numFont * 0.52) : Math.round(numFont * 0.50);
 
         ctx.font = `900 ${numFont}px "Kanit", sans-serif`;
         const numW = ctx.measureText(numStr).width;
         ctx.font = `900 ${unitFont}px "Kanit", sans-serif`;
         const unitW = ctx.measureText(unitStr).width;
-        const charGap = isStrip ? 4 : 6;
+        const charGap = isStrip ? 8 : 6;
         const totalDiscountW = numW + unitW + charGap;
         const discountStartX = stubCenter - (totalDiscountW / 2);
 
-        // Baseline Y coordinate: Both number and unit are baseline-aligned at the bottom (ให้อยู่ข้างล่าง)
-        const discountBaseY = isStrip ? 148 : 224;
+        // Baseline Y coordinate: Both number and unit are baseline-aligned at the bottom
+        const discountBaseY = isStrip ? 180 : 224;
 
         ctx.save();
         ctx.textAlign = 'left';
@@ -4937,11 +5152,11 @@ const CouponManager = ({
         ctx.fillText(unitStr, unitX, discountBaseY);
         ctx.restore();
 
-        // 2. White Card with QR Code in Middle of Stub (QR ขยายใหญ่เต็มพื้นที่สีขาว)
-        const cardBoxW = isStrip ? 340 : 252;
-        const cardBoxH = isStrip ? 232 : 266;
+        // 2. White Card with QR Code in Middle of Stub (QR ขยายใหญ่ สมส่วน ยืดลงมาชิดเบอร์โทร)
+        const cardBoxW = isStrip ? 430 : 252;
+        const cardBoxH = isStrip ? 336 : 266;
         const cardBoxX = stubCenter - (cardBoxW / 2);
-        const cardBoxY = isStrip ? 186 : 286;
+        const cardBoxY = isStrip ? 208 : 286;
 
         ctx.save();
         ctx.fillStyle = '#ffffff';
@@ -4949,30 +5164,30 @@ const CouponManager = ({
         ctx.shadowBlur = 16;
         ctx.shadowOffsetY = 5;
         ctx.beginPath();
-        ctx.roundRect(cardBoxX, cardBoxY, cardBoxW, cardBoxH, 16);
+        ctx.roundRect(cardBoxX, cardBoxY, cardBoxW, cardBoxH, isStrip ? 18 : 16);
         ctx.fill();
         ctx.restore();
 
-        // QR Code fills more of the white card (212px instead of 175px)
-        const qrInnerSize = isStrip ? 172 : 212;
+        // QR Code fills more of the white card (ขยายใหญ่ 260px)
+        const qrInnerSize = isStrip ? 260 : 212;
         const qrInnerX = stubCenter - (qrInnerSize / 2);
-        const qrInnerY = cardBoxY + (isStrip ? 10 : 12);
+        const qrInnerY = cardBoxY + (isStrip ? 16 : 12);
         ctx.drawImage(qrImg, qrInnerX, qrInnerY, qrInnerSize, qrInnerSize);
 
         // Code text under QR
         ctx.save();
         ctx.fillStyle = '#0f172a';
-        ctx.font = `bold ${isStrip ? '19' : '17'}px "JetBrains Mono", monospace`;
+        ctx.font = `bold ${isStrip ? '24' : '17'}px "JetBrains Mono", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(coupon.code, stubCenter, qrInnerY + qrInnerSize + (isStrip ? 18 : 20));
+        ctx.fillText(coupon.code, stubCenter, qrInnerY + qrInnerSize + (isStrip ? 26 : 20));
         ctx.restore();
 
-        // 3. Large Clinic Phone Number at Bottom of Stub (Grounded, right under QR card)
-        const phoneY = height - (isStrip ? 46 : 38);
+        // 3. Large Clinic Phone Number at Bottom of Stub (เพิ่มขนาดเบอร์โทร 48px)
+        const phoneY = height - (isStrip ? 40 : 38);
         ctx.save();
         ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${isStrip ? '32' : '30'}px "Kanit", sans-serif`;
+        ctx.font = `bold ${isStrip ? '48' : '30'}px "Kanit", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
@@ -5133,7 +5348,7 @@ const CouponManager = ({
         'วันที่ใช้': (cp.usedAt || cp.used_at) ? formatDate(cp.usedAt || cp.used_at) : '-',
         'สาขาที่ใช้': cp.usedInBranch || cp.used_in_branch || '-',
         'คนไข้ที่ผูกสิทธิ์': (cp.patientName || cp.patient_name) ? `${cp.patientName || cp.patient_name} (${cp.patientId || cp.patient_id})` : 'ทั่วไป',
-        'วันหมดอายุ': (cp.isLifetime ?? cp.is_lifetime) ? 'ตลอดชีพ' : ((cp.expireDate || cp.expire_date) ? formatDate(cp.expireDate || cp.expire_date) : '-'),
+        'วันหมดอายุ': (cp.isLifetime ?? cp.is_lifetime) ? 'ไม่มีวันหมดอายุ' : ((cp.expireDate || cp.expire_date) ? formatDate(cp.expireDate || cp.expire_date) : 'ไม่มีวันหมดอายุ'),
         'ชุดคูปอง (Batch)': cp.batchName || cp.batch_name || '-'
       }));
 
@@ -5165,48 +5380,19 @@ const CouponManager = ({
   };
 
   // --- 6. Execute A4 Print (Template 1: Strip 5/page | Template 2: Card 10/page) ---
-  const triggerA4Print = async (couponsToPrint, templateType = 'strip') => {
+  // --- 6. Execute A4 Print (Option 1: One-Click Smart Print) ---
+  // Automatically detects coupon layout (card 10/page vs strip 5/page) based on coupon design
+  const triggerA4Print = async (couponsToPrint, forcedTemplateType = null) => {
     if (!couponsToPrint || couponsToPrint.length === 0) {
       showToast('ไม่มีคูปองที่จะสั่งพิมพ์', 'warning');
       return;
     }
 
-    // Ensure all QRs and Barcodes are ready before opening print window
-    const qrMap = { ...qrCodeDataUrls };
-    const barcodeMap = {};
-    for (const cp of couponsToPrint) {
-      const isTransparentQr = (cp.qrConfig?.whiteBg === false) || (cp.qr_config?.whiteBg === false);
-      if (cp.code && (!qrMap[cp.code] || isTransparentQr)) {
-        try {
-          qrMap[cp.code] = await QRCode.toDataURL(cp.code, {
-            width: 280,
-            margin: 1,
-            color: { dark: '#0f172a', light: isTransparentQr ? '#00000000' : '#ffffff' }
-          });
-        } catch (err) {
-          console.error('[Coupon] QR print error:', err);
-        }
-      }
-      const isBarcode = (cp.qrConfig?.codeType === 'barcode') || (cp.qr_config?.codeType === 'barcode');
-      if (isBarcode && cp.code && !barcodeMap[cp.code]) {
-        try {
-          const bCanvas = document.createElement('canvas');
-          JsBarcode(bCanvas, cp.code, {
-            format: 'CODE128',
-            width: 2.2,
-            height: 60,
-            displayValue: false,
-            background: 'transparent',
-            lineColor: '#0f172a',
-            margin: 0
-          });
-          barcodeMap[cp.code] = bCanvas.toDataURL('image/png');
-        } catch (bErr) {
-          console.warn('[Coupon] Barcode print error:', bErr);
-        }
-      }
-    }
-    setQrCodeDataUrls(prev => ({ ...prev, ...qrMap }));
+    // Auto-detect template format from the coupons to guarantee 100% correct aspect ratio
+    const firstCp = couponsToPrint[0];
+    const isCouponStrip = (firstCp?.templateType === 'strip' || firstCp?.template_type === 'strip');
+    const isStrip = forcedTemplateType === 'strip' ? true : (forcedTemplateType === 'card' ? false : isCouponStrip);
+    const templateLabel = isStrip ? 'แถบยาว 200 × 54 mm (5 ใบ/หน้า A4)' : 'บัตรพรีเมียม 85.6 × 54 mm (10 ใบ/หน้า A4)';
 
     const printWin = window.open('', '_blank', 'width=980,height=820');
     if (!printWin) {
@@ -5214,281 +5400,68 @@ const CouponManager = ({
       return;
     }
 
-    const isStrip = templateType === 'strip';
+    // Immediate loading screen in the popup window while high-res canvases are rendered
+    printWin.document.open();
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>กำลังเตรียมพิมพ์คูปอง (${templateLabel})...</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Kanit", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; color: #334155; background: #f8fafc; }
+          .spinner { width: 40px; height: 40px; border: 3.5px solid #e2e8f0; border-top-color: #0284c7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="spinner"></div>
+        <p style="font-weight: 800; font-size: 16px; margin: 0 0 6px 0;">กำลังเรนเดอร์ภาพคูปองความละเอียดสูง (300 DPI)...</p>
+        <p style="font-size: 13px; color: #64748b; margin: 0 0 4px 0;">รูปแบบ: <strong style="color: #0369a1;">${templateLabel}</strong></p>
+        <p style="font-size: 12px; color: #94a3b8; margin: 0;">ระบบจะเปิดหน้าต่างสั่งพิมพ์ให้อัตโนมัติในสักครู่</p>
+      </body>
+      </html>
+    `);
+    printWin.document.close();
+
+    // Pre-render all coupons using generateCouponCanvas to guarantee 100% pixel-perfect
+    // parity between single coupon preview/print and batch A4 print.
+    const renderedCoupons = await Promise.all(
+      couponsToPrint.map(async (cp) => {
+        try {
+          const cvs = await generateCouponCanvas(cp);
+          return {
+            coupon: cp,
+            dataUrl: cvs ? cvs.toDataURL('image/png') : ''
+          };
+        } catch (err) {
+          console.error('[Coupon] Pre-render canvas error for print:', err);
+          return { coupon: cp, dataUrl: '' };
+        }
+      })
+    );
+
     const chunkSize = isStrip ? 5 : 10;
     const pages = [];
-    for (let i = 0; i < couponsToPrint.length; i += chunkSize) {
-      pages.push(couponsToPrint.slice(i, i + chunkSize));
+    for (let i = 0; i < renderedCoupons.length; i += chunkSize) {
+      pages.push(renderedCoupons.slice(i, i + chunkSize));
     }
 
     const pagesHtml = pages.map((pageCoupons) => {
-      const cardsHtml = pageCoupons.map((coupon) => {
-        const qrUrl = qrMap[coupon.code] || '';
-        const expText = formatPrintExpDate(coupon);
-        const isPercent = (coupon.discountType === 'percent' || coupon.discount_type === 'percent');
-        const discountVal = Number(coupon.discountValue || coupon.discount_value || 0);
-        const discountLabel = isPercent ? `ลด ${discountVal}%` : `ลด ฿${discountVal.toLocaleString()}`;
-        
-        const themeKey = coupon.themeColor || coupon.theme_color || 'emerald';
-        const theme = PRINT_THEMES[themeKey] || PRINT_THEMES.emerald;
-        const bInfo = resolveBranchInfo(branchesData, coupon.branchId || currentBranch);
-        const { clinicName, clinicAddress, clinicPhone, taxId, logoUrl } = bInfo;
-        const customImg = coupon.bgImage || coupon.bg_image;
-        const isCustomImg = Boolean(customImg) && (coupon.templateType === 'custom_image' || coupon.template_type === 'custom_image' || templateType === 'custom_image');
-        const qrCfg = coupon.qrConfig || coupon.qr_config || { codeType: 'qr', xPercent: 78, yPercent: 32, sizePercent: 26, whiteBg: true, showCode: true, codeColor: '#0f172a', codeBgStyle: 'none' };
-        const isBarcode = qrCfg.codeType === 'barcode';
-        const codeImgUrl = isBarcode ? (barcodeMap[coupon.code] || '') : qrUrl;
-        const expCfg = coupon.expiryConfig || coupon.expiry_config || {
-          enabled: true,
-          xPercent: 25,
-          yPercent: 82,
-          sizePercent: 18,
-          color: '#0f172a',
-          bgStyle: 'none',
-          format: 'eng',
-          prefix: 'EXP: ',
-          fontFamily: 'Inter',
-          fontWeight: 'light'
-        };
-        const customExpText = formatCustomExpiryDate(
-          coupon.expireDate || coupon.expire_date,
-          expCfg.format,
-          coupon.isLifetime ?? coupon.is_lifetime,
-          expCfg.prefix
-        );
+      // Pad empty slots so the last page keeps proper grid layout and cutting marks
+      const paddedCoupons = [...pageCoupons];
+      while (paddedCoupons.length < chunkSize) {
+        paddedCoupons.push(null);
+      }
 
-        if (isCustomImg) {
-          // TEMPLATE 3: ดีไซน์รูปภาพปรับแต่งเอง (85.6 x 54 mm, 10/A4) วางตำแหน่ง QR Code / Barcode & วันหมดอายุ ตามเครื่องมือสร้าง QR 1:1
-          const codeColor = qrCfg.codeColor || (qrCfg.whiteBg ? '#0f172a' : '#ffffff');
-          const codeBgStyle = qrCfg.codeBgStyle || 'none';
-          const codeBgCss = codeBgStyle === 'white_pill'
-            ? 'background: rgba(255,255,255,0.95); padding: 1.5px 7px; border-radius: 9999px; border: 0.3px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);'
-            : codeBgStyle === 'dark_pill'
-            ? 'background: rgba(15,23,42,0.9); padding: 1.5px 7px; border-radius: 9999px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);'
-            : 'background: transparent;';
-          const codeTextClr = codeBgStyle === 'dark_pill' ? '#ffffff' : codeColor;
-          const expFontWeight = expCfg.fontWeight === 'bold' ? '700' : (expCfg.fontWeight === 'normal' ? '400' : '300');
-
-          // Physical metrics matching Studio 1:1 on 85.6mm card
-          const qrWidthMm = (qrCfg.sizePercent / 100) * 85.6;
-          const qrPadMm = qrCfg.whiteBg ? Math.max(0.6, qrWidthMm * 0.035) : 0;
-          const codeFontMm = Math.max(1.4, Math.min(4.5, qrWidthMm * ((qrCfg.codeFontSize ?? 10) * 0.009)));
-          const codeMarginTopMm = Math.max(0, qrWidthMm * ((qrCfg.codeDistance ?? 0) / 100));
-
-          const expFontMm = Math.max(1.8, Math.min(8.0, 85.6 * ((expCfg.sizePercent || 18) * 0.002)));
-
-          return `
-            <div class="t2-card custom-art-card" style="background-image: url('${customImg}');">
-              <div class="crop-mark top-left"></div>
-              <div class="crop-mark top-right"></div>
-              <div class="crop-mark bottom-left"></div>
-              <div class="crop-mark bottom-right"></div>
-
-              <div class="custom-qr-wrapper" style="
-                left: ${qrCfg.xPercent}%;
-                top: ${qrCfg.yPercent}%;
-                width: ${qrCfg.sizePercent}%;
-                transform: translate(-50%, -50%);
-              ">
-                <div class="custom-qr-box ${qrCfg.whiteBg ? 'with-white-bg' : 'transparent-bg'}" style="
-                  padding: ${qrPadMm.toFixed(2)}mm;
-                  box-sizing: border-box;
-                  width: 100%;
-                ">
-                  <div style="width: 100%; aspect-ratio: ${isBarcode ? 'auto' : '1/1'}; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                    <img src="${codeImgUrl}" alt="${coupon.code}" class="${isBarcode ? 'custom-barcode-img' : 'custom-qr-img'}" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
-                  </div>
-                  ${qrCfg.showCode ? `
-                    <div class="custom-qr-code-text" style="
-                      color: ${codeTextClr};
-                      ${codeBgCss}
-                      font-size: ${codeFontMm.toFixed(2)}mm;
-                      margin-top: ${codeMarginTopMm.toFixed(2)}mm;
-                      white-space: nowrap !important;
-                      overflow: hidden;
-                      text-overflow: clip;
-                      line-height: 1.1;
-                      width: 100%;
-                      text-align: center;
-                      display: block;
-                      box-sizing: border-box;
-                    ">${coupon.code}</div>
-                  ` : ''}
-                </div>
-              </div>
-
-              ${expCfg.enabled !== false ? `
-                <div class="custom-exp-wrapper ${expCfg.bgStyle === 'white_pill' ? 'bg-white-pill' : expCfg.bgStyle === 'dark_pill' ? 'bg-dark-pill' : ''}" style="
-                  left: ${expCfg.xPercent}%;
-                  top: ${expCfg.yPercent}%;
-                  transform: translate(-50%, -50%);
-                  color: ${expCfg.bgStyle === 'dark_pill' ? '#ffffff' : (expCfg.color || '#0f172a')};
-                  font-size: ${expFontMm.toFixed(2)}mm;
-                  font-family: ${getExpiryFontFamily(expCfg.fontFamily)};
-                  font-weight: ${expFontWeight};
-                  white-space: nowrap !important;
-                  line-height: 1.1;
-                ">
-                  ${customExpText}
-                </div>
-              ` : ''}
-            </div>
-          `;
-        } else if (isStrip) {
-          // TEMPLATE 1: แถบยาว 200 x 54 mm (5 ใบ/หน้า A4) พร้อมเส้นตัดตรง 100% และหัวกระดาษแบรนด์คลินิกพรีเมียม
-          const t1DiscountFontSize = discountLabel.length > 8 ? '34px' : '42px';
-          return `
-            <div class="t1-voucher ${customImg ? 'custom-bg' : 'luxury-strip'}" style="${customImg ? `background-image: url('${customImg}');` : `background: ${theme.cardBgGradient};`}">
-              ${!customImg ? `
-                <div class="t1-sheen"></div>
-                <div class="t1-inner-border"></div>
-              ` : ''}
-
-              <div class="t1-left">
-                <div class="t1-header">
-                  <div class="t1-header-brand">
-                    ${logoUrl ? `<img src="${logoUrl}" class="t1-logo-img" alt="Logo" onerror="this.onerror=null; this.outerHTML='<div class=\\'t1-logo-badge\\'>AP</div>';" />` : `<div class="t1-logo-badge">AP</div>`}
-                    <div class="t1-brand-info">
-                      <div class="t1-brand-name">${clinicName}</div>
-                      <div class="t1-brand-address">${clinicAddress}</div>
-                      <div class="t1-brand-contact">
-                        <span>โทร: <strong>${clinicPhone || '-'}</strong></span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="t1-body">
-                  <div class="t1-title">${coupon.title || 'บัตรกำนัลส่วนลดพิเศษ'}</div>
-                  <div class="t1-discount-row">
-                    <span class="t1-discount-val" style="font-size: ${t1DiscountFontSize};">${discountLabel}</span>
-                    <div style="display: flex; flex-direction: column; gap: 0.5mm;">
-                      ${buildCouponConditionLines(coupon).map(line => {
-                        const isSub = line.trim().startsWith('(');
-                        return `<span class="t1-min-spend" style="${isSub ? 'padding-left: 2mm; opacity: 0.9;' : ''}">${line.trim()}</span>`;
-                      }).join('')}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="t1-footer">
-                  <span class="t1-exp-pill">📅 วันหมดอายุ: <strong>${expText}</strong></span>
-                  <span>กรุณาแสดงคูปองต่อเจ้าหน้าที่ก่อนเข้ารับบริการ</span>
-                </div>
-              </div>
-
-              <div class="t1-stub">
-                <div class="t1-stub-content">
-                  <div class="t1-qr-card">
-                    <img src="${qrUrl}" alt="${coupon.code}" class="t1-qr-img" />
-                    <span class="t1-qr-code">${coupon.code}</span>
-                  </div>
-                  <div class="t1-stub-text">โทร.${clinicPhone || '-'}</div>
-                </div>
-              </div>
-            </div>
-          `;
-        } else {
-          // TEMPLATE 2: บัตรมาตรฐาน 85.6 x 54 mm (10 ใบ/หน้า A4) เกรดกระดาษโฟโต้ ตัดตรง 100%
-          const isPercent = (coupon.discountType === 'percent' || coupon.discount_type === 'percent');
-          const discountVal = Number(coupon.discountValue || coupon.discount_value || 0);
-          const numStr = isPercent ? String(discountVal) : discountVal.toLocaleString();
-          const unitStr = isPercent ? '%' : 'บาท';
-
-          const stubNumFontSize = numStr.length >= 4 ? '18px' : (numStr.length === 3 ? '22px' : '28px');
-          const stubUnitFontSize = numStr.length >= 4 ? '9px' : (numStr.length === 3 ? '11px' : '14px');
-
-          const isLifetime = Boolean(coupon.isLifetime ?? coupon.is_lifetime);
-          const expDisplayClean = isLifetime ? 'ไม่มีวันหมดอายุ' : (expText || 'ไม่ระบุ');
-          const termsLines = buildCouponConditionLines(coupon);
-          const numTerms = termsLines.length;
-          const termsFontSize = numTerms > 3 ? '5.2px' : (numTerms > 2 ? '5.8px' : (numTerms > 1 ? '7px' : '8.5px'));
-          const termsMarginTop = numTerms > 3 ? '1.1mm' : (numTerms > 2 ? '1.5mm' : (numTerms > 1 ? '1.8mm' : '2.2mm'));
-          const thanksFontSize = numTerms > 3 ? '7.5px' : (numTerms > 2 ? '8.2px' : (numTerms > 1 ? '8.8px' : '9.5px'));
-          const thanksMargin = numTerms > 3 ? '0.6mm 0 0.2mm 0' : (numTerms > 2 ? '0.8mm 0 0.3mm 0' : (numTerms > 1 ? '1.1mm 0 0.4mm 0' : '1.5mm 0 0.5mm 0'));
-
-          // Dynamic title font sizing for 55.6mm width to span nearly edge-to-edge
-          const titleLen = (coupon.title || '').length;
-          let titleFontSize = '19px';
-          let titleLineHeight = '1.05';
-          if (titleLen <= 5) {
-            titleFontSize = '34px';
-            titleLineHeight = '0.95';
-          } else if (titleLen <= 9) {
-            titleFontSize = '27px';
-            titleLineHeight = '1.0';
-          } else if (titleLen <= 16) {
-            titleFontSize = '19px';
-            titleLineHeight = '1.05';
-          } else if (titleLen <= 26) {
-            titleFontSize = '13.5px';
-            titleLineHeight = '1.1';
-          } else {
-            titleFontSize = '10.5px';
-            titleLineHeight = '1.15';
-          }
-
-          return `
-            <div class="t2-card ${customImg ? 'custom-bg' : 'luxury-card'}" style="${customImg ? `background-image: url('${customImg}');` : `background: ${theme.cardBgGradient};`}">
-              ${!customImg ? `
-                <div class="t2-sheen"></div>
-                <div class="t2-inner-border"></div>
-              ` : ''}
-
-              <div class="t2-left">
-                <div class="t2-header">
-                  <div class="t2-header-brand">
-                    ${logoUrl ? `<img src="${logoUrl}" class="t2-logo-img" alt="Logo" onerror="this.onerror=null; this.outerHTML='<div class=\\'t2-logo-badge\\'>AP</div>';" />` : `<div class="t2-logo-badge">AP</div>`}
-                    <div class="t2-brand-info">
-                      <div class="t2-brand-name">${clinicName}</div>
-                      <div class="t2-brand-address">${clinicAddress}</div>
-                      <div class="t2-brand-contact">
-                        <span>โทร: ${clinicPhone || '-'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="t2-divider"></div>
-
-                <div class="t2-body">
-                  <div class="t2-title" style="font-size: ${titleFontSize}; line-height: ${titleLineHeight};">${coupon.title || 'บัตรกำนัลส่วนลดพิเศษ'}</div>
-                  <div class="t2-terms-group" style="display: flex; flex-direction: column; gap: 0.5mm; margin-top: ${termsMarginTop};">
-                    ${termsLines.map(line => {
-                      const isSub = line.trim().startsWith('(');
-                      return `<div class="t2-min-spend" style="font-size: ${termsFontSize}; margin-top: 0; ${isSub ? 'padding-left: 2mm; opacity: 0.9;' : ''}">${line.trim()}</div>`;
-                    }).join('')}
-                  </div>
-                  <div class="t2-thanks" style="font-size: ${thanksFontSize}; margin: ${thanksMargin};">ขอบคุณที่ไว้วางใจให้อันผิงดูแลคุณ</div>
-                </div>
-
-                <div class="t2-footer">
-                  <div class="t2-prompt-note">กรุณาแสดงบัตรกำนัลนี้แก่เจ้าหน้าที่</div>
-                  <div class="t2-exp-text">วันหมดอายุ: ${expDisplayClean}</div>
-                </div>
-              </div>
-
-              <div class="t2-stub">
-                <div class="t2-stub-content">
-                  <div class="t2-stub-discount">
-                    <span class="t2-stub-discount-label">ลด</span>
-                    <div class="t2-stub-discount-val">
-                      <span class="t2-discount-num" style="font-size: ${stubNumFontSize};">${numStr}</span>
-                      <span class="t2-discount-unit" style="font-size: ${stubUnitFontSize};">${unitStr}</span>
-                    </div>
-                  </div>
-
-                  <div class="t2-qr-card">
-                    <img src="${qrUrl}" alt="${coupon.code}" class="t2-qr-img" />
-                    <span class="t2-qr-code">${coupon.code}</span>
-                  </div>
-
-                  <div class="t2-stub-phone">โทร.${clinicPhone || '-'}</div>
-                </div>
-              </div>
-            </div>
-          `;
+      const cardsHtml = paddedCoupons.map((item) => {
+        if (!item || !item.dataUrl) {
+          return `<div class="${isStrip ? 't1-voucher-box empty' : 't2-card-box empty'}"></div>`;
         }
+        return `
+          <div class="${isStrip ? 't1-voucher-box' : 't2-card-box'}">
+            <img src="${item.dataUrl}" alt="${item.coupon.code}" class="${isStrip ? 't1-voucher-img' : 't2-card-img'}" />
+          </div>
+        `;
       }).join('');
 
       return `
@@ -5506,7 +5479,6 @@ const CouponManager = ({
       <head>
         <meta charset="utf-8">
         <title>พิมพ์คูปองส่วนลด - Anping Clinic</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kanit:wght@300;400;500;600;700;800;900&family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800;900&display=swap" rel="stylesheet">
         <style>
           @page {
             size: A4 portrait;
@@ -5521,7 +5493,7 @@ const CouponManager = ({
             margin: 0;
             padding: 0;
             background: #ffffff;
-            font-family: 'Kanit', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Kanit", sans-serif;
             color: #0f172a;
           }
           .a4-page {
@@ -5541,583 +5513,83 @@ const CouponManager = ({
             break-after: auto;
           }
 
-          /* Hide inner corner crop marks in zero-gap mode so they don't overlap adjacent cards */
-          .crop-mark {
-            display: none !important;
-          }
-
-          /* TEMPLATE 1: STRIP (200 x 54 mm, 5/page) - ไร้ช่องว่างระหว่างคูปอง ตัดคัตเตอร์เส้นเดียว 100% */
-          .grid-strip {
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-            width: 200mm;
-            margin: 0 auto;
-            border: 0.35px solid #64748b;
-            box-sizing: border-box;
-          }
-          .t1-voucher {
-            width: 200mm;
-            height: 54mm;
-            border-bottom: 0.35px dashed #64748b;
-            border-top: none;
-            border-left: none;
-            border-right: none;
-            border-radius: 0px !important;
-            display: flex;
-            position: relative;
-            background: #ffffff;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            overflow: hidden;
-            box-sizing: border-box;
-            color: #ffffff;
-          }
-          .t1-voucher.luxury-strip {
-            background-size: cover;
-            color: #ffffff;
-          }
-          .t1-sheen {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            background: linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.15) 100%);
-            z-index: 1;
-          }
-          .t1-inner-border {
-            position: absolute;
-            inset: 2mm;
-            pointer-events: none;
-            border: 0.4px solid rgba(255,255,255,0.3);
-            border-radius: 2.5mm;
-            z-index: 1;
-          }
-          .t1-voucher:last-child {
-            border-bottom: none;
-          }
-          .t1-left {
-            position: relative;
-            z-index: 2;
-            flex: 1;
-            padding: 4mm 6mm 3.8mm 6.5mm;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-          }
-          .t1-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-          }
-          .t1-header-brand {
-            display: flex;
-            align-items: center;
-            gap: 2.8mm;
-            max-width: 135mm;
-          }
-          .t1-logo-img {
-            width: 9.5mm;
-            height: 9.5mm;
-            border-radius: 50%;
-            object-fit: contain;
-            background: #ffffff;
-            border: 0.4px solid rgba(255,255,255,0.8);
-            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-            flex-shrink: 0;
-          }
-          .t1-logo-badge {
-            width: 9mm;
-            height: 9mm;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.25);
-            border: 0.4px solid rgba(255,255,255,0.7);
-            color: #ffffff;
-            font-size: 10px;
-            font-weight: 900;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-          }
-          .t1-brand-info {
-            display: flex;
-            flex-direction: column;
-            text-align: left;
-            overflow: hidden;
-          }
-          .t1-brand-name {
-            font-size: 13px;
-            font-weight: 900;
-            letter-spacing: 0.2px;
-            color: #ffffff;
-            line-height: 1.15;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.45);
-          }
-          .t1-brand-address {
-            font-size: 8.5px;
-            color: rgba(255,255,255,0.9);
-            line-height: 1.25;
-            word-break: break-word;
-            max-width: 120mm;
-          }
-          .t1-brand-contact {
-            font-size: 8.5px;
-            color: rgba(255,255,255,0.9);
-            display: flex;
-            gap: 4mm;
-            line-height: 1.2;
-          }
-          .t1-title {
-            font-size: 15px;
-            font-weight: 800;
-            color: #ffffff;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-            margin-top: 1px;
-          }
-          .t1-discount-val {
-            font-size: 42px;
-            font-weight: 900;
-            line-height: 0.95;
-            color: #ffffff;
-            text-shadow: 0 2px 6px rgba(0,0,0,0.5);
-            letter-spacing: -0.5px;
-          }
-          .t1-min-spend {
-            font-size: 9.5px;
-            font-weight: 500;
-            color: rgba(255,255,255,0.9);
-            margin-left: 8px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-          }
-          .t1-footer {
-            font-size: 8.5px;
-            color: rgba(255,255,255,0.9);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top: 0.4px solid rgba(255,255,255,0.25);
-            padding-top: 1.8mm;
-          }
-          .t1-exp-pill {
-            background: rgba(0,0,0,0.3);
-            padding: 1.8px 8px;
-            border-radius: 9999px;
-            border: 0.35px solid rgba(255,255,255,0.35);
-            font-weight: 600;
-            color: #ffffff;
-          }
-          .t1-stub {
-            position: relative;
-            z-index: 2;
-            width: 50mm;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 3mm;
-            color: #ffffff;
-            border-left: 0.8px dashed rgba(255,255,255,0.5);
-          }
-          .t1-stub-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2mm;
-          }
-          .t1-qr-card {
-            background: #ffffff;
-            padding: 3.5px;
-            border-radius: 8px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-          }
-          .t1-qr-img {
-            width: 27mm;
-            height: 27mm;
-            display: block;
-          }
-          .t1-qr-code {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 9.5px;
-            font-weight: 800;
-            color: #0f172a;
-            background: #f1f5f9;
-            border-radius: 4px;
-            padding: 1.5px 6px;
-            display: inline-block;
-            margin-top: 2.5px;
-            letter-spacing: 0.5px;
-          }
-          .t1-stub-text {
-            font-size: 8.5px;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-            color: rgba(255,255,255,0.95);
-            text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-          }
-
-          /* TEMPLATE 2 & 3: CARD (85.6 x 54 mm, 10/page) - ไร้ช่องว่างระหว่างคูปอง ตัดคัตเตอร์เส้นเดียว 100% */
+          /* TEMPLATE 2: CARD (85.6 x 54 mm, 10/page) - ตาราง 2 คอลัมน์ x 5 แถว พร้อมเส้นประตัด */
           .grid-card {
             display: grid;
             grid-template-columns: repeat(2, 85.6mm);
             grid-template-rows: repeat(5, 54mm);
             gap: 0;
             width: 171.2mm;
-            margin: 0 auto;
+            height: 270mm;
+            margin: auto;
             border: 0.35px solid #64748b;
             box-sizing: border-box;
           }
-          .t2-card {
+          .t2-card-box {
             width: 85.6mm;
             height: 54mm;
             border-right: 0.35px dashed #64748b;
             border-bottom: 0.35px dashed #64748b;
-            border-top: none;
-            border-left: none;
-            border-radius: 0px !important;
+            box-sizing: border-box;
+            overflow: hidden;
             display: flex;
-            position: relative;
+            align-items: center;
+            justify-content: center;
             background: #ffffff;
             page-break-inside: avoid;
             break-inside: avoid;
-            overflow: hidden;
-            box-sizing: border-box;
-            color: #ffffff;
           }
-          .t2-card.luxury-card {
-            background-size: cover;
-            color: #ffffff;
-          }
-          .t2-sheen {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            background: linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.15) 100%);
-            z-index: 1;
-          }
-          .t2-inner-border {
-            position: absolute;
-            inset: 1.5mm;
-            pointer-events: none;
-            border: 0.35px solid rgba(255,255,255,0.3);
-            border-radius: 2mm;
-            z-index: 1;
-          }
-          .t2-card:nth-child(2n) {
+          .t2-card-box:nth-child(2n) {
             border-right: none;
           }
-          .t2-card:nth-last-child(-n+2) {
+          .t2-card-box:nth-last-child(-n+2) {
             border-bottom: none;
           }
-          .t2-left {
-            position: relative;
-            z-index: 2;
-            width: 55.6mm;
+          .t2-card-box.empty {
+            background: #ffffff;
+          }
+          .t2-card-img {
+            width: 85.6mm;
             height: 54mm;
-            padding: 2.8mm 3.2mm 2.6mm 3.5mm;
+            object-fit: contain;
+            display: block;
+          }
+
+          /* TEMPLATE 1: STRIP (200 x 54 mm, 5/page) - แถบยาว 5 แถว พร้อมเส้นประตัด */
+          .grid-strip {
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            gap: 0;
+            width: 200mm;
+            height: 270mm;
+            margin: auto;
+            border: 0.35px solid #64748b;
             box-sizing: border-box;
           }
-          .t2-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: flex-start;
-            width: 100%;
-          }
-          .t2-header-brand {
-            display: flex;
-            align-items: flex-start;
-            gap: 1.8mm;
-            width: 100%;
-          }
-          .t2-logo-img {
-            width: 7.2mm;
-            height: 7.2mm;
-            border-radius: 50%;
-            object-fit: contain;
-            background: #ffffff;
-            border: 0.4px solid rgba(255,255,255,0.8);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-            flex-shrink: 0;
-            margin-top: 0.2mm;
-          }
-          .t2-logo-badge {
-            width: 6.8mm;
-            height: 6.8mm;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.25);
-            border: 0.4px solid rgba(255,255,255,0.7);
-            color: #ffffff;
-            font-size: 8px;
-            font-weight: 900;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-            margin-top: 0.2mm;
-          }
-          .t2-brand-info {
-            display: flex;
-            flex-direction: column;
-            text-align: left;
-            flex: 1;
-            min-width: 0;
-          }
-          .t2-brand-name {
-            font-size: 8px;
-            font-weight: 900;
-            color: #ffffff;
-            line-height: 1.15;
-            letter-spacing: 0px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-          }
-          .t2-brand-address {
-            font-size: 5.4px;
-            font-weight: 400;
-            color: rgba(255,255,255,0.9);
-            line-height: 1.2;
-            word-break: break-word;
-            margin-top: 0.3mm;
-          }
-          .t2-brand-contact {
-            font-size: 5.2px;
-            font-weight: 400;
-            color: rgba(255,255,255,0.85);
-            line-height: 1.2;
-            display: flex;
-            gap: 2mm;
-            margin-top: 0.3mm;
-          }
-          .t2-divider {
-            width: 100%;
-            height: 0.35px;
-            background: linear-gradient(90deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.18) 70%, rgba(255,255,255,0) 100%);
-            margin: 1mm 0 0.8mm 0;
-          }
-          .t2-body {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            flex: 1;
-            padding: 1.2mm 0 0.5mm 0;
-          }
-          .t2-title {
-            font-weight: 900;
-            color: #ffffff;
-            letter-spacing: -0.2px;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-            word-break: break-word;
-          }
-          .t2-min-spend {
-            font-size: 8.5px;
-            font-weight: 600;
-            color: rgba(255,255,255,0.95);
-            line-height: 1.2;
-            margin-top: 2.2mm;
-          }
-          .t2-thanks {
-            font-size: 9.5px;
-            font-weight: 900;
-            color: #ffffff;
-            text-align: center;
-            margin: 1.5mm 0 0.5mm 0;
-            letter-spacing: -0.2px;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-            white-space: nowrap;
-          }
-          .t2-footer {
-            display: flex;
-            flex-direction: column;
-            gap: 0.8mm;
-            margin-top: auto;
-          }
-          .t2-prompt-note {
-            font-size: 6px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.88);
-            line-height: 1.15;
-          }
-          .t2-exp-text {
-            font-size: 6.6px;
-            font-weight: 700;
-            color: #ffffff;
-            line-height: 1.15;
-          }
-          .t2-stub {
-            position: relative;
-            z-index: 2;
-            width: 30mm;
+          .t1-voucher-box {
+            width: 200mm;
             height: 54mm;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-left: 0.8px dashed rgba(255,255,255,0.5);
-            color: #ffffff;
+            border-bottom: 0.35px dashed #64748b;
             box-sizing: border-box;
-            padding: 1.8mm 1mm;
-          }
-          .t2-stub-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-            height: 100%;
-            width: 100%;
-          }
-          .t2-stub-discount {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-            margin-top: 0.5mm;
-          }
-          .t2-stub-discount-label {
-            font-size: 15px;
-            font-weight: 900;
-            color: #ffffff;
-            line-height: 1;
-            margin-bottom: 0.2mm;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-          }
-          .t2-stub-discount-val {
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            line-height: 0.9;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-          }
-          .t2-discount-num {
-            font-weight: 900;
-            color: #ffffff;
-            letter-spacing: -0.4px;
-            line-height: 0.9;
-          }
-          .t2-discount-unit {
-            font-weight: 900;
-            color: #ffffff;
-            margin-left: 0.5mm;
-            line-height: 0.9;
-            padding-bottom: 0.2mm;
-          }
-          .t2-qr-card {
-            background: #ffffff;
-            padding: 1.5px;
-            border-radius: 5px;
-            text-align: center;
-            box-shadow: 0 2px 7px rgba(0,0,0,0.35);
-          }
-          .t2-qr-img {
-            width: 19.5mm;
-            height: 19.5mm;
-            display: block;
-          }
-          .t2-qr-code {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 6.8px;
-            font-weight: 800;
-            color: #0f172a;
-            background: #f1f5f9;
-            border-radius: 3px;
-            padding: 1px 3.5px;
-            display: inline-block;
-            margin-top: 1.5px;
-            letter-spacing: 0.2px;
-          }
-          .t2-stub-phone {
-            font-size: 8px;
-            font-weight: 800;
-            color: #ffffff;
-            text-align: center;
-            white-space: nowrap;
-            line-height: 1.1;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-            margin-bottom: 0.5mm;
-          }
-          .custom-bg {
-            background-size: cover !important;
-            background-position: center !important;
-          }
-          .custom-art-card {
-            background-size: cover !important;
-            background-position: center !important;
-            position: relative;
-            display: block;
             overflow: hidden;
-            box-sizing: border-box;
-          }
-          .custom-qr-wrapper {
-            position: absolute;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-sizing: border-box;
-          }
-          .custom-qr-box {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            box-sizing: border-box;
-          }
-          .custom-qr-box.with-white-bg {
             background: #ffffff;
-            border-radius: 4px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
-          .custom-qr-img {
-            width: 100%;
-            height: 100%;
-            aspect-ratio: 1/1;
-            display: block;
+          .t1-voucher-box:last-child {
+            border-bottom: none;
+          }
+          .t1-voucher-box.empty {
+            background: #ffffff;
+          }
+          .t1-voucher-img {
+            width: 200mm;
+            height: 54mm;
             object-fit: contain;
-          }
-          .custom-barcode-img {
-            width: 100%;
-            height: auto;
-            max-height: 14mm;
             display: block;
-            object-fit: contain;
-          }
-          .custom-qr-code-text {
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 700;
-            letter-spacing: 0.2px;
-            white-space: nowrap !important;
-            text-align: center;
-            width: 100%;
-            display: block;
-            overflow: hidden;
-            text-overflow: clip;
-            line-height: 1.1;
-            box-sizing: border-box;
-          }
-          .custom-exp-wrapper {
-            position: absolute;
-            white-space: nowrap !important;
-            pointer-events: none;
-            line-height: 1.1;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            box-sizing: border-box;
-          }
-          .custom-exp-wrapper.bg-white-pill {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 1.5px 6px;
-            border-radius: 9999px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            border: 0.3px solid rgba(0,0,0,0.1);
-          }
-          .custom-exp-wrapper.bg-dark-pill {
-            background: rgba(15, 23, 42, 0.9);
-            padding: 1.5px 6px;
-            border-radius: 9999px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-            color: #ffffff !important;
           }
         </style>
       </head>
@@ -6126,14 +5598,16 @@ const CouponManager = ({
         <script>
           window.onload = function() {
             setTimeout(function() {
+              window.focus();
               window.print();
-            }, 450);
+            }, 500);
           };
         </script>
       </body>
       </html>
     `;
 
+    printWin.document.open();
     printWin.document.write(html);
     printWin.document.close();
   };
@@ -6145,9 +5619,11 @@ const CouponManager = ({
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
-            <div>
-              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2">
-                <Ticket className="text-sky-500" /> ระบบคูปอง & สิทธิประโยชน์
+            <div className="min-w-0">
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-1.5 sm:gap-2">
+                <Ticket className="text-sky-500 shrink-0 w-5 h-5 sm:w-6 sm:h-6" />
+                <span className="truncate hidden sm:inline">ระบบคูปอง & สิทธิประโยชน์</span>
+                <span className="truncate sm:hidden">ระบบคูปอง</span>
               </h1>
               <p className="text-slate-500 kanit-text sticky-header-desc">
                 สร้าง ออกแบบ ส่งออกภาพคมชัด และสั่งพิมพ์คูปองส่วนลดแบบชุดมาตรฐาน A4
@@ -6155,23 +5631,25 @@ const CouponManager = ({
             </div>
 
             {/* Header Action Buttons */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsScanModalOpen(true)}
-                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-slate-700 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all text-xs sm:text-sm active:scale-95"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-slate-700 bg-white border border-slate-200 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition-all text-xs sm:text-sm active:scale-95 shrink-0 sticky-header-btn"
+                title="สแกน / ตัดคูปอง"
               >
-                <Camera size={18} className="text-sky-600" />
+                <Camera size={18} className="text-sky-600 shrink-0" />
                 <span className="hidden sm:inline">สแกน / ตัดคูปอง</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(true)}
-                className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-sky-500 hover:bg-sky-600 text-white text-xs sm:text-sm"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl font-semibold shadow-xs transition-transform active:scale-95 shrink-0 bg-sky-500 hover:bg-sky-600 text-white text-xs sm:text-sm sticky-header-btn"
+                title="สร้างคูปองใหม่"
               >
-                <Plus size={18} />
-                <span className="hidden sm:inline">สร้างคูปองใหม่ (เป็นชุด)</span>
+                <Plus size={18} className="shrink-0" />
+                <span className="hidden sm:inline">สร้างคูปองใหม่</span>
               </button>
             </div>
           </div>
@@ -6276,98 +5754,188 @@ const CouponManager = ({
       {/* --- 3. Filter & Search Toolbar (Sticky เมื่อเลื่อนชน Header) --- */}
       <div 
         ref={filterRef}
-        className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-3 sm:my-4 sticky-filter-appt"
+        className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt"
       >
-        <div className="w-full mx-auto pointer-events-none relative z-50">
-          <div className="mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-4 md:px-8 2xl:px-12 py-3 sm:py-3.5 transition-all">
-            {/* Search Bar */}
-            <div className="relative flex-1 max-w-md">
-              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="ค้นหาชื่อคูปอง, รหัส, คนไข้ หรือ HN..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs sm:text-sm font-medium outline-none focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all font-data"
-              />
-              {searchTerm && (
-                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <X size={15} />
+        <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
+          <div className={`absolute top-0 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col px-4 md:px-8 2xl:px-12 py-2.5 sm:py-3 transition-all duration-300 ${showMobileFilters ? 'ease-out' : 'ease-in'}`}>
+            
+            {/* Top Toolbar Row */}
+            <div className="flex flex-row justify-between items-center gap-2 sm:gap-4 w-full">
+              {/* Search Bar */}
+              <div className="relative flex-1 min-w-0 w-full">
+                <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาชื่อคูปอง, รหัส, คนไข้ หรือ HN..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-9 sm:pl-11 sm:pr-10 py-2 sm:py-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs sm:text-sm font-medium outline-none focus:bg-white focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all font-data truncate"
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile Filter Toggle Button (เหมือนหน้าการเงิน) */}
+              <button 
+                type="button"
+                onClick={() => setShowMobileFilters(!showMobileFilters)} 
+                className={`lg:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || statusFilter !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                title="ตัวกรองและมุมมองเพิ่มเติม"
+              >
+                {showMobileFilters ? <ChevronUp size={18} /> : <Filter size={18} />}
+              </button>
+
+              {/* Desktop Filters & View Switcher (Visible on lg+) */}
+              <div className="hidden lg:flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
+                {/* Template Library Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsTemplateModalOpen(true)}
+                  className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold kanit-text transition-all flex items-center gap-1.5 border border-indigo-200/80 shadow-2xs"
+                >
+                  <Bookmark size={14} className="text-indigo-600" />
+                  <span>คลังแม่แบบ (Templates)</span>
                 </button>
-              )}
-            </div>
 
-            {/* Filters & View Switcher */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-              {/* Template Library Button */}
-              <button
-                type="button"
-                onClick={() => setIsTemplateModalOpen(true)}
-                className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold kanit-text transition-all flex items-center gap-1.5 border border-indigo-200/80 shadow-2xs"
-              >
-                <Bookmark size={14} className="text-indigo-600" />
-                <span>คลังแม่แบบ (Templates)</span>
-              </button>
+                {/* Export to Excel Button (Opens Filter Modal) */}
+                <button
+                  type="button"
+                  onClick={handleOpenExportExcel}
+                  className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold kanit-text transition-all flex items-center gap-1.5 border border-emerald-200/80 shadow-2xs"
+                  title="ส่งออกรายงานคูปองเป็นไฟล์ Excel (เลือกชุดหรือช่วงวันที่ได้)"
+                >
+                  <FileSpreadsheet size={14} className="text-emerald-600" />
+                  <span>ส่งออก Excel</span>
+                </button>
 
-              {/* Export to Excel Button (Opens Filter Modal) */}
-              <button
-                type="button"
-                onClick={handleOpenExportExcel}
-                className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold kanit-text transition-all flex items-center gap-1.5 border border-emerald-200/80 shadow-2xs"
-                title="ส่งออกรายงานคูปองเป็นไฟล์ Excel (เลือกชุดหรือช่วงวันที่ได้)"
-              >
-                <FileSpreadsheet size={14} className="text-emerald-600" />
-                <span>ส่งออก Excel</span>
-              </button>
+                {/* Status Tabs */}
+                <div className="p-1 bg-slate-100/80 rounded-2xl flex items-center gap-1 border border-slate-200/50">
+                  {[
+                    { id: 'all', label: 'ทั้งหมด' },
+                    { id: 'active', label: 'พร้อมใช้' },
+                    { id: 'used', label: 'ใช้แล้ว' },
+                    { id: 'expired', label: 'หมดอายุ' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setStatusFilter(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold kanit-text transition-all ${
+                        statusFilter === tab.id
+                          ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
 
-              {/* Status Tabs */}
-              <div className="p-1 bg-slate-100/80 rounded-2xl flex items-center gap-1 border border-slate-200/50">
-                {[
-                  { id: 'all', label: 'ทั้งหมด' },
-                  { id: 'active', label: 'พร้อมใช้' },
-                  { id: 'used', label: 'ใช้แล้ว' },
-                  { id: 'expired', label: 'หมดอายุ' }
-                ].map(tab => (
+                {/* View Mode Switcher */}
+                <div className="p-1 bg-slate-100/80 rounded-2xl flex items-center gap-1 border border-slate-200/50">
                   <button
-                    key={tab.id}
-                    onClick={() => setStatusFilter(tab.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold kanit-text transition-all ${
-                      statusFilter === tab.id
-                        ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                    onClick={() => setViewMode('batches')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 transition-all ${
+                      viewMode === 'batches'
+                        ? 'bg-sky-500 text-white shadow-sm font-extrabold'
                         : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
-                    {tab.label}
+                    <Layers size={14} />
+                    <span>ชุดคูปอง ({batchGroups.length})</span>
                   </button>
-                ))}
-              </div>
-
-              {/* View Mode Switcher */}
-              <div className="p-1 bg-slate-100/80 rounded-2xl flex items-center gap-1 border border-slate-200/50">
-                <button
-                  onClick={() => setViewMode('batches')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 transition-all ${
-                    viewMode === 'batches'
-                      ? 'bg-sky-500 text-white shadow-sm font-extrabold'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Layers size={14} />
-                  <span>ชุดคูปอง ({batchGroups.length})</span>
-                </button>
-                <button
-                  onClick={() => setViewMode('all_cards')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 transition-all ${
-                    viewMode === 'all_cards'
-                      ? 'bg-sky-500 text-white shadow-sm font-extrabold'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Ticket size={14} />
-                  <span>รายใบเดี่ยว ({filteredIndividualCoupons.length})</span>
-                </button>
+                  <button
+                    onClick={() => setViewMode('all_cards')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 transition-all ${
+                      viewMode === 'all_cards'
+                        ? 'bg-sky-500 text-white shadow-sm font-extrabold'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Ticket size={14} />
+                    <span>รายใบเดี่ยว ({filteredIndividualCoupons.length})</span>
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Mobile Expandable Filter Panel (Accordion สไตล์เดียวกับหน้าการเงิน) */}
+            <div className={`lg:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-300' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-200'}`}>
+              <div className={showMobileFilters ? 'overflow-visible' : 'overflow-hidden'}>
+                <div className={`flex flex-col gap-2 pt-2.5 mt-1 border-t border-slate-100 transition-transform ${showMobileFilters ? 'translate-y-0 ease-out duration-300' : '-translate-y-2 ease-in duration-200'}`}>
+                  {/* Action Buttons: Template & Export */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTemplateModalOpen(true)}
+                      className="w-full px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 border border-indigo-200/80 shadow-2xs"
+                    >
+                      <Bookmark size={14} className="text-indigo-600 shrink-0" />
+                      <span>คลังแม่แบบ</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenExportExcel}
+                      className="w-full px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 border border-emerald-200/80 shadow-2xs"
+                    >
+                      <FileSpreadsheet size={14} className="text-emerald-600 shrink-0" />
+                      <span>ส่งออก Excel</span>
+                    </button>
+                  </div>
+
+                  {/* Status Tabs on Mobile */}
+                  <div className="p-1 bg-slate-100/90 rounded-xl grid grid-cols-4 gap-1 border border-slate-200/50">
+                    {[
+                      { id: 'all', label: 'ทั้งหมด' },
+                      { id: 'active', label: 'พร้อมใช้' },
+                      { id: 'used', label: 'ใช้แล้ว' },
+                      { id: 'expired', label: 'หมดอายุ' }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setStatusFilter(tab.id)}
+                        className={`py-1.5 rounded-lg text-xs font-bold kanit-text text-center transition-all ${
+                          statusFilter === tab.id
+                            ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* View Mode Switcher on Mobile */}
+                  <div className="p-1 bg-slate-100/90 rounded-xl grid grid-cols-2 gap-1 border border-slate-200/50">
+                    <button
+                      onClick={() => setViewMode('batches')}
+                      className={`py-1.5 rounded-lg text-xs font-bold kanit-text flex items-center justify-center gap-1.5 transition-all ${
+                        viewMode === 'batches'
+                          ? 'bg-sky-500 text-white shadow-sm font-extrabold'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Layers size={13} />
+                      <span>ชุดคูปอง ({batchGroups.length})</span>
+                    </button>
+                    <button
+                      onClick={() => setViewMode('all_cards')}
+                      className={`py-1.5 rounded-lg text-xs font-bold kanit-text flex items-center justify-center gap-1.5 transition-all ${
+                        viewMode === 'all_cards'
+                          ? 'bg-sky-500 text-white shadow-sm font-extrabold'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Ticket size={13} />
+                      <span>รายใบ ({filteredIndividualCoupons.length})</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -6383,7 +5951,7 @@ const CouponManager = ({
                   <Ticket size={32} />
                 </div>
                 <h4 className="text-base font-bold text-slate-700 kanit-text">ไม่พบชุดคูปอง</h4>
-                <p className="text-xs text-slate-400 mt-1">กดปุ่ม "สร้างคูปองใหม่ (เป็นชุด)" เพื่อเพิ่มคูปองเข้าสู่ระบบ</p>
+                <p className="text-xs text-slate-400 mt-1">กดปุ่ม "สร้างคูปองใหม่" เพื่อเพิ่มคูปองเข้าสู่ระบบ</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -6440,7 +6008,7 @@ const CouponManager = ({
 
                             <div className="flex items-center gap-1.5 flex-wrap justify-end">
                               <span className="px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold text-white border border-white/20 shadow-2xs">
-                                {batch.isLifetime ? '✨ ตลอดชีพ' : (batch.expireDate ? `หมด ${formatDate(batch.expireDate)}` : 'VOUCHER')}
+                                {batch.isLifetime ? 'ไม่มีวันหมดอายุ' : (batch.expireDate ? `หมด ${formatDate(batch.expireDate)}` : 'ไม่มีวันหมดอายุ')}
                               </span>
                               <span className="px-2.5 py-1 rounded-full bg-black/25 backdrop-blur-md text-[10px] font-extrabold text-white border border-white/20 shadow-2xs font-data">
                                 ชุด {batch.total} ใบ
@@ -6515,9 +6083,9 @@ const CouponManager = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setPrintModalConfig({ coupons: batch.coupons, template: batch.templateType || 'card', batchTitle: batch.batchName })}
+                            onClick={() => triggerA4Print(batch.coupons)}
                             className="py-2.5 px-3.5 rounded-xl bg-black/30 hover:bg-black/45 text-white text-xs font-bold kanit-text transition-all flex items-center gap-1.5 border border-white/25 shadow-sm active:scale-95"
-                            title="พิมพ์ / ส่งออก A4"
+                            title="พิมพ์ A4 ทันที (สัดส่วนตรงตามที่ออกแบบ 100%)"
                           >
                             <Printer size={15} />
                             <span className="hidden sm:inline">พิมพ์ A4</span>
@@ -6601,7 +6169,7 @@ const CouponManager = ({
                             </div>
                           )}
                           <div className="text-[10px] text-slate-400 font-data mt-1">
-                            {isLifetime ? 'ตลอดชีพ' : `หมดอายุ: ${expDate || '-'}`}
+                            {isLifetime ? 'ไม่มีวันหมดอายุ' : `หมดอายุ: ${expDate || '-'}`}
                           </div>
                         </div>
                         {qrUrl && (
@@ -6648,7 +6216,7 @@ const CouponManager = ({
                           {/* Print single card */}
                           <button
                             type="button"
-                            onClick={() => setPrintModalConfig({ coupons: [cp], template: 'card', batchTitle: cp.code })}
+                            onClick={() => triggerA4Print([cp], (cp.templateType === 'strip' || cp.template_type === 'strip') ? 'strip' : 'card')}
                             className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                             title="พิมพ์ใบนี้"
                           >
@@ -6698,35 +6266,35 @@ const CouponManager = ({
       {/* MODAL 1: CREATE COUPONS BATCH MODAL (Portal z-[200])                      */}
       {/* ========================================================================= */}
       {isCreateModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[94vh] animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-none sm:rounded-3xl w-full max-w-3xl shadow-2xl border-0 sm:border border-slate-100 overflow-hidden flex flex-col h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-white to-indigo-50/50 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0">
-                  <Ticket size={22} />
+            <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-white to-indigo-50/50 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0">
+                  <Ticket size={20} className="sm:w-5 sm:h-5" />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base sm:text-lg kanit-text leading-tight">
-                    สร้างคูปองส่วนลดใหม่ (ผลิตเป็นชุด)
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-slate-800 text-sm sm:text-lg kanit-text leading-tight truncate">
+                    สร้างคูปองส่วนลดใหม่
                   </h3>
-                  <p className="text-xs text-slate-500 kanit-text">กำหนดสิทธิประโยชน์ วันหมดอายุ และสาขาที่ให้บริการ</p>
+                  <p className="hidden sm:block text-xs text-slate-500 kanit-text">กำหนดสิทธิประโยชน์ วันหมดอายุ และสาขาที่ให้บริการ</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsTemplateModalOpen(true)}
-                  className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 shadow-2xs transition-colors"
+                  className="px-2.5 sm:px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-bold kanit-text flex items-center gap-1.5 shadow-2xs transition-colors shrink-0"
                   title="เลือกจากคลังแม่แบบ"
                 >
-                  <Bookmark size={13} />
+                  <Bookmark size={13} className="shrink-0" />
                   <span className="hidden sm:inline">เลือกแม่แบบ</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
                 >
                   <X size={20} />
                 </button>
@@ -6736,15 +6304,15 @@ const CouponManager = ({
             {/* Modal Form Body */}
             <form onSubmit={handleCreateCoupons} className="flex flex-col flex-1 overflow-hidden min-h-0">
               {/* Scrollable Form Content */}
-              <div className="overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 flex-1">
+              <div className="overflow-y-auto custom-scrollbar p-3.5 sm:p-6 space-y-4 sm:space-y-5 flex-1">
                 {/* ส่วนที่ 1: ข้อมูลคูปองและมูลค่าส่วนลด */}
-              <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/70 space-y-3.5">
-                <div className="flex items-center gap-2.5 border-b border-slate-200/80 pb-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center text-sky-600 shrink-0">
-                    <Tag size={16} />
+              <div className="bg-slate-50/80 rounded-2xl p-3.5 sm:p-5 border border-slate-200/70 space-y-3">
+                <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-sky-100 flex items-center justify-center text-sky-600 shrink-0">
+                    <Tag size={14} className="sm:w-4 sm:h-4" />
                   </div>
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-800 kanit-text">
-                    ส่วนที่ 1: ข้อมูลโปรโมชั่นและมูลค่าส่วนลด
+                  <h4 className="text-xs sm:text-base font-extrabold text-slate-800 kanit-text">
+                    ส่วนที่ 1: ข้อมูลและมูลค่าส่วนลด
                   </h4>
                 </div>
 
@@ -6820,13 +6388,13 @@ const CouponManager = ({
               </div>
 
               {/* ส่วนที่ 2: เงื่อนไขและสิทธิ์การใช้งาน */}
-              <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/70 space-y-4">
-                <div className="flex items-center gap-2.5 border-b border-slate-200/80 pb-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                    <ShieldCheck size={16} />
+              <div className="bg-slate-50/80 rounded-2xl p-3.5 sm:p-5 border border-slate-200/70 space-y-3.5">
+                <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                    <ShieldCheck size={14} className="sm:w-4 sm:h-4" />
                   </div>
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-800 kanit-text">
-                    ส่วนที่ 2: เงื่อนไข อายุการใช้งาน และสาขาที่ให้บริการ
+                  <h4 className="text-xs sm:text-base font-extrabold text-slate-800 kanit-text">
+                    ส่วนที่ 2: เงื่อนไขและสาขาที่ให้บริการ
                   </h4>
                 </div>
 
@@ -6840,7 +6408,7 @@ const CouponManager = ({
                       className="flex items-center gap-2 select-none cursor-pointer"
                       onClick={() => setForm(prev => ({ ...prev, isLifetime: !prev.isLifetime }))}
                     >
-                      <span className={`text-xs font-bold kanit-text transition-colors ${form.isLifetime ? 'text-amber-600' : 'text-slate-500'}`}>
+                      <span className={`text-xs font-bold kanit-text transition-colors ${form.isLifetime ? 'text-sky-600' : 'text-slate-500'}`}>
                         ไม่มีวันหมดอายุ
                       </span>
                       <button
@@ -6852,7 +6420,7 @@ const CouponManager = ({
                           setForm(prev => ({ ...prev, isLifetime: !prev.isLifetime }));
                         }}
                         className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                          form.isLifetime ? 'bg-amber-500' : 'bg-slate-300'
+                          form.isLifetime ? 'bg-sky-500' : 'bg-slate-300'
                         }`}
                       >
                         <span
@@ -6869,17 +6437,17 @@ const CouponManager = ({
                       <button
                         type="button"
                         onClick={handleOpenCalendar}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium cursor-pointer hover:border-sky-400 flex items-center justify-between shadow-2xs group text-left"
+                        className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium cursor-pointer hover:border-sky-400 flex items-center justify-between shadow-2xs group text-left transition-all"
                       >
-                        <div className="flex items-center gap-2">
-                          <Calendar size={16} className="text-sky-600 group-hover:scale-110 transition-transform" />
-                          <span className={form.expireDate ? 'font-bold text-slate-800 font-data' : 'text-slate-400'}>
-                            {form.expireDate ? formatDate(form.expireDate) : 'กดเพื่อเลือกวันหมดอายุจากปฏิทิน'}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Calendar size={15} className="text-sky-600 group-hover:scale-110 transition-transform shrink-0" />
+                          <span className={`truncate text-xs sm:text-sm ${form.expireDate ? 'font-bold text-slate-800 font-data' : 'text-slate-400'}`}>
+                            {form.expireDate ? formatDate(form.expireDate) : 'กดเพื่อเลือกวันหมดอายุ'}
                           </span>
                         </div>
-                        <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-100 flex items-center gap-1">
-                          <Calendar size={13} />
-                          <span>เลือกปฏิทิน</span>
+                        <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-sky-100 flex items-center gap-1 shrink-0 ml-2">
+                          <Calendar size={12} />
+                          <span>เลือกวันที่</span>
                         </span>
                       </button>
                     </div>
@@ -6889,7 +6457,7 @@ const CouponManager = ({
                 {/* Patient Link with Floating Dropdown Portal & Click Outside */}
                 <div ref={patientInputContainerRef} className="relative z-20">
                   <label className="block text-xs font-bold text-slate-700 mb-1 kanit-text">
-                    ผูกสิทธิ์กับคนไข้ <span className="text-slate-400 font-normal">(เว้นว่างไว้หากเป็นคูปองทั่วไป)</span>
+                    ผูกสิทธิ์กับคนไข้ <span className="text-slate-400 font-normal text-[11px]">(ไม่ระบุ = คูปองทั่วไป)</span>
                   </label>
                   <div className="relative">
                     {(() => {
@@ -6960,20 +6528,20 @@ const CouponManager = ({
 
                 {/* Multi-Branch Selector */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
                     <label className="block text-xs font-bold text-slate-700 kanit-text">
-                      สาขาที่สามารถใช้งานได้ <span className="text-slate-400 font-normal">(เลือกได้อิสระ)</span>
+                      สาขาที่สามารถใช้งานได้
                     </label>
                     <button
                       type="button"
                       onClick={() => setForm(prev => ({ ...prev, branchScope: 'all' }))}
-                      className={`text-[11px] font-bold kanit-text px-2.5 py-0.5 rounded-full transition-all ${
+                      className={`text-[11px] font-bold kanit-text px-3 py-1 rounded-full transition-all whitespace-nowrap shrink-0 ${
                         (!form.branchScope || form.branchScope === 'all')
                           ? 'bg-sky-500 text-white shadow-2xs'
                           : 'bg-slate-200/80 text-slate-600 hover:bg-slate-300'
                       }`}
                     >
-                      🌐 ใช้งานได้ทุกสาขา
+                      ทุกสาขา
                     </button>
                   </div>
 
@@ -7003,12 +6571,12 @@ const CouponManager = ({
               </div>
 
               {/* ส่วนที่ 3: ดีไซน์และรูปแบบคูปอง */}
-              <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200/70 space-y-4">
-                <div className="flex items-center gap-2.5 border-b border-slate-200/80 pb-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
-                    <Layers size={16} />
+              <div className="bg-slate-50/80 rounded-2xl p-3.5 sm:p-5 border border-slate-200/70 space-y-3.5">
+                <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                    <Layers size={14} className="sm:w-4 sm:h-4" />
                   </div>
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-800 kanit-text">
+                  <h4 className="text-xs sm:text-base font-extrabold text-slate-800 kanit-text">
                     ส่วนที่ 3: รูปแบบและดีไซน์คูปอง
                   </h4>
                 </div>
@@ -7017,43 +6585,55 @@ const CouponManager = ({
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, templateType: 'card' })}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
+                    className={`p-2.5 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
                       form.templateType === 'card'
                         ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-300 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <Ticket size={18} className="text-sky-600 mb-1" />
-                    <div className="text-xs font-bold kanit-text text-slate-800">บัตรพรีเมียม</div>
-                    <div className="text-[10px] text-slate-400 font-data">85.6 × 54 mm (10/A4)</div>
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
+                      <Ticket size={18} className="text-sky-600 shrink-0 mb-0.5 sm:mb-0 sm:mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold kanit-text text-slate-800 truncate">แบบการ์ด</div>
+                        <div className="text-[10px] text-slate-400 font-data whitespace-nowrap">10 ใบ/A4</div>
+                      </div>
+                    </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, templateType: 'strip' })}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
+                    className={`p-2.5 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
                       form.templateType === 'strip'
                         ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-300 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <Scissors size={18} className="text-emerald-600 mb-1" />
-                    <div className="text-xs font-bold kanit-text text-slate-800">แถบยาวมีรอยฉีก</div>
-                    <div className="text-[10px] text-slate-400 font-data">200 × 54 mm (5/A4)</div>
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
+                      <Scissors size={18} className="text-emerald-600 shrink-0 mb-0.5 sm:mb-0 sm:mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold kanit-text text-slate-800 truncate">แบบแถบยาว</div>
+                        <div className="text-[10px] text-slate-400 font-data whitespace-nowrap">5 ใบ/A4</div>
+                      </div>
+                    </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, templateType: 'custom_image' })}
-                    className={`p-3 rounded-2xl border text-left transition-all ${
+                    className={`p-2.5 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
                       form.templateType === 'custom_image'
                         ? 'border-purple-500 bg-purple-50/70 ring-2 ring-purple-300 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <ImageIcon size={18} className="text-purple-600 mb-1" />
-                    <div className="text-xs font-bold kanit-text text-slate-800">อัปโหลดดีไซน์เอง</div>
-                    <div className="text-[10px] text-slate-400 font-data">Canva / Photoshop</div>
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
+                      <ImageIcon size={18} className="text-purple-600 shrink-0 mb-0.5 sm:mb-0 sm:mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold kanit-text text-slate-800 truncate">อัปโหลดเอง</div>
+                        <div className="text-[10px] text-slate-400 font-data whitespace-nowrap">Canva/ภาพ</div>
+                      </div>
+                    </div>
                   </button>
                 </div>
 
@@ -7090,32 +6670,25 @@ const CouponManager = ({
                       </div>
                     </div>
 
-                    <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                    <div className="pt-1">
                       <button
                         type="button"
                         onClick={() => {
                           if (!form.customImageUrl) {
-                            setForm(prev => ({ ...prev, customImageUrl: DEFAULT_SAMPLE_VOUCHER_ART }));
+                            setForm(prev => ({
+                              ...prev,
+                              customImageUrl: DEFAULT_SAMPLE_VOUCHER_ART,
+                              userUploadedImage: DEFAULT_SAMPLE_VOUCHER_ART,
+                              templateType: 'custom_image'
+                            }));
                           }
                           setIsQrEditorOpen(true);
                         }}
-                        className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm kanit-text shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-98"
+                        className="w-full py-2.5 sm:py-3 px-3.5 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm kanit-text shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-98"
                       >
-                        <Sliders size={16} />
-                        <span>🛠 เปิดเครื่องมือสร้าง QR & บาร์โค้ด (จัดวางตำแหน่ง)</span>
+                        <Sliders size={15} className="shrink-0" />
+                        <span>จัดวางตำแหน่ง QR & บาร์โค้ด</span>
                       </button>
-
-                      {!form.customImageUrl && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForm(prev => ({ ...prev, customImageUrl: DEFAULT_SAMPLE_VOUCHER_ART }));
-                          }}
-                          className="py-3 px-3.5 rounded-xl border border-sky-300 bg-white hover:bg-sky-50 text-sky-700 font-bold text-xs kanit-text transition-all shrink-0 shadow-2xs"
-                        >
-                          🎨 ลองใช้ภาพตัวอย่าง
-                        </button>
-                      )}
                     </div>
 
                     {form.customImageUrl && (
@@ -7199,9 +6772,11 @@ const CouponManager = ({
                                 style={{
                                   left: `${form.expiryConfig.xPercent}%`,
                                   top: `${form.expiryConfig.yPercent}%`,
-                                  transform: 'translate(-50%, -50%)',
+                                  transform: form.expiryConfig.align === 'left'
+                                    ? 'translate(0, -50%)'
+                                    : (form.expiryConfig.align === 'right' ? 'translate(-100%, -50%)' : 'translate(-50%, -50%)'),
                                   boxSizing: 'border-box',
-                                  padding: form.expiryConfig.bgStyle !== 'none' ? '2px 7px' : '1px'
+                                  padding: form.expiryConfig.bgStyle !== 'none' ? '2px 7px' : '0px'
                                 }}
                               >
                                 <span
@@ -7210,7 +6785,9 @@ const CouponManager = ({
                                     fontFamily: getExpiryFontFamily(form.expiryConfig.fontFamily),
                                     fontSize: `${Math.max(9, Math.round((form.expiryConfig.sizePercent || 18) * 0.7))}px`,
                                     fontWeight: form.expiryConfig.fontWeight === 'normal' ? 400 : 300,
-                                    color: form.expiryConfig.bgStyle === 'dark_pill' ? '#ffffff' : form.expiryConfig.color
+                                    color: form.expiryConfig.bgStyle === 'dark_pill' ? '#ffffff' : form.expiryConfig.color,
+                                    textAlign: form.expiryConfig.align || 'center',
+                                    lineHeight: 1
                                   }}
                                 >
                                   {formatCustomExpiryDate(form.expireDate, form.expiryConfig.format, form.isLifetime, form.expiryConfig.prefix)}
@@ -7247,12 +6824,12 @@ const CouponManager = ({
               </div>
               </div>
 
-              {/* Modal Full-Width Fixed Footer (ชิดขอบล่างและข้าง 100%) */}
-              <div className="px-4 py-3.5 sm:px-6 sm:py-4 border-t border-slate-200/80 bg-slate-50 flex items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+              {/* Modal Full-Width Fixed Footer */}
+              <div className="px-3.5 py-3 sm:px-6 sm:py-4 border-t border-slate-200/80 bg-slate-50 flex items-center justify-between gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={handleSaveAsTemplate}
-                  className="px-3 sm:px-3.5 py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold kanit-text text-xs flex items-center gap-1.5 transition-colors bg-white shadow-2xs whitespace-nowrap shrink-0"
+                  className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold kanit-text text-xs flex items-center gap-1.5 transition-colors bg-white shadow-2xs whitespace-nowrap shrink-0"
                   title="บันทึกข้อมูลและดีไซน์นี้เป็นแม่แบบ"
                 >
                   <Bookmark size={14} className="shrink-0" />
@@ -7260,20 +6837,21 @@ const CouponManager = ({
                   <span className="sm:hidden">แม่แบบ</span>
                 </button>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-3 sm:px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold kanit-text text-xs hover:bg-slate-100 transition-colors bg-white shadow-2xs whitespace-nowrap shrink-0"
+                    className="px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold kanit-text text-xs hover:bg-slate-100 transition-colors bg-white shadow-2xs whitespace-nowrap shrink-0"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    className="px-4 sm:px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold kanit-text text-xs shadow-md shadow-sky-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
+                    className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold kanit-text text-xs shadow-md shadow-sky-500/25 transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
                   >
-                    <Check size={16} className="shrink-0" />
-                    <span>สร้างชุดคูปอง ({form.quantity} ใบ)</span>
+                    <Check size={15} className="shrink-0" />
+                    <span className="hidden sm:inline">สร้างชุดคูปอง ({form.quantity} ใบ)</span>
+                    <span className="sm:hidden">สร้าง ({form.quantity})</span>
                   </button>
                 </div>
               </div>
@@ -7635,6 +7213,7 @@ const CouponManager = ({
               qrConfig,
               expiryConfig,
               customImageUrl: customImageUrl || prev.customImageUrl,
+              userUploadedImage: prev.userUploadedImage || customImageUrl || prev.customImageUrl,
               designConfig,
               templateType: 'custom_image'
             };
@@ -7655,7 +7234,7 @@ const CouponManager = ({
         initialQrConfig={form.qrConfig}
         initialExpiryConfig={form.expiryConfig}
         initialDesignConfig={form.designConfig}
-        uploadedArtworkUrl={form.userUploadedImage}
+        uploadedArtworkUrl={form.userUploadedImage || form.customImageUrl}
         expireDate={form.expireDate}
         isLifetime={form.isLifetime}
         clinicInfo={resolveBranchInfo(branchesData, form.branchScope)}
@@ -7720,61 +7299,129 @@ const CouponManager = ({
                     const isPercent = d.discountType === 'percent';
                     const discountStr = isPercent ? `ลด ${d.discountValue}%` : `ลด ฿${Number(d.discountValue || 0).toLocaleString()}`;
                     const th = THEME_STYLES[d.themeColor] || THEME_STYLES.emerald;
+                    const customImg = d.customImageUrl || d.userUploadedImage || d.bgImage || d.bg_image || d.designConfig?.customImageUrl || d.designConfig?.bgImage || '';
+                    const isStrip = d.templateType === 'strip';
+                    const isCustomArt = Boolean(customImg);
 
                     return (
                       <div
                         key={tpl.id}
-                        className="p-4 rounded-2xl border border-slate-200/80 hover:border-indigo-300 hover:shadow-md transition-all bg-white flex flex-col justify-between gap-3 group"
+                        className="rounded-3xl shadow-md hover:shadow-2xl transition-all duration-300 p-4 sm:p-5 flex flex-col justify-between group relative overflow-hidden text-white border border-white/20 hover:-translate-y-0.5"
                       >
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold">
-                              {d.templateType === 'strip' ? 'แถบยาว 200mm' : 'การ์ด 85.6mm'}
-                            </span>
-                            <div className={`w-3.5 h-3.5 rounded-full bg-gradient-to-r ${th.bg}`} />
+                        {/* Background Artwork or Gradient */}
+                        {isCustomArt ? (
+                          <div 
+                            className="absolute inset-0 bg-cover bg-center"
+                            style={{ backgroundImage: `url('${customImg}')` }}
+                          >
+                            <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]" />
                           </div>
-                          <h4 className="font-bold text-sm text-slate-800 kanit-text group-hover:text-indigo-600 transition-colors">
-                            {tpl.name}
-                          </h4>
-                          <p className="text-xs text-slate-500 font-light mt-0.5 line-clamp-1">
-                            {d.description || d.title}
-                          </p>
-                          <div className="text-lg font-black text-emerald-600 font-data mt-2">
-                            {discountStr}
-                            {d.minSpend > 0 && (
-                              <span className="text-[10px] text-slate-400 font-normal kanit-text ml-2">
-                                (ขั้นต่ำ ฿{Number(d.minSpend).toLocaleString()})
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                        ) : (
+                          <div className={`absolute inset-0 bg-gradient-to-br ${th.bg}`} />
+                        )}
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForm(prev => ({
-                              ...prev,
-                              title: d.title || tpl.name,
-                              description: d.description || '',
-                              discountType: d.discountType || 'percent',
-                              discountValue: d.discountValue || 10,
-                              minSpend: d.minSpend || 0,
-                              isLifetime: Boolean(d.isLifetime),
-                              templateType: d.templateType || 'card',
-                              themeColor: d.themeColor || 'emerald',
-                              customImageUrl: d.customImageUrl || '',
-                              qrConfig: d.qrConfig || prev.qrConfig,
-                              expiryConfig: d.expiryConfig || prev.expiryConfig
-                            }));
-                            setIsTemplateModalOpen(false);
-                            setIsCreateModalOpen(true);
-                            showToast(`เลือกใช้แม่แบบ "${tpl.name}" เรียบร้อย`, 'success');
+                        {/* Metallic / Glossy Lighting Sheen Overlay */}
+                        <div 
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.18) 100%)'
                           }}
-                          className="w-full py-2 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 rounded-xl text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 shadow-2xs"
-                        >
-                          <span>เลือกใช้แม่แบบนี้</span>
-                          <ArrowRight size={13} />
-                        </button>
+                        />
+
+                        {/* Content Layer (z-10) */}
+                        <div className="relative z-10 flex flex-col h-full justify-between gap-3">
+                          <div>
+                            {/* Badges and Delete Action Header */}
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-extrabold text-white border border-white/25 shadow-2xs">
+                                  {isStrip ? '✂️ แถบยาว 200mm' : (isCustomArt ? '🖼️ ภาพอัปโหลด' : '💳 การ์ด 85.6mm')}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-full bg-black/25 backdrop-blur-md text-[10px] font-bold text-white border border-white/20 shadow-2xs font-data">
+                                  {d.isLifetime ? 'ไม่มีวันหมดอายุ' : 'VOUCHER'}
+                                </span>
+                              </div>
+
+                              {/* Delete Template Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTemplate(tpl);
+                                }}
+                                title="ลบแม่แบบนี้"
+                                className="w-7 h-7 rounded-xl bg-black/25 hover:bg-rose-600/90 text-white/80 hover:text-white backdrop-blur-md border border-white/20 flex items-center justify-center transition-all active:scale-90 shadow-2xs cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+
+                            <h4 className="font-extrabold text-base text-white kanit-text drop-shadow-md line-clamp-1">
+                              {tpl.name}
+                            </h4>
+                            <p className="text-xs text-white/80 font-light mt-0.5 line-clamp-1 drop-shadow-sm">
+                              {d.description || d.title || 'แม่แบบคูปองส่วนลดสำหรับใช้งานซ้ำ'}
+                            </p>
+                            <div className="text-2xl font-black text-white font-data mt-2 drop-shadow-lg flex items-baseline gap-2">
+                              <span>{discountStr}</span>
+                              {d.minSpend > 0 && (
+                                <span className="text-[10px] text-white/80 font-normal kanit-text drop-shadow-sm">
+                                  (ขั้นต่ำ ฿{Number(d.minSpend).toLocaleString()})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const restoredDesignConfig = d.designConfig ? {
+                                ...d.designConfig,
+                                bgType: customImg ? 'image' : (d.designConfig.bgType || 'gradient'),
+                                logoEnabled: d.designConfig.logoEnabled ?? false
+                              } : (customImg ? {
+                                bgType: 'image',
+                                gradientKey: d.themeColor || 'emerald',
+                                gradientColor1: '#064e3b',
+                                gradientColor2: '#047857',
+                                solidColor: '#064e3b',
+                                sheenEnabled: true,
+                                borderEnabled: true,
+                                logoEnabled: false,
+                                logoX: 6,
+                                logoY: 12,
+                                logoSize: 11,
+                                headerText: '',
+                                discountText: '',
+                                termsText: ''
+                              } : null);
+
+                              setForm(prev => ({
+                                ...prev,
+                                title: d.title || tpl.name,
+                                description: d.description || '',
+                                discountType: d.discountType || 'percent',
+                                discountValue: d.discountValue || 10,
+                                minSpend: d.minSpend || 0,
+                                isLifetime: Boolean(d.isLifetime),
+                                templateType: customImg ? 'custom_image' : (d.templateType || 'card'),
+                                themeColor: d.themeColor || 'emerald',
+                                customImageUrl: customImg,
+                                userUploadedImage: customImg,
+                                designConfig: restoredDesignConfig || prev.designConfig,
+                                qrConfig: d.qrConfig || prev.qrConfig,
+                                expiryConfig: d.expiryConfig || prev.expiryConfig
+                              }));
+                              setIsTemplateModalOpen(false);
+                              setIsCreateModalOpen(true);
+                              showToast(`เลือกใช้แม่แบบ "${tpl.name}" เรียบร้อย`, 'success');
+                            }}
+                            className="w-full py-2.5 bg-white/90 hover:bg-white text-slate-900 rounded-xl text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-98 cursor-pointer mt-1"
+                          >
+                            <span>เลือกใช้แม่แบบนี้</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -7834,7 +7481,7 @@ const CouponManager = ({
                     {currentDrillDownBatch.batchName} ({currentDrillDownBatch.coupons.length} ใบ)
                   </h3>
                   <p className="text-xs text-slate-500 kanit-text">
-                    ส่วนลด: {currentDrillDownBatch.discountType === 'percent' ? `${currentDrillDownBatch.discountValue}%` : `฿${currentDrillDownBatch.discountValue}`} • วันหมดอายุ: {currentDrillDownBatch.isLifetime ? 'ตลอดชีพ' : currentDrillDownBatch.expireDate}
+                    ส่วนลด: {currentDrillDownBatch.discountType === 'percent' ? `${currentDrillDownBatch.discountValue}%` : `฿${currentDrillDownBatch.discountValue}`} • วันหมดอายุ: {currentDrillDownBatch.isLifetime ? 'ไม่มีวันหมดอายุ' : currentDrillDownBatch.expireDate}
                   </p>
                 </div>
               </div>
@@ -7866,12 +7513,9 @@ const CouponManager = ({
                     {selectedInBatch.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setPrintModalConfig({
-                          coupons: selectedInBatch,
-                          template: currentDrillDownBatch.templateType || 'card',
-                          batchTitle: `${currentDrillDownBatch.batchName} (${selectedInBatch.length} ใบที่เลือก)`
-                        })}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 transition-all animate-in fade-in"
+                        onClick={() => triggerA4Print(selectedInBatch)}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 transition-all animate-in fade-in active:scale-95"
+                        title="พิมพ์เฉพาะใบที่เลือก (สัดส่วนตรงตามที่ออกแบบ)"
                       >
                         <Printer size={14} />
                         <span>พิมพ์เฉพาะ {selectedInBatch.length} ใบที่เลือก (A4)</span>
@@ -7880,8 +7524,9 @@ const CouponManager = ({
 
                     <button
                       type="button"
-                      onClick={() => setPrintModalConfig({ coupons: currentDrillDownBatch.coupons, template: currentDrillDownBatch.templateType || 'card', batchTitle: currentDrillDownBatch.batchName })}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 transition-all"
+                      onClick={() => triggerA4Print(currentDrillDownBatch.coupons)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
+                      title="พิมพ์คูปองทั้งชุด (สัดส่วนตรงตามที่ออกแบบ 100%)"
                     >
                       <Printer size={14} />
                       <span>พิมพ์ทั้งชุด ({currentDrillDownBatch.coupons.length} ใบ)</span>
@@ -8004,7 +7649,7 @@ const CouponManager = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPrintModalConfig({ coupons: [cp], template: 'card', batchTitle: cp.code });
+                              triggerA4Print([cp], (cp.templateType === 'strip' || cp.template_type === 'strip') ? 'strip' : 'card');
                             }}
                             className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors"
                             title="พิมพ์ใบนี้"
@@ -8062,264 +7707,21 @@ const CouponManager = ({
       {/* ========================================================================= */}
       {/* MODAL 4: PRINT & SHEET EXPORT MODAL (Portal z-[200])                      */}
       {/* ========================================================================= */}
-      {printModalConfig && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-slate-800 text-white flex items-center justify-center">
-                  <Printer size={20} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base kanit-text">เลือกเทมเพลตสั่งพิมพ์ (A4)</h3>
-                  <p className="text-xs text-slate-500 kanit-text">พิมพ์คูปองจำนวน {printModalConfig.coupons.length} ใบ (ขอบตัดตรง 100%)</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPrintModalConfig(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
 
-            {/* Template Choices */}
-            <div className="p-5 space-y-3.5">
-              {/* Option 1: Card 10 cards/page */}
-              <button
-                type="button"
-                onClick={() => setPrintModalConfig(prev => prev ? ({ ...prev, template: 'card' }) : null)}
-                className={`w-full text-left p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3.5 ${
-                  printModalConfig.template === 'card'
-                    ? 'border-sky-500 bg-sky-50/60 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className={`p-2.5 rounded-xl ${printModalConfig.template === 'card' ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <Ticket size={20} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-extrabold text-sm text-slate-800 kanit-text">
-                      เทมเพลต 1: ขนาดบัตรเครดิตพรีเมียม (10 ใบ/หน้า A4)
-                    </h4>
-                    <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 text-[10px] font-extrabold kanit-text">
-                      ประหยัดกระดาษสุด
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 kanit-text mt-1">
-                    ขนาด 85.6 mm × 54 mm (ตาราง 2 คอลัมน์ × 5 แถว) ขอบฉากตรง 100% พร้อมเส้นมาร์กตัดมุม 0.3px บางเฉียบ
-                  </p>
-                </div>
-              </button>
-
-              {/* Option 2: Strip 5 cards/page */}
-              <button
-                type="button"
-                onClick={() => setPrintModalConfig(prev => prev ? ({ ...prev, template: 'strip' }) : null)}
-                className={`w-full text-left p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3.5 ${
-                  printModalConfig.template === 'strip'
-                    ? 'border-sky-500 bg-sky-50/60 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className={`p-2.5 rounded-xl ${printModalConfig.template === 'strip' ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <Scissors size={20} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-extrabold text-sm text-slate-800 kanit-text">
-                      เทมเพลต 2: แถบยาวเต็มความกว้าง A4 (5 ใบ/หน้า A4)
-                    </h4>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-extrabold kanit-text">
-                      ตัดง่ายสุด
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 kanit-text mt-1">
-                    ขนาด 200 mm × 54 mm มีเส้นประรอยฉีกสำหรับหางตั๋วคูปอง ตัดขวางแนวนอนเพียง 4 ฉับเสร็จสิ้น
-                  </p>
-                </div>
-              </button>
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setPrintModalConfig(null)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold kanit-text text-xs hover:bg-white"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const targetCoupons = printModalConfig.coupons;
-                  const targetTemplate = printModalConfig.template;
-                  setPrintModalConfig(null);
-                  triggerA4Print(targetCoupons, targetTemplate);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold kanit-text text-xs shadow-md shadow-slate-900/10 flex items-center gap-2 active:scale-95"
-              >
-                <Printer size={16} />
-                <span>เปิดหน้าต่างพิมพ์ (Print Preview)</span>
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* ========================================================================= */}
-      {/* MODAL 5: SCAN & REDEEM COUPON MODAL (Portal z-[200])                      */}
+      {/* MODAL 5: SCAN & REDEEM COUPON MODAL (Shared QrScannerModal)               */}
       {/* ========================================================================= */}
-      {isScanModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50/50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-sky-500 text-white">
-                  <Camera size={18} />
-                </div>
-                <h3 className="font-extrabold text-slate-800 text-base kanit-text">สแกน / ตัดคูปอง</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  stopCamera();
-                  setIsScanModalOpen(false);
-                }}
-                className="p-1.5 text-slate-400 hover:text-slate-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="p-5 space-y-4">
-              {/* Camera Preview */}
-              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden flex items-center justify-center">
-                <video ref={videoRef} className={`w-full h-full object-cover ${!scannerActive ? 'hidden' : ''}`} />
-                <canvas ref={canvasRef} className="hidden" />
-
-                {!scannerActive && (
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="px-4 py-2 bg-white/90 hover:bg-white text-slate-800 font-bold kanit-text text-xs rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95"
-                  >
-                    <Camera size={16} className="text-sky-600" />
-                    <span>เปิดกล้องสแกน QR Code</span>
-                  </button>
-                )}
-
-                {scannerActive && (
-                  <div className="absolute inset-0 border-2 border-sky-400 pointer-events-none flex items-center justify-center">
-                    <div className="w-48 h-48 border-2 border-dashed border-white/80 rounded-2xl animate-pulse" />
-                  </div>
-                )}
-
-                {/* Camera controls overlay */}
-                {scannerActive && (
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                    {hasTorch && (
-                      <button
-                        type="button"
-                        onClick={toggleTorch}
-                        className={`p-2 rounded-full backdrop-blur-md text-xs font-bold ${
-                          torchOn ? 'bg-amber-400 text-slate-900' : 'bg-black/50 text-white'
-                        }`}
-                      >
-                        <Sparkles size={14} />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setCameraFacing(prev => prev === 'environment' ? 'user' : 'environment')}
-                      className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white"
-                    >
-                      <RotateCcw size={14} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Scanned Result Banner */}
-              {scannedResultCoupon && (
-                <div className={`p-3.5 rounded-2xl border ${
-                  scannedResultCoupon.status === 'used'
-                    ? 'bg-rose-50 border-rose-200 text-rose-800'
-                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                }`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-xs font-mono">{scannedResultCoupon.code}</span>
-                    <span className="text-[10px] font-bold uppercase">{scannedResultCoupon.status}</span>
-                  </div>
-                  <div className="text-sm font-extrabold">{scannedResultCoupon.title}</div>
-                  <div className="mt-2 flex items-center gap-2">
-                    {scannedResultCoupon.status === 'used' ? (
-                      <button
-                        type="button"
-                        onClick={() => handleUndoRedeemCoupon(scannedResultCoupon)}
-                        className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold kanit-text"
-                      >
-                        คืนสิทธิ์คูปองนี้
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleRedeemCoupon(scannedResultCoupon.code)}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold kanit-text"
-                      >
-                        ตัดคูปองนี้
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Manual Input Form */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700 kanit-text">หรือพิมพ์รหัสคูปองด้วยตนเอง:</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="เช่น CP-6901-A123"
-                    value={manualCodeInput}
-                    onChange={(e) => setManualCodeInput(e.target.value.toUpperCase())}
-                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold tracking-wider outline-none focus:bg-white focus:border-sky-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRedeemCoupon(manualCodeInput)}
-                    className="px-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold kanit-text shadow-sm transition-all active:scale-95"
-                  >
-                    ตัดคูปอง
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  stopCamera();
-                  setIsScanModalOpen(false);
-                }}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold kanit-text"
-              >
-                ปิดหน้าต่าง
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <QrScannerModal
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+        onScan={handleRedeemCoupon}
+        showToast={showToast}
+        title="สแกน / ตัดคูปอง"
+        subtitle="ส่องกล้องไปที่ QR Code บนคูปองของลูกค้า หรือพิมพ์รหัส"
+        actionButtonText="ตัดคูปอง"
+        placeholder="เช่น CP-XXXX หรือ URL คูปอง"
+      />
 
       {/* ========================================================================= */}
       {/* MODAL 6: PREVIEW COUPON IMAGE MODAL (Portal z-[210])                      */}
@@ -8334,7 +7736,7 @@ const CouponManager = ({
           onDownloadPng={handleDownloadSinglePng}
           onPrint={(cp) => {
             setPreviewCouponModal(null);
-            setPrintModalConfig({ coupons: [cp], template: 'card', batchTitle: cp.code });
+            triggerA4Print([cp], (cp.templateType === 'strip' || cp.template_type === 'strip') ? 'strip' : 'card');
           }}
         />,
         document.body

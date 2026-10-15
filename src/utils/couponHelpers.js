@@ -15,7 +15,7 @@ export function calculateVipExpiry(currentExpireDate = null, months = 1) {
     if (typeof currentExpireDate === 'object' && currentExpireDate !== null) {
       cleanExpStr = currentExpireDate.expireDateStr || currentExpireDate.expireDate || '';
     }
-    if (cleanExpStr && String(cleanExpStr).trim() !== '' && String(cleanExpStr) !== 'ตลอดชีพ') {
+    if (cleanExpStr && String(cleanExpStr).trim() !== '' && String(cleanExpStr) !== 'ตลอดชีพ' && String(cleanExpStr) !== 'ไม่มีวันหมดอายุ') {
       const existingExp = new Date(cleanExpStr);
       if (!isNaN(existingExp.getTime()) && existingExp.getTime() > baseDate.getTime()) {
         baseDate = new Date(existingExp);
@@ -79,7 +79,7 @@ export function isPatientVipActive(patient) {
   }
 
   const expStr = String(expireDate).trim();
-  if (!expStr || expStr === 'ตลอดชีพ' || expStr.toLowerCase() === 'lifetime' || expStr.startsWith('2099')) {
+  if (!expStr || expStr === 'ตลอดชีพ' || expStr === 'ไม่มีวันหมดอายุ' || expStr.toLowerCase() === 'lifetime' || expStr.startsWith('2099')) {
     return true;
   }
 
@@ -123,7 +123,7 @@ export function getPatientVipStatus(patient) {
     return { isActive: false, label: 'ทั่วไป', color: 'slate', remainingDays: 0 };
   }
 
-  if (!expireDate || String(expireDate).startsWith('2099') || expireDate === 'ตลอดชีพ') {
+  if (!expireDate || String(expireDate).startsWith('2099') || expireDate === 'ตลอดชีพ' || expireDate === 'ไม่มีวันหมดอายุ') {
     return {
       isActive: true,
       isLifetime: true,
@@ -253,7 +253,7 @@ export function getCouponExpiryTimestamp(coupon) {
   if (!coupon) return Infinity;
   if (coupon.isLifetime || coupon.is_lifetime) return Infinity;
   const exp = coupon.expireDate || coupon.expire_date;
-  if (!exp || exp === 'ตลอดชีพ') return Infinity;
+  if (!exp || exp === 'ตลอดชีพ' || exp === 'ไม่มีวันหมดอายุ') return Infinity;
   const t = new Date(exp).getTime();
   return isNaN(t) ? Infinity : t;
 }

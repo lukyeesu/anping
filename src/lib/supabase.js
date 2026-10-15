@@ -80,7 +80,7 @@ const TABLE_COLUMNS = {
     'id', 'code', 'batch_id', 'batch_name', 'batch_total', 'title', 'description', 
     'discount_type', 'discount_value', 'min_spend', 'max_discount', 'patient_id', 
     'patient_name', 'branch_id', 'bg_image', 'logo_url', 'template_type', 'theme_color', 
-    'qr_config', 'is_lifetime', 'expire_date', 'status', 'is_used', 'used_at', 
+    'qr_config', 'expiry_config', 'design_config', 'is_lifetime', 'expire_date', 'status', 'is_used', 'used_at', 
     'used_in_branch', 'used_in_receipt', 'used_by_patient_id', 'source', 'notes', 
     'created_at', 'updated_at', 'is_deleted'
   ],
@@ -459,9 +459,17 @@ export function rowToJS(row) {
     jsObj.templateType = row.template_type || row.templateType || 'standard';
     jsObj.template_type = jsObj.templateType;
   }
-  if (row.theme_color !== undefined || row.themeColor !== undefined) {
-    jsObj.themeColor = row.theme_color || row.themeColor || 'emerald';
-    jsObj.theme_color = jsObj.themeColor;
+  if (row.qr_config !== undefined || row.qrConfig !== undefined) {
+    jsObj.qrConfig = row.qr_config || row.qrConfig;
+    jsObj.qr_config = jsObj.qrConfig;
+  }
+  if (row.expiry_config !== undefined || row.expiryConfig !== undefined) {
+    jsObj.expiryConfig = row.expiry_config || row.expiryConfig;
+    jsObj.expiry_config = jsObj.expiryConfig;
+  }
+  if (row.design_config !== undefined || row.designConfig !== undefined) {
+    jsObj.designConfig = row.design_config || row.designConfig;
+    jsObj.design_config = jsObj.designConfig;
   }
 
   return jsObj;
@@ -2046,6 +2054,24 @@ export async function callSupabase(action, sheetName, payload = null) {
       }
 
       return { status: 'success', message: 'Data saved successfully', id: row.id, data: savedJsRow };
+    }
+
+    case 'SAVE_BATCH': {
+      if (!Array.isArray(payload) || payload.length === 0) {
+        return { status: 'success', message: 'No records to save', data: [] };
+      }
+      const rows = payload.map(item => jsToRow(item, tableName));
+      const { data: resData, error: upsertErr } = await supabase.from(tableName).upsert(rows, { onConflict: 'id' }).select();
+      if (upsertErr) {
+        console.error("🔥 SUPABASE BATCH UPSERT ERROR:", upsertErr);
+        throw upsertErr;
+      }
+      const savedJsRows = (resData && resData.length > 0) ? resData.map(rowToJS) : payload;
+      if (tableName !== 'patient_courses') {
+        await upsertLocalStore(tableName, savedJsRows);
+        await setLastSyncTime(tableName, new Date().toISOString());
+      }
+      return { status: 'success', message: 'Batch saved successfully', count: savedJsRows.length, data: savedJsRows };
     }
 
     case 'DELETE_DATA': {

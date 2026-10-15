@@ -2426,7 +2426,6 @@ export default function App() {
         return [payload, ...prev];
       });
     } else if (sheetName === 'Coupons' || sheetName === 'coupons') {
-      upsertLocalStore('coupons', [payload]).catch(() => {});
       setCouponsData(prev => {
         const cCode = String(payload.code || '').trim().toUpperCase();
         const idx = prev.findIndex(c => 
@@ -2435,9 +2434,22 @@ export default function App() {
         );
         if (idx >= 0) {
           const next = [...prev];
-          next[idx] = { ...next[idx], ...payload };
+          const existing = next[idx] || {};
+          const preservedBg = existing.bgImage || existing.bg_image || existing.designConfig?.customImageUrl || existing.design_config?.customImageUrl || '';
+          const incomingBg = payload.bgImage || payload.bg_image || payload.designConfig?.customImageUrl || payload.design_config?.customImageUrl || '';
+          const effectiveBg = incomingBg || preservedBg || null;
+
+          const merged = { 
+            ...existing, 
+            ...payload,
+            bgImage: effectiveBg,
+            bg_image: effectiveBg
+          };
+          upsertLocalStore('coupons', [merged]).catch(() => {});
+          next[idx] = merged;
           return next;
         }
+        upsertLocalStore('coupons', [payload]).catch(() => {});
         return [payload, ...prev];
       });
     } else if (sheetName === 'Settings' || sheetName === 'settings') {
@@ -2542,7 +2554,7 @@ export default function App() {
   // --- ปรับปรุงฟังก์ชันป้องกัน Error HTML แบบ 100% และรองรับ Supabase ---
   const callAppScript = async (action, sheetName, data = null) => {
     // 🛡️ ในโหมดจำลองข้อมูล (Sandbox Simulation) ไม่อนุญาตให้เขียนหรือลบข้อมูลจริงลง Supabase
-    if (isSimulationMode && (action === 'SAVE_DATA' || action === 'DELETE_DATA' || action === 'UPDATE_DATA')) {
+    if (isSimulationMode && (action === 'SAVE_DATA' || action === 'SAVE_BATCH' || action === 'DELETE_DATA' || action === 'UPDATE_DATA')) {
       showToast('อยู่ในโหมดจำลองข้อมูล (Sandbox Mode): ข้อมูลทำงานบนเบราว์เซอร์เท่านั้น ไม่ถูกบันทึกลงระบบจริง', 'warning');
       return { status: 'success', simulated: true, data };
     }
@@ -2602,10 +2614,12 @@ export default function App() {
         if (result.status === 'error') throw new Error(result.message);
       }
 
-      // --- อัปเดต React State สดๆ ทันทีเมื่อ SAVE_DATA หรือ DELETE_DATA สำเร็จ ---
+      // --- อัปเดต React State สดๆ ทันทีเมื่อ SAVE_DATA, SAVE_BATCH หรือ DELETE_DATA สำเร็จ ---
       if (result && result.status === 'success') {
         if (action === 'SAVE_DATA' && data) {
           syncLocalStateOnSave(sheetName, data);
+        } else if (action === 'SAVE_BATCH' && Array.isArray(data)) {
+          data.forEach(item => syncLocalStateOnSave(sheetName, item));
         } else if (action === 'DELETE_DATA' && data) {
           syncLocalStateOnDelete(sheetName, data);
         }
@@ -4032,55 +4046,198 @@ export default function App() {
         }
 
         /* --- CSS-Based 60FPS Sticky Header Animations --- */
-        .sticky-header-bg { transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease; border-bottom: 1px solid transparent; background-color: transparent; will-change: background-color, backdrop-filter; }
-        .is-scrolled .sticky-header-bg { background-color: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-color: transparent; box-shadow: none; }
+        :root {
+          --scrolled-header-h: 52px;
+        }
+        @media (min-width: 640px) {
+          :root {
+            --scrolled-header-h: 60px;
+          }
+        }
+
+        .sticky-header-bg { 
+          transition: background-color 0.3s ease, border-color 0.3s ease, backdrop-filter 0.3s ease, height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          border: 1px solid transparent !important; 
+          border-color: transparent !important; 
+          border-top-color: transparent !important; 
+          border-bottom-color: transparent !important; 
+          border-left-color: transparent !important; 
+          border-right-color: transparent !important; 
+          background-color: rgba(255, 255, 255, 0); 
+          box-shadow: none !important; 
+          outline: none !important; 
+          will-change: background-color, backdrop-filter; 
+        }
+        .is-scrolled .sticky-header-bg { 
+          height: var(--scrolled-header-h, 52px) !important;
+          box-sizing: border-box !important;
+          background-color: rgba(255, 255, 255, 0.90) !important; 
+          backdrop-filter: blur(16px) !important; 
+          -webkit-backdrop-filter: blur(16px) !important; 
+          border: 1px solid transparent !important; 
+          border-color: transparent !important; 
+          border-top-color: transparent !important; 
+          border-bottom-color: transparent !important; 
+          border-left-color: transparent !important; 
+          border-right-color: transparent !important; 
+          box-shadow: none !important; 
+          outline: none !important; 
+        }
+        @media (min-width: 640px) {
+          .is-scrolled .sticky-header-bg {
+            height: var(--scrolled-header-h, 60px) !important;
+          }
+        }
 
         .header-spacer { transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); height: 0.75rem; }
         @media (min-width: 640px) { .header-spacer { height: 1rem; } }
         .is-scrolled .header-spacer { height: 0px !important; }
 
-        .sticky-header-inner { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding-top: 1rem; padding-bottom: 1rem; will-change: padding; }
+        .sticky-header-inner { 
+          transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          padding-top: 1rem; 
+          padding-bottom: 1rem; 
+          will-change: padding, height; 
+        }
         @media (min-width: 768px) { .sticky-header-inner { padding-top: 2rem; } }
-        .is-scrolled .sticky-header-inner { padding-top: 1rem; padding-bottom: 0.5rem; }
-        @media (min-width: 640px) { .is-scrolled .sticky-header-inner { padding-bottom: 0.75rem; } }
+        .is-scrolled .sticky-header-inner { 
+          height: 100% !important; 
+          min-height: 100% !important; 
+          max-height: 100% !important; 
+          padding-top: 0 !important; 
+          padding-bottom: 0 !important; 
+          display: flex !important; 
+          align-items: center !important; 
+        }
 
-        .sticky-header-title { transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), line-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-size: 1.5rem; line-height: 2rem; margin: 0; will-change: font-size, line-height; }
+        .sticky-header-title { 
+          transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), line-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          font-size: 1.5rem; 
+          line-height: 2rem; 
+          margin: 0; 
+          will-change: font-size, line-height; 
+        }
         @media (min-width: 640px) { .sticky-header-title { font-size: 1.875rem; line-height: 2.25rem; } }
-        .is-scrolled .sticky-header-title { font-size: 1.25rem; line-height: 1.75rem; }
-        @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.5rem; line-height: 2rem; } }
+        .is-scrolled .sticky-header-title { 
+          font-size: 1.125rem; 
+          line-height: 1.5rem; 
+          white-space: nowrap; 
+          overflow: hidden; 
+          text-overflow: ellipsis; 
+        }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.375rem; line-height: 1.875rem; } }
 
-        .sticky-header-desc { transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease; opacity: 1; max-height: 50px; margin-top: 0.25rem; overflow: hidden; will-change: opacity, max-height, margin-top; }
-        .is-scrolled .sticky-header-desc { opacity: 0; max-height: 0; margin-top: 0; }
+        .sticky-header-desc { 
+          transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease; 
+          opacity: 1; 
+          max-height: 50px; 
+          margin-top: 0.25rem; 
+          overflow: hidden; 
+          will-change: opacity, max-height, margin-top; 
+        }
+        .is-scrolled .sticky-header-desc { 
+          opacity: 0; 
+          max-height: 0; 
+          margin-top: 0; 
+          display: none; 
+        }
 
-        .sticky-header-btn { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.75rem; will-change: padding, font-size; }
+        .sticky-header-btn { 
+          transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          padding: 0.75rem; 
+          will-change: padding, font-size, height; 
+        }
         @media (min-width: 640px) { .sticky-header-btn { padding: 0.75rem 1.5rem; font-size: 1rem; } }
-        .is-scrolled .sticky-header-btn { padding: 0.625rem; font-size: 0.875rem; }
-        .sticky-header-btn svg { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 20px; height: 20px; will-change: width, height; }
-        .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; }
+        .is-scrolled .sticky-header-btn { 
+          padding: 0.375rem 0.625rem; 
+          font-size: 0.8125rem; 
+          height: 36px; 
+          display: inline-flex; 
+          align-items: center; 
+          justify-content: center; 
+        }
+        @media (min-width: 640px) { 
+          .is-scrolled .sticky-header-btn { 
+            padding: 0.5rem 1rem; 
+            font-size: 0.875rem; 
+            height: 40px; 
+          } 
+        }
+        .sticky-header-btn svg { 
+          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          width: 20px; 
+          height: 20px; 
+          will-change: width, height; 
+        }
+        .is-scrolled .sticky-header-btn svg { width: 16px; height: 16px; }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; } }
 
-        .dash-date-badge { transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0.375rem 0.75rem; font-size: 0.875rem; will-change: padding, font-size; }
+        .dash-date-badge { 
+          transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          padding: 0.375rem 0.75rem; 
+          font-size: 0.875rem; 
+          will-change: padding, font-size; 
+        }
         @media (min-width: 640px) { .dash-date-badge { padding: 0.5rem 1rem; font-size: 1rem; } }
-        .dash-date-badge svg { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 18px; height: 18px; will-change: width, height; }
-        .is-scrolled .dash-date-badge { font-size: 0.75rem; }
+        .dash-date-badge svg { 
+          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          width: 18px; 
+          height: 18px; 
+          will-change: width, height; 
+        }
+        .is-scrolled .dash-date-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; height: 32px; display: inline-flex; align-items: center; }
         .is-scrolled .dash-date-badge svg { width: 14px; height: 14px; }
 
-        .sticky-filter-inner { transition: width 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, backdrop-filter 0.3s ease; width: calc(100% - 2rem); border-radius: 2rem; border-width: 1px; will-change: width, padding, border-radius; background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .sticky-filter-inner { 
+          transition: width 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, backdrop-filter 0.3s ease; 
+          width: calc(100% - 2rem); 
+          border-radius: 2rem; 
+          border-width: 1px; 
+          border-style: solid;
+          border-color: rgba(226, 232, 240, 0.7);
+          will-change: width, padding, border-radius, border-color, box-shadow; 
+          background-color: rgba(255, 255, 255, 0.90); 
+          backdrop-filter: blur(16px); 
+          -webkit-backdrop-filter: blur(16px); 
+          box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.03); 
+        }
         @media (min-width: 768px) { .sticky-filter-inner { width: calc(100% - 4rem); } }
         @media (min-width: 1536px) { .sticky-filter-inner { width: calc(100% - 6rem); } }
-        .is-scrolled .sticky-filter-inner { width: 100%; border-radius: 0 0 1.5rem 1.5rem; border-top-color: transparent; border-left-color: transparent; border-right-color: transparent; border-bottom-color: rgba(226, 232, 240, 0.8); box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); }
-        .is-scrolled .sticky-filter-inner { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
-        @media (min-width: 768px) { 
-          .is-scrolled .sticky-filter-inner { padding-top: 1rem !important; padding-bottom: 1rem !important; padding-left: 2rem; padding-right: 2rem; } 
+        .is-scrolled .sticky-filter-inner { 
+          position: relative !important; 
+          top: 0 !important; 
+          transform: none !important; 
+          --tw-translate-y: 0 !important; 
+          width: 100% !important; 
+          border-radius: 0 0 1.5rem 1.5rem !important; 
+          border-top-color: transparent !important; 
+          border-left-color: transparent !important; 
+          border-right-color: transparent !important; 
+          border-bottom-color: rgba(226, 232, 240, 0.8) !important; 
+          box-shadow: 0 10px 15px -6px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.02) !important; 
+          background-color: rgba(255, 255, 255, 0.90) !important;
+          backdrop-filter: blur(16px) !important;
+          -webkit-backdrop-filter: blur(16px) !important;
+          padding-top: 0.625rem !important; 
+          padding-bottom: 0.625rem !important; 
         }
-        @media (min-width: 1536px) { .is-scrolled .sticky-filter-inner { padding-left: 3rem; padding-right: 3rem; } }
+        @media (min-width: 768px) { 
+          .is-scrolled .sticky-filter-inner { 
+            padding-top: 0.875rem !important; 
+            padding-bottom: 0.875rem !important; 
+            padding-left: 2rem !important; 
+            padding-right: 2rem !important; 
+          } 
+        }
+        @media (min-width: 1536px) { .is-scrolled .sticky-filter-inner { padding-left: 3rem !important; padding-right: 3rem !important; } }
 
-        /* --- [NEW] CSS คำนวณระยะกาง Filter ของหน้านัดหมายอัตโนมัติ --- */
-        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 52px); }
-        @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + 60px); } }
+        /* --- [NEW] CSS คำนวณระยะกาง Filter เชื่อมต่อแนบสนิทกับขอบล่าง Header แบบ 0px Gap --- */
+        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 52px)); }
+        @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 60px)); } }
 
-        /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก (เพิ่มระยะห่างจากขอบบนเพื่อความสวยงามและไม่โดนบัง) */
-        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 52px); z-index: 40; }
-        @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + 60px); } }
+        /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก */
+        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 52px)); z-index: 40; }
+        @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 60px)); } }
 
         /* --- Executive Dashboard Sticky Header (Opaque & Clean) --- */
         .exec-sticky-header {
