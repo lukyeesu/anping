@@ -2027,7 +2027,10 @@ export default function CustomerDisplay({
         {/* ULTRA-LARGE PROMPTPAY QR DISPLAY (Inside Left Card in PAYMENT_QR) */}
         {/* ============================================================== */}
         {displayMode === 'PAYMENT_QR' && (
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white flex flex-col items-center justify-center p-6 lg:p-10 z-20 overflow-hidden">
+          <div 
+            className="absolute inset-0 bg-slate-950 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white flex flex-col items-center justify-center p-6 lg:p-10 z-20 overflow-hidden"
+            style={{ backgroundColor: '#020617' }}
+          >
             {/* Ambient Herbal Jade Glow */}
             <div className="absolute w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[140px] pointer-events-none" />
 
@@ -2147,7 +2150,10 @@ export default function CustomerDisplay({
                     ข้อมูลผู้รับบริการ
                   </span>
                   {cartData?.patient?.isVip && (
-                    <span className="text-[10px] sm:text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0">
+                    <span 
+                      className="text-[10px] sm:text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0"
+                      style={{ backgroundColor: '#f59e0b', backgroundImage: 'linear-gradient(to right, #f59e0b, #eab308, #d97706)' }}
+                    >
                       <Crown size={11} className="fill-amber-200 text-white" /> VIP
                     </span>
                   )}
@@ -2155,7 +2161,7 @@ export default function CustomerDisplay({
 
                 <div className={`p-2.5 rounded-xl flex flex-col gap-1.5 transition-all ${
                   cartData?.patient?.isVip
-                    ? 'border-amber-300/90 border-l-4 border-l-amber-500 bg-gradient-to-r from-amber-100/90 via-yellow-50/90 to-amber-100/80 shadow-xs'
+                    ? 'border-amber-300/90 border-l-4 border-l-amber-500 bg-amber-100 bg-gradient-to-r from-amber-100/90 via-yellow-50/90 to-amber-100/80 shadow-xs'
                     : 'bg-slate-50 border border-slate-200/80'
                 }`}>
                   <div className="flex items-center justify-between">
@@ -2306,9 +2312,23 @@ export default function CustomerDisplay({
                 <span className="text-xs sm:text-sm font-semibold text-slate-500 block kanit-text leading-tight">ยอดชำระสุทธิ</span>
                 <span className="text-base sm:text-lg font-black text-slate-800 kanit-text leading-tight">Net Payable</span>
               </div>
-              <div className="px-5 py-2.5 sm:px-6 sm:py-3.5 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white font-mono font-black text-2xl sm:text-3xl lg:text-4xl shadow-xl tracking-tight flex items-baseline gap-2 shrink-0">
-                <span className="drop-shadow-sm font-black">{Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
-                <span className="text-sm sm:text-base font-semibold opacity-95 font-sans">บาท</span>
+              <div 
+                className="px-5 py-2.5 sm:px-6 sm:py-3.5 rounded-2xl sm:rounded-3xl bg-emerald-600 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white font-mono font-black text-2xl sm:text-3xl lg:text-4xl shadow-xl tracking-tight flex items-baseline gap-2 shrink-0"
+                style={{
+                  backgroundColor: '#059669',
+                  backgroundImage: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
+                  WebkitTransform: 'translateZ(0)',
+                  transform: 'translateZ(0)',
+                  isolation: 'isolate',
+                  color: '#ffffff'
+                }}
+              >
+                <span className="drop-shadow-sm font-black text-white" style={{ color: '#ffffff' }}>
+                  {Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </span>
+                <span className="text-sm sm:text-base font-semibold opacity-95 font-sans text-emerald-50" style={{ color: '#ecfdf5' }}>
+                  บาท
+                </span>
               </div>
             </div>
           </div>
@@ -2323,7 +2343,10 @@ export default function CustomerDisplay({
           displayMode === 'PAYMENT_SUCCESS' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="bg-gradient-to-b from-slate-900 to-[#0c2419] rounded-3xl border border-emerald-500/30 shadow-2xl p-8 sm:p-12 max-w-lg w-full flex flex-col items-center text-center">
+        <div 
+          className="bg-slate-900 bg-gradient-to-b from-slate-900 to-[#0c2419] rounded-3xl border border-emerald-500/30 shadow-2xl p-8 sm:p-12 max-w-lg w-full flex flex-col items-center text-center"
+          style={{ backgroundColor: '#0f172a' }}
+        >
           <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mb-5 shadow-[0_0_40px_rgba(16,185,129,0.35)] animate-bounce">
             <CheckCircle2 className="w-10 h-10" />
           </div>
@@ -2395,7 +2418,7 @@ export default function CustomerDisplay({
                 className={`w-full py-2.5 sm:py-3 px-4 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-md transition-all active:scale-[0.98] cursor-pointer ${
                   isFullscreen
                     ? 'bg-slate-800 hover:bg-slate-700 text-white shadow-slate-800/20'
-                    : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white shadow-emerald-600/30'
+                    : 'bg-emerald-600 bg-gradient-to-r from-emerald-600 via-teal-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white shadow-emerald-600/30'
                 }`}
               >
                 <Maximize className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />

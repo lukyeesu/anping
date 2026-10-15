@@ -4665,10 +4665,10 @@ const CouponManager = ({
         ctx.fillText(line, headerTextX, addrStartY + (idx * addrLineH));
       });
 
-      // Contact Line (Phone & Tax ID)
+      // Contact Line (Phone)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.font = `${isStrip ? '15' : '12'}px "Kanit", sans-serif`;
-      const contactInfo = `โทร: ${clinicPhone || '-'}${taxId ? `  •  เลขผู้เสียภาษี: ${taxId}` : ''}`;
+      const contactInfo = `โทร: ${clinicPhone || '-'}`;
       const contactY = addrStartY + (Math.min(addrLines.length, 3) * addrLineH) + (isStrip ? 4 : 2);
       ctx.fillText(contactInfo, headerTextX, contactY);
 
@@ -5353,7 +5353,6 @@ const CouponManager = ({
                       <div class="t1-brand-address">${clinicAddress}</div>
                       <div class="t1-brand-contact">
                         <span>โทร: <strong>${clinicPhone || '-'}</strong></span>
-                        ${taxId ? `<span>เลขผู้เสียภาษี: <strong>${taxId}</strong></span>` : ''}
                       </div>
                     </div>
                   </div>
@@ -5445,7 +5444,6 @@ const CouponManager = ({
                       <div class="t2-brand-address">${clinicAddress}</div>
                       <div class="t2-brand-contact">
                         <span>โทร: ${clinicPhone || '-'}</span>
-                        ${taxId ? `<span>เลขผู้เสียภาษี: ${taxId}</span>` : ''}
                       </div>
                     </div>
                   </div>
