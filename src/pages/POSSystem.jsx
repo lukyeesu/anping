@@ -51,6 +51,7 @@ const POSSystem = ({
     currentBranch,
     branchesData = [],
     showToast, callAppScript, isGlobalLoading, showGlobalAlert, globalAlert,
+    isMobile,
     showMobileBars,
     handlePrintReceipt,
     currentUser,
@@ -3022,8 +3023,16 @@ const POSSystem = ({
           .pos-dropdown-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         }
       `}</style>
-      {/* แก้ไข: เพิ่ม z-[70] เมื่อเปิดตะกร้าบนมือถือ เพื่อยกเลเยอร์ให้ลอยข้าม Header และ Navbar */}
-      <div className={`absolute inset-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in ${isMobileCartOpen ? 'z-[70]' : ''}`}>
+      {/* ปรับ top/bottom บน Mobile ให้สอดคล้องกับ Header และ Navbar แบบ GPU-accelerated พร้อมป้องกันการเลื่อนล้นขอบ */}
+      <div 
+        className={`absolute left-0 right-0 flex flex-col p-3 sm:p-4 lg:p-6 xl:p-8 fade-in ${isMobileCartOpen ? 'z-[70]' : ''} md:top-0 md:bottom-0`}
+        style={{
+          top: 'var(--mobile-pos-top, 0px)',
+          bottom: 'var(--mobile-pos-bottom, 0px)',
+          transition: 'top 0.35s cubic-bezier(0.32, 0.72, 0, 1), bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
+          overscrollBehaviorY: 'none'
+        }}
+      >
         
         {/* Header ของ POS (Responsive: 2 แถวบน Mobile เพื่อความเป็นระเบียบ ไม่เบียดกัน) */}
         <div className="pos-header flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
@@ -3118,7 +3127,7 @@ const POSSystem = ({
             </div>
 
             {/* Product Grid */}
-            <div className="pos-product-grid flex-1 p-3 sm:p-6 pb-24 lg:pb-6 overflow-y-auto custom-scrollbar bg-slate-50/30">
+            <div className="pos-product-grid flex-1 p-3 sm:p-6 pb-24 lg:pb-6 overflow-y-auto custom-scrollbar bg-slate-50/30" style={{ overscrollBehaviorY: 'none' }}>
               {isGlobalLoading ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-5 auto-rows-max">
                   {Array.from({ length: 12 }).map((_, i) => (
@@ -4028,7 +4037,13 @@ const POSSystem = ({
 
           {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือตอนอยู่หน้าเลือกสินค้า) --- */}
           {!isMobileCartOpen && (
-            <div className={`md:hidden fixed left-4 right-4 z-40 transition-all duration-300 ease-in-out ${showMobileBars ? 'bottom-[76px]' : 'bottom-6'}`}>
+            <div 
+              className="md:hidden fixed left-4 right-4 z-40"
+              style={{
+                bottom: showMobileBars ? '76px' : '24px',
+                transition: 'bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1)'
+              }}
+            >
               <button 
                 onClick={() => setIsMobileCartOpen(true)}
                 className={`w-full p-4 rounded-2xl shadow-xl flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}

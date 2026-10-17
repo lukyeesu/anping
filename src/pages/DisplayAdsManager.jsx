@@ -211,7 +211,8 @@ export default function DisplayAdsManager({
       const target = e?.target || mainElement;
       const scrollTop = target?.scrollTop ?? window?.scrollY ?? 0;
       
-      if (scrollTop > 20) {
+      const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+      if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
         headerRef.current.classList.add('is-scrolled');
       } else {
         headerRef.current.classList.remove('is-scrolled');

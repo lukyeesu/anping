@@ -33,6 +33,7 @@ const THEME_STYLES = {
   emerald: {
     id: 'emerald',
     name: 'เขียวเอเมอรัลด์ (สุขภาพ & สมดุล)',
+    shortName: 'เขียวเอเมอรัลด์',
     bg: 'from-emerald-600 via-teal-600 to-emerald-800',
     headerBg: '#059669',
     accentText: '#047857',
@@ -45,6 +46,7 @@ const THEME_STYLES = {
   sky: {
     id: 'sky',
     name: 'ฟ้าครามการแพทย์ (ความน่าเชื่อถือ)',
+    shortName: 'ฟ้าครามการแพทย์',
     bg: 'from-sky-600 via-blue-600 to-indigo-800',
     headerBg: '#0284c7',
     accentText: '#0369a1',
@@ -56,7 +58,8 @@ const THEME_STYLES = {
   },
   gold: {
     id: 'gold',
-    name: 'ทองคำหรูหรา (VIP & คอร์สพรีเมียม)',
+    name: 'ทองคำหรูหรา (VIP & พรีเมียม)',
+    shortName: 'ทองคำหรูหรา',
     bg: 'from-amber-500 via-yellow-500 to-amber-700',
     headerBg: '#d97706',
     accentText: '#b45309',
@@ -69,6 +72,7 @@ const THEME_STYLES = {
   rose: {
     id: 'rose',
     name: 'กุหลาบชมพู (ความงาม & ผิวพรรณ)',
+    shortName: 'กุหลาบชมพู',
     bg: 'from-rose-500 via-pink-600 to-rose-800',
     headerBg: '#e11d48',
     accentText: '#be123c',
@@ -80,7 +84,8 @@ const THEME_STYLES = {
   },
   purple: {
     id: 'purple',
-    name: 'ม่วงพรีเมียม (ศาสตร์ความงามชั้นสูง)',
+    name: 'ม่วงพรีเมียม (ศาสตร์ความงาม)',
+    shortName: 'ม่วงพรีเมียม',
     bg: 'from-purple-600 via-indigo-600 to-purple-900',
     headerBg: '#7c3aed',
     accentText: '#6d28d9',
@@ -90,9 +95,140 @@ const THEME_STYLES = {
     sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
     tagColor: '#8b5cf6'
   },
+  crimson: {
+    id: 'crimson',
+    name: 'แดงทับทิมมงคล (มงคล & ฮอตดีล)',
+    shortName: 'แดงทับทิม',
+    bg: 'from-red-600 via-rose-700 to-red-950',
+    headerBg: '#dc2626',
+    accentText: '#b91c1c',
+    badge: 'bg-red-50 text-red-700 border-red-200',
+    primaryColor: '#dc2626',
+    lightBg: '#fef2f2',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.25) 100%)',
+    tagColor: '#ef4444'
+  },
+  amber: {
+    id: 'amber',
+    name: 'ส้มซันเซ็ท (สดใส & โปรโมชั่น)',
+    shortName: 'ส้มซันเซ็ท',
+    bg: 'from-orange-500 via-amber-600 to-orange-800',
+    headerBg: '#ea580c',
+    accentText: '#c2410c',
+    badge: 'bg-orange-50 text-orange-700 border-orange-200',
+    primaryColor: '#ea580c',
+    lightBg: '#fff7ed',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
+    tagColor: '#f97316'
+  },
+  teal: {
+    id: 'teal',
+    name: 'เขียวน้ำทะเล (โมเดิร์น & รีเฟรช)',
+    shortName: 'เขียวน้ำทะเล',
+    bg: 'from-teal-500 via-cyan-600 to-teal-800',
+    headerBg: '#0d9488',
+    accentText: '#0f766e',
+    badge: 'bg-teal-50 text-teal-700 border-teal-200',
+    primaryColor: '#0d9488',
+    lightBg: '#f0fdfa',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
+    tagColor: '#14b8a6'
+  },
+  indigo: {
+    id: 'indigo',
+    name: 'อินดิโก้นาวี (ภูมิฐาน & ทางการ)',
+    shortName: 'อินดิโก้นาวี',
+    bg: 'from-indigo-600 via-blue-700 to-indigo-950',
+    headerBg: '#4f46e5',
+    accentText: '#4338ca',
+    badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    primaryColor: '#4f46e5',
+    lightBg: '#eef2ff',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
+    tagColor: '#6366f1'
+  },
+  fuchsia: {
+    id: 'fuchsia',
+    name: 'ฟิวเชียออร่า (แฟชั่น & ปาร์ตี้)',
+    shortName: 'ฟิวเชียออร่า',
+    bg: 'from-fuchsia-600 via-pink-600 to-purple-800',
+    headerBg: '#c026d3',
+    accentText: '#a21caf',
+    badge: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+    primaryColor: '#c026d3',
+    lightBg: '#fdf4ff',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.25) 100%)',
+    tagColor: '#d946ef'
+  },
+  cyan: {
+    id: 'cyan',
+    name: 'ฟ้ามิ้นต์ไอซ์ (ไครโอ & สปา)',
+    shortName: 'ฟ้ามิ้นต์ไอซ์',
+    bg: 'from-cyan-500 via-teal-600 to-cyan-800',
+    headerBg: '#0891b2',
+    accentText: '#0e7490',
+    badge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    primaryColor: '#0891b2',
+    lightBg: '#ecfeff',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
+    tagColor: '#06b6d4'
+  },
+  forest: {
+    id: 'forest',
+    name: 'เขียวพงไพร (สมุนไพร & ธรรมชาติ)',
+    shortName: 'เขียวพงไพร',
+    bg: 'from-green-700 via-emerald-800 to-emerald-950',
+    headerBg: '#15803d',
+    accentText: '#166534',
+    badge: 'bg-green-50 text-green-700 border-green-200',
+    primaryColor: '#15803d',
+    lightBg: '#f0fdf4',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
+    tagColor: '#22c55e'
+  },
+  violet: {
+    id: 'violet',
+    name: 'ลาเวนเดอร์ (ผ่อนคลาย & สบายตา)',
+    shortName: 'ลาเวนเดอร์',
+    bg: 'from-violet-500 via-purple-600 to-indigo-900',
+    headerBg: '#6d28d9',
+    accentText: '#5b21b6',
+    badge: 'bg-violet-50 text-violet-700 border-violet-200',
+    primaryColor: '#6d28d9',
+    lightBg: '#f5f3ff',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.2) 100%)',
+    tagColor: '#8b5cf6'
+  },
+  bronze: {
+    id: 'bronze',
+    name: 'บรอนซ์คอปเปอร์ (เมทัลลิก & อบอุ่น)',
+    shortName: 'บรอนซ์คอปเปอร์',
+    bg: 'from-amber-700 via-yellow-800 to-stone-900',
+    headerBg: '#b45309',
+    accentText: '#92400e',
+    badge: 'bg-stone-100 text-amber-900 border-amber-300',
+    primaryColor: '#b45309',
+    lightBg: '#fffbeb',
+    sheen: 'linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.3) 100%)',
+    tagColor: '#d97706'
+  },
+  dark_gold: {
+    id: 'dark_gold',
+    name: 'แบล็คการ์ดโกลด์ (เอกซ์คลูซีฟ VIP)',
+    shortName: 'แบล็คการ์ดโกลด์',
+    bg: 'from-zinc-900 via-neutral-900 to-black',
+    headerBg: '#d97706',
+    accentText: '#f59e0b',
+    badge: 'bg-zinc-800 text-amber-300 border-amber-500/40',
+    primaryColor: '#d97706',
+    lightBg: '#27272a',
+    sheen: 'linear-gradient(135deg, rgba(251,191,36,0.4) 0%, rgba(255,255,255,0.05) 50%, rgba(245,158,11,0.25) 100%)',
+    tagColor: '#fbbf24'
+  },
   slate: {
     id: 'slate',
     name: 'คลาสสิกขาว-เทา (เรียบหรู มินิมอล)',
+    shortName: 'คลาสสิกขาว-เทา',
     bg: 'from-slate-700 via-slate-800 to-slate-950',
     headerBg: '#334155',
     accentText: '#1e293b',
@@ -165,6 +301,126 @@ const PRINT_THEMES = {
     tagBg: 'rgba(255, 255, 255, 0.22)',
     tagText: '#ffffff'
   },
+  crimson: {
+    primary: '#dc2626',
+    primaryDark: '#7f1d1d',
+    primaryLight: '#fef2f2',
+    cardBgGradient: 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 50%, #991b1b 100%)',
+    stubGradient: 'linear-gradient(145deg, #450a0a 0%, #7f1d1d 55%, #dc2626 100%)',
+    badgeGradient: 'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 60%, #dc2626 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #f87171 0%, #dc2626 55%, #7f1d1d 100%)',
+    starColor: '#fef08a',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  amber: {
+    primary: '#ea580c',
+    primaryDark: '#7c2d12',
+    primaryLight: '#fff7ed',
+    cardBgGradient: 'linear-gradient(135deg, #7c2d12 0%, #ea580c 50%, #9a3412 100%)',
+    stubGradient: 'linear-gradient(145deg, #431407 0%, #7c2d12 55%, #ea580c 100%)',
+    badgeGradient: 'linear-gradient(135deg, #7c2d12 0%, #c2410c 60%, #ea580c 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #fb923c 0%, #ea580c 55%, #7c2d12 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  teal: {
+    primary: '#0d9488',
+    primaryDark: '#134e4a',
+    primaryLight: '#f0fdfa',
+    cardBgGradient: 'linear-gradient(135deg, #134e4a 0%, #0d9488 50%, #115e59 100%)',
+    stubGradient: 'linear-gradient(145deg, #042f2e 0%, #134e4a 55%, #0d9488 100%)',
+    badgeGradient: 'linear-gradient(135deg, #134e4a 0%, #0f766e 60%, #0d9488 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #2dd4bf 0%, #0d9488 55%, #134e4a 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  indigo: {
+    primary: '#4f46e5',
+    primaryDark: '#312e81',
+    primaryLight: '#eef2ff',
+    cardBgGradient: 'linear-gradient(135deg, #312e81 0%, #4f46e5 50%, #3730a3 100%)',
+    stubGradient: 'linear-gradient(145deg, #1e1b4b 0%, #312e81 55%, #4f46e5 100%)',
+    badgeGradient: 'linear-gradient(135deg, #312e81 0%, #4338ca 60%, #4f46e5 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #818cf8 0%, #4f46e5 55%, #312e81 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  fuchsia: {
+    primary: '#c026d3',
+    primaryDark: '#701a75',
+    primaryLight: '#fdf4ff',
+    cardBgGradient: 'linear-gradient(135deg, #701a75 0%, #c026d3 50%, #86198f 100%)',
+    stubGradient: 'linear-gradient(145deg, #4a044e 0%, #701a75 55%, #c026d3 100%)',
+    badgeGradient: 'linear-gradient(135deg, #701a75 0%, #a21caf 60%, #c026d3 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #e879f9 0%, #c026d3 55%, #701a75 100%)',
+    starColor: '#fef08a',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  cyan: {
+    primary: '#0891b2',
+    primaryDark: '#164e63',
+    primaryLight: '#ecfeff',
+    cardBgGradient: 'linear-gradient(135deg, #164e63 0%, #0891b2 50%, #155e75 100%)',
+    stubGradient: 'linear-gradient(145deg, #083344 0%, #164e63 55%, #0891b2 100%)',
+    badgeGradient: 'linear-gradient(135deg, #164e63 0%, #0e7490 60%, #0891b2 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #22d3ee 0%, #0891b2 55%, #164e63 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  forest: {
+    primary: '#15803d',
+    primaryDark: '#14532d',
+    primaryLight: '#f0fdf4',
+    cardBgGradient: 'linear-gradient(135deg, #14532d 0%, #15803d 50%, #166534 100%)',
+    stubGradient: 'linear-gradient(145deg, #052e16 0%, #14532d 55%, #15803d 100%)',
+    badgeGradient: 'linear-gradient(135deg, #14532d 0%, #166534 60%, #15803d 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #4ade80 0%, #15803d 55%, #14532d 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  violet: {
+    primary: '#6d28d9',
+    primaryDark: '#4c1d95',
+    primaryLight: '#f5f3ff',
+    cardBgGradient: 'linear-gradient(135deg, #4c1d95 0%, #6d28d9 50%, #5b21b6 100%)',
+    stubGradient: 'linear-gradient(145deg, #2e1065 0%, #4c1d95 55%, #6d28d9 100%)',
+    badgeGradient: 'linear-gradient(135deg, #4c1d95 0%, #5b21b6 60%, #6d28d9 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #a78bfa 0%, #6d28d9 55%, #4c1d95 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(255, 255, 255, 0.22)',
+    tagText: '#ffffff'
+  },
+  bronze: {
+    primary: '#b45309',
+    primaryDark: '#78350f',
+    primaryLight: '#fffbeb',
+    cardBgGradient: 'linear-gradient(135deg, #78350f 0%, #b45309 50%, #451a03 100%)',
+    stubGradient: 'linear-gradient(145deg, #291205 0%, #451a03 55%, #b45309 100%)',
+    badgeGradient: 'linear-gradient(135deg, #78350f 0%, #92400e 60%, #b45309 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #f59e0b 0%, #b45309 55%, #78350f 100%)',
+    starColor: '#fef08a',
+    tagBg: 'rgba(255, 255, 255, 0.25)',
+    tagText: '#ffffff'
+  },
+  dark_gold: {
+    primary: '#d97706',
+    primaryDark: '#18181b',
+    primaryLight: '#27272a',
+    cardBgGradient: 'linear-gradient(135deg, #18181b 0%, #27272a 50%, #09090b 100%)',
+    stubGradient: 'linear-gradient(145deg, #09090b 0%, #18181b 55%, #27272a 100%)',
+    badgeGradient: 'linear-gradient(135deg, #78350f 0%, #d97706 60%, #b45309 100%)',
+    cardStubGradient: 'radial-gradient(circle at 75% 30%, #fbbf24 0%, #d97706 55%, #18181b 100%)',
+    starColor: '#fde047',
+    tagBg: 'rgba(245, 158, 11, 0.3)',
+    tagText: '#fef08a'
+  },
   slate: {
     primary: '#334155',
     primaryDark: '#0f172a',
@@ -186,6 +442,16 @@ const STUDIO_GRADIENT_PRESETS = [
   { id: 'gold', name: 'ทองคำหรูหรา', c1: '#78350f', c2: '#d97706', c3: '#b45309' },
   { id: 'rose', name: 'กุหลาบชมพู', c1: '#881337', c2: '#e11d48', c3: '#be123c' },
   { id: 'purple', name: 'ม่วงพรีเมียม', c1: '#4c1d95', c2: '#7c3aed', c3: '#581c87' },
+  { id: 'crimson', name: 'แดงทับทิมมงคล', c1: '#7f1d1d', c2: '#dc2626', c3: '#991b1b' },
+  { id: 'amber', name: 'ส้มซันเซ็ท', c1: '#7c2d12', c2: '#ea580c', c3: '#9a3412' },
+  { id: 'teal', name: 'เขียวน้ำทะเล', c1: '#134e4a', c2: '#0d9488', c3: '#115e59' },
+  { id: 'indigo', name: 'อินดิโก้นาวี', c1: '#312e81', c2: '#4f46e5', c3: '#3730a3' },
+  { id: 'fuchsia', name: 'ฟิวเชียออร่า', c1: '#701a75', c2: '#c026d3', c3: '#86198f' },
+  { id: 'cyan', name: 'ฟ้ามิ้นต์ไอซ์', c1: '#164e63', c2: '#0891b2', c3: '#155e75' },
+  { id: 'forest', name: 'เขียวพงไพร', c1: '#14532d', c2: '#15803d', c3: '#166534' },
+  { id: 'violet', name: 'ลาเวนเดอร์', c1: '#4c1d95', c2: '#6d28d9', c3: '#5b21b6' },
+  { id: 'bronze', name: 'บรอนซ์คอปเปอร์', c1: '#78350f', c2: '#b45309', c3: '#451a03' },
+  { id: 'dark_gold', name: 'แบล็คการ์ดโกลด์', c1: '#18181b', c2: '#27272a', c3: '#09090b' },
   { id: 'slate', name: 'ดาร์กสเลตมินิมอล', c1: '#0f172a', c2: '#334155', c3: '#1e293b' },
   { id: 'sunset', name: 'ซันเซ็ทพาสเทล', c1: '#c2410c', c2: '#ea580c', c3: '#e11d48' },
   { id: 'ocean', name: 'ดีพโอเชียน', c1: '#0c4a6e', c2: '#0284c7', c3: '#0369a1' }
@@ -253,6 +519,23 @@ const DEFAULT_PRESET_TEMPLATES = [
 
 // รูปแบบคูปองตัวอย่างเริ่มต้น (สำหรับทดสอบจัดตำแหน่ง QR Code ทันที)
 const DEFAULT_SAMPLE_VOUCHER_ART = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="856" height="540" viewBox="0 0 856 540"><defs><linearGradient id="vbg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2318181b"/><stop offset="50%" stop-color="%23222226"/><stop offset="100%" stop-color="%232a2a30"/></linearGradient><pattern id="pdots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="%23ffffff" fill-opacity="0.08"/></pattern></defs><rect width="856" height="540" rx="32" fill="url(%23vbg)"/><rect width="856" height="540" rx="32" fill="url(%23pdots)"/><rect x="28" y="28" width="800" height="484" rx="22" fill="none" stroke="%23f59e0b" stroke-width="2.5" stroke-dasharray="10 6" stroke-opacity="0.7"/><circle cx="110" cy="110" r="42" fill="%23f59e0b" fill-opacity="0.15"/><polygon points="110,80 120,105 145,108 126,125 132,150 110,136 88,150 94,125 75,108 100,105" fill="%23fbbf24"/><text x="175" y="108" font-family="sans-serif" font-weight="900" font-size="32" fill="%23ffffff" letter-spacing="2">ANPING CLINIC</text><text x="175" y="138" font-family="sans-serif" font-weight="600" font-size="16" fill="%23cbd5e1" letter-spacing="1">SPECIAL PRIVILEGE VOUCHER</text><text x="60" y="260" font-family="sans-serif" font-weight="900" font-size="52" fill="%23fbbf24">DISCOUNT ฿500</text><text x="60" y="310" font-family="sans-serif" font-weight="500" font-size="22" fill="%23f8fafc">บัตรกำนัลส่วนลดแทนเงินสดสำหรับโปรแกรมการรักษา</text><text x="60" y="440" font-family="sans-serif" font-weight="400" font-size="16" fill="%2394a3b8">เงื่อนไข: ใช้ได้ที่อันผิงคลินิกทุกสาขา | โปรดแสดง QR Code แก่เจ้าหน้าที่</text></svg>';
+
+// รูปแบบคูปองแถบยาวตัวอย่างเริ่มต้น (สัดส่วน 3:1 ถึง 3.7:1 พิมพ์ 4 ใบ/หน้า A4 ชิดขอบซ้ายขวา)
+const DEFAULT_SAMPLE_STRIP_VOUCHER_ART = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="540" viewBox="0 0 2000 540"><defs><linearGradient id="vbg_strip" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2318181b"/><stop offset="50%" stop-color="%23222226"/><stop offset="100%" stop-color="%232a2a30"/></linearGradient><linearGradient id="gold_grad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="%23fbbf24"/><stop offset="100%" stop-color="%23f59e0b"/></linearGradient><pattern id="pdots_strip" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="%23ffffff" fill-opacity="0.08"/></pattern></defs><rect width="2000" height="540" rx="28" fill="url(%23vbg_strip)"/><rect width="2000" height="540" rx="28" fill="url(%23pdots_strip)"/><rect x="24" y="24" width="1440" height="492" rx="20" fill="none" stroke="%23f59e0b" stroke-width="2" stroke-dasharray="10 6" stroke-opacity="0.6"/><circle cx="95" cy="95" r="38" fill="%23f59e0b" fill-opacity="0.15"/><polygon points="95,68 104,90 127,93 110,108 115,131 95,118 75,131 80,108 63,93 86,90" fill="%23fbbf24"/><text x="155" y="92" font-family="sans-serif" font-weight="900" font-size="34" fill="%23ffffff" letter-spacing="2">ANPING CLINIC</text><text x="155" y="122" font-family="sans-serif" font-weight="600" font-size="16" fill="%23cbd5e1" letter-spacing="1">SPECIAL PRIVILEGE GIFT VOUCHER</text><text x="70" y="250" font-family="sans-serif" font-weight="900" font-size="58" fill="url(%23gold_grad)">DISCOUNT ฿500</text><text x="70" y="305" font-family="sans-serif" font-weight="500" font-size="24" fill="%23f8fafc">บัตรกำนัลส่วนลดแทนเงินสดสำหรับโปรแกรมการรักษาและหัตถการ</text><text x="70" y="440" font-family="sans-serif" font-weight="400" font-size="16" fill="%2394a3b8">เงื่อนไข: ใช้ได้ที่อันผิงคลินิกทุกสาขา | โปรดแสดง QR Code ด้านขวาแก่เจ้าหน้าที่ก่อนรับบริการ</text><line x1="1485" y1="20" x2="1485" y2="520" stroke="%2364748b" stroke-width="2.5" stroke-dasharray="12 10" stroke-opacity="0.8"/><circle cx="1485" cy="0" r="22" fill="%23101012"/><circle cx="1485" cy="540" r="22" fill="%23101012"/><rect x="1515" y="24" width="460" height="492" rx="20" fill="none" stroke="%23475569" stroke-width="1.5" stroke-opacity="0.5"/><text x="1745" y="70" font-family="sans-serif" font-weight="800" font-size="16" fill="%2394a3b8" text-anchor="middle" letter-spacing="1">VOUCHER STUB</text><rect x="1575" y="100" width="340" height="260" rx="14" fill="%23ffffff" fill-opacity="0.06" stroke="%23ffffff" stroke-width="1" stroke-dasharray="6 4" stroke-opacity="0.25"/><text x="1745" y="235" font-family="sans-serif" font-weight="600" font-size="16" fill="%2364748b" text-anchor="middle">QR CODE / BARCODE</text><text x="1745" y="410" font-family="sans-serif" font-weight="700" font-size="18" fill="%23cbd5e1" text-anchor="middle">ANPING CLINIC</text><text x="1745" y="445" font-family="sans-serif" font-weight="400" font-size="14" fill="%2364748b" text-anchor="middle">โปรดเก็บบัตรนี้เพื่อรับสิทธิ์</text></svg>';
+
+// ฟังก์ชันตรวจสอบสัดส่วนคูปองว่าเป็นแบบแถบยาว (4 ใบ/หน้า A4 ชิดขอบซ้ายขวา) หรือไม่
+export const isCouponStrip = (coupon) => {
+  if (!coupon) return false;
+  if (coupon.designConfig?.layoutType === 'card') return false;
+  if (coupon.designConfig?.layoutType === 'strip') return true;
+  if (coupon.designConfig?.templateType === 'card') return false;
+  if (coupon.designConfig?.templateType === 'strip') return true;
+  if (coupon.templateType === 'card' || coupon.template_type === 'card') return false;
+  if (coupon.templateType === 'strip' || coupon.template_type === 'strip') return true;
+  if (coupon.designConfig?.aspectRatio === '85.6 / 54' || coupon.designConfig?.aspectRatio === '85.6/54') return false;
+  if (coupon.designConfig?.aspectRatio === '200 / 54' || coupon.designConfig?.aspectRatio === '200/54') return true;
+  return false;
+};
 
 // ฟังก์ชันดึงการตั้งค่าวันหมดอายุของคูปอง (ดึงจาก expiryConfig, expiry_config หรือ qrConfig.expiryConfig)
 const getCouponExpiryConfig = (coupon) => {
@@ -684,6 +967,7 @@ const StoryArtworkEditorModal = ({
   initialQrConfig,
   initialExpiryConfig,
   initialDesignConfig,
+  initialLayoutType,
   uploadedArtworkUrl,
   expireDate,
   isLifetime,
@@ -694,6 +978,14 @@ const StoryArtworkEditorModal = ({
   themeColor
 }) => {
   if (!isOpen) return null;
+
+  // Layout format: 'card' (85.6 x 54 mm, 10/page) vs 'strip' (200 x 54 mm, 5/page)
+  const [layoutType, setLayoutType] = useState(() => {
+    if (initialLayoutType) return initialLayoutType;
+    if (initialDesignConfig?.layoutType) return initialDesignConfig.layoutType;
+    if (initialDesignConfig?.aspectRatio === '200 / 54' || initialDesignConfig?.aspectRatio === '200/54') return 'strip';
+    return 'card';
+  });
 
   // Local state for QR & Barcode
   const [localQrConfig, setLocalQrConfig] = useState(() => ({
@@ -738,11 +1030,13 @@ const StoryArtworkEditorModal = ({
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          const isWideRatio = (img.naturalWidth / img.naturalHeight) >= 2.0;
           setArtworkNaturalDimensions({
             width: img.naturalWidth,
             height: img.naturalHeight,
             aspectRatio: `${img.naturalWidth} / ${img.naturalHeight}`
           });
+          setLayoutType(isWideRatio ? 'strip' : 'card');
         }
       };
       img.src = effectiveArtwork;
@@ -753,17 +1047,7 @@ const StoryArtworkEditorModal = ({
 
   // Editable Layer State: restored from initialDesignConfig if previously edited!
   const [designConfig, setDesignConfig] = useState(() => {
-    if (initialDesignConfig) {
-      return {
-        ...initialDesignConfig,
-        // Ensure bgType doesn't revert to gradient if an artwork URL is available
-        bgType: (initialDesignConfig.bgType === 'image' && !effectiveArtwork)
-          ? 'gradient'
-          : (initialDesignConfig.bgType || (effectiveArtwork ? 'image' : 'gradient')),
-        logoEnabled: initialDesignConfig.logoEnabled ?? false
-      };
-    }
-    return {
+    const defaults = {
       bgType: effectiveArtwork ? 'image' : 'gradient', // 'gradient' | 'solid' | 'image'
       gradientKey: themeColor || 'emerald',
       gradientColor1: '#064e3b',
@@ -779,26 +1063,51 @@ const StoryArtworkEditorModal = ({
       logoSize: 11,
 
       // Header / Title Text Layer (starts empty - user adds text when desired)
-      headerText: initialDesignConfig?.headerText || '',
-      headerColor: initialDesignConfig?.headerColor || '#ffffff',
-      headerFontSize: initialDesignConfig?.headerFontSize || 13,
-      headerX: initialDesignConfig?.headerX || 20,
-      headerY: initialDesignConfig?.headerY || 13,
+      headerText: '',
+      headerColor: '#ffffff',
+      headerFontSize: 13,
+      headerX: 20,
+      headerY: 13,
 
       // Discount Callout Layer (starts empty - user adds text when desired)
-      discountText: initialDesignConfig?.discountText || '',
-      discountColor: initialDesignConfig?.discountColor || '#ffffff',
-      discountFontSize: initialDesignConfig?.discountFontSize || 28,
-      discountX: initialDesignConfig?.discountX || 20,
-      discountY: initialDesignConfig?.discountY || 42,
+      discountText: '',
+      discountColor: '#ffffff',
+      discountFontSize: 28,
+      discountX: 20,
+      discountY: 42,
 
       // Subtext / Terms Layer (starts empty - user adds text when desired)
-      termsText: initialDesignConfig?.termsText || '',
-      termsColor: initialDesignConfig?.termsColor || 'rgba(255,255,255,0.85)',
-      termsFontSize: initialDesignConfig?.termsFontSize || 11,
-      termsX: initialDesignConfig?.termsX || 20,
-      termsY: initialDesignConfig?.termsY || 76
+      termsText: '',
+      termsColor: 'rgba(255,255,255,0.85)',
+      termsFontSize: 11,
+      termsX: 20,
+      termsY: 76
     };
+
+    if (initialDesignConfig) {
+      return {
+        ...defaults,
+        ...initialDesignConfig,
+        logoEnabled: initialDesignConfig.logoEnabled ?? defaults.logoEnabled,
+        logoX: Number.isFinite(initialDesignConfig.logoX) ? initialDesignConfig.logoX : defaults.logoX,
+        logoY: Number.isFinite(initialDesignConfig.logoY) ? initialDesignConfig.logoY : defaults.logoY,
+        logoSize: Number.isFinite(initialDesignConfig.logoSize) ? initialDesignConfig.logoSize : defaults.logoSize,
+        headerX: Number.isFinite(initialDesignConfig.headerX) ? initialDesignConfig.headerX : defaults.headerX,
+        headerY: Number.isFinite(initialDesignConfig.headerY) ? initialDesignConfig.headerY : defaults.headerY,
+        headerFontSize: Number.isFinite(initialDesignConfig.headerFontSize) ? initialDesignConfig.headerFontSize : defaults.headerFontSize,
+        discountX: Number.isFinite(initialDesignConfig.discountX) ? initialDesignConfig.discountX : defaults.discountX,
+        discountY: Number.isFinite(initialDesignConfig.discountY) ? initialDesignConfig.discountY : defaults.discountY,
+        discountFontSize: Number.isFinite(initialDesignConfig.discountFontSize) ? initialDesignConfig.discountFontSize : defaults.discountFontSize,
+        termsX: Number.isFinite(initialDesignConfig.termsX) ? initialDesignConfig.termsX : defaults.termsX,
+        termsY: Number.isFinite(initialDesignConfig.termsY) ? initialDesignConfig.termsY : defaults.termsY,
+        termsFontSize: Number.isFinite(initialDesignConfig.termsFontSize) ? initialDesignConfig.termsFontSize : defaults.termsFontSize,
+        // Ensure bgType doesn't revert to gradient if an artwork URL is available
+        bgType: (initialDesignConfig.bgType === 'image' && !effectiveArtwork)
+          ? 'gradient'
+          : (initialDesignConfig.bgType || (effectiveArtwork ? 'image' : 'gradient'))
+      };
+    }
+    return defaults;
   });
 
   // Navigation & Active Layers: 'text' | 'bg' | 'logo' | 'qr' | 'expiry'
@@ -818,8 +1127,21 @@ const StoryArtworkEditorModal = ({
 
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
+  const pinchRef = useRef(null);
+  const isPinchingRef = useRef(false);
   const rafIdRef = useRef(null);
   const latestPointerRef = useRef({ x: 0, y: 0 });
+
+  // Synced state refs for instantaneous 60 FPS access in touch & pointer events
+  const activeStickerRef = useRef(activeSticker);
+  const localQrConfigRef = useRef(localQrConfig);
+  const localExpiryConfigRef = useRef(localExpiryConfig);
+  const designConfigRef = useRef(designConfig);
+
+  useEffect(() => { activeStickerRef.current = activeSticker; }, [activeSticker]);
+  useEffect(() => { localQrConfigRef.current = localQrConfig; }, [localQrConfig]);
+  useEffect(() => { localExpiryConfigRef.current = localExpiryConfig; }, [localExpiryConfig]);
+  useEffect(() => { designConfigRef.current = designConfig; }, [designConfig]);
 
   // Preview measurement (proportional card aspect ratio 85.6 x 54)
   const [previewDims, setPreviewDims] = useState({ width: 856, height: 540 });
@@ -964,6 +1286,7 @@ const StoryArtworkEditorModal = ({
   // Pointer Down Handlers with Pointer Capture (Zero-lag 60 FPS dragging)
   const handleStartDrag = (e, sticker) => {
     e.stopPropagation();
+    if (isPinchingRef.current) return;
     try {
       e.currentTarget?.setPointerCapture?.(e.pointerId);
     } catch {}
@@ -979,23 +1302,23 @@ const StoryArtworkEditorModal = ({
     let initX = 0;
     let initY = 0;
     if (sticker === 'qr') {
-      initX = localQrConfig.xPercent;
-      initY = localQrConfig.yPercent;
+      initX = Number.isFinite(localQrConfigRef.current.xPercent) ? localQrConfigRef.current.xPercent : 78;
+      initY = Number.isFinite(localQrConfigRef.current.yPercent) ? localQrConfigRef.current.yPercent : 32;
     } else if (sticker === 'expiry') {
-      initX = localExpiryConfig.xPercent;
-      initY = localExpiryConfig.yPercent;
+      initX = Number.isFinite(localExpiryConfigRef.current.xPercent) ? localExpiryConfigRef.current.xPercent : 32;
+      initY = Number.isFinite(localExpiryConfigRef.current.yPercent) ? localExpiryConfigRef.current.yPercent : 90.5;
     } else if (sticker === 'logo') {
-      initX = designConfig.logoX;
-      initY = designConfig.logoY;
+      initX = Number.isFinite(designConfigRef.current.logoX) ? designConfigRef.current.logoX : 6;
+      initY = Number.isFinite(designConfigRef.current.logoY) ? designConfigRef.current.logoY : 12;
     } else if (sticker === 'header') {
-      initX = designConfig.headerX;
-      initY = designConfig.headerY;
+      initX = Number.isFinite(designConfigRef.current.headerX) ? designConfigRef.current.headerX : 20;
+      initY = Number.isFinite(designConfigRef.current.headerY) ? designConfigRef.current.headerY : 13;
     } else if (sticker === 'discount') {
-      initX = designConfig.discountX;
-      initY = designConfig.discountY;
+      initX = Number.isFinite(designConfigRef.current.discountX) ? designConfigRef.current.discountX : 20;
+      initY = Number.isFinite(designConfigRef.current.discountY) ? designConfigRef.current.discountY : 42;
     } else if (sticker === 'terms') {
-      initX = designConfig.termsX;
-      initY = designConfig.termsY;
+      initX = Number.isFinite(designConfigRef.current.termsX) ? designConfigRef.current.termsX : 20;
+      initY = Number.isFinite(designConfigRef.current.termsY) ? designConfigRef.current.termsY : 76;
     }
 
     dragRef.current = {
@@ -1015,9 +1338,12 @@ const StoryArtworkEditorModal = ({
     } catch {}
     setActiveSticker(sticker);
     let initSize = 26;
-    if (sticker === 'qr') initSize = localQrConfig.sizePercent;
-    else if (sticker === 'expiry') initSize = localExpiryConfig.sizePercent;
-    else if (sticker === 'logo') initSize = designConfig.logoSize;
+    if (sticker === 'qr') initSize = Number.isFinite(localQrConfigRef.current.sizePercent) ? localQrConfigRef.current.sizePercent : 26;
+    else if (sticker === 'expiry') initSize = Number.isFinite(localExpiryConfigRef.current.sizePercent) ? localExpiryConfigRef.current.sizePercent : 16;
+    else if (sticker === 'logo') initSize = Number.isFinite(designConfigRef.current.logoSize) ? designConfigRef.current.logoSize : 11;
+    else if (sticker === 'discount') initSize = Number.isFinite(designConfigRef.current.discountFontSize) ? designConfigRef.current.discountFontSize : 28;
+    else if (sticker === 'header') initSize = Number.isFinite(designConfigRef.current.headerFontSize) ? designConfigRef.current.headerFontSize : 13;
+    else if (sticker === 'terms') initSize = Number.isFinite(designConfigRef.current.termsFontSize) ? designConfigRef.current.termsFontSize : 11;
 
     dragRef.current = {
       action: 'resize',
@@ -1028,16 +1354,16 @@ const StoryArtworkEditorModal = ({
     };
   };
 
-  // Immediate pointer tracking (60 FPS direct animation frame)
+  // Immediate pointer tracking (60 FPS direct animation frame) + Two-Finger Pinch Gesture
   useEffect(() => {
     const handlePointerMove = (e) => {
-      if (!dragRef.current || !canvasRef.current) return;
+      if (isPinchingRef.current || !dragRef.current || !canvasRef.current) return;
       latestPointerRef.current = { x: e.clientX, y: e.clientY };
 
       if (!rafIdRef.current) {
         rafIdRef.current = requestAnimationFrame(() => {
           rafIdRef.current = null;
-          if (!dragRef.current || !canvasRef.current) return;
+          if (isPinchingRef.current || !dragRef.current || !canvasRef.current) return;
           const rect = canvasRef.current.getBoundingClientRect();
           if (rect.width === 0 || rect.height === 0) return;
           const { x, y } = latestPointerRef.current;
@@ -1075,8 +1401,20 @@ const StoryArtworkEditorModal = ({
               setLocalExpiryConfig(prev => ({ ...prev, sizePercent: newSize }));
             } else if (sticker === 'logo') {
               const deltaScale = ((deltaX + deltaY) / rect.width) * 35;
-              const newSize = Math.round(Math.max(5, Math.min(30, initSize + deltaScale)) * 10) / 10;
+              const newSize = Math.round(Math.max(5, Math.min(40, initSize + deltaScale)) * 10) / 10;
               setDesignConfig(prev => ({ ...prev, logoSize: newSize }));
+            } else if (sticker === 'discount') {
+              const deltaFont = ((deltaX + deltaY) / rect.width) * 60;
+              const newFont = Math.round(Math.max(12, Math.min(72, initSize + deltaFont)));
+              setDesignConfig(prev => ({ ...prev, discountFontSize: newFont }));
+            } else if (sticker === 'header') {
+              const deltaFont = ((deltaX + deltaY) / rect.width) * 40;
+              const newFont = Math.round(Math.max(8, Math.min(40, initSize + deltaFont)));
+              setDesignConfig(prev => ({ ...prev, headerFontSize: newFont }));
+            } else if (sticker === 'terms') {
+              const deltaFont = ((deltaX + deltaY) / rect.width) * 30;
+              const newFont = Math.round(Math.max(6, Math.min(30, initSize + deltaFont)));
+              setDesignConfig(prev => ({ ...prev, termsFontSize: newFont }));
             }
           }
         });
@@ -1102,9 +1440,154 @@ const StoryArtworkEditorModal = ({
     };
   }, []);
 
+  // Multi-Touch Pinch-to-Resize on Canvas (Two-finger pinch in / pinch out for all stickers)
+  useEffect(() => {
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        // Stop native browser viewport pinch zoom
+        e.preventDefault();
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+
+        // Check if either touch hit a sticker
+        const sticker0 = t0.target?.closest?.('[data-sticker]')?.dataset?.sticker;
+        const sticker1 = t1.target?.closest?.('[data-sticker]')?.dataset?.sticker;
+        const target = sticker0 || sticker1 || activeStickerRef.current || 'qr';
+
+        setActiveSticker(target);
+        if (target === 'qr') setActiveTab('qr');
+        else if (target === 'expiry') setActiveTab('expiry');
+        else if (target === 'logo') setActiveTab('logo');
+        else {
+          setActiveTab('text');
+          setActiveTextLayer(target);
+        }
+
+        let initSize = 26;
+        let initX = 50;
+        let initY = 50;
+
+        if (target === 'qr') {
+          initSize = Number.isFinite(localQrConfigRef.current.sizePercent) ? localQrConfigRef.current.sizePercent : 26;
+          initX = Number.isFinite(localQrConfigRef.current.xPercent) ? localQrConfigRef.current.xPercent : 78;
+          initY = Number.isFinite(localQrConfigRef.current.yPercent) ? localQrConfigRef.current.yPercent : 32;
+        } else if (target === 'expiry') {
+          initSize = Number.isFinite(localExpiryConfigRef.current.sizePercent) ? localExpiryConfigRef.current.sizePercent : 16;
+          initX = Number.isFinite(localExpiryConfigRef.current.xPercent) ? localExpiryConfigRef.current.xPercent : 32;
+          initY = Number.isFinite(localExpiryConfigRef.current.yPercent) ? localExpiryConfigRef.current.yPercent : 90.5;
+        } else if (target === 'logo') {
+          initSize = Number.isFinite(designConfigRef.current.logoSize) ? designConfigRef.current.logoSize : 11;
+          initX = Number.isFinite(designConfigRef.current.logoX) ? designConfigRef.current.logoX : 6;
+          initY = Number.isFinite(designConfigRef.current.logoY) ? designConfigRef.current.logoY : 12;
+        } else if (target === 'discount') {
+          initSize = Number.isFinite(designConfigRef.current.discountFontSize) ? designConfigRef.current.discountFontSize : 28;
+          initX = Number.isFinite(designConfigRef.current.discountX) ? designConfigRef.current.discountX : 20;
+          initY = Number.isFinite(designConfigRef.current.discountY) ? designConfigRef.current.discountY : 42;
+        } else if (target === 'header') {
+          initSize = Number.isFinite(designConfigRef.current.headerFontSize) ? designConfigRef.current.headerFontSize : 13;
+          initX = Number.isFinite(designConfigRef.current.headerX) ? designConfigRef.current.headerX : 20;
+          initY = Number.isFinite(designConfigRef.current.headerY) ? designConfigRef.current.headerY : 13;
+        } else if (target === 'terms') {
+          initSize = Number.isFinite(designConfigRef.current.termsFontSize) ? designConfigRef.current.termsFontSize : 11;
+          initX = Number.isFinite(designConfigRef.current.termsX) ? designConfigRef.current.termsX : 20;
+          initY = Number.isFinite(designConfigRef.current.termsY) ? designConfigRef.current.termsY : 76;
+        }
+
+        pinchRef.current = {
+          sticker: target,
+          initDist: Math.max(15, dist),
+          initSize,
+          initMidX: midX,
+          initMidY: midY,
+          initX,
+          initY
+        };
+        isPinchingRef.current = true;
+        dragRef.current = null; // Cancel single drag to prevent conflicts
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (e.touches.length === 2 && pinchRef.current) {
+        e.preventDefault(); // Stop native viewport pinch zoom
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+
+        if (!rafIdRef.current) {
+          rafIdRef.current = requestAnimationFrame(() => {
+            rafIdRef.current = null;
+            if (!pinchRef.current || !canvasRef.current) return;
+            const rect = canvasRef.current.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+
+            const { sticker, initDist, initSize, initMidX, initMidY, initX, initY } = pinchRef.current;
+            const scaleRatio = dist / initDist;
+
+            // Two-finger repositioning + scaling
+            const deltaXPercent = ((midX - initMidX) / rect.width) * 100;
+            const deltaYPercent = ((midY - initMidY) / rect.height) * 100;
+            const newX = Math.round(Math.max(0, Math.min(100, initX + deltaXPercent)) * 10) / 10;
+            const newY = Math.round(Math.max(0, Math.min(100, initY + deltaYPercent)) * 10) / 10;
+
+            if (sticker === 'qr') {
+              const newSize = Math.round(Math.max(8, Math.min(70, initSize * scaleRatio)) * 10) / 10;
+              setLocalQrConfig(prev => ({ ...prev, sizePercent: newSize, xPercent: newX, yPercent: newY }));
+            } else if (sticker === 'expiry') {
+              const newSize = Math.round(Math.max(6, Math.min(45, initSize * scaleRatio)) * 10) / 10;
+              setLocalExpiryConfig(prev => ({ ...prev, sizePercent: newSize, xPercent: newX, yPercent: newY }));
+            } else if (sticker === 'logo') {
+              const newSize = Math.round(Math.max(5, Math.min(40, initSize * scaleRatio)) * 10) / 10;
+              setDesignConfig(prev => ({ ...prev, logoSize: newSize, logoX: newX, logoY: newY }));
+            } else if (sticker === 'discount') {
+              const newSize = Math.round(Math.max(12, Math.min(72, initSize * scaleRatio)));
+              setDesignConfig(prev => ({ ...prev, discountFontSize: newSize, discountX: newX, discountY: newY }));
+            } else if (sticker === 'header') {
+              const newSize = Math.round(Math.max(8, Math.min(40, initSize * scaleRatio)));
+              setDesignConfig(prev => ({ ...prev, headerFontSize: newSize, headerX: newX, headerY: newY }));
+            } else if (sticker === 'terms') {
+              const newSize = Math.round(Math.max(6, Math.min(30, initSize * scaleRatio)));
+              setDesignConfig(prev => ({ ...prev, termsFontSize: newSize, termsX: newX, termsY: newY }));
+            }
+          });
+        }
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (e.touches.length < 2) {
+        pinchRef.current = null;
+        setTimeout(() => {
+          isPinchingRef.current = false;
+        }, 80);
+      }
+    };
+
+    canvasEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvasEl.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvasEl.addEventListener('touchend', handleTouchEnd);
+    canvasEl.addEventListener('touchcancel', handleTouchEnd);
+
+    return () => {
+      canvasEl.removeEventListener('touchstart', handleTouchStart);
+      canvasEl.removeEventListener('touchmove', handleTouchMove);
+      canvasEl.removeEventListener('touchend', handleTouchEnd);
+      canvasEl.removeEventListener('touchcancel', handleTouchEnd);
+    };
+  }, []);
+
   // Save & Bake High-Res Artwork (1:1 Exact Mathematical Proportions to Preview)
   const handleSave = async () => {
     let renderedCustomImgUrl = null;
+    const isStrip = layoutType === 'strip';
 
     if (designConfig.bgType !== 'image' || !effectiveArtwork) {
       try {
@@ -1113,8 +1596,8 @@ const StoryArtworkEditorModal = ({
         }
 
         const artCanvas = document.createElement('canvas');
-        const w = 1712;
-        const h = 1080;
+        const w = isStrip ? 2362 : 1712;
+        const h = isStrip ? 638 : 1080;
         artCanvas.width = w;
         artCanvas.height = h;
         const artCtx = artCanvas.getContext('2d');
@@ -1288,7 +1771,12 @@ const StoryArtworkEditorModal = ({
       qrConfig: localQrConfig,
       expiryConfig: localExpiryConfig,
       customImageUrl: renderedCustomImgUrl || effectiveArtwork || null,
-      designConfig
+      designConfig: {
+        ...designConfig,
+        layoutType: isStrip ? 'strip' : 'card',
+        aspectRatio: isStrip ? '200 / 54' : '85.6 / 54'
+      },
+      layoutType: isStrip ? 'strip' : 'card'
     });
     onClose();
   };
@@ -1362,10 +1850,11 @@ const StoryArtworkEditorModal = ({
   const termsFontPx = Math.max(8, Math.round(previewDims.width * (designConfig.termsFontSize * 0.0028)));
   const logoSizePx = Math.max(20, Math.round((designConfig.logoSize / 100) * previewDims.width));
 
+  const isStripLayout = layoutType === 'strip';
   // Dynamic canvas aspect ratio: dynamically preserves uploaded Canva artwork ratio
   const canvasAspectRatio = (designConfig.bgType === 'image' && artworkNaturalDimensions)
     ? artworkNaturalDimensions.aspectRatio
-    : '85.6 / 54';
+    : (isStripLayout ? '200 / 54' : '85.6 / 54');
 
   // Photoshop Color Picker selection value
   const colorPickerInitialColor = 
@@ -1391,87 +1880,138 @@ const StoryArtworkEditorModal = ({
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-0 sm:p-3 md:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
       <div className="bg-[#18181b] border-0 sm:border border-zinc-800 rounded-none sm:rounded-2xl w-full sm:w-[98vw] max-w-[1700px] h-[100dvh] sm:h-[96vh] shadow-2xl flex flex-col overflow-hidden text-zinc-100 animate-in zoom-in-95 duration-150">
         
-        {/* Top Studio Header */}
-        <div className="p-3 sm:p-4 border-b border-zinc-800/90 flex items-center justify-between shrink-0 bg-[#141416]">
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-200 shadow-xs shrink-0">
-              <Sparkles size={18} className="sm:w-5 sm:h-5 text-amber-400" />
+        {/* Top Studio Header: Fully responsive for mobile and desktop */}
+        <div className="border-b border-zinc-800/90 shrink-0 bg-[#141416]">
+          {/* Main Bar: Title + Desktop Switchers + Actions */}
+          <div className="p-2.5 sm:p-3 md:p-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-200 shadow-xs shrink-0">
+                <Sparkles size={16} className="sm:w-5 sm:h-5 text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-zinc-100 text-xs sm:text-base kanit-text leading-tight flex items-center gap-2 truncate">
+                  <span>สตูดิโอออกแบบคูปอง</span>
+                  <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-[10px] text-zinc-300 font-mono">
+                    Canva Style
+                  </span>
+                </h3>
+                <p className="hidden sm:block text-[10px] sm:text-[11px] text-zinc-400 kanit-text truncate">
+                  ปรับแต่งพื้นหลัง ข้อความอิสระ โลโก้ และจัดวางตำแหน่ง QR / บาร์โค้ด
+                </p>
+              </div>
             </div>
-            <div className="hidden sm:block">
-              <h3 className="font-bold text-zinc-100 text-xs sm:text-base kanit-text leading-tight flex items-center gap-2">
-                <span>สตูดิโอออกแบบคูปอง & เครื่องมือสร้าง QR</span>
-                <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-[10px] text-zinc-300 font-mono">
-                  Photoshop & Canva Style
-                </span>
-              </h3>
-              <p className="text-[10px] sm:text-[11px] text-zinc-400 kanit-text">
-                เปลี่ยนสีพื้นหลังไล่เฉด พิมพ์ข้อความอิสระ ใส่โลโก้คลินิก และจัดวางตำแหน่ง QR / บาร์โค้ด
-              </p>
+
+            {/* Desktop Switchers (Format + View) on lg+ screens */}
+            <div className="hidden lg:flex items-center gap-2.5">
+              {/* Format Switcher */}
+              <div className="flex items-center bg-[#101012] border border-zinc-800 rounded-xl p-1 select-none shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLayoutType('card')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold kanit-text transition-all ${
+                    layoutType === 'card' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                  }`}
+                  title="สัดส่วนบัตรพรีเมียม 85.6 × 54 mm (พิมพ์ 10 ใบต่อหน้า A4)"
+                >
+                  <Ticket size={13} className={layoutType === 'card' ? 'text-sky-400' : 'text-zinc-500'} />
+                  <span>บัตรการ์ด (85.6×54)</span>
+                  <span className="text-[10px] text-zinc-400 font-mono font-normal">10 ใบ/A4</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutType('strip')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold kanit-text transition-all ${
+                    layoutType === 'strip' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                  }`}
+                  title="สัดส่วนคูปองแถบยาวชิดขอบ (พิมพ์ 4 ใบต่อหน้า A4)"
+                >
+                  <Scissors size={13} className={layoutType === 'strip' ? 'text-emerald-400' : 'text-zinc-500'} />
+                  <span>คูปองแถบยาว (ชิดขอบ)</span>
+                  <span className="text-[10px] text-zinc-400 font-mono font-normal">4 ใบ/A4</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons: Reset, Save, Close (always visible and clickable!) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="p-1.5 sm:px-3 sm:py-2 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold kanit-text text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0 cursor-pointer"
+                title="รีเซ็ตค่ามาตรฐาน"
+              >
+                <RotateCcw size={14} className="text-zinc-400 shrink-0" />
+                <span className="hidden sm:inline">รีเซ็ต</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold kanit-text text-xs sm:text-sm transition-all shadow-md shadow-emerald-900/30 flex items-center gap-1.5 active:scale-95 shrink-0 cursor-pointer"
+              >
+                <Check size={16} className="shrink-0" />
+                <span className="hidden sm:inline">บันทึกดีไซน์ & ตำแหน่ง</span>
+                <span className="sm:hidden">บันทึก</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 sm:p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0 cursor-pointer"
+                title="ปิด"
+              >
+                <X size={18} />
+              </button>
             </div>
           </div>
 
-          {/* View Switcher for Mobile & Tablet */}
-          <div className="flex lg:hidden items-center bg-[#141416] border border-zinc-800/90 rounded-lg p-0.5 shadow-inner shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode('split')}
-              className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold kanit-text transition-all ${
-                viewMode === 'split' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <LayoutGrid size={13} />
-              <span>มุมมองคู่</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('canvas')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-semibold kanit-text transition-all flex items-center gap-1 sm:gap-1.5 ${
-                viewMode === 'canvas' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Move size={12} className="sm:w-3.5 sm:h-3.5" />
-              <span>ผืนผ้าใบ</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('controls')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-[11px] sm:text-xs font-semibold kanit-text transition-all flex items-center gap-1 sm:gap-1.5 ${
-                viewMode === 'controls' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Sliders size={12} className="sm:w-3.5 sm:h-3.5" />
-              <span>เครื่องมือ</span>
-            </button>
-          </div>
+          {/* Mobile & Tablet Toolbar: Format Switcher + View Switcher (Row 2 on screens < lg) */}
+          <div className="lg:hidden px-2.5 pb-2.5 pt-0 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+            {/* Format Switcher */}
+            <div className="flex items-center bg-[#101012] border border-zinc-800 rounded-xl p-0.5 select-none shrink-0">
+              <button
+                type="button"
+                onClick={() => setLayoutType('card')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold kanit-text transition-all whitespace-nowrap ${
+                  layoutType === 'card' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Ticket size={12} className={layoutType === 'card' ? 'text-sky-400' : 'text-zinc-500'} />
+                <span>บัตรการ์ด (85.6×54)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutType('strip')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold kanit-text transition-all whitespace-nowrap ${
+                  layoutType === 'strip' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Scissors size={12} className={layoutType === 'strip' ? 'text-emerald-400' : 'text-zinc-500'} />
+                <span>แถบยาว (ชิดขอบ)</span>
+              </button>
+            </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="p-1.5 sm:px-3 sm:py-2 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold kanit-text text-xs transition-all shadow-xs flex items-center gap-1.5 active:scale-95 shrink-0"
-              title="รีเซ็ตค่ามาตรฐาน"
-            >
-              <RotateCcw size={14} className="text-zinc-400 shrink-0" />
-              <span className="hidden sm:inline">รีเซ็ต</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold kanit-text text-xs sm:text-sm transition-all shadow-md shadow-emerald-900/30 flex items-center gap-1.5 active:scale-95 shrink-0"
-            >
-              <Check size={16} className="shrink-0" />
-              <span className="hidden sm:inline">บันทึกดีไซน์ & ตำแหน่ง</span>
-              <span className="sm:hidden">บันทึก</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 sm:p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
-              title="ปิด"
-            >
-              <X size={18} />
-            </button>
+            {/* View Switcher for Mobile & Tablet */}
+            <div className="flex items-center bg-[#101012] border border-zinc-800 rounded-xl p-0.5 select-none shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('canvas')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold kanit-text transition-all whitespace-nowrap ${
+                  viewMode === 'canvas' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Move size={12} />
+                <span>ผืนผ้าใบ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('controls')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold kanit-text transition-all whitespace-nowrap ${
+                  viewMode === 'controls' ? 'bg-zinc-700 text-white shadow-xs' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Sliders size={12} />
+                <span>เครื่องมือ</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1483,33 +2023,42 @@ const StoryArtworkEditorModal = ({
             viewMode === 'controls' ? 'hidden lg:flex' : 'flex'
           }`}>
             
-            {/* Canvas Helper Pill */}
-            <div className="mb-2 sm:mb-3 flex items-center gap-2 sm:gap-3 px-3 py-1 rounded-full bg-zinc-900/80 border border-zinc-800 text-[10px] sm:text-[11px] text-zinc-400 font-medium kanit-text shadow-sm">
-              <span className="flex items-center gap-1 text-zinc-300">
-                <Move size={11} className="text-amber-400" />
-                <span>คลิกวัตถุเพื่อลากย้าย</span>
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1 text-zinc-300">
+            {/* Canvas Helper Bar: Modern sleek responsive chips that never break into single-character columns */}
+            <div className="mb-2 sm:mb-3 max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 sm:gap-2 px-1 select-none">
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-bold kanit-text text-emerald-400 shadow-2xs whitespace-nowrap shrink-0">
+                {isStripLayout ? <Scissors size={12} /> : <Ticket size={12} />}
+                <span>{isStripLayout ? 'แถบยาว ~210 × 74 mm (4 ใบ/A4)' : 'บัตรพรีเมียม 85.6 × 54 mm (10 ใบ/A4)'}</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
+                <Move size={12} className="text-amber-400 shrink-0" />
+                <span>แตะ/ลากวัตถุ</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
+                <span className="text-amber-400">🤏 2 นิ้ว:</span>
+                <span>กาง/หุบ ขยายสติ๊กเกอร์</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
                 <span className="text-zinc-400">⌨️ ลูกศร:</span>
                 <span>ขยับละเอียด 0.1%</span>
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1 text-zinc-300">
-                <span className="text-amber-400">✏️ คลิก 2 ครั้ง:</span>
-                <span>พิมพ์แก้ไขข้อความ</span>
-              </span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
+                <span className="text-amber-400">✏️ ดับเบิ้ลคลิก:</span>
+                <span>แก้ไขข้อความ</span>
+              </div>
             </div>
 
             {/* Proportional Aspect Ratio Canvas Wrapper: matches uploaded image natural ratio or 85.6 x 54 mm */}
             <div
               ref={canvasRef}
               onClick={() => { setActiveSticker(null); setInlineEditingLayer(null); }}
-              className="relative w-full max-w-[960px] rounded-2xl overflow-hidden shadow-2xl border border-zinc-800 select-none transition-shadow"
+              className="relative w-full max-w-[960px] rounded-2xl overflow-hidden shadow-2xl border border-zinc-800 select-none transition-shadow touch-none"
               style={{
                 aspectRatio: canvasAspectRatio,
                 background: getGradientCss(),
-                boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+                boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                touchAction: 'none',
+                userSelect: 'none',
+                WebkitUserSelect: 'none'
               }}
             >
               {/* Optional Custom Background Image from File Upload or Template */}
@@ -1547,6 +2096,7 @@ const StoryArtworkEditorModal = ({
               {/* 3. Clinic Logo Layer */}
               {designConfig.logoEnabled && (
                 <div
+                  data-sticker="logo"
                   onPointerDown={(e) => handleStartDrag(e, 'logo')}
                   onClick={(e) => { e.stopPropagation(); setActiveTab('logo'); setActiveSticker('logo'); setInlineEditingLayer(null); }}
                   className={`absolute select-none cursor-move group flex items-center justify-center transition-[box-shadow,outline-color] duration-150 ${
@@ -1555,12 +2105,13 @@ const StoryArtworkEditorModal = ({
                       : 'hover:outline-1 hover:outline-white/40 hover:outline-offset-1 z-10'
                   }`}
                   style={{
-                    left: `${designConfig.logoX}%`,
-                    top: `${designConfig.logoY}%`,
-                    width: `${designConfig.logoSize}%`,
+                    left: `${designConfig.logoX ?? 6}%`,
+                    top: `${designConfig.logoY ?? 12}%`,
+                    width: `${designConfig.logoSize ?? 11}%`,
                     aspectRatio: '1 / 1',
                     touchAction: 'none',
-                    userSelect: 'none'
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none'
                   }}
                 >
                   {clinicInfo?.logoUrl ? (
@@ -1570,7 +2121,7 @@ const StoryArtworkEditorModal = ({
                       className="w-full h-full object-contain rounded-full shadow-lg border border-white/60 pointer-events-none bg-white/95"
                     />
                   ) : (
-                    <div className="w-full h-full rounded-full bg-white/20 border border-white/60 flex items-center justify-center text-white font-black shadow-lg text-[10px]">
+                    <div className="w-full h-full rounded-full bg-white/20 border border-white/60 flex items-center justify-center text-white font-black shadow-lg text-[10px] pointer-events-none select-none">
                       AP
                     </div>
                   )}
@@ -1579,8 +2130,8 @@ const StoryArtworkEditorModal = ({
                   {activeSticker === 'logo' && (
                     <div
                       onPointerDown={(e) => handleStartResize(e, 'logo')}
-                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-400 border border-zinc-900 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30"
-                      title="ลากเพื่อย่อ-ขยายโลโก้"
+                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-400 border border-zinc-900 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30 group-hover:scale-110 transition-transform"
+                      title="ลากเพื่อย่อ-ขยาย หรือใช้ 2 นิ้วกางหุบ"
                     >
                       <div className="w-1.5 h-1.5 bg-zinc-900 rounded-full" />
                     </div>
@@ -1593,6 +2144,7 @@ const StoryArtworkEditorModal = ({
               {/* 4A. Header / Brand Text */}
               {designConfig.headerText && (
                 <div
+                  data-sticker="header"
                   onPointerDown={(e) => handleStartDrag(e, 'header')}
                   onClick={(e) => { e.stopPropagation(); setActiveTab('text'); setActiveSticker('header'); setActiveTextLayer('header'); }}
                   onDoubleClick={(e) => { e.stopPropagation(); setInlineEditingLayer('header'); }}
@@ -1602,8 +2154,8 @@ const StoryArtworkEditorModal = ({
                       : 'hover:outline-1 hover:outline-white/30 hover:outline-offset-1 z-10'
                   }`}
                   style={{
-                    left: `${designConfig.headerX}%`,
-                    top: `${designConfig.headerY}%`,
+                    left: `${designConfig.headerX ?? 20}%`,
+                    top: `${designConfig.headerY ?? 13}%`,
                     color: designConfig.headerColor || '#ffffff',
                     fontSize: `${headerFontPx}px`,
                     fontWeight: 800,
@@ -1611,6 +2163,7 @@ const StoryArtworkEditorModal = ({
                     textShadow: '0 2px 4px rgba(0,0,0,0.4)',
                     touchAction: 'none',
                     userSelect: 'none',
+                    WebkitUserSelect: 'none',
                     fontFamily: 'Kanit, sans-serif',
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
@@ -1633,7 +2186,20 @@ const StoryArtworkEditorModal = ({
                       style={{ fontSize: `${headerFontPx}px`, minWidth: '140px' }}
                     />
                   ) : (
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{designConfig.headerText}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', pointerEvents: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
+                      {designConfig.headerText}
+                    </div>
+                  )}
+
+                  {/* Resize Handle for Header */}
+                  {activeSticker === 'header' && inlineEditingLayer !== 'header' && (
+                    <div
+                      onPointerDown={(e) => handleStartResize(e, 'header')}
+                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-400 border border-zinc-900 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30 group-hover:scale-110 transition-transform"
+                      title="ลากเพื่อย่อ-ขยาย หรือใช้ 2 นิ้วกางหุบ"
+                    >
+                      <div className="w-1.5 h-1.5 bg-zinc-900 rounded-full" />
+                    </div>
                   )}
                 </div>
               )}
@@ -1641,6 +2207,7 @@ const StoryArtworkEditorModal = ({
               {/* 4B. Discount Highlight (Main Big Text) */}
               {designConfig.discountText && (
                 <div
+                  data-sticker="discount"
                   onPointerDown={(e) => handleStartDrag(e, 'discount')}
                   onClick={(e) => { e.stopPropagation(); setActiveTab('text'); setActiveSticker('discount'); setActiveTextLayer('discount'); }}
                   onDoubleClick={(e) => { e.stopPropagation(); setInlineEditingLayer('discount'); }}
@@ -1650,8 +2217,8 @@ const StoryArtworkEditorModal = ({
                       : 'hover:outline-1 hover:outline-white/30 hover:outline-offset-1 z-10'
                   }`}
                   style={{
-                    left: `${designConfig.discountX}%`,
-                    top: `${designConfig.discountY}%`,
+                    left: `${designConfig.discountX ?? 20}%`,
+                    top: `${designConfig.discountY ?? 42}%`,
                     color: designConfig.discountColor || '#ffffff',
                     fontSize: `${discountFontPx}px`,
                     fontWeight: 900,
@@ -1659,6 +2226,7 @@ const StoryArtworkEditorModal = ({
                     textShadow: '0 2px 6px rgba(0,0,0,0.5)',
                     touchAction: 'none',
                     userSelect: 'none',
+                    WebkitUserSelect: 'none',
                     letterSpacing: '-0.3px',
                     fontFamily: 'Kanit, sans-serif',
                     whiteSpace: 'pre-wrap',
@@ -1682,7 +2250,20 @@ const StoryArtworkEditorModal = ({
                       style={{ fontSize: `${discountFontPx}px`, minWidth: '160px' }}
                     />
                   ) : (
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{designConfig.discountText}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', pointerEvents: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
+                      {designConfig.discountText}
+                    </div>
+                  )}
+
+                  {/* Resize Handle for Discount */}
+                  {activeSticker === 'discount' && inlineEditingLayer !== 'discount' && (
+                    <div
+                      onPointerDown={(e) => handleStartResize(e, 'discount')}
+                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-400 border border-zinc-900 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30 group-hover:scale-110 transition-transform"
+                      title="ลากเพื่อย่อ-ขยาย หรือใช้ 2 นิ้วกางหุบ"
+                    >
+                      <div className="w-1.5 h-1.5 bg-zinc-900 rounded-full" />
+                    </div>
                   )}
                 </div>
               )}
@@ -1690,6 +2271,7 @@ const StoryArtworkEditorModal = ({
               {/* 4C. Terms / Subtext */}
               {designConfig.termsText && (
                 <div
+                  data-sticker="terms"
                   onPointerDown={(e) => handleStartDrag(e, 'terms')}
                   onClick={(e) => { e.stopPropagation(); setActiveTab('text'); setActiveSticker('terms'); setActiveTextLayer('terms'); }}
                   onDoubleClick={(e) => { e.stopPropagation(); setInlineEditingLayer('terms'); }}
@@ -1699,8 +2281,8 @@ const StoryArtworkEditorModal = ({
                       : 'hover:outline-1 hover:outline-white/30 hover:outline-offset-1 z-10'
                   }`}
                   style={{
-                    left: `${designConfig.termsX}%`,
-                    top: `${designConfig.termsY}%`,
+                    left: `${designConfig.termsX ?? 20}%`,
+                    top: `${designConfig.termsY ?? 76}%`,
                     color: designConfig.termsColor || 'rgba(255,255,255,0.85)',
                     fontSize: `${termsFontPx}px`,
                     fontWeight: 500,
@@ -1708,6 +2290,7 @@ const StoryArtworkEditorModal = ({
                     textShadow: '0 1px 2px rgba(0,0,0,0.4)',
                     touchAction: 'none',
                     userSelect: 'none',
+                    WebkitUserSelect: 'none',
                     fontFamily: 'Kanit, sans-serif',
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word'
@@ -1729,13 +2312,27 @@ const StoryArtworkEditorModal = ({
                       style={{ fontSize: `${termsFontPx}px`, minWidth: '180px' }}
                     />
                   ) : (
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{designConfig.termsText}</div>
+                    <div style={{ whiteSpace: 'pre-wrap', pointerEvents: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
+                      {designConfig.termsText}
+                    </div>
+                  )}
+
+                  {/* Resize Handle for Terms */}
+                  {activeSticker === 'terms' && inlineEditingLayer !== 'terms' && (
+                    <div
+                      onPointerDown={(e) => handleStartResize(e, 'terms')}
+                      className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-400 border border-zinc-900 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30 group-hover:scale-110 transition-transform"
+                      title="ลากเพื่อย่อ-ขยาย หรือใช้ 2 นิ้วกางหุบ"
+                    >
+                      <div className="w-1.5 h-1.5 bg-zinc-900 rounded-full" />
+                    </div>
                   )}
                 </div>
               )}
 
               {/* 5. QR Code / Barcode Sticker */}
               <div
+                data-sticker="qr"
                 onPointerDown={(e) => handleStartDrag(e, 'qr')}
                 onClick={(e) => { e.stopPropagation(); setActiveTab('qr'); setActiveSticker('qr'); setInlineEditingLayer(null); }}
                 className={`absolute select-none cursor-move transition-[box-shadow,border-color] duration-150 group rounded-xl flex flex-col items-center justify-center ${
@@ -1748,19 +2345,21 @@ const StoryArtworkEditorModal = ({
                     : (localQrConfig.whiteBg ? 'border-transparent hover:border-zinc-400 z-10' : 'border-2 border-dashed border-transparent hover:border-zinc-500/50 z-10')
                 }`}
                 style={{
-                  left: `${localQrConfig.xPercent}%`,
-                  top: `${localQrConfig.yPercent}%`,
-                  width: `${localQrConfig.sizePercent}%`,
-                  maxWidth: `${localQrConfig.sizePercent}%`,
+                  left: `${localQrConfig.xPercent ?? 78}%`,
+                  top: `${localQrConfig.yPercent ?? 32}%`,
+                  width: `${localQrConfig.sizePercent ?? 26}%`,
+                  maxWidth: `${localQrConfig.sizePercent ?? 26}%`,
                   transform: 'translate(-50%, -50%)',
                   touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
                   boxSizing: 'border-box',
                   padding: `${cardPadPx}px`,
                   minWidth: 0
                 }}
               >
                 {localQrConfig.codeType === 'barcode' ? (
-                  <div className="w-full flex items-center justify-center overflow-hidden py-0.5">
+                  <div className="w-full flex items-center justify-center overflow-hidden py-0.5 pointer-events-none select-none">
                     {sampleBarcodeDataUrl ? (
                       <img src={sampleBarcodeDataUrl} alt="Sample Barcode" className="w-full h-auto object-contain pointer-events-none" />
                     ) : (
@@ -1768,7 +2367,7 @@ const StoryArtworkEditorModal = ({
                     )}
                   </div>
                 ) : (
-                  <div className="w-full flex items-center justify-center overflow-hidden">
+                  <div className="w-full flex items-center justify-center overflow-hidden pointer-events-none select-none">
                     {sampleQrDataUrl ? (
                       <img src={sampleQrDataUrl} alt="Sample QR" className="w-full h-auto aspect-square object-contain pointer-events-none" />
                     ) : (
@@ -1780,7 +2379,7 @@ const StoryArtworkEditorModal = ({
                 {/* Show Code Text Underneath */}
                 {localQrConfig.showCode && (
                   <div
-                    className={`font-mono tracking-wider font-semibold block truncate max-w-full text-center transition-all ${
+                    className={`font-mono tracking-wider font-semibold block truncate max-w-full text-center transition-all pointer-events-none select-none ${
                       localQrConfig.codeBgStyle === 'white_pill'
                         ? 'bg-white/95 text-slate-900 border border-slate-200 shadow-sm rounded-full'
                         : localQrConfig.codeBgStyle === 'dark_pill'
@@ -1805,7 +2404,7 @@ const StoryArtworkEditorModal = ({
                   <div
                     onPointerDown={(e) => handleStartResize(e, 'qr')}
                     className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-zinc-900 border border-zinc-200 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30 group-hover:scale-110 transition-transform"
-                    title="ลากเพื่อย่อ-ขยายขนาด"
+                    title="ลากเพื่อย่อ-ขยายขนาด หรือใช้ 2 นิ้วกางหุบ"
                   >
                     <Move size={8} className="text-white transform rotate-45" />
                   </div>
@@ -1815,6 +2414,7 @@ const StoryArtworkEditorModal = ({
               {/* 6. Expiry Date Sticker (EXP) */}
               {localExpiryConfig.enabled !== false && (
                 <div
+                  data-sticker="expiry"
                   onPointerDown={(e) => handleStartDrag(e, 'expiry')}
                   onClick={(e) => { e.stopPropagation(); setActiveTab('expiry'); setActiveSticker('expiry'); setInlineEditingLayer(null); }}
                   className={`absolute select-none cursor-move transition-[border-color,box-shadow,opacity] duration-150 group flex items-center justify-center ${
@@ -1829,13 +2429,14 @@ const StoryArtworkEditorModal = ({
                       : 'hover:outline-1 hover:outline-white/30 z-10'
                   }`}
                   style={{
-                    left: `${localExpiryConfig.xPercent}%`,
-                    top: `${localExpiryConfig.yPercent}%`,
+                    left: `${localExpiryConfig.xPercent ?? 32}%`,
+                    top: `${localExpiryConfig.yPercent ?? 90.5}%`,
                     transform: localExpiryConfig.align === 'left'
                       ? 'translate(0, -50%)'
                       : (localExpiryConfig.align === 'right' ? 'translate(-100%, -50%)' : 'translate(-50%, -50%)'),
                     touchAction: 'none',
                     userSelect: 'none',
+                    WebkitUserSelect: 'none',
                     padding: localExpiryConfig.bgStyle !== 'none' ? `${Math.round(expFontPx * 0.35)}px ${Math.round(expFontPx * 0.7)}px` : '0px'
                   }}
                 >
@@ -1848,7 +2449,10 @@ const StoryArtworkEditorModal = ({
                       lineHeight: 1,
                       whiteSpace: 'nowrap',
                       display: 'inline-block',
-                      textAlign: localExpiryConfig.align || 'center'
+                      textAlign: localExpiryConfig.align || 'center',
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none'
                     }}
                   >
                     {formattedExpiryDisplay}
@@ -1858,7 +2462,8 @@ const StoryArtworkEditorModal = ({
                   {activeSticker === 'expiry' && (
                     <div
                       onPointerDown={(e) => handleStartResize(e, 'expiry')}
-                      className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-zinc-900 border border-zinc-200 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30"
+                      className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-zinc-900 border border-zinc-200 rounded-full cursor-nwse-resize shadow-md flex items-center justify-center z-30 group-hover:scale-110 transition-transform"
+                      title="ลากเพื่อย่อ-ขยาย หรือใช้ 2 นิ้วกางหุบ"
                     >
                       <div className="w-1 h-1 bg-white rounded-full" />
                     </div>
@@ -3202,6 +3807,66 @@ const PreviewCouponModalView = ({
   );
 };
 
+// --- Global In-Memory LRU Cache for Coupon QR Codes (Max 250 items, ~5MB RAM total) ---
+const couponQrCache = new Map();
+
+/**
+ * Lazy Coupon QR Component: Generates and renders QR code just-in-time when mounted on screen.
+ * Uses LRU cache to prevent re-generating during scrolling while keeping memory strictly bounded.
+ */
+const LazyCouponQr = React.memo(({ code, onClick, title, className = "", imgClassName = "w-14 h-14 object-contain" }) => {
+  const [qrUrl, setQrUrl] = useState(() => couponQrCache.get(code) || null);
+  const [isLoading, setIsLoading] = useState(!qrUrl);
+
+  useEffect(() => {
+    if (!code) return;
+    if (couponQrCache.has(code)) {
+      setQrUrl(couponQrCache.get(code));
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    QRCode.toDataURL(code, {
+      width: 280,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' }
+    }).then(url => {
+      if (!isMounted) return;
+      if (couponQrCache.size > 250) {
+        const firstKey = couponQrCache.keys().next().value;
+        couponQrCache.delete(firstKey);
+      }
+      couponQrCache.set(code, url);
+      setQrUrl(url);
+      setIsLoading(false);
+    }).catch(err => {
+      console.warn('[LazyCouponQr] Error:', err);
+      if (isMounted) setIsLoading(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [code]);
+
+  if (isLoading || !qrUrl) {
+    return (
+      <div className={`p-1 bg-slate-50 rounded-xl border border-slate-200/80 shadow-2xs shrink-0 flex items-center justify-center animate-pulse ${className || 'w-16 h-16'}`}>
+        <QrCode size={20} className="text-slate-300" />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={`p-1 bg-white rounded-xl border border-slate-200 shadow-2xs shrink-0 cursor-pointer hover:border-sky-400 hover:ring-2 hover:ring-sky-100 hover:scale-105 transition-all group ${className}`}
+      onClick={onClick}
+      title={title || "คลิกเพื่อดูตัวอย่างคูปองฉบับเต็มก่อนส่งลูกค้า"}
+    >
+      <img src={qrUrl} alt={code} className={`${imgClassName} group-hover:scale-105 transition-transform`} />
+    </div>
+  );
+});
+
 const CouponManager = ({
   couponsData = [],
   setCouponsData,
@@ -3313,7 +3978,6 @@ const CouponManager = ({
   const patientInputContainerRef = useRef(null);
   const patientPortalRef = useRef(null);
   const [dropdownCoords, setDropdownCoords] = useState({ top: 0, left: 0, width: 0 });
-  const [qrCodeDataUrls, setQrCodeDataUrls] = useState({});
   const [isUploadingArtwork, setIsUploadingArtwork] = useState(false);
   const pendingArtworkFileRef = useRef(null); // Deferred artwork file upload
   const artworkUploadPromiseRef = useRef(null); // Non-blocking background upload promise
@@ -3382,18 +4046,21 @@ const CouponManager = ({
       const target = e?.target || (mainElement === window ? document.documentElement : mainElement);
       const scrollTop = target.scrollTop ?? window.scrollY ?? 0;
 
-      // 1. ย่อขนาด Header และเพิ่มเงาเบลอเมื่อเลื่อนเกิน 20px
-      if (scrollTop > 20) {
+      // 1. ย่อขนาด Header และเพิ่มเงาเบลอเมื่อเลื่อน พร้อม Hysteresis ป้องกันการกระตุก
+      const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+      if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
         headerRef.current.classList.add('is-scrolled');
       } else {
         headerRef.current.classList.remove('is-scrolled');
       }
 
-      // 2. ปรับขนาดและสถานะ Filter Bar เมื่อเลื่อนมาชนขอบล่างของ Header
+      // 2. ปรับขนาดและสถานะ Filter Bar เมื่อเลื่อนมาชนขอบล่างของ Header (ใช้ Hysteresis ป้องกันการกระตุก/หลุดสถานะ)
       if (filterRef.current && headerRef.current) {
         const headerRect = headerRef.current.getBoundingClientRect();
         const filterRect = filterRef.current.getBoundingClientRect();
-        if (filterRect.top <= headerRect.bottom + 1) {
+        const isCurrentlyScrolled = filterRef.current.classList.contains('is-scrolled');
+        const threshold = isCurrentlyScrolled ? (headerRect.bottom + 6) : (headerRect.bottom + 1);
+        if (filterRect.top <= threshold) {
           filterRef.current.classList.add('is-scrolled');
         } else {
           filterRef.current.classList.remove('is-scrolled');
@@ -3407,13 +4074,13 @@ const CouponManager = ({
     }
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
       if (filterRef.current) filterRef.current.classList.remove('is-scrolled');
-      if (container) container.dispatchEvent(new Event('scroll'));
-    }, 60);
+    }, 200);
 
     return () => {
+      clearTimeout(timer);
       if (container) container.removeEventListener('scroll', handleScroll);
       window.removeEventListener('scroll', handleScroll);
     };
@@ -3479,43 +4146,10 @@ const CouponManager = ({
   const [hasMoreTemplates, setHasMoreTemplates] = useState(false);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
 
-  // --- 1. Background QR Code Generator for Fast Rendering ---
-  useEffect(() => {
-    let isCancelled = false;
-    const generateAllQr = async () => {
-      const newUrls = { ...qrCodeDataUrls };
-      let updated = false;
-
-      for (const cp of (couponsData || [])) {
-        if (!cp || !cp.code) continue;
-        if (!newUrls[cp.code]) {
-          try {
-            const dataUrl = await QRCode.toDataURL(cp.code, {
-              width: 320,
-              margin: 1,
-              color: { dark: '#0f172a', light: '#ffffff' }
-            });
-            if (!isCancelled) {
-              newUrls[cp.code] = dataUrl;
-              updated = true;
-            }
-          } catch (e) {
-            console.warn('[Coupon] QR gen error:', e);
-          }
-        }
-      }
-
-      if (updated && !isCancelled) {
-        setQrCodeDataUrls(newUrls);
-      }
-    };
-
-    if (couponsData && couponsData.length > 0) {
-      generateAllQr();
-    }
-
-    return () => { isCancelled = true; };
-  }, [couponsData]);
+  // --- 1. Pure Just-In-Time (JIT) QR Architecture ---
+  // Background pre-generation of all QR codes is completely removed.
+  // QR codes are now generated strictly on-demand when cards scroll into view (<LazyCouponQr />)
+  // or when explicitly printing/exporting. This guarantees instant 0ms load and microscopic memory footprint.
 
   // --- 2. Calculate Revenue & Discount Given from posHistoryData ---
   const couponFinancialStats = useMemo(() => {
@@ -3700,6 +4334,75 @@ const CouponManager = ({
     });
   }, [couponsData, statusFilter, searchTerm]);
 
+  // --- Infinite Scroll / Virtual Pagination for Individual Coupons ---
+  const [individualVisibleCount, setIndividualVisibleCount] = useState(24);
+  const individualSentinelRef = useRef(null);
+
+  // Reset pagination when search filter changes
+  useEffect(() => {
+    setIndividualVisibleCount(24);
+  }, [searchTerm, statusFilter]);
+
+  // Infinite Scroll Observer for Individual Coupons (Mobile & Desktop)
+  useEffect(() => {
+    if (viewMode !== 'individual') return;
+    const sentinel = individualSentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (entry && entry.isIntersecting) {
+        setIndividualVisibleCount(prev => {
+          if (prev >= filteredIndividualCoupons.length) return prev;
+          return Math.min(prev + 24, filteredIndividualCoupons.length);
+        });
+      }
+    }, { rootMargin: '350px' });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [viewMode, filteredIndividualCoupons.length]);
+
+  const displayedIndividualCoupons = useMemo(() => {
+    return filteredIndividualCoupons.slice(0, individualVisibleCount);
+  }, [filteredIndividualCoupons, individualVisibleCount]);
+
+  // --- Infinite Scroll for Batch Drill-Down Modal ---
+  const [drillDownVisibleCount, setDrillDownVisibleCount] = useState(24);
+  const drillDownSentinelRef = useRef(null);
+
+  // Reset drill-down count when active batch changes
+  useEffect(() => {
+    setDrillDownVisibleCount(24);
+  }, [activeDrillDownBatch]);
+
+  const currentDrillDownCoupons = useMemo(() => {
+    return currentDrillDownBatch?.coupons || [];
+  }, [currentDrillDownBatch]);
+
+  const displayedDrillDownCoupons = useMemo(() => {
+    return currentDrillDownCoupons.slice(0, drillDownVisibleCount);
+  }, [currentDrillDownCoupons, drillDownVisibleCount]);
+
+  useEffect(() => {
+    if (!activeDrillDownBatch) return;
+    const sentinel = drillDownSentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (entry && entry.isIntersecting) {
+        setDrillDownVisibleCount(prev => {
+          if (prev >= currentDrillDownCoupons.length) return prev;
+          return Math.min(prev + 24, currentDrillDownCoupons.length);
+        });
+      }
+    }, { rootMargin: '250px' });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeDrillDownBatch, currentDrillDownCoupons.length]);
+
   // Filtered Patients for Create Form
   const filteredPatients = useMemo(() => {
     if (!patientSearch.trim()) return (patientsData || []).slice(0, 8);
@@ -3821,12 +4524,12 @@ const CouponManager = ({
           discountValue: form.discountValue,
           minSpend: form.minSpend,
           isLifetime: Boolean(form.isLifetime || !form.expireDate),
-          templateType: effectiveArt ? 'custom_image' : form.templateType,
+          templateType: (form.templateType === 'strip' || form.designConfig?.layoutType === 'strip') ? 'strip' : (form.templateType === 'card' ? 'card' : (effectiveArt ? 'custom_image' : form.templateType)),
           themeColor: form.themeColor,
           customImageUrl: effectiveArt,
           userUploadedImage: effectiveArt,
           bgImage: effectiveArt,
-          designConfig: form.designConfig ? { ...form.designConfig, customImageUrl: effectiveArt, bgImage: effectiveArt } : null,
+          designConfig: form.designConfig ? { ...form.designConfig, layoutType: (form.templateType === 'strip' || form.designConfig?.layoutType === 'strip') ? 'strip' : 'card', customImageUrl: effectiveArt, bgImage: effectiveArt } : null,
           qrConfig: form.qrConfig,
           expiryConfig: form.expiryConfig
         },
@@ -3896,15 +4599,33 @@ const CouponManager = ({
         return;
       }
       pendingArtworkFileRef.current = file;
-      setForm(prev => ({
-        ...prev,
-        templateType: 'custom_image',
-        userUploadedImage: localDataUrl,
-        customImageUrl: localDataUrl,
-        designConfig: prev.designConfig ? { ...prev.designConfig, bgType: 'image' } : null
-      }));
-      setIsQrEditorOpen(true);
-      showToast('โหลดรูปภาพสำเร็จ! เปิดเครื่องมือจัดตำแหน่ง QR และวันหมดอายุ', 'success');
+      const probeImg = new Image();
+      probeImg.onload = () => {
+        const isWide = (probeImg.naturalWidth / probeImg.naturalHeight) >= 2.0;
+        const detectedLayout = isWide ? 'strip' : 'card';
+        setForm(prev => ({
+          ...prev,
+          templateType: 'custom_image',
+          userUploadedImage: localDataUrl,
+          customImageUrl: localDataUrl,
+          designConfig: prev.designConfig
+            ? { ...prev.designConfig, bgType: 'image', layoutType: detectedLayout }
+            : { bgType: 'image', layoutType: detectedLayout }
+        }));
+        setIsQrEditorOpen(true);
+        showToast(`โหลดรูปภาพสำเร็จ! (${isWide ? 'ตรวจพบสัดส่วนคูปองแถบยาว ~210×74mm' : 'ตรวจพบสัดส่วนคูปองแบบการ์ด 85.6×54mm'})`, 'success');
+      };
+      probeImg.onerror = () => {
+        setForm(prev => ({
+          ...prev,
+          userUploadedImage: localDataUrl,
+          customImageUrl: localDataUrl,
+          designConfig: prev.designConfig ? { ...prev.designConfig, bgType: 'image' } : { bgType: 'image' }
+        }));
+        setIsQrEditorOpen(true);
+        showToast('โหลดรูปภาพสำเร็จ! เปิดเครื่องมือจัดตำแหน่ง QR และวันหมดอายุ', 'success');
+      };
+      probeImg.src = localDataUrl;
 
       // 2. Concurrently start background upload to Google Drive
       setIsUploadingArtwork(true);
@@ -4034,7 +4755,8 @@ const CouponManager = ({
     pendingArtworkFileRef.current = null;
     artworkUploadPromiseRef.current = null;
 
-    const effectiveTemplateType = finalImageUrl ? 'custom_image' : form.templateType;
+    const isStripLayout = form.templateType === 'strip' || form.designConfig?.layoutType === 'strip';
+    const effectiveTemplateType = isStripLayout ? 'strip' : (form.templateType === 'card' ? 'card' : (finalImageUrl ? 'custom_image' : form.templateType));
 
     const newCoupons = [];
     for (let i = 0; i < count; i++) {
@@ -4071,8 +4793,8 @@ const CouponManager = ({
         qr_config: { ...form.qrConfig, expiryConfig: form.expiryConfig },
         expiryConfig: form.expiryConfig,
         expiry_config: form.expiryConfig,
-        designConfig: form.designConfig ? { ...form.designConfig, customImageUrl: finalImageUrl || form.designConfig.customImageUrl } : null,
-        design_config: form.designConfig ? { ...form.designConfig, customImageUrl: finalImageUrl || form.designConfig.customImageUrl } : null,
+        designConfig: form.designConfig ? { ...form.designConfig, layoutType: isStripLayout ? 'strip' : 'card', customImageUrl: finalImageUrl || form.designConfig.customImageUrl } : { layoutType: isStripLayout ? 'strip' : 'card', customImageUrl: finalImageUrl || null },
+        design_config: form.designConfig ? { ...form.designConfig, layoutType: isStripLayout ? 'strip' : 'card', customImageUrl: finalImageUrl || form.designConfig.customImageUrl } : { layoutType: isStripLayout ? 'strip' : 'card', customImageUrl: finalImageUrl || null },
         isLifetime: Boolean(form.isLifetime || !form.expireDate),
         is_lifetime: Boolean(form.isLifetime || !form.expireDate),
         expireDate: (form.isLifetime || !form.expireDate) ? null : form.expireDate,
@@ -4480,11 +5202,11 @@ const CouponManager = ({
 
   // --- 5. Generate 300 DPI Canvas for Single Coupon (Download & Copy to Clipboard) ---
   const generateCouponCanvas = async (coupon) => {
-    const isStrip = (coupon.templateType || coupon.template_type) === 'strip';
+    const isStrip = isCouponStrip(coupon);
     const themeKey = coupon.themeColor || coupon.theme_color || 'emerald';
     const theme = PRINT_THEMES[themeKey] || PRINT_THEMES.emerald;
     const customImg = coupon.bgImage || coupon.bg_image || coupon.customImageUrl;
-    const isCustomImage = Boolean(customImg) && (coupon.templateType === 'custom_image' || coupon.template_type === 'custom_image');
+    const isCustomImage = Boolean(customImg);
 
     if (typeof document !== 'undefined' && document.fonts) {
       try {
@@ -5072,9 +5794,14 @@ const CouponManager = ({
       ctx.fillText(`วันหมดอายุ: ${expCleanStr}`, logoX, expY);
 
       // 🌟 RIGHT STUB: Discount on Top, QR in Middle, Large Phone on Bottom
-      let qrUrl = qrCodeDataUrls[coupon.code];
+      let qrUrl = couponQrCache.get(coupon.code);
       if (!qrUrl) {
         qrUrl = await QRCode.toDataURL(coupon.code, { width: 450, margin: 1 });
+        if (couponQrCache.size > 250) {
+          const firstKey = couponQrCache.keys().next().value;
+          couponQrCache.delete(firstKey);
+        }
+        couponQrCache.set(coupon.code, qrUrl);
       }
       if (qrUrl) {
         const qrImg = new Image();
@@ -5381,18 +6108,14 @@ const CouponManager = ({
 
   // --- 6. Execute A4 Print (Template 1: Strip 5/page | Template 2: Card 10/page) ---
   // --- 6. Execute A4 Print (Option 1: One-Click Smart Print) ---
-  // Automatically detects coupon layout (card 10/page vs strip 5/page) based on coupon design
+  // Automatically detects coupon layout (card 10/page vs strip 5/page) based on coupon design & canvas aspect ratio
   const triggerA4Print = async (couponsToPrint, forcedTemplateType = null) => {
     if (!couponsToPrint || couponsToPrint.length === 0) {
       showToast('ไม่มีคูปองที่จะสั่งพิมพ์', 'warning');
       return;
     }
 
-    // Auto-detect template format from the coupons to guarantee 100% correct aspect ratio
     const firstCp = couponsToPrint[0];
-    const isCouponStrip = (firstCp?.templateType === 'strip' || firstCp?.template_type === 'strip');
-    const isStrip = forcedTemplateType === 'strip' ? true : (forcedTemplateType === 'card' ? false : isCouponStrip);
-    const templateLabel = isStrip ? 'แถบยาว 200 × 54 mm (5 ใบ/หน้า A4)' : 'บัตรพรีเมียม 85.6 × 54 mm (10 ใบ/หน้า A4)';
 
     const printWin = window.open('', '_blank', 'width=980,height=820');
     if (!printWin) {
@@ -5406,7 +6129,7 @@ const CouponManager = ({
       <!DOCTYPE html>
       <html>
       <head>
-        <title>กำลังเตรียมพิมพ์คูปอง (${templateLabel})...</title>
+        <title>กำลังเตรียมพิมพ์คูปอง...</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Kanit", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; color: #334155; background: #f8fafc; }
           .spinner { width: 40px; height: 40px; border: 3.5px solid #e2e8f0; border-top-color: #0284c7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
@@ -5416,7 +6139,7 @@ const CouponManager = ({
       <body>
         <div class="spinner"></div>
         <p style="font-weight: 800; font-size: 16px; margin: 0 0 6px 0;">กำลังเรนเดอร์ภาพคูปองความละเอียดสูง (300 DPI)...</p>
-        <p style="font-size: 13px; color: #64748b; margin: 0 0 4px 0;">รูปแบบ: <strong style="color: #0369a1;">${templateLabel}</strong></p>
+        <p style="font-size: 13px; color: #64748b; margin: 0 0 4px 0;">ระบบกำลังตรวจสอบสัดส่วนคูปองและจัดหน้ากระดาษ A4 ให้อัตโนมัติ...</p>
         <p style="font-size: 12px; color: #94a3b8; margin: 0;">ระบบจะเปิดหน้าต่างสั่งพิมพ์ให้อัตโนมัติในสักครู่</p>
       </body>
       </html>
@@ -5431,23 +6154,64 @@ const CouponManager = ({
           const cvs = await generateCouponCanvas(cp);
           return {
             coupon: cp,
+            canvas: cvs,
+            width: cvs ? cvs.width : 0,
+            height: cvs ? cvs.height : 0,
             dataUrl: cvs ? cvs.toDataURL('image/png') : ''
           };
         } catch (err) {
           console.error('[Coupon] Pre-render canvas error for print:', err);
-          return { coupon: cp, dataUrl: '' };
+          return { coupon: cp, canvas: null, width: 0, height: 0, dataUrl: '' };
         }
       })
     );
 
-    const chunkSize = isStrip ? 5 : 10;
+    // Auto-detect template format from the actual rendered canvases or coupon metadata
+    const firstValid = renderedCoupons.find(r => r.width > 0 && r.height > 0);
+    const canvasIsStrip = firstValid ? ((firstValid.width / firstValid.height) >= 2.0) : false;
+    const isCouponStripMeta = isCouponStrip(firstCp);
+
+    let isStrip = false;
+    if (forcedTemplateType === 'strip') {
+      isStrip = true;
+    } else if (forcedTemplateType === 'card') {
+      // If forced to card, only respect if canvas is NOT a long strip (protects against buggy callers)
+      isStrip = canvasIsStrip;
+    } else {
+      isStrip = canvasIsStrip || isCouponStripMeta;
+    }
+
+    const templateLabel = isStrip ? 'แถบยาวชิดขอบ (4 ใบ/หน้า A4)' : 'บัตรพรีเมียม 85.6 × 54 mm (10 ใบ/หน้า A4)';
+
+    const chunkSize = isStrip ? 4 : 10;
     const pages = [];
     for (let i = 0; i < renderedCoupons.length; i += chunkSize) {
       pages.push(renderedCoupons.slice(i, i + chunkSize));
     }
 
     const pagesHtml = pages.map((pageCoupons) => {
-      // Pad empty slots so the last page keeps proper grid layout and cutting marks
+      if (isStrip) {
+        // แถบยาวชิดขอบซ้ายขวา 100% (หน้าละ 4 ใบ) พร้อมเส้นประนำตัดบางๆ ระหว่างใบ 1 เส้น
+        const vouchersHtml = pageCoupons.map((item, idx) => {
+          if (!item || !item.dataUrl) return '';
+          const isLast = idx === pageCoupons.length - 1;
+          return `
+            <div class="t1-voucher-box ${isLast ? 'no-border' : ''}">
+              <img src="${item.dataUrl}" alt="${item.coupon?.code || ''}" class="t1-voucher-img" />
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="a4-page a4-strip-page">
+            <div class="grid-strip">
+              ${vouchersHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      // Card layout: Pad empty slots so the last page keeps proper 2-column x 5-row grid layout and cutting marks
       const paddedCoupons = [...pageCoupons];
       while (paddedCoupons.length < chunkSize) {
         paddedCoupons.push(null);
@@ -5455,18 +6219,18 @@ const CouponManager = ({
 
       const cardsHtml = paddedCoupons.map((item) => {
         if (!item || !item.dataUrl) {
-          return `<div class="${isStrip ? 't1-voucher-box empty' : 't2-card-box empty'}"></div>`;
+          return `<div class="t2-card-box empty"></div>`;
         }
         return `
-          <div class="${isStrip ? 't1-voucher-box' : 't2-card-box'}">
-            <img src="${item.dataUrl}" alt="${item.coupon.code}" class="${isStrip ? 't1-voucher-img' : 't2-card-img'}" />
+          <div class="t2-card-box">
+            <img src="${item.dataUrl}" alt="${item.coupon.code}" class="t2-card-img" />
           </div>
         `;
       }).join('');
 
       return `
         <div class="a4-page">
-          <div class="${isStrip ? 'grid-strip' : 'grid-card'}">
+          <div class="grid-card">
             ${cardsHtml}
           </div>
         </div>
@@ -5482,7 +6246,7 @@ const CouponManager = ({
         <style>
           @page {
             size: A4 portrait;
-            margin: 0mm;
+            margin: 0mm !important;
           }
           * {
             box-sizing: border-box;
@@ -5501,16 +6265,22 @@ const CouponManager = ({
             height: 297mm;
             page-break-after: always;
             break-after: page;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
             margin: 0;
+            padding: 0;
             box-sizing: border-box;
+            overflow: hidden;
+            background: #ffffff;
           }
           .a4-page:last-child {
             page-break-after: auto;
             break-after: auto;
+          }
+
+          /* Template 2: Card Centering */
+          .a4-page:not(.a4-strip-page) {
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
 
           /* TEMPLATE 2: CARD (85.6 x 54 mm, 10/page) - ตาราง 2 คอลัมน์ x 5 แถว พร้อมเส้นประตัด */
@@ -5555,41 +6325,90 @@ const CouponManager = ({
             display: block;
           }
 
-          /* TEMPLATE 1: STRIP (200 x 54 mm, 5/page) - แถบยาว 5 แถว พร้อมเส้นประตัด */
+          /* TEMPLATE 1: STRIP (แถบยาวชิดขอบซ้ายขวา 100%, 4 ใบ/หน้า A4) - พร้อมเส้นประนำตัดบางๆ ระหว่างใบ 1 เส้น */
+          .a4-strip-page {
+            display: block;
+            width: 210mm;
+            height: 297mm;
+            padding: 0;
+            margin: 0;
+          }
           .grid-strip {
             display: flex;
             flex-direction: column;
             gap: 0;
-            width: 200mm;
-            height: 270mm;
-            margin: auto;
-            border: 0.35px solid #64748b;
+            width: 210mm;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            border: none;
             box-sizing: border-box;
           }
           .t1-voucher-box {
-            width: 200mm;
-            height: 54mm;
-            border-bottom: 0.35px dashed #64748b;
+            width: 210mm;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            position: relative;
             box-sizing: border-box;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #ffffff;
+            border-bottom: 0.75px dashed #94a3b8;
             page-break-inside: avoid;
             break-inside: avoid;
+            line-height: 0;
+            font-size: 0;
           }
+          .t1-voucher-box.no-border,
           .t1-voucher-box:last-child {
             border-bottom: none;
           }
-          .t1-voucher-box.empty {
-            background: #ffffff;
-          }
           .t1-voucher-img {
-            width: 200mm;
-            height: 54mm;
-            object-fit: contain;
+            width: 210mm;
+            width: 100%;
+            height: auto;
+            max-height: 74.25mm;
             display: block;
+            margin: 0;
+            padding: 0;
+            object-fit: fill;
+          }
+
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 0mm !important;
+            }
+            html, body {
+              width: 210mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .a4-page {
+              width: 210mm !important;
+              height: 297mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .a4-strip-page {
+              width: 210mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .grid-strip {
+              width: 210mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .t1-voucher-box {
+              width: 210mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .t1-voucher-img {
+              width: 210mm !important;
+              width: 100% !important;
+              height: auto !important;
+              max-height: 74.25mm !important;
+            }
           }
         </style>
       </head>
@@ -5616,7 +6435,7 @@ const CouponManager = ({
     <div className="flex flex-col h-full fade-in pb-20 md:pb-0 relative">
       
       {/* --- 1. Sticky Header --- */}
-      <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
+      <div ref={headerRef} className="sticky z-30 w-full pointer-events-none page-sticky-header flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
             <div className="min-w-0">
@@ -5754,7 +6573,7 @@ const CouponManager = ({
       {/* --- 3. Filter & Search Toolbar (Sticky เมื่อเลื่อนชน Header) --- */}
       <div 
         ref={filterRef}
-        className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt"
+        className="w-full pointer-events-none sticky z-20 my-5 sm:my-6 sticky-filter-appt"
       >
         <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
           <div className={`absolute top-0 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-col px-4 md:px-8 2xl:px-12 py-2.5 sm:py-3 transition-all duration-300 ${showMobileFilters ? 'ease-out' : 'ease-in'}`}>
@@ -5959,8 +6778,6 @@ const CouponManager = ({
                   const theme = THEME_STYLES[batch.themeColor] || THEME_STYLES.emerald;
                   const discountText = batch.discountType === 'percent' ? `ลด ${batch.discountValue}%` : `ลด ฿${Number(batch.discountValue).toLocaleString()}`;
                   const usedPercent = batch.total > 0 ? Math.round((batch.usedCount / batch.total) * 100) : 0;
-                  const firstCouponCode = batch.coupons[0]?.code || 'CP-PREVIEW';
-                  const sampleQrUrl = qrCodeDataUrls[firstCouponCode];
 
                   return (
                     <div
@@ -6116,8 +6933,7 @@ const CouponManager = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredIndividualCoupons.map(cp => {
-                  const qrUrl = qrCodeDataUrls[cp.code];
+                {displayedIndividualCoupons.map(cp => {
                   const isUsed = cp.status === 'used';
                   const isLifetime = Boolean(cp.isLifetime ?? cp.is_lifetime);
                   const expDate = cp.expireDate || cp.expire_date;
@@ -6172,15 +6988,11 @@ const CouponManager = ({
                             {isLifetime ? 'ไม่มีวันหมดอายุ' : `หมดอายุ: ${expDate || '-'}`}
                           </div>
                         </div>
-                        {qrUrl && (
-                          <div 
-                            className="p-1 bg-white rounded-xl border border-slate-200 shadow-2xs shrink-0 cursor-pointer hover:border-sky-400 hover:ring-2 hover:ring-sky-100 hover:scale-105 transition-all group"
-                            onClick={() => setPreviewCouponModal(cp)}
-                            title="คลิกเพื่อดูตัวอย่างคูปองฉบับเต็มก่อนส่งลูกค้า"
-                          >
-                            <img src={qrUrl} alt={cp.code} className="w-14 h-14 object-contain group-hover:scale-105 transition-transform" />
-                          </div>
-                        )}
+                        <LazyCouponQr
+                          code={cp.code}
+                          onClick={() => setPreviewCouponModal(cp)}
+                          title="คลิกเพื่อดูตัวอย่างคูปองฉบับเต็มก่อนส่งลูกค้า"
+                        />
                       </div>
 
                       {/* Card Action Buttons */}
@@ -6216,7 +7028,7 @@ const CouponManager = ({
                           {/* Print single card */}
                           <button
                             type="button"
-                            onClick={() => triggerA4Print([cp], (cp.templateType === 'strip' || cp.template_type === 'strip') ? 'strip' : 'card')}
+                            onClick={() => triggerA4Print([cp])}
                             className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                             title="พิมพ์ใบนี้"
                           >
@@ -6256,6 +7068,23 @@ const CouponManager = ({
                     </div>
                   );
                 })}
+
+                {/* Infinite Scroll Sentinel / Load More for Individual Coupons */}
+                {individualVisibleCount < filteredIndividualCoupons.length && (
+                  <div ref={individualSentinelRef} className="col-span-full py-6 flex flex-col items-center justify-center gap-2.5">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 kanit-text font-medium">
+                      <Loader2 size={16} className="animate-spin text-sky-500" />
+                      <span>กำลังโหลดคูปองเพิ่มเติม... (แสดงแล้ว {displayedIndividualCoupons.length} จาก {filteredIndividualCoupons.length} ใบ)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIndividualVisibleCount(prev => Math.min(prev + 24, filteredIndividualCoupons.length))}
+                      className="px-4 py-2 rounded-xl text-xs font-bold kanit-text bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-2xs transition-all active:scale-95"
+                    >
+                      โหลดเพิ่มอีก 24 ใบ
+                    </button>
+                  </div>
+                )}
               </div>
             )
           )}
@@ -6304,7 +7133,7 @@ const CouponManager = ({
             {/* Modal Form Body */}
             <form onSubmit={handleCreateCoupons} className="flex flex-col flex-1 overflow-hidden min-h-0">
               {/* Scrollable Form Content */}
-              <div className="overflow-y-auto custom-scrollbar p-3.5 sm:p-6 space-y-4 sm:space-y-5 flex-1">
+              <div className="overflow-y-auto overflow-x-hidden custom-scrollbar p-3 sm:p-6 space-y-4 sm:space-y-5 flex-1 w-full max-w-full">
                 {/* ส่วนที่ 1: ข้อมูลคูปองและมูลค่าส่วนลด */}
               <div className="bg-slate-50/80 rounded-2xl p-3.5 sm:p-5 border border-slate-200/70 space-y-3">
                 <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
@@ -6584,54 +7413,65 @@ const CouponManager = ({
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, templateType: 'card' })}
+                    onClick={() => setForm(prev => ({
+                      ...prev,
+                      templateType: 'card',
+                      designConfig: { ...(prev.designConfig || {}), layoutType: 'card', templateType: 'card', aspectRatio: '85.6 / 54' }
+                    }))}
                     className={`p-2.5 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
                       form.templateType === 'card'
                         ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-300 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2 min-w-0">
                       <Ticket size={18} className="text-sky-600 shrink-0 mb-0.5 sm:mb-0 sm:mt-0.5" />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold kanit-text text-slate-800 truncate">แบบการ์ด</div>
-                        <div className="text-[10px] text-slate-400 font-data whitespace-nowrap">10 ใบ/A4</div>
+                      <div className="min-w-0 w-full text-center sm:text-left">
+                        <div className="text-[11px] sm:text-xs font-bold kanit-text text-slate-800 truncate">แบบการ์ด</div>
+                        <div className="text-[9.5px] sm:text-[10px] text-slate-400 font-data truncate">10 ใบ/A4</div>
                       </div>
                     </div>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, templateType: 'strip' })}
-                    className={`p-2.5 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
+                    onClick={() => setForm(prev => ({
+                      ...prev,
+                      templateType: 'strip',
+                      designConfig: { ...(prev.designConfig || {}), layoutType: 'strip', templateType: 'strip', aspectRatio: '200 / 54' }
+                    }))}
+                    className={`p-2 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
                       form.templateType === 'strip'
                         ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-300 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2 min-w-0">
                       <Scissors size={18} className="text-emerald-600 shrink-0 mb-0.5 sm:mb-0 sm:mt-0.5" />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold kanit-text text-slate-800 truncate">แบบแถบยาว</div>
-                        <div className="text-[10px] text-slate-400 font-data whitespace-nowrap">5 ใบ/A4</div>
+                      <div className="min-w-0 w-full text-center sm:text-left">
+                        <div className="text-[11px] sm:text-xs font-bold kanit-text text-slate-800 truncate">แบบแถบยาว</div>
+                        <div className="text-[9.5px] sm:text-[10px] text-slate-400 font-data truncate">4 ใบ/A4</div>
                       </div>
                     </div>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, templateType: 'custom_image' })}
-                    className={`p-2.5 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
+                    onClick={() => setForm(prev => ({
+                      ...prev,
+                      templateType: 'custom_image'
+                    }))}
+                    className={`p-2 sm:p-3 rounded-2xl border text-center sm:text-left transition-all ${
                       form.templateType === 'custom_image'
                         ? 'border-purple-500 bg-purple-50/70 ring-2 ring-purple-300 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2 min-w-0">
                       <ImageIcon size={18} className="text-purple-600 shrink-0 mb-0.5 sm:mb-0 sm:mt-0.5" />
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold kanit-text text-slate-800 truncate">อัปโหลดเอง</div>
-                        <div className="text-[10px] text-slate-400 font-data whitespace-nowrap">Canva/ภาพ</div>
+                      <div className="min-w-0 w-full text-center sm:text-left">
+                        <div className="text-[11px] sm:text-xs font-bold kanit-text text-slate-800 truncate">อัปโหลดเอง</div>
+                        <div className="text-[9.5px] sm:text-[10px] text-slate-400 font-data truncate">Canva/ภาพ</div>
                       </div>
                     </div>
                   </button>
@@ -6670,24 +7510,132 @@ const CouponManager = ({
                       </div>
                     </div>
 
+                    {/* Format Switcher within custom_image */}
+                    <div className="flex flex-col xs:flex-row sm:items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-purple-100/70 rounded-xl border border-purple-200 w-full min-w-0">
+                      <span className="text-[11px] font-bold text-purple-900 kanit-text px-1 shrink-0">
+                        สัดส่วนการพิมพ์:
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5 flex-1 w-full min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => {
+                            const isSample = !prev.userUploadedImage || 
+                              prev.userUploadedImage === DEFAULT_SAMPLE_STRIP_VOUCHER_ART || 
+                              prev.userUploadedImage === DEFAULT_SAMPLE_VOUCHER_ART;
+                            return {
+                              ...prev,
+                              templateType: 'custom_image',
+                              customImageUrl: isSample ? DEFAULT_SAMPLE_VOUCHER_ART : (prev.customImageUrl || DEFAULT_SAMPLE_VOUCHER_ART),
+                              userUploadedImage: isSample ? DEFAULT_SAMPLE_VOUCHER_ART : prev.userUploadedImage,
+                              designConfig: { 
+                                ...(prev.designConfig || {}), 
+                                layoutType: 'card',
+                                templateType: 'card',
+                                aspectRatio: '85.6 / 54'
+                              }
+                            };
+                          })}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 cursor-pointer min-w-0 ${
+                            !isCouponStrip(form)
+                              ? 'bg-white text-purple-700 shadow-2xs border border-purple-200 ring-1 ring-purple-300'
+                              : 'text-purple-600/70 hover:bg-white/50'
+                          }`}
+                          title="บัตรการ์ด 10 ใบต่อหน้า A4 (85.6 × 54 mm)"
+                        >
+                          <Ticket size={13} className="shrink-0" />
+                          <span className="truncate">การ์ด (10 ใบ)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => {
+                            const isSample = !prev.userUploadedImage || 
+                              prev.userUploadedImage === DEFAULT_SAMPLE_STRIP_VOUCHER_ART || 
+                              prev.userUploadedImage === DEFAULT_SAMPLE_VOUCHER_ART;
+                            return {
+                              ...prev,
+                              templateType: 'custom_image',
+                              customImageUrl: isSample ? DEFAULT_SAMPLE_STRIP_VOUCHER_ART : (prev.customImageUrl || DEFAULT_SAMPLE_STRIP_VOUCHER_ART),
+                              userUploadedImage: isSample ? DEFAULT_SAMPLE_STRIP_VOUCHER_ART : prev.userUploadedImage,
+                              designConfig: { 
+                                ...(prev.designConfig || {}), 
+                                layoutType: 'strip',
+                                templateType: 'strip',
+                                aspectRatio: '200 / 54'
+                              }
+                            };
+                          })}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-bold kanit-text transition-all flex items-center justify-center gap-1.5 cursor-pointer min-w-0 ${
+                            isCouponStrip(form)
+                              ? 'bg-white text-purple-700 shadow-2xs border border-purple-200 ring-1 ring-purple-300'
+                              : 'text-purple-600/70 hover:bg-white/50'
+                          }`}
+                          title="แถบยาว 4 ใบต่อหน้า A4 (~210 × 74 mm)"
+                        >
+                          <Scissors size={13} className="shrink-0" />
+                          <span className="truncate">แถบยาว (4 ใบ)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* ข้อมูลระบุขนาดคร่าวๆ สำหรับ Canva / Photoshop */}
+                    <div className="p-3 rounded-xl bg-purple-100/70 border border-purple-200/90 text-xs kanit-text text-purple-950 space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-purple-900">
+                        <Sparkles size={14} className="text-purple-600 shrink-0" />
+                        <span>ขนาดแนะนำสำหรับออกแบบใน Canva / Photoshop:</span>
+                      </div>
+                      {isCouponStrip(form) ? (
+                        <div className="space-y-1 text-purple-900/90 pl-3 border-l-2 border-emerald-500 text-[11px] sm:text-xs">
+                          <div className="font-bold text-emerald-800 flex items-center gap-1">
+                            <Scissors size={12} className="shrink-0" />
+                            <span>สัดส่วนแบบแถบยาว (พิมพ์เต็มหน้า 4 ใบต่อ A4 ชิดขอบ):</span>
+                          </div>
+                          <div>
+                            • <strong>ขนาดพิมพ์จริง:</strong> กว้าง <strong>210 mm</strong> × สูง <strong>74.25 mm</strong> (หรือขนาดแถบยาวมาตรฐาน ~200 × 54 mm)
+                          </div>
+                          <div>
+                            • <strong>ขนาดพิกเซลแนะนำ (Canva 300 DPI):</strong> <strong>2480 × 877 px</strong> (อัตราส่วนประมาณ <strong>2.8 : 1</strong> ถึง <strong>3.7 : 1</strong> เช่น 2000 × 540 px)
+                          </div>
+                          <div className="text-[10px] text-purple-700/80">
+                            * ระบบจัดวางพิมพ์ชิดขอบซ้าย-ขวาเต็มความกว้างหน้ากระดาษ A4 พอดี
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1 text-purple-900/90 pl-3 border-l-2 border-indigo-500 text-[11px] sm:text-xs">
+                          <div className="font-bold text-indigo-800 flex items-center gap-1">
+                            <Ticket size={12} className="shrink-0" />
+                            <span>สัดส่วนแบบบัตรการ์ด (พิมพ์ 10 ใบต่อ A4 • 2 คอลัมน์):</span>
+                          </div>
+                          <div>
+                            • <strong>ขนาดบัตรมาตรฐาน (CR80):</strong> กว้าง <strong>85.6 mm</strong> × สูง <strong>54 mm</strong>
+                          </div>
+                          <div>
+                            • <strong>ขนาดพิกเซลแนะนำ (Canva 300 DPI):</strong> <strong>1011 × 638 px</strong> (หรือ 856 × 540 px)
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="pt-1">
                       <button
                         type="button"
                         onClick={() => {
+                          const isStripMode = isCouponStrip(form);
                           if (!form.customImageUrl) {
+                            const defaultArt = isStripMode ? DEFAULT_SAMPLE_STRIP_VOUCHER_ART : DEFAULT_SAMPLE_VOUCHER_ART;
                             setForm(prev => ({
                               ...prev,
-                              customImageUrl: DEFAULT_SAMPLE_VOUCHER_ART,
-                              userUploadedImage: DEFAULT_SAMPLE_VOUCHER_ART,
-                              templateType: 'custom_image'
+                              customImageUrl: defaultArt,
+                              userUploadedImage: defaultArt,
+                              templateType: 'custom_image',
+                              designConfig: { ...(prev.designConfig || {}), layoutType: isStripMode ? 'strip' : 'card' }
                             }));
                           }
                           setIsQrEditorOpen(true);
                         }}
-                        className="w-full py-2.5 sm:py-3 px-3.5 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm kanit-text shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-98"
+                        className="w-full py-2.5 sm:py-3 px-3.5 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs sm:text-sm kanit-text shadow-md shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
                       >
                         <Sliders size={15} className="shrink-0" />
-                        <span>จัดวางตำแหน่ง QR & บาร์โค้ด</span>
+                        <span>สตูดิโอออกแบบ & วาง QR</span>
                       </button>
                     </div>
 
@@ -6696,18 +7644,62 @@ const CouponManager = ({
                         {/* Full Size Live Preview (สัดส่วนจริงเต็มใบ - คลิกเพื่อเปิดเครื่องมือเต็มจอ) */}
                         <div
                           onClick={() => setIsQrEditorOpen(true)}
-                          className="p-3 sm:p-4 bg-white rounded-2xl border border-sky-100 flex flex-col items-center cursor-pointer hover:border-sky-300 hover:shadow-md transition-all group"
+                          className="p-3 sm:p-4 bg-white rounded-2xl border border-sky-100 flex flex-col items-center cursor-pointer hover:border-sky-300 hover:shadow-md transition-all group w-full min-w-0 overflow-hidden"
                           title="คลิกเพื่อเปิดเครื่องมือจัดตำแหน่งแบบเต็มจอ"
                         >
-                          <div className="text-xs font-bold text-slate-700 kanit-text mb-2.5 self-start flex items-center justify-between w-full">
-                            <span className="flex items-center gap-1.5 text-sky-700">
-                              <Eye size={14} className="text-sky-600" />
-                              <span>พรีวิวคูปองสัดส่วนจริง (คลิกที่ภาพเพื่อจัดวางตำแหน่ง):</span>
-                            </span>
-                            <span className="text-xs text-sky-600 group-hover:underline flex items-center gap-0.5 font-bold">
-                              <span>คลิกแก้ไขตำแหน่ง</span>
-                              <ChevronRight size={13} />
-                            </span>
+                          <div className="text-xs font-bold text-slate-700 kanit-text mb-2.5 w-full flex items-center justify-between gap-1.5 border-b border-slate-100 pb-2 min-w-0">
+                            <div className="flex items-center gap-1.5 text-sky-700 min-w-0 flex-1">
+                              <Eye size={13} className="text-sky-600 shrink-0" />
+                              <span className="font-bold shrink-0 hidden xs:inline">พรีวิว:</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold kanit-text truncate ${
+                                isCouponStrip(form)
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                              }`}>
+                                {isCouponStrip(form) ? '✂️ แถบยาว (4 ใบ)' : '💳 การ์ด (10 ใบ)'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                              {/* ปุ่ม Clear */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setForm(prev => {
+                                    const isStripMode = isCouponStrip(prev);
+                                    return {
+                                      ...prev,
+                                      customImageUrl: null,
+                                      userUploadedImage: null,
+                                      designConfig: {
+                                        ...(prev.designConfig || {}),
+                                        customImageUrl: null,
+                                        bgType: 'color',
+                                        layoutType: isStripMode ? 'strip' : 'card',
+                                        templateType: isStripMode ? 'strip' : 'card',
+                                        aspectRatio: isStripMode ? '200 / 54' : '85.6 / 54'
+                                      }
+                                    };
+                                  });
+                                  if (artworkFileInputRef.current) {
+                                    artworkFileInputRef.current.value = '';
+                                  }
+                                  pendingArtworkFileRef.current = null;
+                                  showToast('เคลียร์ภาพ Canva แล้ว สามารถอัปโหลดหรือสร้างใหม่ได้ทันที', 'info');
+                                }}
+                                className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold kanit-text flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-2xs shrink-0"
+                                title="เคลียร์รูปภาพ Canva และเริ่มต้นใหม่"
+                              >
+                                <RotateCcw size={11} className="shrink-0" />
+                                <span>Clear</span>
+                              </button>
+
+                              <span className="text-[11px] sm:text-xs text-sky-600 group-hover:underline flex items-center gap-0.5 font-bold shrink-0">
+                                <span className="hidden sm:inline">แก้ไขตำแหน่ง</span>
+                                <ChevronRight size={13} className="shrink-0" />
+                              </span>
+                            </div>
                           </div>
                           <div className="relative w-full max-w-full rounded-xl overflow-hidden border border-slate-300/80 bg-slate-900 shadow-sm flex items-center justify-center">
                             <img
@@ -6800,24 +7792,85 @@ const CouponManager = ({
                     )}
                   </div>
                 ) : (
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5 kanit-text">เลือกโทนสีการ์ด</label>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                      {Object.values(THEME_STYLES).map(th => (
-                        <button
-                          key={th.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, themeColor: th.id })}
-                          className={`p-2.5 rounded-xl border text-center transition-all bg-white ${
-                            form.themeColor === th.id
-                              ? 'border-sky-500 ring-2 ring-sky-300 shadow-2xs font-bold'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className={`w-full h-4 rounded-md bg-gradient-to-r ${th.bg} mb-1.5`} />
-                          <span className="text-[10px] font-bold kanit-text block truncate text-slate-700">{th.id.toUpperCase()}</span>
-                        </button>
-                      ))}
+                  <div className="space-y-3">
+                    <div className="p-3.5 sm:p-4 bg-gradient-to-br from-slate-50/80 via-white to-sky-50/40 rounded-2xl border border-slate-200/90 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                            form.templateType === 'strip' 
+                              ? 'bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-emerald-500/20' 
+                              : 'bg-gradient-to-tr from-sky-500 to-indigo-500 text-white shadow-sky-500/20'
+                          }`}>
+                            {form.templateType === 'strip' ? <Scissors size={18} /> : <Ticket size={18} />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs sm:text-sm font-bold kanit-text text-slate-800">
+                                {form.templateType === 'strip' ? 'คูปองแบบแถบยาว' : 'บัตรพรีเมียม'}
+                              </span>
+                              <span className="text-[10px] font-semibold font-mono px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 shadow-2xs">
+                                {form.templateType === 'strip' ? '~210 × 74 mm' : '85.6 × 54 mm'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-data mt-0.5 truncate">
+                              {form.templateType === 'strip' ? 'จัดเรียง 4 ใบต่อหน้า A4 • 300 DPI ชิดขอบซ้ายขวา' : 'จัดเรียง 10 ใบต่อหน้า A4 • 2 คอลัมน์ (มาตรฐาน)'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isStripMode = form.templateType === 'strip';
+                          const defaultArt = isStripMode ? DEFAULT_SAMPLE_STRIP_VOUCHER_ART : DEFAULT_SAMPLE_VOUCHER_ART;
+                          setForm(prev => ({
+                            ...prev,
+                            customImageUrl: prev.customImageUrl || defaultArt,
+                            userUploadedImage: prev.userUploadedImage || defaultArt,
+                            designConfig: { ...(prev.designConfig || {}), layoutType: isStripMode ? 'strip' : 'card' }
+                          }));
+                          setIsQrEditorOpen(true);
+                        }}
+                        className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-500 via-sky-500 to-sky-600 hover:from-indigo-600 hover:to-sky-700 text-white text-xs font-bold kanit-text flex items-center justify-center gap-2 shadow-sm shadow-indigo-500/20 transition-all active:scale-[0.98] cursor-pointer"
+                      >
+                        <Sliders size={14} />
+                        <span>เปิดสตูดิโอปรับแต่งดีไซน์คูปอง & จัดวาง QR</span>
+                      </button>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-700 kanit-text">
+                          เลือกโทนสีคูปอง ({Object.keys(THEME_STYLES).length} โทนสี)
+                        </label>
+                        <span className="text-[11px] font-semibold text-sky-600 kanit-text bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200 truncate max-w-[200px]">
+                          {THEME_STYLES[form.themeColor]?.shortName || THEME_STYLES[form.themeColor]?.name || form.themeColor}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 sm:gap-2">
+                        {Object.values(THEME_STYLES).map(th => {
+                          const isSelected = form.themeColor === th.id;
+                          return (
+                            <button
+                              key={th.id}
+                              type="button"
+                              onClick={() => setForm({ ...form, themeColor: th.id })}
+                              title={th.name}
+                              className={`p-1.5 sm:p-2 rounded-xl border text-center transition-all bg-white relative cursor-pointer ${
+                                isSelected
+                                  ? 'border-sky-500 ring-2 ring-sky-300 shadow-2xs font-bold bg-sky-50/20'
+                                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                              }`}
+                            >
+                              <div className={`w-full h-3.5 sm:h-4 rounded-md bg-gradient-to-r ${th.bg} mb-1 shadow-2xs`} />
+                              <span className="text-[10px] font-bold kanit-text block truncate text-slate-700">
+                                {th.shortName || th.name.split(' ')[0]}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -7206,7 +8259,9 @@ const CouponManager = ({
       <StoryArtworkEditorModal
         isOpen={isQrEditorOpen}
         onClose={() => setIsQrEditorOpen(false)}
-        onSave={({ qrConfig, expiryConfig, customImageUrl, designConfig }) => {
+        initialLayoutType={(form.templateType === 'strip' || form.designConfig?.layoutType === 'strip') ? 'strip' : 'card'}
+        onSave={({ qrConfig, expiryConfig, customImageUrl, designConfig, layoutType }) => {
+          const chosenLayout = layoutType || designConfig?.layoutType || ((form.templateType === 'strip' || form.designConfig?.layoutType === 'strip') ? 'strip' : 'card');
           setForm(prev => {
             const updated = {
               ...prev,
@@ -7214,8 +8269,8 @@ const CouponManager = ({
               expiryConfig,
               customImageUrl: customImageUrl || prev.customImageUrl,
               userUploadedImage: prev.userUploadedImage || customImageUrl || prev.customImageUrl,
-              designConfig,
-              templateType: 'custom_image'
+              designConfig: { ...(designConfig || prev.designConfig || {}), layoutType: chosenLayout },
+              templateType: prev.templateType === 'custom_image' ? 'custom_image' : chosenLayout
             };
             if (designConfig?.headerText) {
               updated.title = designConfig.headerText;
@@ -7229,7 +8284,7 @@ const CouponManager = ({
             }
             return updated;
           });
-          showToast('บันทึกดีไซน์คูปองและตำแหน่ง QR Code เรียบร้อยแล้ว', 'success');
+          showToast(`บันทึกดีไซน์คูปอง (${chosenLayout === 'strip' ? 'แบบแถบยาว ~210×74 mm' : 'แบบบัตรพรีเมียม 85.6×54 mm'}) เรียบร้อยแล้ว`, 'success');
         }}
         initialQrConfig={form.qrConfig}
         initialExpiryConfig={form.expiryConfig}
@@ -7546,8 +8601,7 @@ const CouponManager = ({
             {/* Coupons Grid Inside Batch */}
             <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {currentDrillDownBatch.coupons.map((cp, idx) => {
-                  const qrUrl = qrCodeDataUrls[cp.code];
+                {displayedDrillDownCoupons.map((cp, idx) => {
                   const isUsed = cp.status === 'used' || Boolean(cp.isUsed || cp.is_used);
                   const isChecked = Boolean(selectedCouponIdsToPrint[cp.id]);
 
@@ -7596,18 +8650,16 @@ const CouponManager = ({
                             )}
                           </div>
                         </div>
-                        {qrUrl && (
-                          <img
-                            src={qrUrl}
-                            alt={cp.code}
-                            className="w-12 h-12 rounded-lg border p-0.5 bg-white shrink-0 cursor-pointer hover:border-sky-400 hover:ring-2 hover:ring-sky-100 hover:scale-105 transition-all"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewCouponModal(cp);
-                            }}
-                            title="คลิกเพื่อดูตัวอย่างคูปองฉบับเต็มก่อนส่งลูกค้า"
-                          />
-                        )}
+                        <LazyCouponQr
+                          code={cp.code}
+                          className="w-12 h-12 p-0.5 rounded-lg"
+                          imgClassName="w-11 h-11 object-contain"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewCouponModal(cp);
+                          }}
+                          title="คลิกเพื่อดูตัวอย่างคูปองฉบับเต็มก่อนส่งลูกค้า"
+                        />
                       </div>
 
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
@@ -7649,7 +8701,7 @@ const CouponManager = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              triggerA4Print([cp], (cp.templateType === 'strip' || cp.template_type === 'strip') ? 'strip' : 'card');
+                              triggerA4Print([cp]);
                             }}
                             className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors"
                             title="พิมพ์ใบนี้"
@@ -7685,6 +8737,23 @@ const CouponManager = ({
                     </div>
                   );
                 })}
+
+                {/* Infinite Scroll Sentinel for Drill-Down Modal */}
+                {drillDownVisibleCount < currentDrillDownCoupons.length && (
+                  <div ref={drillDownSentinelRef} className="col-span-full py-4 flex flex-col items-center justify-center gap-2">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 kanit-text font-medium">
+                      <Loader2 size={15} className="animate-spin text-sky-500" />
+                      <span>กำลังโหลดเพิ่มเติม... (แสดงแล้ว {displayedDrillDownCoupons.length} จาก {currentDrillDownCoupons.length} ใบ)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDrillDownVisibleCount(prev => Math.min(prev + 24, currentDrillDownCoupons.length))}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold kanit-text bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-95"
+                    >
+                      โหลดเพิ่มอีก 24 ใบ
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -7736,7 +8805,7 @@ const CouponManager = ({
           onDownloadPng={handleDownloadSinglePng}
           onPrint={(cp) => {
             setPreviewCouponModal(null);
-            triggerA4Print([cp], (cp.templateType === 'strip' || cp.template_type === 'strip') ? 'strip' : 'card');
+            triggerA4Print([cp]);
           }}
         />,
         document.body

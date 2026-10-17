@@ -248,6 +248,26 @@ const mockPatients = [
   { id: 'HN003', name: 'มีชัย ทำดี', phone: '082-333-4444', lastVisit: '2023-10-27', branchId: 'b1' },
 ];
 
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
+  { id: 'exec_dashboard', label: 'แดชบอร์ดผู้บริหาร', icon: TrendingUp },
+  { id: 'records', label: 'เวชระเบียน', icon: Users },
+  { id: 'queue', label: 'นัดหมาย', icon: CalendarRange },
+  { id: 'pos', label: 'POS', icon: Calculator },
+  { id: 'coupons', label: 'คูปอง', icon: Ticket },
+  { id: 'catalog', label: 'สินค้า/บริการ', icon: Tag },
+  { id: 'inventory', label: 'คลังสินค้า', icon: Package },
+  { id: 'finance', label: 'การเงิน', icon: Banknote },
+  { id: 'staff', label: 'พนักงาน', icon: UserCog },
+  { id: 'branch', label: 'สาขา', icon: Building2 },
+  { id: 'reports', label: 'รายงาน', icon: BarChart3 },
+  { id: 'display_ads', label: 'จัดการโฆษณา', icon: Megaphone },
+  { id: 'settings', label: 'ตั้งค่า', icon: Settings },
+];
+
+const MAIN_NAV_ORDER = ['dashboard', 'records', 'queue', 'pos', 'reports'];
+const OTHER_PREFERRED_ORDER = ['exec_dashboard', 'coupons', 'catalog', 'inventory', 'finance', 'staff', 'branch', 'display_ads', 'settings'];
+
 export default function App() {
 
   const getUrlParam = (key) => {
@@ -872,8 +892,9 @@ export default function App() {
   const sidebarBaseWidth = isSidebarExpanded ? SIDEBAR_MAX_WIDTH : SIDEBAR_MIN_WIDTH;
   const baseProgress = isSidebarExpanded ? 1 : 0;
 
-  // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ ---
+  // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ และเปิดขยายแท็บเมนูด้านล่าง ---
   const [showMobileBars, setShowMobileBars] = useState(true);
+  const [isMobileNavExpanded, setIsMobileNavExpanded] = useState(false);
   const lastScrollY = React.useRef(0);
 
   // บันทึกสถานะลง LocalStorage เมื่อมีการเปลี่ยนแปลง (เฉพาะ PC)
@@ -967,24 +988,76 @@ export default function App() {
   const mainRef = React.useRef(null);
   const scrollPositions = React.useRef({});
 
-  // --- Global Scroll Listener for Mobile Auto-Hide Bars ---
+  // --- ป้องกัน Mobile Window Scrolling / Extra Overscroll บนมือถืออย่างเด็ดขาด ---
   useEffect(() => {
-    const mainElement = mainRef.current;
-    if (!mainElement) return;
+    if (!isMobile) return;
+    const preventWindowScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener('scroll', preventWindowScroll, { passive: true });
+    return () => window.removeEventListener('scroll', preventWindowScroll);
+  }, [isMobile]);
 
+  // --- Global Scroll Listener for Mobile Auto-Hide Bars & Continuous Fluid Header ---
+  useEffect(() => {
     const handleGlobalScroll = (e) => {
-      if (!isMobile) return; // ทำงานเฉพาะโหมดมือถือเท่านั้น
-      const currentScrollY = e.target.scrollTop;
+      const target = e.target;
+      if (!target || !target.classList) return;
 
-      // ถ้าเลื่อนกลับไปบนสุด ให้แสดงแถบเครื่องมือเสมอ
-      if (currentScrollY <= 20) {
+      const isMain = target.id === 'main-scroll-container';
+      const isPosGrid = target.classList.contains('pos-product-grid');
+
+      // ตรวจจับเฉพาะ scroll container หลักของหน้า หรือ product grid ของหน้า POS
+      if (!isMain && !isPosGrid) return;
+
+      const currentScrollY = target.scrollTop;
+
+      // คำนวณความคืบหน้าการย่อขยาย Header แบบลื่นไหล 60/120fps ตามระยะนิ้วสัมผัส (0.000 ถึง 1.000)
+      if (isMain) {
+        const headerP = Math.min(1, Math.max(0, currentScrollY / 50));
+        target.style.setProperty('--header-p', headerP.toFixed(3));
+      }
+
+      if (!isMobile) return;
+      if (isMobileNavExpanded) return;
+
+      // ถ้าเลื่อนกลับไปบนสุด หรือยังอยู่ในช่วงส่วนหัว (<= 80px) ให้แสดงแถบเครื่องมือเสมอ ไม่ซ่อนกระตุก
+      if (currentScrollY <= 80) {
+        setShowMobileBars(true);
+        lastScrollY.current = currentScrollY;
+        if (target.style.overscrollBehaviorY !== 'auto') {
+          target.style.overscrollBehaviorY = 'auto';
+        }
+        return;
+      }
+
+      // เมื่อเลื่อนลงมาในเนื้อหา ให้สลับเป็น contain เพื่อป้องกันขอบล่างยืดหรือหลุดเฟรม
+      if (target.style.overscrollBehaviorY !== 'contain') {
+        target.style.overscrollBehaviorY = 'contain';
+      }
+
+      // ป้องกันหน้าสั้นเกินไปจนเลื่อนไม่ได้
+      const maxScroll = target.scrollHeight - target.clientHeight;
+      if (maxScroll <= 30) {
         setShowMobileBars(true);
         lastScrollY.current = currentScrollY;
         return;
       }
 
+      // ป้องกัน Overscroll Bounce หรือ Rubber-band ที่ขอบล่างสุดของหน้าจอ
+      // เมื่ออยู่ใกล้ขอบล่างสุด ถ้ากำลังเลื่อนลงให้ซ่อนแถบ และถ้าเด้งกลับห้ามดีดแถบแสดงขึ้นมาบัง
+      if (currentScrollY >= maxScroll - 60) {
+        if (currentScrollY > lastScrollY.current) {
+          setShowMobileBars(false);
+        }
+        lastScrollY.current = Math.min(currentScrollY, maxScroll);
+        return;
+      }
+
       // ใช้ Threshold เพื่อป้องกันการทำงานจุกจิกเกินไปเวลาขยับนิ้วเล็กน้อย
-      if (Math.abs(currentScrollY - lastScrollY.current) < 15) return;
+      if (Math.abs(currentScrollY - lastScrollY.current) < 25) return;
 
       if (currentScrollY > lastScrollY.current) {
         setShowMobileBars(false); // เลื่อนลง -> ซ่อนแถบ
@@ -994,16 +1067,16 @@ export default function App() {
       lastScrollY.current = currentScrollY;
     };
 
-    mainElement.addEventListener('scroll', handleGlobalScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleGlobalScroll);
-  }, [isMobile, isLoggedIn, isGlobalLoading]);
+    window.addEventListener('scroll', handleGlobalScroll, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', handleGlobalScroll, { capture: true });
+  }, [isMobile, isLoggedIn, isGlobalLoading, currentTab]);
 
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   const [navUnsavedModal, setNavUnsavedModal] = useState({ isOpen: false, targetTab: null });
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
   const handleTabClick = (tabId) => {
-    if (hasDragged.current) return;
+    if (!isMobile && hasDragged.current) return;
     if (tabId === currentTab) return;
 
     // หากมีข้อมูลการตั้งค่าที่ยังไม่ได้บันทึก ให้เด้งป๊อปอัพแจ้งเตือนก่อนเปลี่ยนหน้า
@@ -1026,6 +1099,8 @@ export default function App() {
       const targetScroll = scrollPositions.current[currentTab] || 0;
       mainRef.current.scrollTop = targetScroll;
       lastScrollY.current = targetScroll;
+      const headerP = Math.min(1, Math.max(0, targetScroll / 50));
+      mainRef.current.style.setProperty('--header-p', headerP.toFixed(3));
       setShowMobileBars(true);
     }
   }, [currentTab]);
@@ -2113,7 +2188,7 @@ export default function App() {
   };
 
   // --- ระบบ Realtime Sync ช่วยอัปเดต State หน้าเว็บทันทีเมื่อเพิ่ม/แก้ไข/ลบข้อมูล ---
-  const syncLocalStateOnSave = (sheetName, payload) => {
+  const syncLocalStateOnSave = useCallback((sheetName, payload) => {
     if (!payload) return;
     const targetId = String(payload.id || payload.hn || '').trim();
     const targetName = String(payload.name || payload.patientName || payload.title || '').trim().toLowerCase();
@@ -2487,9 +2562,9 @@ export default function App() {
         }
       }
     }
-  };
+  }, []);
 
-  const syncLocalStateOnDelete = (sheetName, payload) => {
+  const syncLocalStateOnDelete = useCallback((sheetName, payload) => {
     if (!payload) return;
     const targetId = String(payload.id || payload.hn || '').trim();
     if (!targetId) return;
@@ -2549,10 +2624,10 @@ export default function App() {
         return p;
       }));
     }
-  };
+  }, []);
 
   // --- ปรับปรุงฟังก์ชันป้องกัน Error HTML แบบ 100% และรองรับ Supabase ---
-  const callAppScript = async (action, sheetName, data = null) => {
+  const callAppScript = useCallback(async (action, sheetName, data = null) => {
     // 🛡️ ในโหมดจำลองข้อมูล (Sandbox Simulation) ไม่อนุญาตให้เขียนหรือลบข้อมูลจริงลง Supabase
     if (isSimulationMode && (action === 'SAVE_DATA' || action === 'SAVE_BATCH' || action === 'DELETE_DATA' || action === 'UPDATE_DATA')) {
       showToast('อยู่ในโหมดจำลองข้อมูล (Sandbox Mode): ข้อมูลทำงานบนเบราว์เซอร์เท่านั้น ไม่ถูกบันทึกลงระบบจริง', 'warning');
@@ -2629,7 +2704,7 @@ export default function App() {
     } catch (error) { 
         throw error; 
     }
-  };
+  }, [isSimulationMode, showToast, currentUser, syncLocalStateOnSave, syncLocalStateOnDelete]);
 
   const parseSettings = (resSettings) => {
     if (resSettings?.status === 'success' && Array.isArray(resSettings.data)) {
@@ -2922,22 +2997,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const navItems = [
-    { id: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
-    { id: 'exec_dashboard', label: 'แดชบอร์ดผู้บริหาร', icon: TrendingUp },
-    { id: 'records', label: 'เวชระเบียน', icon: Users },
-    { id: 'queue', label: 'นัดหมาย', icon: CalendarRange },
-    { id: 'pos', label: 'POS', icon: Calculator },
-    { id: 'coupons', label: 'คูปอง', icon: Ticket },
-    { id: 'catalog', label: 'สินค้า/บริการ', icon: Tag },
-    { id: 'inventory', label: 'คลังสินค้า', icon: Package },
-    { id: 'finance', label: 'การเงิน', icon: Banknote },
-    { id: 'staff', label: 'พนักงาน', icon: UserCog },
-    { id: 'branch', label: 'สาขา', icon: Building2 },
-    { id: 'reports', label: 'รายงาน', icon: BarChart3 },
-    { id: 'display_ads', label: 'จัดการโฆษณา', icon: Megaphone },
-    { id: 'settings', label: 'ตั้งค่า', icon: Settings },
-  ];
+  const navItems = NAV_ITEMS;
 
   const dealStatuses = useMemo(() => {
     const colorClasses = {
@@ -2983,8 +3043,8 @@ export default function App() {
     const tabs = currentUser.role === 'admin' && !allowedTabs.includes('settings') 
       ? [...allowedTabs, 'settings'] 
       : allowedTabs;
-    return navItems.filter(item => tabs.includes(item.id));
-  }, [navItems, allowedTabs, currentUser.role]);
+    return NAV_ITEMS.filter(item => tabs.includes(item.id));
+  }, [allowedTabs, currentUser.role]);
 
   // เมื่อสิทธิ์เปลี่ยนแล้วแท็บปัจจุบันที่เปิดอยู่ไม่มีสิทธิ์เข้าถึง ให้เด้งไปหน้าแรกที่สามารถเข้าได้
   useEffect(() => {
@@ -2994,9 +3054,496 @@ export default function App() {
     }
   }, [filteredNavItems, currentTab]);
 
-  // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า
-  const mobileNavItems = filteredNavItems.filter(item => ['dashboard', 'records', 'queue', 'pos', 'reports'].includes(item.id));
-  const activeNavIndex = mobileNavItems.findIndex(item => item.id === currentTab);
+  // คำนวณตัวแปรสำหรับ Navbar มือถือล่วงหน้า (แถวที่ 1 เมนูหลัก 5 หน้า และแถวที่เหลือเป็นเมนูเพิ่มเติม 4 คอลัมน์)
+  const hasMoreNavItems = filteredNavItems.length >= 6;
+
+  const mobileNavItems = useMemo(() => {
+    if (!hasMoreNavItems) return filteredNavItems;
+    return MAIN_NAV_ORDER
+      .map(id => filteredNavItems.find(item => item.id === id))
+      .filter(Boolean);
+  }, [filteredNavItems, hasMoreNavItems]);
+
+  const otherMobileNavItems = useMemo(() => {
+    if (!hasMoreNavItems) return [];
+    return filteredNavItems
+      .filter(item => !MAIN_NAV_ORDER.includes(item.id))
+      .sort((a, b) => {
+        const idxA = OTHER_PREFERRED_ORDER.indexOf(a.id);
+        const idxB = OTHER_PREFERRED_ORDER.indexOf(b.id);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      });
+  }, [filteredNavItems, hasMoreNavItems]);
+
+  const [navActiveTab, setNavActiveTab] = useState(currentTab);
+  const effectiveNavTab = navActiveTab || currentTab;
+
+  useEffect(() => {
+    setNavActiveTab(currentTab);
+  }, [currentTab]);
+
+  const activeNavIndex = mobileNavItems.findIndex(item => item.id === effectiveNavTab);
+  const activeOtherIndex = otherMobileNavItems.findIndex(item => item.id === effectiveNavTab);
+
+  // จดจำตำแหน่งดัชนีของเมนูหลักล่าสุด เพื่อให้วงกลมสีฟ้าเลื่อนสไลด์ได้อย่างต่อเนื่อง ไม่กระโดดมาจากขอบจอ
+  const lastMainIndexRef = useRef(0);
+  if (activeNavIndex !== -1) {
+    lastMainIndexRef.current = activeNavIndex;
+  }
+
+  // ควบคุมวงกลม Liquid Bubble สีสันที่เลื่อนไปหาไอคอนที่เลือกในแถวเพิ่มเติม (4 คอลัมน์) โดยใช้ Ref ตรงกับ DOM ไม่ผ่าน React State เพื่อตัดปัญหา Re-render และอาการพื้นหลังเบลอกระพริบ
+  const extraGridRef = useRef(null);
+  const extraBubbleRef = useRef(null);
+
+  const updateExtraBubble = useCallback((animate = false) => {
+    if (!extraGridRef.current || !extraBubbleRef.current) return;
+    const activeBtn = extraGridRef.current.querySelector('[data-active="true"]');
+    if (activeBtn) {
+      const iconEl = activeBtn.querySelector('.extra-nav-icon');
+      const x = activeBtn.offsetLeft + (iconEl ? iconEl.offsetLeft : (activeBtn.offsetWidth - 48) / 2);
+      const y = activeBtn.offsetTop + (iconEl ? iconEl.offsetTop : 4);
+      if (animate) {
+        extraBubbleRef.current.style.transition = 'transform 450ms cubic-bezier(0.34, 1.15, 0.64, 1), opacity 200ms ease-out';
+      } else {
+        extraBubbleRef.current.style.transition = 'none';
+      }
+      extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
+      extraBubbleRef.current.style.opacity = '1';
+    } else {
+      extraBubbleRef.current.style.opacity = '0';
+    }
+  }, []);
+
+  // ซิงค์ตำแหน่ง Bubble เมื่อแผงควบคุมถูกเปิดออก โดยวางตำแหน่งทันทีที่เฟรมแรก (0ms)
+  useEffect(() => {
+    if (isMobileNavExpanded) {
+      updateExtraBubble(false);
+    }
+  }, [isMobileNavExpanded, updateExtraBubble]);
+
+  useEffect(() => {
+    if (!extraGridRef.current || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => updateExtraBubble(false));
+    ro.observe(extraGridRef.current);
+    return () => ro.disconnect();
+  }, [updateExtraBubble]);
+
+  // ควบคุมความสูงและการลากเลื่อน (Touch Dragging) แผงควบคุมตามนิ้วมือแบบ Real-time 60/120fps
+  const navSheetRef = useRef(null);
+  const [navSheetNode, setNavSheetNode] = useState(null);
+  const setNavSheetRef = useCallback((node) => {
+    navSheetRef.current = node;
+    setNavSheetNode(node);
+  }, []);
+  const isDraggingRef = useRef(false);
+  const navBackdropRef = useRef(null);
+  const extraContentRef = useRef(null);
+  const [extraHeight, setExtraHeight] = useState(200);
+  const extraHeightRef = useRef(200);
+  const isExpandedRef = useRef(isMobileNavExpanded);
+  isExpandedRef.current = isMobileNavExpanded;
+  const navCollapseTimerRef = useRef(null);
+  const navPageSwitchTimerRef = useRef(null);
+
+  // นำทางไปยังแท็บที่เลือก โดยปล่อยให้วงกลม Liquid Bubble เลื่อนไปหาไอคอนเป้าหมายให้เห็นอนิเมชั่นอย่างชัดเจนก่อน แล้วจึงค่อยๆ พับเก็บแผงควบคุมลง
+  const handleNavSelect = useCallback((tabId, clickedElement) => {
+    if (navCollapseTimerRef.current) {
+      clearTimeout(navCollapseTimerRef.current);
+      navCollapseTimerRef.current = null;
+    }
+    if (navPageSwitchTimerRef.current) {
+      clearTimeout(navPageSwitchTimerRef.current);
+      navPageSwitchTimerRef.current = null;
+    }
+
+    if (tabId === currentTab) {
+      if (isMobileNavExpanded) {
+        setIsMobileNavExpanded(false);
+      }
+      return;
+    }
+
+    // 1. ตอบสนอง UI ทันที 0ms: ให้วงกลมสีฟ้าเริ่มเลื่อนและไฮไลต์ไอคอนทันที
+    setNavActiveTab(tabId);
+
+    // 2. ถ้าเป็นแท็บในแถวเพิ่มเติม (4 คอลัมน์): เคลื่อน Bubble ทันทีตั้งแต่เฟรมแรก (0ms) ด้วยพิกัด layout ของปุ่ม
+    const isOtherTab = otherMobileNavItems.some(item => item.id === tabId);
+    if (isOtherTab && extraGridRef.current && extraBubbleRef.current) {
+      const btn = clickedElement || extraGridRef.current.querySelector(`[data-tab-id="${tabId}"]`);
+      if (btn) {
+        const iconEl = btn.querySelector('.extra-nav-icon');
+        const x = btn.offsetLeft + (iconEl ? iconEl.offsetLeft : (btn.offsetWidth - 48) / 2);
+        const y = btn.offsetTop + (iconEl ? iconEl.offsetTop : 4);
+        const wasHidden = extraBubbleRef.current.style.opacity === '0' || !extraBubbleRef.current.style.opacity;
+        if (wasHidden) {
+          extraBubbleRef.current.style.transition = 'none';
+          extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(0.6)`;
+          extraBubbleRef.current.style.opacity = '0';
+          void extraBubbleRef.current.offsetHeight;
+          extraBubbleRef.current.style.transition = 'transform 350ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 200ms ease-out';
+          extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
+          extraBubbleRef.current.style.opacity = '1';
+        } else {
+          extraBubbleRef.current.style.transition = 'transform 450ms cubic-bezier(0.34, 1.15, 0.64, 1), opacity 200ms ease-out';
+          extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
+          extraBubbleRef.current.style.opacity = '1';
+        }
+      }
+    } else if (extraBubbleRef.current) {
+      extraBubbleRef.current.style.opacity = '0';
+    }
+
+    // 3. ปล่อยให้วงกลมสีฟ้าแล่นสไลด์แบบ 60 FPS อย่างลื่นไหลเต็มตาก่อนสลับหน้าจริง
+    if (isMobileNavExpanded) {
+      // สลับหน้าจริงเมื่อ Bubble วิ่งเสร็จเรียบร้อย (~300ms)
+      navPageSwitchTimerRef.current = setTimeout(() => {
+        handleTabClick(tabId);
+        navPageSwitchTimerRef.current = null;
+      }, 300);
+
+      // เริ่มพับเก็บแผงควบคุมลงอย่างนุ่มนวลที่ 420ms
+      navCollapseTimerRef.current = setTimeout(() => {
+        setIsMobileNavExpanded(false);
+        navCollapseTimerRef.current = null;
+      }, 420);
+    } else {
+      // สำหรับเมนูหลัก 5 ปุ่ม: ให้วงกลมสีฟ้าเริ่มแล่นสไลด์ก่อน 180ms ก่อนเริ่มเรนเดอร์หน้าใหม่ เพื่อความนุ่มนวลเหมือนเดิม 100%
+      navPageSwitchTimerRef.current = setTimeout(() => {
+        React.startTransition(() => {
+          handleTabClick(tabId);
+        });
+        navPageSwitchTimerRef.current = null;
+      }, 180);
+    }
+  }, [handleTabClick, isMobileNavExpanded, currentTab, otherMobileNavItems]);
+
+  useEffect(() => {
+    return () => {
+      if (navCollapseTimerRef.current) clearTimeout(navCollapseTimerRef.current);
+      if (navPageSwitchTimerRef.current) clearTimeout(navPageSwitchTimerRef.current);
+    };
+  }, []);
+
+  // คำนวณความสูงจริงของเมนูแถวเพิ่มเติม (4 คอลัมน์) โดยใช้ ResizeObserver เพื่อความแม่นยำสูงสุด
+  useEffect(() => {
+    const updateH = () => {
+      let newH = 0;
+      if (extraContentRef.current) {
+        const h = extraContentRef.current.offsetHeight;
+        if (h > 0) newH = h;
+      }
+      if (newH === 0 && otherMobileNavItems.length > 0) {
+        const rows = Math.ceil(otherMobileNavItems.length / 4);
+        newH = rows * 76 + 16;
+      }
+      extraHeightRef.current = newH;
+      setExtraHeight(prev => (prev === newH ? prev : newH));
+    };
+
+    updateH();
+    if (extraContentRef.current && typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(updateH);
+      ro.observe(extraContentRef.current);
+      return () => ro.disconnect();
+    }
+  }, [otherMobileNavItems]);
+
+  // ซิงค์สถานะการเปิด/ปิด (Visual Style Sync) ระหว่างแผงควบคุมและ Backdrop ให้ตรงกัน 100% เสมอ ป้องกันอาการบั๊กภาพค้างหรือไม่เบลอ
+  useEffect(() => {
+    if (!navSheetRef.current || isDraggingRef.current) return;
+    const H = extraHeightRef.current || extraHeight || 250;
+
+    navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
+
+    if (isMobile && !showMobileBars && !isMobileNavExpanded) {
+      navSheetRef.current.style.transform = 'translateY(115%)';
+    } else if (hasMoreNavItems && !isMobileNavExpanded) {
+      navSheetRef.current.style.transform = `translateY(${H}px)`;
+    } else {
+      navSheetRef.current.style.transform = 'translateY(0px)';
+    }
+
+    if (navBackdropRef.current) {
+      navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
+      navBackdropRef.current.style.opacity = isMobileNavExpanded ? '1' : '0';
+      navBackdropRef.current.style.pointerEvents = isMobileNavExpanded ? 'auto' : 'none';
+    }
+
+    if (extraContentRef.current) {
+      extraContentRef.current.style.transition = 'opacity 320ms ease-out';
+      extraContentRef.current.style.opacity = isMobileNavExpanded ? '1' : '0';
+      extraContentRef.current.style.pointerEvents = isMobileNavExpanded ? 'auto' : 'none';
+    }
+  }, [isMobileNavExpanded, extraHeight, hasMoreNavItems, showMobileBars, isMobile]);
+
+  // ระบบ Interactive Dragging รูดตามนิ้วมือแบบ Real-time เหมือน Control Center / Quick Panel
+  useEffect(() => {
+    const el = navSheetNode;
+    if (!el || !hasMoreNavItems) return;
+
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let touchStartTime = 0;
+    let isDraggingTouch = false;
+
+    // --- 1. TOUCH EVENTS (สำหรับโทรศัพท์มือถือ / แท็บเล็ต) ---
+    const handleTouchStart = (e) => {
+      if (e.touches.length !== 1) return;
+      if (navCollapseTimerRef.current) {
+        clearTimeout(navCollapseTimerRef.current);
+        navCollapseTimerRef.current = null;
+      }
+      touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+      touchStartTime = Date.now();
+      isDraggingTouch = false;
+    };
+
+    const handleTouchMove = (e) => {
+      if (e.touches.length !== 1) return;
+      const touchY = e.touches[0].clientY;
+      const touchX = e.touches[0].clientX;
+      const deltaY = touchY - touchStartY;
+      const deltaX = touchX - touchStartX;
+
+      if (!isDraggingTouch) {
+        // ต้องขยับเกิน 8px และเน้นไปทางแนวตั้งเท่านั้น จึงจะเริ่มการลากแผงควบคุม (Intentional Drag)
+        if (Math.abs(deltaY) < 8) return;
+        if (Math.abs(deltaX) > Math.abs(deltaY)) return; // ปัดแนวนอน ไม่ใช่การลากแผงนี้
+
+        isDraggingTouch = true;
+        isDraggingRef.current = true;
+        el.style.transition = 'none';
+        if (navBackdropRef.current) navBackdropRef.current.style.transition = 'none';
+        if (extraContentRef.current) extraContentRef.current.style.transition = 'none';
+      }
+
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
+      const H = extraHeightRef.current || extraHeight || 200;
+      let targetTranslateY = 0;
+
+      if (!isExpandedRef.current) {
+        // เริ่มจากพับเก็บ: รูดขึ้น deltaY เป็นลบ (จำกัดไม่ให้เกิน 0 เด็ดขาด ห้ามลอยจนเห็นช่องว่างด้านล่าง)
+        if (deltaY <= 0) {
+          targetTranslateY = Math.max(0, H + deltaY);
+        } else {
+          // รูดลงขณะพับเก็บอยู่ -> มีแรงต้าน Rubber-band เล็กน้อย
+          targetTranslateY = H + deltaY * 0.15;
+        }
+      } else {
+        // เริ่มจากเปิดขยาย: รูดลง deltaY เป็นบวก (จำกัดไม่ให้เกิน H)
+        if (deltaY >= 0) {
+          targetTranslateY = Math.min(H, deltaY);
+        } else {
+          // ถ้ารูดขึ้นขณะเปิดขยายอยู่แล้ว -> ห้ามลอยขยับขึ้นเด็ดขาด ล็อกที่ 0 ทันที
+          targetTranslateY = 0;
+        }
+      }
+
+      el.style.transform = `translateY(${targetTranslateY}px)`;
+
+      if (H > 0) {
+        const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
+        if (navBackdropRef.current) {
+          navBackdropRef.current.style.opacity = progress.toFixed(3);
+          navBackdropRef.current.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+        }
+        if (extraContentRef.current) {
+          extraContentRef.current.style.opacity = progress.toFixed(3);
+          extraContentRef.current.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
+        }
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (!isDraggingTouch) {
+        // เป็นเพียงการแตะเลือกเมนู (Clean Tap) -> ไม่แตะต้อง transform หรือ state ปล่อยให้ onClick ของปุ่มทำงานอย่างสมบูรณ์
+        return;
+      }
+      isDraggingTouch = false;
+      isDraggingRef.current = false;
+
+      const endY = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : touchStartY;
+      const totalDeltaY = endY - touchStartY;
+      const elapsed = Math.max(1, Date.now() - touchStartTime);
+      const velocityY = totalDeltaY / elapsed;
+
+      const H = extraHeightRef.current || extraHeight || 200;
+      const wasExpanded = isExpandedRef.current;
+      let shouldExpand = wasExpanded;
+
+      if (!wasExpanded) {
+        // ต้องการเปิด: ต้องรูดขึ้นเกิน 25px หรือสะบัดนิ้วขึ้นเร็วโดยมีการเคลื่อนที่ขึ้นเกิน 10px
+        if (totalDeltaY < -25 || (totalDeltaY < -10 && velocityY < -0.3)) {
+          shouldExpand = true;
+        }
+      } else {
+        // ต้องการปิด: ต้องรูดลงเกิน 25px หรือสะบัดนิ้วลงเร็วโดยมีการเคลื่อนที่ลงเกิน 10px
+        if (totalDeltaY > 25 || (totalDeltaY > 10 && velocityY > 0.3)) {
+          shouldExpand = false;
+        }
+      }
+
+      // ป้องกัน click event ทะลุไปโดนปุ่มใต้ปลายนิ้วขณะปล่อยการลาก
+      const preventClick = (ce) => {
+        ce.stopPropagation();
+        ce.preventDefault();
+      };
+      window.addEventListener('click', preventClick, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', preventClick, { capture: true }), 150);
+
+      const finalTranslateY = shouldExpand ? 0 : H;
+      el.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
+      el.style.transform = `translateY(${finalTranslateY}px)`;
+
+      if (navBackdropRef.current) {
+        navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
+        navBackdropRef.current.style.opacity = shouldExpand ? '1' : '0';
+        navBackdropRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
+      }
+      if (extraContentRef.current) {
+        extraContentRef.current.style.transition = 'opacity 320ms ease-out';
+        extraContentRef.current.style.opacity = shouldExpand ? '1' : '0';
+        extraContentRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
+      }
+
+      isExpandedRef.current = shouldExpand;
+      setIsMobileNavExpanded(shouldExpand);
+    };
+
+    // --- 2. MOUSE EVENTS (สำหรับคอมพิวเตอร์ PC / แล็ปท็อป เวลาย่อขนาดหน้าจอ) ---
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return; // คลิกซ้ายเท่านั้น
+      if (navCollapseTimerRef.current) {
+        clearTimeout(navCollapseTimerRef.current);
+        navCollapseTimerRef.current = null;
+      }
+
+      const mStartY = e.clientY;
+      const mStartTime = Date.now();
+      let isDraggingMouse = false;
+
+      const handleMouseMove = (me) => {
+        const deltaY = me.clientY - mStartY;
+        if (!isDraggingMouse) {
+          if (Math.abs(deltaY) < 6) return;
+          isDraggingMouse = true;
+          isDraggingRef.current = true;
+          el.style.transition = 'none';
+          if (navBackdropRef.current) navBackdropRef.current.style.transition = 'none';
+          if (extraContentRef.current) extraContentRef.current.style.transition = 'none';
+        }
+
+        const H = extraHeightRef.current || extraHeight || 200;
+        let targetTranslateY = 0;
+
+        if (!isExpandedRef.current) {
+          if (deltaY <= 0) {
+            targetTranslateY = Math.max(0, H + deltaY);
+          } else {
+            targetTranslateY = H + deltaY * 0.15;
+          }
+        } else {
+          if (deltaY >= 0) {
+            targetTranslateY = Math.min(H, deltaY);
+          } else {
+            targetTranslateY = 0;
+          }
+        }
+
+        el.style.transform = `translateY(${targetTranslateY}px)`;
+
+        if (H > 0) {
+          const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
+          if (navBackdropRef.current) {
+            navBackdropRef.current.style.opacity = progress.toFixed(3);
+            navBackdropRef.current.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+          }
+          if (extraContentRef.current) {
+            extraContentRef.current.style.opacity = progress.toFixed(3);
+            extraContentRef.current.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
+          }
+        }
+      };
+
+      const handleMouseUp = (me) => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+
+        if (!isDraggingMouse) {
+          return;
+        }
+        isDraggingMouse = false;
+        isDraggingRef.current = false;
+
+        const totalDeltaY = me.clientY - mStartY;
+        const elapsed = Math.max(1, Date.now() - mStartTime);
+        const velocityY = totalDeltaY / elapsed;
+
+        const H = extraHeightRef.current || extraHeight || 200;
+        const wasExpanded = isExpandedRef.current;
+        let shouldExpand = wasExpanded;
+
+        if (!wasExpanded) {
+          if (totalDeltaY < -25 || (totalDeltaY < -10 && velocityY < -0.3)) {
+            shouldExpand = true;
+          }
+        } else {
+          if (totalDeltaY > 25 || (totalDeltaY > 10 && velocityY > 0.3)) {
+            shouldExpand = false;
+          }
+        }
+
+        // ป้องกัน click event ทะลุไปโดนปุ่มใต้เมาส์ขณะปล่อยการลาก
+        const preventClick = (ce) => {
+          ce.stopPropagation();
+          ce.preventDefault();
+        };
+        window.addEventListener('click', preventClick, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener('click', preventClick, { capture: true }), 150);
+
+        const finalTranslateY = shouldExpand ? 0 : H;
+        el.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
+        el.style.transform = `translateY(${finalTranslateY}px)`;
+
+        if (navBackdropRef.current) {
+          navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
+          navBackdropRef.current.style.opacity = shouldExpand ? '1' : '0';
+          navBackdropRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
+        }
+        if (extraContentRef.current) {
+          extraContentRef.current.style.transition = 'opacity 320ms ease-out';
+          extraContentRef.current.style.opacity = shouldExpand ? '1' : '0';
+          extraContentRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
+        }
+
+        isExpandedRef.current = shouldExpand;
+        setIsMobileNavExpanded(shouldExpand);
+      };
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    el.addEventListener('touchend', handleTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+    el.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEnd);
+      el.removeEventListener('touchcancel', handleTouchEnd);
+      el.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [navSheetNode, hasMoreNavItems, extraHeight]);
+
+
 
   const isCustomerDisplayRoute = location.pathname === '/customer-display' || location.pathname === '/display' || Boolean(getUrlParam('customer_display'));
   if (isCustomerDisplayRoute) {
@@ -3105,12 +3652,11 @@ export default function App() {
   }
 
   return (
-    <div className="w-full h-screen bg-slate-50 flex relative overflow-hidden text-slate-800">
+    <div className={`w-full h-full h-[100dvh] max-h-[100dvh] bg-slate-50 flex relative overflow-hidden text-slate-800 ${isMobile && !showMobileBars ? 'mobile-bars-hidden' : 'mobile-bars-visible'}`}>
       <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-sky-200/40 blur-[100px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-200/30 blur-[100px] pointer-events-none z-0"></div>
 
-      {/* แก้ไขกลับมาเป็น h-screen เพราะ 100dvh อาจทำให้หน้าจอยุบตัวบนบาง Browser */}
-      <div className="flex h-screen overflow-hidden overflow-x-hidden w-full max-w-full flex-col md:flex-row relative">
+      <div className={`flex h-full h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden w-full max-w-full flex-col md:flex-row relative ${isMobile && !showMobileBars ? 'mobile-bars-hidden' : 'mobile-bars-visible'}`}>
         
         {/* Backdrop สำหรับ Mobile เมื่อกางเมนู (ใช้ CSS Transition ธรรมดา ไม่กิน CPU) */}
         <div 
@@ -3389,7 +3935,13 @@ export default function App() {
         </aside>
         
         {/* --- Mobile Top Header --- */}
-        <header className={`md:hidden fixed top-0 left-0 right-0 flex items-center justify-between px-3.5 py-2.5 sm:px-5 sm:py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : '-translate-y-full'}`}>
+        <header 
+          className="mobile-top-header md:hidden fixed top-0 left-0 right-0 h-[61px] box-border flex items-center justify-between px-3.5 py-2.5 sm:px-5 sm:py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm"
+          style={{ 
+            transform: (isMobile && !showMobileBars) ? 'translateY(-61px)' : 'translateY(0px)', 
+            transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)' 
+          }}
+        >
           <div className="flex items-center gap-1.5 sm:gap-2.5">
             <button onClick={() => setIsSidebarExpanded(true)} className="w-10 h-10 flex items-center justify-center text-slate-500 active:scale-90 transition-transform">
               <div className="w-8 h-8 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-sky-500/30">
@@ -3482,10 +4034,12 @@ export default function App() {
         </header>
 
         {/* เพิ่ม ref={mainRef} ให้กล่องหลัก ปลด z-20 ออกเพื่อให้ Modal ทำงานอิสระ */}
-        <main id="main-scroll-container" ref={mainRef} className="flex-1 min-w-0 flex flex-col overflow-y-auto pb-24 md:pb-0 relative custom-scrollbar" style={{ overflowAnchor: 'none', '--mobile-header-offset': (isMobile && showMobileBars) ? '61px' : '0px' }}>
+        <main id="main-scroll-container" ref={mainRef} className={`flex-1 min-w-0 flex flex-col relative custom-scrollbar ${currentTab === 'pos' ? 'overflow-hidden pb-0' : 'overflow-y-auto pb-24 md:pb-0'}`} style={{ overflowAnchor: 'none', overscrollBehaviorY: 'auto', '--mobile-header-offset': (isMobile && showMobileBars) ? '61px' : '0px', '--mobile-pos-top': (isMobile && showMobileBars) ? '61px' : '0px', '--mobile-pos-bottom': (isMobile && showMobileBars) ? '64px' : '0px' }}>
           
-          {/* --- [FIX] ย้าย Spacer มาไว้ด้านในกล่อง Scroll แบบตายตัว ไม่ให้ Layout สั่นกระตุก --- */}
-          <div className="md:hidden shrink-0 w-full h-[61px] pointer-events-none"></div>
+          {/* --- [FIX] ย้าย Spacer มาไว้ด้านในกล่อง Scroll แบบตายตัว ไม่ให้ Layout สั่นกระตุก (ยกเว้นหน้าเต็มจออย่าง POS) --- */}
+          {currentTab !== 'pos' && (
+            <div className="md:hidden shrink-0 w-full h-[61px] pointer-events-none"></div>
+          )}
 
           {/* 🧪 Simulation Sandbox Mode Banner */}
           {isSimulationMode && (
@@ -3618,6 +4172,7 @@ export default function App() {
                         showToast={showToast}
                         callAppScript={callAppScript}
                         isGlobalLoading={isGlobalLoading}
+                        isMobile={isMobile}
                         showMobileBars={showMobileBars}
                         handlePrintReceipt={handlePrintReceipt}
                         integrationTokens={integrationTokens}
@@ -3794,44 +4349,155 @@ export default function App() {
             )}
           </div>
 
-          {/* ปรับแก้ Navbar มือถือ: Liquid Tab Bar Animation (Sliding Bubble) เพิ่มขอบมนด้านบน */}
-          <div className={`md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-[calc(max(0.5rem,env(safe-area-inset-bottom)))] pt-2 px-2 z-[45] transition-transform duration-300 ease-in-out ${showMobileBars ? 'translate-y-0' : 'translate-y-[120%]'}`}>
-            <div className="relative flex w-full max-w-sm mx-auto h-14">
-                {/* กล่องใส่ก้อน Bubble สีสันที่เลื่อนไปมา ปรับเวลาเป็น 500ms และใช้ ease-in-out เพื่อความนุ่มนวลสูงสุด (ไม่เด้งและไม่กระชาก) */}
-                <div 
-                  className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none transition-transform duration-500 ease-in-out" 
-                  style={{ 
-                    width: `calc(100% / ${mobileNavItems.length})`, // กว้าง 1 สล็อต
-                    transform: `translateX(calc(${activeNavIndex} * 100%))`, // เลื่อนไปตาม Index
-                    opacity: activeNavIndex !== -1 ? 1 : 0
-                  }} 
-                >
-                  {/* ตัวก้อนวงกลมจริง ๆ */}
-                  <div className="w-12 h-12 bg-gradient-to-tr from-sky-400 to-sky-600 rounded-full shadow-lg shadow-sky-500/40" />
-                </div>
-
-                {/* Nav Buttons: ปุ่มล่องหนอยู่ชั้นบนสุด (z-10) ไว้รับการกดคลิก */}
-                {mobileNavItems.map((item) => {
-                    const isActive = currentTab === item.id;
-                    return (
-                        <button 
-                            key={item.id} 
-                            onClick={() => handleTabClick(item.id)} 
-                            className={`relative z-10 flex-1 flex items-center justify-center transition-colors duration-500 ${isActive ? 'text-white' : 'text-slate-400 hover:text-sky-500'}`}
-                        >
-                            <item.icon 
-                                size={24} 
-                                strokeWidth={isActive ? 2.5 : 2} 
-                                /* ปรับแอนิเมชันของไอคอนให้ลื่นไหลสอดคล้องกับวงกลม */
-                                className={`transition-transform duration-500 ease-in-out ${isActive ? 'scale-110' : 'scale-100'}`}
-                            />
-                        </button>
-                    );
-                })}
-            </div>
-          </div>
         </main> 
 
+        {/* Backdrop Overlay เมื่อเลื่อนเปิดแถบเมนูเพิ่มเติม (วางไว้นอก <main> เพื่อความเสถียร 60fps และไม่กระพริบซ้อน) */}
+        {isMobile && hasMoreNavItems && (
+          <div 
+            ref={navBackdropRef}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[42] will-change-[opacity]"
+            style={{
+              opacity: isMobileNavExpanded ? 1 : 0,
+              pointerEvents: isMobileNavExpanded ? 'auto' : 'none',
+              transition: 'opacity 300ms ease-out'
+            }}
+            onClick={() => {
+              if (navCollapseTimerRef.current) {
+                clearTimeout(navCollapseTimerRef.current);
+                navCollapseTimerRef.current = null;
+              }
+              setIsMobileNavExpanded(false);
+            }}
+          />
+        )}
+
+        {/* ปรับแก้ Navbar มือถือ: Compact & Full เหมือนแบบเดิม พร้อม Expandable Quick Panel ดึงขึ้นเพื่อเลือกหน้าอื่น */}
+        <div 
+          ref={setNavSheetRef}
+          className="md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pt-1 pb-1.5 px-2 z-[45] transition-transform duration-300 ease-out select-none touch-none"
+          style={{
+            transform: isDraggingRef.current
+              ? undefined
+              : (isMobile && !showMobileBars && !isMobileNavExpanded)
+                ? 'translateY(115%)'
+                : hasMoreNavItems && !isMobileNavExpanded
+                  ? `translateY(${extraHeight}px)`
+                  : 'translateY(0px)'
+          }}
+        >
+          {/* Drag Handle Indicator (ขีดเส้นเรียบกะทัดรัด ไม่ดันความสูงของบาร์ให้หนาเทอะทะ) */}
+          {hasMoreNavItems && (
+            <div 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (navCollapseTimerRef.current) {
+                  clearTimeout(navCollapseTimerRef.current);
+                  navCollapseTimerRef.current = null;
+                }
+                setIsMobileNavExpanded(prev => !prev);
+              }}
+              className="w-full flex items-center justify-center pt-0 pb-0.5 cursor-grab active:cursor-grabbing select-none group touch-none"
+              aria-label={isMobileNavExpanded ? "พับเก็บเมนู" : "เปิดดูเมนูเพิ่มเติม"}
+              role="button"
+            >
+              <div className="w-8 h-1 rounded-full bg-slate-300/80 transition-transform duration-200 group-hover:scale-105" />
+            </div>
+          )}
+
+          {/* แถวที่ 1: 5 เมนูหลัก พร้อม Liquid Bubble กะทัดรัด สัดส่วนเต็ม กระชับ ไซส์เดิม 100% */}
+          <div className="relative flex w-full max-w-sm mx-auto h-14">
+              {/* กล่องใส่ก้อน Bubble สีสันที่เลื่อนไปมา ขนาด 48px (w-12 h-12) พร้อม Liquid Tab Bar Animation 500ms นุ่มนวล ไม่กระตุก */}
+              <div 
+                className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none will-change-transform" 
+                style={{ 
+                  width: `calc(100% / ${mobileNavItems.length})`,
+                  transform: `translateX(calc(${activeNavIndex !== -1 ? activeNavIndex : lastMainIndexRef.current} * 100%))`,
+                  opacity: activeNavIndex !== -1 ? 1 : 0,
+                  transition: 'transform 500ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease-in-out'
+                }} 
+              >
+                <div className="w-12 h-12 bg-gradient-to-tr from-sky-400 to-sky-600 rounded-full shadow-lg shadow-sky-500/40" />
+              </div>
+
+              {/* Nav Buttons: ปุ่มรับการกดคลิก ไอคอนขนาด 24px ชัดเจนเต็มตา */}
+              {mobileNavItems.map((item) => {
+                  const isActive = effectiveNavTab === item.id;
+                  return (
+                      <button 
+                          key={item.id} 
+                          data-tab-id={item.id}
+                          onClick={(e) => handleNavSelect(item.id, e.currentTarget)} 
+                          className={`relative z-10 flex-1 flex items-center justify-center transition-colors duration-500 ${isActive ? 'text-white' : 'text-slate-400 hover:text-sky-500'}`}
+                          title={item.label}
+                          aria-label={item.label}
+                      >
+                          <item.icon 
+                              size={24} 
+                              strokeWidth={isActive ? 2.5 : 2} 
+                              className={`transition-transform duration-500 ease-in-out ${isActive ? 'scale-110' : 'scale-100'}`}
+                          />
+                      </button>
+                  );
+              })}
+          </div>
+
+          {/* แถวที่เหลือ: เมนูเพิ่มเติม 4 คอลัมน์ ไอคอนใหญ่เท่าเมนูหลัก (w-12 h-12, size 24) ดูเป็นเนื้อเดียวกัน */}
+          {hasMoreNavItems && (
+            <div 
+              ref={extraContentRef}
+              className="w-full max-w-sm mx-auto pt-2 pb-[calc(max(1.25rem,env(safe-area-inset-bottom)))] transition-opacity duration-300"
+              style={{
+                opacity: isMobileNavExpanded ? 1 : 0,
+                pointerEvents: isMobileNavExpanded ? 'auto' : 'none'
+              }}
+            >
+              <div id="extra-mobile-nav-grid" ref={extraGridRef} className="grid grid-cols-4 gap-x-2 gap-y-2 px-1 relative">
+                {/* Sliding Liquid Bubble Indicator สำหรับเมนูแถวเพิ่มเติม (ขนาด w-12 h-12 เท่ากับเมนูหลัก 100%) */}
+                <div 
+                  ref={extraBubbleRef}
+                  className="absolute top-0 left-0 w-12 h-12 bg-gradient-to-tr from-sky-400 to-sky-600 rounded-full shadow-lg shadow-sky-500/40 pointer-events-none opacity-0 z-0"
+                  style={{
+                    willChange: 'transform'
+                  }}
+                />
+
+                {otherMobileNavItems.map((item) => {
+                  const isActive = effectiveNavTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      data-tab-id={item.id}
+                      data-active={isActive ? "true" : "false"}
+                      onClick={(e) => handleNavSelect(item.id, e.currentTarget)}
+                      className="flex flex-col items-center justify-center py-1 px-0.5 rounded-xl active:scale-95 transition-all text-center group relative z-10"
+                      aria-label={item.label}
+                      title={item.label}
+                    >
+                      <div className="extra-nav-icon w-12 h-12 flex items-center justify-center transition-colors duration-300">
+                        <item.icon 
+                          size={24} 
+                          strokeWidth={isActive ? 2.5 : 2} 
+                          className={`transition-all duration-300 ease-in-out ${
+                            isActive ? 'scale-110 text-white' : 'scale-100 text-slate-400 group-hover:text-sky-500'
+                          }`}
+                        />
+                      </div>
+                      <span className={`text-[11px] font-light kanit-text leading-tight mt-1 text-center truncate max-w-[76px] line-clamp-1 px-0.5 transition-colors duration-300 ${
+                        isActive ? 'text-sky-600 font-medium' : 'text-slate-500 group-hover:text-slate-700'
+                      }`}>
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* แผ่นพื้นหลังส่วนขยายด้านล่าง (Bottom Skirt) เพื่อปิดช่องว่าง 100% ไม่ให้เห็นขอบล่างทะลุเด็ดขาด */}
+          <div className="absolute top-full left-0 right-0 h-96 bg-white pointer-events-none" />
+        </div>
       </div>
 
       <ToastContainer />
@@ -4047,59 +4713,91 @@ export default function App() {
 
         /* --- CSS-Based 60FPS Sticky Header Animations --- */
         :root {
-          --scrolled-header-h: 52px;
+          --scrolled-header-h: 60px;
+          --header-p: 0;
         }
         @media (min-width: 640px) {
           :root {
-            --scrolled-header-h: 60px;
+            --scrolled-header-h: 64px;
           }
         }
 
         .sticky-header-bg { 
-          transition: background-color 0.3s ease, border-color 0.3s ease, backdrop-filter 0.3s ease, height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+          min-height: calc(var(--scrolled-header-h, 60px) + (1 - var(--header-p, 0)) * 48px);
+          height: auto;
+          box-sizing: border-box !important;
+          padding-top: calc(0.5rem + (1 - var(--header-p, 0)) * 0.5rem);
+          padding-bottom: calc(0.5rem + (1 - var(--header-p, 0)) * 0.5rem);
+          background-color: rgba(255, 255, 255, calc(var(--header-p, 0) * 0.90)); 
+          backdrop-filter: blur(calc(var(--header-p, 0) * 16px)); 
+          -webkit-backdrop-filter: blur(calc(var(--header-p, 0) * 16px)); 
           border: 1px solid transparent !important; 
-          border-color: transparent !important; 
-          border-top-color: transparent !important; 
-          border-bottom-color: transparent !important; 
-          border-left-color: transparent !important; 
-          border-right-color: transparent !important; 
-          background-color: rgba(255, 255, 255, 0); 
-          box-shadow: none !important; 
+          border-bottom-color: rgba(226, 232, 240, calc(var(--header-p, 0) * 0.8)) !important; 
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, calc(var(--header-p, 0) * 0.02)) !important; 
           outline: none !important; 
-          will-change: background-color, backdrop-filter; 
+          will-change: min-height, background-color, backdrop-filter; 
+        }
+        @media (min-width: 640px) {
+          .sticky-header-bg {
+            min-height: calc(var(--scrolled-header-h, 64px) + (1 - var(--header-p, 0)) * 36px);
+            padding-top: calc(0.5rem + (1 - var(--header-p, 0)) * 0.5rem);
+            padding-bottom: calc(0.5rem + (1 - var(--header-p, 0)) * 0.5rem);
+          }
         }
         .is-scrolled .sticky-header-bg { 
-          height: var(--scrolled-header-h, 52px) !important;
+          height: var(--scrolled-header-h, 60px) !important;
+          min-height: var(--scrolled-header-h, 60px) !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
           box-sizing: border-box !important;
           background-color: rgba(255, 255, 255, 0.90) !important; 
           backdrop-filter: blur(16px) !important; 
           -webkit-backdrop-filter: blur(16px) !important; 
-          border: 1px solid transparent !important; 
-          border-color: transparent !important; 
-          border-top-color: transparent !important; 
-          border-bottom-color: transparent !important; 
-          border-left-color: transparent !important; 
-          border-right-color: transparent !important; 
-          box-shadow: none !important; 
+          border-bottom-color: rgba(226, 232, 240, 0.8) !important; 
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02) !important; 
           outline: none !important; 
         }
         @media (min-width: 640px) {
           .is-scrolled .sticky-header-bg {
-            height: var(--scrolled-header-h, 60px) !important;
+            height: var(--scrolled-header-h, 64px) !important;
+            min-height: var(--scrolled-header-h, 64px) !important;
           }
         }
 
-        .header-spacer { transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); height: 0.75rem; }
-        @media (min-width: 640px) { .header-spacer { height: 1rem; } }
+        .header-spacer { 
+          height: calc(0.75rem - var(--header-p, 0) * 0.75rem); 
+        }
+        @media (min-width: 640px) { 
+          .header-spacer { 
+            height: calc(1rem - var(--header-p, 0) * 1rem); 
+          } 
+        }
         .is-scrolled .header-spacer { height: 0px !important; }
 
         .sticky-header-inner { 
-          transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-          padding-top: 1rem; 
-          padding-bottom: 1rem; 
-          will-change: padding, height; 
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box !important;
+          padding-top: calc(0.5rem - var(--header-p, 0) * 0.5rem); 
+          padding-bottom: calc(0.5rem - var(--header-p, 0) * 0.5rem); 
+          height: 100%;
+          display: flex;
+          align-items: center;
+          will-change: padding; 
         }
-        @media (min-width: 768px) { .sticky-header-inner { padding-top: 2rem; } }
+        .sticky-header-inner > *:first-child {
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+        }
+        .sticky-header-inner > *:last-child {
+          flex-shrink: 0 !important;
+        }
+        @media (min-width: 768px) { 
+          .sticky-header-inner { 
+            padding-top: calc(1rem - var(--header-p, 0) * 1rem); 
+            padding-bottom: calc(1rem - var(--header-p, 0) * 1rem); 
+          } 
+        }
         .is-scrolled .sticky-header-inner { 
           height: 100% !important; 
           min-height: 100% !important; 
@@ -4111,82 +4809,120 @@ export default function App() {
         }
 
         .sticky-header-title { 
-          transition: font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), line-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-          font-size: 1.5rem; 
-          line-height: 2rem; 
+          font-size: calc(1.1875rem + (1 - var(--header-p, 0)) * 0.125rem); 
+          line-height: calc(1.6rem + (1 - var(--header-p, 0)) * 0.2rem); 
           margin: 0; 
-          will-change: font-size, line-height; 
-        }
-        @media (min-width: 640px) { .sticky-header-title { font-size: 1.875rem; line-height: 2.25rem; } }
-        .is-scrolled .sticky-header-title { 
-          font-size: 1.125rem; 
-          line-height: 1.5rem; 
           white-space: nowrap; 
           overflow: hidden; 
           text-overflow: ellipsis; 
+          will-change: font-size, line-height; 
         }
-        @media (min-width: 640px) { .is-scrolled .sticky-header-title { font-size: 1.375rem; line-height: 1.875rem; } }
+        @media (min-width: 640px) { 
+          .sticky-header-title { 
+            font-size: calc(1.375rem + (1 - var(--header-p, 0)) * 0.5rem); 
+            line-height: calc(1.875rem + (1 - var(--header-p, 0)) * 0.375rem); 
+          } 
+        }
+        .is-scrolled .sticky-header-title { 
+          font-size: 1.1875rem !important; 
+          line-height: 1.6rem !important; 
+          white-space: nowrap !important; 
+          overflow: hidden !important; 
+          text-overflow: ellipsis !important; 
+        }
+        @media (min-width: 640px) { 
+          .is-scrolled .sticky-header-title { 
+            font-size: 1.375rem !important; 
+            line-height: 1.875rem !important; 
+          } 
+        }
 
         .sticky-header-desc { 
-          transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease; 
-          opacity: 1; 
-          max-height: 50px; 
-          margin-top: 0.25rem; 
+          opacity: calc(max(0, 1 - var(--header-p, 0) * 1.4)); 
+          max-height: calc(max(0px, (1 - var(--header-p, 0) * 1.3) * 64px)); 
+          line-height: 1.35rem; 
+          font-size: 0.875rem; 
+          margin-top: calc(max(0px, (1 - var(--header-p, 0) * 1.2) * 0.25rem)); 
+          transform: translateY(calc(var(--header-p, 0) * -6px));
           overflow: hidden; 
-          will-change: opacity, max-height, margin-top; 
+          pointer-events: none;
+          will-change: opacity, transform, max-height; 
         }
         .is-scrolled .sticky-header-desc { 
-          opacity: 0; 
-          max-height: 0; 
-          margin-top: 0; 
-          display: none; 
+          opacity: 0 !important; 
+          max-height: 0 !important; 
+          margin-top: 0 !important; 
+          margin-bottom: 0 !important; 
+          pointer-events: none !important; 
         }
 
         .sticky-header-btn { 
-          transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-          padding: 0.75rem; 
-          will-change: padding, font-size, height; 
-        }
-        @media (min-width: 640px) { .sticky-header-btn { padding: 0.75rem 1.5rem; font-size: 1rem; } }
-        .is-scrolled .sticky-header-btn { 
-          padding: 0.375rem 0.625rem; 
-          font-size: 0.8125rem; 
-          height: 36px; 
+          height: calc(40px + (1 - var(--header-p, 0)) * 4px); 
+          padding: calc(0.425rem + (1 - var(--header-p, 0)) * 0.125rem) calc(0.625rem + (1 - var(--header-p, 0)) * 0.125rem); 
+          font-size: calc(0.85rem + (1 - var(--header-p, 0)) * 0.05rem); 
           display: inline-flex; 
           align-items: center; 
           justify-content: center; 
+          flex-shrink: 0;
+          will-change: padding, font-size, height; 
+        }
+        @media (min-width: 640px) { 
+          .sticky-header-btn { 
+            padding: calc(0.5rem + (1 - var(--header-p, 0)) * 0.25rem) calc(1.25rem - var(--header-p, 0) * 0.25rem); 
+            font-size: calc(0.9375rem + (1 - var(--header-p, 0)) * 0.0625rem); 
+            height: calc(44px + (1 - var(--header-p, 0)) * 4px); 
+          } 
+        }
+        .is-scrolled .sticky-header-btn { 
+          padding: 0.425rem 0.625rem !important; 
+          font-size: 0.85rem !important; 
+          height: 40px !important; 
+          display: inline-flex !important; 
+          align-items: center !important; 
+          justify-content: center !important; 
+          flex-shrink: 0 !important;
         }
         @media (min-width: 640px) { 
           .is-scrolled .sticky-header-btn { 
-            padding: 0.5rem 1rem; 
-            font-size: 0.875rem; 
-            height: 40px; 
+            padding: 0.5rem 1.25rem !important; 
+            font-size: 0.9375rem !important; 
+            height: 44px !important; 
           } 
         }
         .sticky-header-btn svg { 
-          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-          width: 20px; 
-          height: 20px; 
+          width: calc(18px + (1 - var(--header-p, 0)) * 2px); 
+          height: calc(18px + (1 - var(--header-p, 0)) * 2px); 
           will-change: width, height; 
         }
-        .is-scrolled .sticky-header-btn svg { width: 16px; height: 16px; }
-        @media (min-width: 640px) { .is-scrolled .sticky-header-btn svg { width: 18px; height: 18px; } }
+        @media (min-width: 640px) { 
+          .sticky-header-btn svg { 
+            width: calc(20px - var(--header-p, 0) * 1px); 
+            height: calc(20px - var(--header-p, 0) * 1px); 
+          } 
+        }
+        .is-scrolled .sticky-header-btn svg { width: 18px !important; height: 18px !important; }
+        @media (min-width: 640px) { .is-scrolled .sticky-header-btn svg { width: 19px !important; height: 19px !important; } }
 
         .dash-date-badge { 
-          transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-          padding: 0.375rem 0.75rem; 
-          font-size: 0.875rem; 
+          padding: calc(0.375rem - var(--header-p, 0) * 0.125rem) calc(0.75rem - var(--header-p, 0) * 0.25rem); 
+          font-size: calc(0.875rem - var(--header-p, 0) * 0.125rem); 
+          height: calc(38px - var(--header-p, 0) * 6px);
+          display: inline-flex;
+          align-items: center;
           will-change: padding, font-size; 
         }
-        @media (min-width: 640px) { .dash-date-badge { padding: 0.5rem 1rem; font-size: 1rem; } }
-        .dash-date-badge svg { 
-          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-          width: 18px; 
-          height: 18px; 
-          will-change: width, height; 
+        @media (min-width: 640px) { 
+          .dash-date-badge { 
+            padding: calc(0.5rem - var(--header-p, 0) * 0.125rem) calc(1rem - var(--header-p, 0) * 0.25rem); 
+            font-size: 1rem; 
+          } 
         }
-        .is-scrolled .dash-date-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; height: 32px; display: inline-flex; align-items: center; }
-        .is-scrolled .dash-date-badge svg { width: 14px; height: 14px; }
+        .dash-date-badge svg { 
+          width: calc(18px - var(--header-p, 0) * 4px); 
+          height: calc(18px - var(--header-p, 0) * 4px); 
+        }
+        .is-scrolled .dash-date-badge { font-size: 0.75rem !important; padding: 0.25rem 0.5rem !important; height: 32px !important; display: inline-flex !important; align-items: center !important; }
+        .is-scrolled .dash-date-badge svg { width: 14px !important; height: 14px !important; }
 
         .sticky-filter-inner { 
           transition: width 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease, backdrop-filter 0.3s ease; 
@@ -4231,13 +4967,69 @@ export default function App() {
         }
         @media (min-width: 1536px) { .is-scrolled .sticky-filter-inner { padding-left: 3rem !important; padding-right: 3rem !important; } }
 
-        /* --- [NEW] CSS คำนวณระยะกาง Filter เชื่อมต่อแนบสนิทกับขอบล่าง Header แบบ 0px Gap --- */
-        .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 52px)); }
-        @media (min-width: 640px) { .sticky-filter-appt { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 60px)); } }
+        /* --- [PERFECT 0px GAP] Synchronized GPU-accelerated Header & Filter Docking --- */
+        @media (max-width: 767px) {
+          /* Lock sticky top to 61px on mobile (matching 61px mobile header) with zero layout thrashing */
+          .page-sticky-header,
+          div:has(> .sticky-header-bg),
+          div[style*="--mobile-header-offset"] {
+            top: 61px !important;
+          }
 
-        /* สไตล์เพิ่มเติมเมื่อกาง Filter ออก */
-        .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 52px)); z-index: 40; }
-        @media (min-width: 640px) { .sticky-filter-appt.filter-expanded { top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 60px)); } }
+          /* Filter sticky positioning: strictly driven by --mobile-header-offset and scrolled header height without layout jumping */
+          .sticky-filter-appt {
+            top: calc(var(--mobile-header-offset, 0px) + var(--scrolled-header-h, 60px)) !important;
+            transform: none !important;
+            transition: top 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+          }
+          .sticky-filter-appt.filter-expanded {
+            z-index: 40 !important;
+          }
+
+          /* Hardware-accelerated GPU transitions running on the compositor thread for mobile headers */
+          header.mobile-top-header,
+          .page-sticky-header,
+          div:has(> .sticky-header-bg),
+          div[style*="--mobile-header-offset"] {
+            transform: translateY(0px);
+            transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+            will-change: transform;
+          }
+
+          /* Lockstep slide-up when scrolling down: 0px gap at all times */
+          .mobile-bars-hidden header.mobile-top-header,
+          .mobile-bars-hidden .page-sticky-header,
+          .mobile-bars-hidden div:has(> .sticky-header-bg),
+          .mobile-bars-hidden div[style*="--mobile-header-offset"] {
+            transform: translateY(-61px) !important;
+          }
+
+          .mobile-bars-visible header.mobile-top-header,
+          .mobile-bars-visible .page-sticky-header,
+          .mobile-bars-visible div:has(> .sticky-header-bg),
+          .mobile-bars-visible div[style*="--mobile-header-offset"] {
+            transform: translateY(0px) !important;
+          }
+        }
+
+        @media (min-width: 768px) {
+          .page-sticky-header,
+          div:has(> .sticky-header-bg),
+          div[style*="--mobile-header-offset"] {
+            top: 0px !important;
+            transform: none !important;
+            transition: none !important;
+          }
+          .sticky-filter-appt {
+            top: var(--scrolled-header-h, 64px) !important;
+            transform: none !important;
+            transition: none !important;
+          }
+          .sticky-filter-appt.filter-expanded {
+            top: var(--scrolled-header-h, 64px) !important;
+            z-index: 40;
+          }
+        }
 
         /* --- Executive Dashboard Sticky Header (Opaque & Clean) --- */
         .exec-sticky-header {

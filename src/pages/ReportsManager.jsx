@@ -145,14 +145,20 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
   }, [posHistoryData]);
 
   // 🌟 ดึงสรุปจำนวนเอกสารตรงจาก Server (0 Egress / High Performance HEAD Count)
+  const callAppScriptRef = useRef(callAppScript);
+  callAppScriptRef.current = callAppScript;
+
   useEffect(() => {
     let isMounted = true;
-    setIsStatsLoading(true);
+    // แสดง Skeleton pulse เฉพาะตอนโหลดครั้งแรกที่ยังไม่มีข้อมูล ป้องกันตัวเลขกระพริบเมื่อเปิด/ปิดแถบเมนู
+    if (!docServerStats) {
+      setIsStatsLoading(true);
+    }
 
     const loadStats = async () => {
       try {
-        if (callAppScript) {
-          const res = await callAppScript('GET_REPORT_DOCUMENT_STATS', 'System', { branchId: currentBranch });
+        if (callAppScriptRef.current) {
+          const res = await callAppScriptRef.current('GET_REPORT_DOCUMENT_STATS', 'System', { branchId: currentBranch });
           if (isMounted && res?.status === 'success' && res.data) {
             setDocServerStats(res.data);
             setIsStatsLoading(false);
@@ -167,7 +173,7 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
 
     loadStats();
     return () => { isMounted = false; };
-  }, [currentBranch, callAppScript]);
+  }, [currentBranch]);
 
   // 1. รวบรวมและจัดเตรียมข้อมูลเอกสารทั้งหมด (Normalize Data) - OPTIMIZED
   const allDocuments = useMemo(() => {
@@ -585,14 +591,17 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
       }
 
       if (headerRef.current) {
-        if (scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+        const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+        if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) headerRef.current.classList.add('is-scrolled');
         else headerRef.current.classList.remove('is-scrolled');
       }
 
       if (filterRef.current && headerRef.current) {
         const headerRect = headerRef.current.getBoundingClientRect();
         const filterRect = filterRef.current.getBoundingClientRect();
-        if (filterRect.top <= headerRect.bottom + 1) filterRef.current.classList.add('is-scrolled');
+        const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
+        const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
+        if (filterRect.top <= threshold) filterRef.current.classList.add('is-scrolled');
         else filterRef.current.classList.remove('is-scrolled');
       }
 

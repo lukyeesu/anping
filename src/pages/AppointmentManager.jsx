@@ -898,19 +898,22 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
       const target = e.target || mainElement;
       const { scrollTop, scrollHeight, clientHeight } = target;
       
-      // 1. อัปเดต Header ทันทีเมื่อเลื่อนเกิน 20px
-      if (scrollTop > 20) {
+      // 1. อัปเดต Header ทันทีเมื่อเลื่อน พร้อม Hysteresis ป้องกันการกระตุก
+      const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+      if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
           headerRef.current.classList.add('is-scrolled');
       } else {
           headerRef.current.classList.remove('is-scrolled');
       }
 
-      // 2. อัปเดต Filter ขยายขนาด "เฉพาะตอนที่เลื่อนมาชน Header พอดีเป๊ะ"
+      // 2. อัปเดต Filter ขยายขนาด "เฉพาะตอนที่เลื่อนมาชน Header พอดีเป๊ะ" พร้อม Hysteresis
       if (filterRef.current && headerRef.current) {
           const headerRect = headerRef.current.getBoundingClientRect();
           const filterRect = filterRef.current.getBoundingClientRect();
+          const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
+          const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
           
-          if (filterRect.top <= headerRect.bottom + 5) {
+          if (filterRect.top <= threshold) {
               filterRef.current.classList.add('is-scrolled');
           } else {
               filterRef.current.classList.remove('is-scrolled');

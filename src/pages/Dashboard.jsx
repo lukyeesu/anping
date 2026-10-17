@@ -153,7 +153,8 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     const handleScroll = rAFThrottle((e) => {
       const target = e.target || mainElement;
       if (headerRef.current) {
-          if (target.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+          const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+          if (isHeaderScrolled ? (target.scrollTop > 35) : (target.scrollTop > 50)) headerRef.current.classList.add('is-scrolled');
           else headerRef.current.classList.remove('is-scrolled');
       }
     });
@@ -161,7 +162,8 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     // ตรวจสอบสถานะเริ่มต้นทันที
     setTimeout(() => {
         if (mainElement && headerRef.current) {
-            if (mainElement.scrollTop > 20) headerRef.current.classList.add('is-scrolled');
+            const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+            if (isHeaderScrolled ? (mainElement.scrollTop > 35) : (mainElement.scrollTop > 50)) headerRef.current.classList.add('is-scrolled');
             else headerRef.current.classList.remove('is-scrolled');
         }
     }, 50);
