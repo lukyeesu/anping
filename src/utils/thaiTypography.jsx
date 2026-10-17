@@ -387,12 +387,12 @@ export const TAG_TEXT_SHADOW_OPTIONS = [
 
 export const TAG_TEXT_COLOR_SWATCHES = [
   { label: 'ค่าเริ่มต้น', value: '' },
-  { label: 'ขาวบริสุทธิ์', value: '#FFFFFF' },
-  { label: 'ดำสนิท', value: '#000000' },
-  { label: 'ทองคำสว่าง', value: '#FFF49E' },
-  { label: 'ทองบรอนซ์เข้ม', value: '#2E1700' },
-  { label: 'เหลืองสด', value: '#FEF08A' },
-  { label: 'แดงเพลิง', value: '#FF4D4D' }
+  { label: 'สีขาว', value: '#FFFFFF' },
+  { label: 'สีดำ', value: '#000000' },
+  { label: 'สีทองสว่าง', value: '#FFF49E' },
+  { label: 'สีทองเข้ม', value: '#2E1700' },
+  { label: 'สีเหลืองสด', value: '#FEF08A' },
+  { label: 'กำหนดเอง (หลอดดูดสี)', value: 'custom', isCustom: true }
 ];
 
 /**

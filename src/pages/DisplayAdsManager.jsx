@@ -4,7 +4,8 @@ import {
   Megaphone, Plus, Trash2, Edit3, MoveUp, MoveDown, Eye, CheckCircle2, 
   AlertCircle, Upload, Film, Image as ImageIcon, Play, Pause, 
   ExternalLink, Save, Smartphone, Monitor, Clock, 
-  Sliders, RefreshCw, X, Check, Volume2, VolumeX, Building2, Copy, Sparkles, Star
+  Sliders, RefreshCw, X, Check, Volume2, VolumeX, Building2, Copy, Sparkles, Star,
+  ChevronDown, RotateCcw, Pipette
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDirectImageUrl } from '../lib/notificationHub';
@@ -12,6 +13,7 @@ import { formatMediaUrl, preloadAllAdsMedia, isYouTubeUrl, getYouTubeVideoId } f
 import { createAdsSyncHub } from '../lib/customerDisplaySync';
 import { rAFThrottle } from '../global/helpers';
 import { formatThaiTypography, TAG_STYLE_CATEGORIES, ALL_TAG_SHADES, getTagBadgeStyle, getTagBadgeClass, TAG_TEXT_COLOR_SWATCHES, TAG_TEXT_STROKE_OPTIONS, TAG_TEXT_SHADOW_OPTIONS } from '../utils/thaiTypography';
+import PhotoshopColorPickerModal from '../components/PhotoshopColorPickerModal';
 
 // iOS-style Smooth Toggle Switch Component
 const ToggleSwitch = ({ checked, onChange, disabled = false, size = 'md', activeColor = 'bg-sky-500' }) => (
@@ -166,6 +168,9 @@ export default function DisplayAdsManager({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAd, setEditingAd] = useState(null);
   const [activeStyleTab, setActiveStyleTab] = useState('luxury_gold');
+  const [modalMobileTab, setModalMobileTab] = useState('media'); // 'media' | 'content' | 'settings'
+  const [showTypographyAdvanced, setShowTypographyAdvanced] = useState(false);
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [adFilter, setAdFilter] = useState('all'); // 'all' | 'special'
   const [modalForm, setModalForm] = useState({
     type: 'image',
@@ -197,6 +202,14 @@ export default function DisplayAdsManager({
   const [previewMuted, setPreviewMuted] = useState(true);
   const [slideTimerProgress, setSlideTimerProgress] = useState(0);
 
+  // Stable callback for high-performance color picker
+  const handleCustomTextColorSelect = useCallback((hex) => {
+    setModalForm(prev => {
+      if (prev.customTextColor === hex) return prev;
+      return { ...prev, customTextColor: hex };
+    });
+  }, []);
+
   const fileInputRef = useRef(null);
   const previewTimerRef = useRef(null);
   const previewVideoRef = useRef(null);
@@ -209,7 +222,7 @@ export default function DisplayAdsManager({
     const handleScroll = rAFThrottle((e) => {
       if (!headerRef.current) return;
       const target = e?.target || mainElement;
-      const scrollTop = target?.scrollTop ?? window?.scrollY ?? 0;
+      const scrollTop = target?.scrollTop ?? window?.scrollY ?? document.documentElement.scrollTop ?? 0;
       
       const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
       if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
@@ -223,6 +236,15 @@ export default function DisplayAdsManager({
       mainElement.addEventListener('scroll', handleScroll, { passive: true });
     }
     window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Initial check
+    setTimeout(() => {
+      if (headerRef.current) {
+        const scrollTop = mainElement?.scrollTop ?? window?.scrollY ?? document.documentElement.scrollTop ?? 0;
+        if (scrollTop > 40) headerRef.current.classList.add('is-scrolled');
+        else headerRef.current.classList.remove('is-scrolled');
+      }
+    }, 100);
 
     return () => {
       if (mainElement) mainElement.removeEventListener('scroll', handleScroll);
@@ -518,6 +540,8 @@ export default function DisplayAdsManager({
       applyToAllBranches: false
     });
     setActiveStyleTab('luxury_gold');
+    setModalMobileTab('media');
+    setShowTypographyAdvanced(false);
     setModalOpen(true);
   };
 
@@ -550,6 +574,9 @@ export default function DisplayAdsManager({
     // Sync category tab with the ad's tagColor
     const parentCat = TAG_STYLE_CATEGORIES.find(c => c.shades.some(s => s.id === chosenTagColor));
     setActiveStyleTab(parentCat?.id || 'luxury_gold');
+    setModalMobileTab('media');
+    const hasCustomTypo = Boolean(ad.customTextColor || (ad.customTextStroke && ad.customTextStroke !== 'none') || (ad.customTextShadow && ad.customTextShadow !== 'none'));
+    setShowTypographyAdvanced(hasCustomTypo);
     setModalOpen(true);
   };
 
@@ -750,34 +777,34 @@ export default function DisplayAdsManager({
       {/* 1. Sticky Header Bar */}
       <div 
         ref={headerRef} 
-        className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" 
+        className="sticky z-30 w-full pointer-events-none page-sticky-header transition-all duration-300 ease-in-out flex flex-col" 
         style={{ top: 'var(--mobile-header-offset, 0px)' }}
       >
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
-          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-wrap justify-between items-center gap-3 sticky-header-inner py-3 sm:py-4">
-            <div className="flex flex-col items-start min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2 leading-none sticky-header-title">
+          <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
+            <div className="min-w-0">
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-1.5 sm:gap-2">
                 <Megaphone className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500 shrink-0" />
-                <span>จัดการสื่อโฆษณาบนจอลูกค้า</span>
-                {/* แสดงผลแนวนอนบน Desktop */}
-                <span className="hidden sm:inline-flex text-xs sm:text-sm font-medium text-slate-400 ml-2 bg-slate-100 px-2 py-1 rounded-lg">Digital Signage</span>
+                <span className="truncate hidden sm:inline">จัดการสื่อโฆษณาบนจอลูกค้า</span>
+                <span className="truncate sm:hidden">สื่อโฆษณา</span>
               </h1>
-              {/* แสดงผลบรรทัดล่างบน Mobile */}
-              <span className="sm:hidden text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md mt-1.5 ml-7">Digital Signage</span>
+              <p className="text-slate-500 kanit-text sticky-header-desc">
+                จัดการสื่อประชาสัมพันธ์ ภาพและวิดีโอบนหน้าจอลูกค้า (Digital Signage)
+              </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               {/* Branch Selector Tabs */}
               {branchesData && branchesData.length > 1 && (
-                <div className="flex items-center gap-1 p-1 rounded-2xl bg-slate-100/90 border border-slate-200/80 mr-1">
-                  <Building2 className="w-3.5 h-3.5 text-slate-500 ml-1.5 shrink-0" />
-                  <span className="text-[11px] font-semibold text-slate-500 mr-1 hidden sm:inline">สาขา:</span>
+                <div className="flex items-center gap-1 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl bg-slate-100/90 border border-slate-200/80 mr-0.5 sm:mr-1 shrink-0">
+                  <Building2 className="w-3.5 h-3.5 text-slate-500 ml-1 sm:ml-1.5 shrink-0" />
+                  <span className="text-[11px] font-semibold text-slate-500 mr-1 hidden md:inline">สาขา:</span>
                   {branchesData.map(b => (
                     <button
                       key={b.id}
                       type="button"
                       onClick={() => handleSelectBranch(b.id)}
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl text-xs font-semibold transition-all flex items-center gap-1 sm:gap-1.5 ${
                         selectedBranch === b.id 
                           ? 'bg-white text-sky-700 shadow-2xs border border-slate-200/80 font-bold' 
                           : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
@@ -787,7 +814,7 @@ export default function DisplayAdsManager({
                         <img src={formatDirectImageUrl(b.logo) || b.logo} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
                       )}
                       <span>{b.name || b.id}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedBranch === b.id ? 'bg-sky-100 text-sky-700' : 'bg-slate-200/70 text-slate-500'}`}>
+                      <span className={`text-[10px] px-1 sm:px-1.5 py-0.2 rounded-full ${selectedBranch === b.id ? 'bg-sky-100 text-sky-700' : 'bg-slate-200/70 text-slate-500'}`}>
                         {(branchAds[b.id] || (b.id === 'b1' ? ads : []))?.length || 0}
                       </span>
                     </button>
@@ -796,20 +823,23 @@ export default function DisplayAdsManager({
               )}
 
               <button
+                type="button"
                 onClick={() => window.open(`/customer-display?station=station_1&branch=${selectedBranch}`, '_blank')}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-sky-600 hover:bg-sky-50 hover:border-sky-200 shadow-2xs text-xs sm:text-sm font-medium transition-all"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-4 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-slate-700 bg-white border border-slate-200 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition-all text-xs sm:text-sm active:scale-95 shrink-0 sticky-header-btn"
                 title="เปิดหน้าจอลูกค้าจริงบนแท็บใหม่"
               >
-                <ExternalLink className="w-4 h-4 text-sky-500" />
-                <span>เปิดหน้าจอลูกค้า</span>
+                <ExternalLink size={18} className="text-sky-600 shrink-0" />
+                <span className="hidden sm:inline">เปิดหน้าจอลูกค้า</span>
               </button>
 
               <button
+                type="button"
                 onClick={handleOpenAddModal}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 active:scale-95 text-white shadow-sm shadow-sky-500/25 text-xs sm:text-sm font-medium transition-all"
+                className="flex items-center justify-center gap-1.5 p-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl font-semibold shadow-xs transition-transform active:scale-95 shrink-0 bg-sky-500 hover:bg-sky-600 text-white text-xs sm:text-sm sticky-header-btn"
+                title="เพิ่มสื่อโฆษณา"
               >
-                <Plus className="w-4 h-4" />
-                <span>เพิ่มสื่อโฆษณา</span>
+                <Plus size={18} className="shrink-0" />
+                <span className="hidden sm:inline">เพิ่มสื่อโฆษณา</span>
               </button>
             </div>
           </div>
@@ -895,41 +925,74 @@ export default function DisplayAdsManager({
                 return (
                   <div
                     key={ad.id || originalIndex}
-                    className={`group bg-white rounded-2xl border transition-all p-3.5 sm:p-4 shadow-sm hover:shadow-md ${
-                      ad.isSpecial ? 'border-amber-300/80 ring-1 ring-amber-300/40 bg-amber-50/10' :
-                      ad.isActive ? 'border-slate-200/90' : 'border-slate-200/50 opacity-60 bg-slate-50/50'
+                    className={`group bg-white rounded-2xl border transition-all p-3 sm:p-4 shadow-xs hover:shadow-md ${
+                      ad.isSpecial ? 'border-amber-300 ring-2 ring-amber-300/30 bg-amber-50/10' :
+                      ad.isActive ? 'border-slate-200/80' : 'border-slate-200/50 opacity-65 bg-slate-50/40'
                     }`}
                   >
-                    <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-                      {/* Order Controls */}
-                      <div className="flex flex-col items-center justify-center gap-0.5 shrink-0">
-                        <button
-                          onClick={() => handleMoveOrder(originalIndex, -1)}
-                          disabled={originalIndex <= 0}
-                          className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center transition-colors"
-                          title="เลื่อนขึ้น"
-                        >
-                          <MoveUp className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-xs font-bold text-slate-500 font-mono">#{originalIndex + 1}</span>
-                        <button
-                          onClick={() => handleMoveOrder(originalIndex, 1)}
-                          disabled={originalIndex >= ads.length - 1}
-                          className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center transition-colors"
-                          title="เลื่อนลง"
-                        >
-                          <MoveDown className="w-3.5 h-3.5" />
-                        </button>
+                    {/* 1. Card Top Bar: Order Pill & Tag on Left | Active Toggle Switch on Right */}
+                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100/90">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {/* Order Controls Pill */}
+                        <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200/70 shadow-2xs shrink-0">
+                          <span className="px-2 text-xs font-bold text-slate-700 font-mono">#{originalIndex + 1}</span>
+                          <div className="h-3.5 w-px bg-slate-300/80 mx-0.5" />
+                          <button
+                            onClick={() => handleMoveOrder(originalIndex, -1)}
+                            disabled={originalIndex <= 0}
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-white active:bg-slate-200 disabled:opacity-20 transition-all cursor-pointer"
+                            title="เลื่อนขึ้น"
+                          >
+                            <MoveUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveOrder(originalIndex, 1)}
+                            disabled={originalIndex >= ads.length - 1}
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-white active:bg-slate-200 disabled:opacity-20 transition-all cursor-pointer"
+                            title="เลื่อนลง"
+                          >
+                            <MoveDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Tag Pill */}
+                        {ad.tag && (() => {
+                          const badge = getTagBadgeStyle(ad);
+                          return (
+                            <span 
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-lg truncate shadow-2xs transition-all ${badge.className}`}
+                              style={badge.style}
+                            >
+                              {ad.tag}
+                            </span>
+                          );
+                        })()}
                       </div>
 
+                      {/* Active Status iOS Toggle Switch */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`text-[11px] font-medium select-none ${ad.isActive ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {ad.isActive ? 'เปิดอยู่' : 'ปิด'}
+                        </span>
+                        <ToggleSwitch
+                          checked={ad.isActive}
+                          onChange={() => handleToggleActive(ad.id)}
+                          size="sm"
+                          activeColor="bg-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. Card Body: Thumbnail Preview & Title/Subtitle */}
+                    <div className="flex gap-3 items-start py-2.5">
                       {/* Thumbnail Preview */}
-                      <div className="w-20 h-14 sm:w-24 sm:h-16 rounded-xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-100">
+                      <div className="w-24 sm:w-28 aspect-video rounded-xl overflow-hidden bg-slate-900 relative shrink-0 border border-slate-100 shadow-2xs">
                         {isYouTubeUrl(ad.url) ? (
                           <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white relative">
                             <img
                               src={`https://img.youtube.com/vi/${getYouTubeVideoId(ad.url)}/hqdefault.jpg`}
                               alt={ad.title || 'YouTube Video'}
-                              className="w-full h-full object-cover opacity-80"
+                              className="w-full h-full object-cover opacity-85"
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
                               <Play className="w-5 h-5 text-rose-500 fill-rose-500 drop-shadow" />
@@ -942,7 +1005,7 @@ export default function DisplayAdsManager({
                           <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white relative">
                             <video
                               src={formattedUrl}
-                              className="w-full h-full object-cover opacity-60"
+                              className="w-full h-full object-cover opacity-75"
                               muted
                               playsInline
                               preload="none"
@@ -967,113 +1030,105 @@ export default function DisplayAdsManager({
                         )}
                         <span className="absolute top-1 left-1">
                           {isVideo ? (
-                            <span className="w-4 h-4 rounded-md bg-purple-600 text-white flex items-center justify-center text-[10px]">
+                            <span className="w-4 h-4 rounded-md bg-purple-600/90 text-white flex items-center justify-center text-[10px] shadow-xs">
                               🎬
                             </span>
                           ) : (
-                            <span className="w-4 h-4 rounded-md bg-sky-600 text-white flex items-center justify-center text-[10px]">
+                            <span className="w-4 h-4 rounded-md bg-sky-600/90 text-white flex items-center justify-center text-[10px] shadow-xs">
                               🖼️
                             </span>
                           )}
                         </span>
                       </div>
 
-                      {/* Info & Details */}
+                      {/* Info: Title & Subtitle */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                          {ad.tag && (() => {
-                            const badge = getTagBadgeStyle(ad);
-                            return (
-                              <span 
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md inline-block shadow-xs transition-all ${badge.className}`}
-                                style={badge.style}
-                              >
-                                {ad.tag}
-                              </span>
-                            );
-                          })()}
-                          <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
-                            <Clock className="w-3 h-3" />
-                            {isVideo && ad.autoVideoEnd ? 'เล่นตามความยาวคลิป' : `${ad.duration || 8} วินาที`}
-                          </span>
-                          <span className="text-[10px] text-slate-400 capitalize">
-                            • สัดส่วน: {ad.objectFit || 'cover'}
-                          </span>
-                          {isVideo && (
-                            ad.enableAudio ? (
-                              <span className="text-[10px] text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200/60 font-medium flex items-center gap-0.5">
-                                <Volume2 className="w-3 h-3" /> มีเสียง
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60 font-medium flex items-center gap-0.5">
-                                <VolumeX className="w-3 h-3" /> ปิดเสียง
-                              </span>
-                            )
-                          )}
-                          {ad.showBottomOverlay === false && (
-                            <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 font-medium">
-                              ปิดเงาดำ
-                            </span>
-                          )}
-                          {ad.showBrandHeader === false || (ad.showLogo === false && ad.showClinicName === false) ? (
-                            <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 font-medium">
-                              ซ่อนแบรนด์
-                            </span>
-                          ) : ad.showLogo === false ? (
-                            <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 font-medium">
-                              ซ่อนเฉพาะโลโก้
-                            </span>
-                          ) : ad.showClinicName === false ? (
-                            <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200/60 font-medium">
-                              ซ่อนเฉพาะชื่อ
-                            </span>
-                          ) : null}
-                          {ad.showClock === false && (
-                            <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/60 font-medium flex items-center gap-0.5">
-                              <Clock className="w-2.5 h-2.5" /> ซ่อนนาฬิกา
-                            </span>
-                          )}
-                        </div>
-
-                        <h3 className="font-bold text-slate-800 text-xs sm:text-sm truncate">
+                        <h3 className="font-bold text-slate-800 text-xs sm:text-sm line-clamp-2 leading-snug">
                           {ad.title || '(ไม่มีหัวข้อสื่อ)'}
                         </h3>
-                        {ad.subtitle && (
-                          <p className="text-[11px] sm:text-xs text-slate-500 truncate mt-0.5 font-normal">
+                        {ad.subtitle ? (
+                          <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-2 mt-1 font-normal leading-relaxed">
                             {ad.subtitle}
                           </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic mt-1 font-light">ไม่มีคำบรรยาย</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. Metadata Chips: Full Width Wrap */}
+                    <div className="flex flex-wrap items-center gap-1.5 pb-2.5">
+                      <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        {isVideo && ad.autoVideoEnd ? 'เล่นตามคลิป' : `${ad.duration || 8} วินาที`}
+                      </span>
+
+                      <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-medium capitalize">
+                        สัดส่วน: {ad.objectFit || 'cover'}
+                      </span>
+
+                      {isVideo && (
+                        ad.enableAudio ? (
+                          <span className="text-[10px] text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200/60 font-medium flex items-center gap-1">
+                            <Volume2 className="w-3 h-3" /> มีเสียง
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60 font-medium flex items-center gap-1">
+                            <VolumeX className="w-3 h-3" /> ปิดเสียง
+                          </span>
+                        )
+                      )}
+
+                      {ad.showBottomOverlay === false && (
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60 font-medium">
+                          ปิดเงาดำ
+                        </span>
+                      )}
+
+                      {ad.showBrandHeader === false || (ad.showLogo === false && ad.showClinicName === false) ? (
+                        <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200/60 font-medium">
+                          ซ่อนแบรนด์
+                        </span>
+                      ) : ad.showLogo === false ? (
+                        <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200/60 font-medium">
+                          ซ่อนโลโก้
+                        </span>
+                      ) : ad.showClinicName === false ? (
+                        <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200/60 font-medium">
+                          ซ่อนชื่อคลินิก
+                        </span>
+                      ) : null}
+
+                      {ad.showClock === false && (
+                        <span className="text-[10px] text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200/60 font-medium flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" /> ซ่อนนาฬิกา
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 4. Card Footer: Media Type Indicator & Action Buttons */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
+                        <span>{isVideo ? (isYouTubeUrl(ad.url) ? 'YouTube Video' : 'MP4 Video') : 'ภาพนิ่ง'}</span>
+                        {ad.isSpecial && (
+                          <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 font-sans font-medium">
+                            ★ พิเศษ
+                          </span>
                         )}
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                        {/* Toggle Active */}
-                        <button
-                          onClick={() => handleToggleActive(ad.id)}
-                          className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
-                            ad.isActive 
-                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' 
-                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                          }`}
-                          title={ad.isActive ? 'คลิกเพื่อปิดใช้งาน' : 'คลิกเพื่อเปิดใช้งาน'}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                          <span className="hidden sm:inline">{ad.isActive ? 'เปิดอยู่' : 'ปิด'}</span>
-                        </button>
-
-                        {/* Edit Button */}
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleOpenEditModal(ad)}
-                          className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-sky-50 text-slate-600 hover:text-sky-600 flex items-center justify-center transition-colors"
+                          className="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs cursor-pointer"
                           title="แก้ไขสื่อนี้"
                         >
-                          <Edit3 className="w-4 h-4" />
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>แก้ไข</span>
                         </button>
-
-                        {/* Delete Button */}
                         <button
                           onClick={() => handleDeleteAd(ad)}
-                          className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-600 flex items-center justify-center transition-colors"
+                          className="p-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all active:scale-95 cursor-pointer"
                           title="ลบสื่อนี้"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1355,19 +1410,19 @@ export default function DisplayAdsManager({
 
       {/* Add / Edit Ad Modal */}
       {modalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-3 sm:p-5 md:p-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-6xl overflow-hidden max-h-[92vh] sm:max-h-[88vh] flex flex-col">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-4 sm:p-5 md:p-6 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-6xl overflow-hidden max-h-[84vh] sm:max-h-[88vh] flex flex-col my-auto">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-600 flex items-center justify-center shadow-2xs">
-                  <Megaphone className="w-5 h-5" />
+            <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-sky-500/10 text-sky-600 flex items-center justify-center shadow-2xs shrink-0">
+                  <Megaphone className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-base sm:text-lg kanit-text">
+                <div className="min-w-0">
+                  <h3 className="font-bold text-slate-800 text-sm sm:text-lg kanit-text truncate">
                     {editingAd ? 'แก้ไขสื่อโฆษณา' : 'เพิ่มสื่อโฆษณาใหม่'}
                   </h3>
-                  <p className="text-xs text-slate-400 font-light">
+                  <p className="text-[11px] sm:text-xs text-slate-400 font-light truncate hidden sm:block">
                     กำหนดไฟล์สื่อ ข้อความประชาสัมพันธ์ สไตล์ป้าย และการแสดงผลบนจอแสดงผลลูกค้า
                   </p>
                 </div>
@@ -1375,18 +1430,60 @@ export default function DisplayAdsManager({
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="w-9 h-9 rounded-xl hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Form Body - 2 Columns on PC (lg:), Stacks on Mobile */}
-            <div className="p-5 sm:p-6 md:p-7 overflow-y-auto flex-1 custom-scrollbar">
+            {/* Mobile Segmented Form Navigation (เฉพาะจอมือถือ/แท็บเล็ต < lg) */}
+            <div className="lg:hidden px-3 pt-2.5 pb-0 bg-slate-50/50 border-b border-slate-100 shrink-0">
+              <div className="grid grid-cols-3 gap-1 p-1 bg-slate-200/70 rounded-2xl border border-slate-200/60 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setModalMobileTab('media')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    modalMobileTab === 'media'
+                      ? 'bg-white text-sky-600 shadow-xs border border-slate-200/60'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Film className="w-3.5 h-3.5 shrink-0" />
+                  <span>ไฟล์สื่อ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMobileTab('content')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    modalMobileTab === 'content'
+                      ? 'bg-white text-sky-600 shadow-xs border border-slate-200/60'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>ข้อความ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMobileTab('settings')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    modalMobileTab === 'settings'
+                      ? 'bg-white text-sky-600 shadow-xs border border-slate-200/60'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5 shrink-0" />
+                  <span>ตั้งค่าจอ</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Form Body - 2 Columns on PC (lg:), Segmented on Mobile */}
+            <div className="p-4 sm:p-6 md:p-7 overflow-y-auto flex-1 custom-scrollbar">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 
-                {/* Left Column: Media File, Live Preview & Placement (5 cols) */}
-                <div className="lg:col-span-5 space-y-4">
+                {/* Left Column: Media File, Live Preview & Placement (5 cols on PC, visible if modalMobileTab === 'media' on Mobile) */}
+                <div className={`space-y-4 lg:col-span-5 ${modalMobileTab === 'media' ? 'block' : 'hidden lg:block'}`}>
                   {/* Media Type Switcher */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-2">ประเภทของสื่อ</label>
@@ -1401,7 +1498,7 @@ export default function DisplayAdsManager({
                         }`}
                       >
                         <ImageIcon className="w-4 h-4 text-sky-500" />
-                        <span>🖼️ รูปภาพ</span>
+                        <span>รูปภาพ</span>
                       </button>
                       <button
                         type="button"
@@ -1413,7 +1510,7 @@ export default function DisplayAdsManager({
                         }`}
                       >
                         <Film className="w-4 h-4 text-purple-500" />
-                        <span>🎬 วิดีโอ MP4</span>
+                        <span>วิดีโอ MP4</span>
                       </button>
                       <button
                         type="button"
@@ -1425,19 +1522,19 @@ export default function DisplayAdsManager({
                         }`}
                       >
                         <Play className="w-4 h-4 text-rose-500 fill-rose-500" />
-                        <span>▶️ YouTube</span>
+                        <span>YouTube</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Upload to Google Drive Section */}
-                  <div className="p-4 rounded-2xl bg-sky-50/50 border border-sky-100 space-y-3">
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-sky-50/50 border border-sky-100 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                         <Upload className="w-3.5 h-3.5 text-sky-600" />
-                        <span>อัปโหลดขึ้น Google Drive (Zero-Egress)</span>
+                        <span>อัปโหลดขึ้น Google Drive</span>
                       </span>
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[11px] text-slate-500 font-mono">
                         {modalForm.type === 'video' ? 'จำกัด 25MB' : 'จำกัด 8MB'}
                       </span>
                     </div>
@@ -1465,16 +1562,16 @@ export default function DisplayAdsManager({
                         ) : (
                           <>
                             <Upload className="w-4 h-4 text-sky-600" />
-                            <span>เลือกไฟล์จากเครื่องคอมพิวเตอร์</span>
+                            <span>เลือกไฟล์จากเครื่อง</span>
                           </>
                         )}
                       </button>
                     </div>
 
                     {/* Direct URL input fallback */}
-                    <div>
+                    <div className="pt-1">
                       <label className="block text-[11px] font-medium text-slate-500 mb-1">
-                        หรือระบุ URL สื่อโดยตรง (รองรับ YouTube Unlisted, Google Drive, MP4)
+                        หรือระบุ URL สื่อโดยตรง (รองรับ YouTube, Drive, MP4)
                       </label>
                       <input
                         type="text"
@@ -1604,28 +1701,50 @@ export default function DisplayAdsManager({
                     </div>
                   </div>
 
-                  {/* Display Fit & Immediate Activation Switch */}
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">การเกลี่ยภาพ (Object Fit)</label>
-                      <select
-                        value={modalForm.objectFit}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, objectFit: e.target.value }))}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
-                      >
-                        <option value="cover">เต็มจอสวยงาม (Cover)</option>
-                        <option value="contain">คงสัดส่วนเดิม (Contain)</option>
-                      </select>
+                  {/* Display Fit & Immediate Activation Controls */}
+                  <div className="space-y-2.5 pt-1">
+                    {/* Object Fit Segmented Pill */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-50 border border-slate-200/80 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 kanit-text block">การจัดสัดส่วนภาพ</span>
+                        <span className="text-[10px] text-slate-400">เลือกแบบเต็มจอหรือคงสัดส่วนเดิม</span>
+                      </div>
+                      <div className="flex items-center p-0.5 bg-slate-200/70 rounded-xl shrink-0 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setModalForm(prev => ({ ...prev, objectFit: 'cover' }))}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            modalForm.objectFit === 'cover'
+                              ? 'bg-white text-sky-600 shadow-2xs'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          เต็มจอ (Cover)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModalForm(prev => ({ ...prev, objectFit: 'contain' }))}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            modalForm.objectFit === 'contain'
+                              ? 'bg-white text-sky-600 shadow-2xs'
+                              : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          พอดีภาพ (Contain)
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col justify-end">
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="text-xs font-bold text-slate-700">เปิดใช้งานทันที</span>
-                        <ToggleSwitch
-                          checked={modalForm.isActive}
-                          onChange={(val) => setModalForm(prev => ({ ...prev, isActive: val }))}
-                        />
+                    {/* Immediate Activation Row */}
+                    <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-slate-50 border border-slate-200/80 gap-3">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 kanit-text block">เปิดใช้งานทันที</span>
+                        <span className="text-[10px] text-slate-400">แสดงในคิวฉายทันทีหลังบันทึก</span>
                       </div>
+                      <ToggleSwitch
+                        checked={modalForm.isActive}
+                        onChange={(val) => setModalForm(prev => ({ ...prev, isActive: val }))}
+                      />
                     </div>
                   </div>
 
@@ -1650,276 +1769,379 @@ export default function DisplayAdsManager({
                   )}
                 </div>
 
-                {/* Right Column: Typography, Tag Styles & Display Settings (7 cols) */}
-                <div className="lg:col-span-7 space-y-4">
-                  {/* Title & Subtitle */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">หัวข้อสื่อโฆษณา (Title)</label>
-                      <input
-                        type="text"
-                        value={modalForm.title}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, title: e.target.value }))}
-                        placeholder="เช่น ฝังเข็มปรับสมดุล & คลายปวดเรื้อรัง"
-                        className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
-                      />
+                {/* Right Column: Typography, Tag Styles & Display Settings (7 cols on PC) */}
+                <div className={`space-y-4 lg:col-span-7 ${modalMobileTab !== 'media' ? 'block' : 'hidden lg:block'}`}>
+                  
+                  {/* Section A: Title, Subtitle, Tag & Styles (visible if modalMobileTab === 'content' on Mobile) */}
+                  <div className={`space-y-4 ${modalMobileTab === 'content' ? 'block' : 'hidden lg:block'}`}>
+                    {/* Title & Subtitle */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">หัวข้อสื่อโฆษณา (Title)</label>
+                        <input
+                          type="text"
+                          value={modalForm.title}
+                          onChange={(e) => setModalForm(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="เช่น ฝังเข็มปรับสมดุล & คลายปวดเรื้อรัง"
+                          className="w-full px-3.5 py-2.5 text-xs sm:text-sm rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">คำบรรยาย / รายละเอียด (Subtitle)</label>
+                        <textarea
+                          rows={2}
+                          value={modalForm.subtitle}
+                          onChange={(e) => setModalForm(prev => ({ ...prev, subtitle: e.target.value }))}
+                          placeholder="รายละเอียดโปรโมชั่น หรือจุดเด่นการรักษา..."
+                          className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
+                        />
+                      </div>
                     </div>
 
+                    {/* Tag Setting & Live Badge Preview */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">คำบรรยาย / รายละเอียด (Subtitle)</label>
-                      <textarea
-                        rows={2}
-                        value={modalForm.subtitle}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, subtitle: e.target.value }))}
-                        placeholder="รายละเอียดโปรโมชั่น หรือจุดเด่นการรักษา..."
-                        className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Tag & Duration Settings */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">ป้ายกำกับ (Tag)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">ป้ายกำกับ (Tag)</label>
+                        {/* Live Badge Preview */}
+                        <div>
+                          {(() => {
+                            const liveBadge = getTagBadgeStyle(modalForm);
+                            return (
+                              <span 
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block kanit-text shadow-2xs transition-all ${liveBadge.className}`}
+                                style={liveBadge.style}
+                              >
+                                {modalForm.tag?.trim() || 'ตัวอย่างป้าย'}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
                       <input
                         type="text"
                         value={modalForm.tag}
                         onChange={(e) => setModalForm(prev => ({ ...prev, tag: e.target.value }))}
-                        placeholder="เช่น โปรโมชั่น, แนะนำ"
+                        placeholder="เช่น โปรโมชั่น, แนะนำ, เกร็ดการแพทย์"
                         className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">ระยะเวลาแสดงผล (วินาที)</label>
-                      <input
-                        type="number"
-                        min={3}
-                        max={60}
-                        value={modalForm.duration}
-                        onChange={(e) => setModalForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 8 }))}
-                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-sky-500 text-slate-800"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Tag Badge Style & Gradient Preset Selector (3 Styles x 8 Shades = 24 Curated Shades) */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    {/* Tag Badge Style & Gradient Preset Selector (3 Styles x 8 Shades = 24 Curated Shades) */}
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
                       <div>
                         <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 kanit-text">
                           <Sparkles className="w-4 h-4 text-amber-500" />
                           <span>เฉดสีและสไตล์ป้ายกำกับ (Tag Badge Style)</span>
                         </span>
                         <p className="text-[11px] text-slate-500 font-light mt-0.5">
-                          เลือกจาก 3 สไตล์หลัก • แต่ละสไตล์มี 8 เฉดสีคัดสรรพิเศษ (รวม 24 เฉดสี)
+                          เลือกจาก 3 สไตล์หลัก • แต่ละสไตล์มี 8 เฉดสีคัดสรรพิเศษ
                         </p>
                       </div>
 
-                      {/* Live Badge Preview */}
-                      <div className="shrink-0">
-                        {(() => {
-                          const liveBadge = getTagBadgeStyle(modalForm);
+                      {/* 3 Style Category Tabs */}
+                      <div className="grid grid-cols-3 gap-1 p-1 bg-slate-200/70 rounded-xl">
+                        {TAG_STYLE_CATEGORIES.map(cat => {
+                          const isActive = activeStyleTab === cat.id;
+                          const shortName = cat.id === 'luxury_gold' ? 'ทองหรู' : cat.id === 'minimal' ? 'มินิมอล' : 'ตะโกน';
                           return (
-                            <span 
-                              className={`text-xs font-bold px-3 py-1 rounded-full inline-block kanit-text shadow-sm transition-all ${liveBadge.className}`}
-                              style={liveBadge.style}
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => setActiveStyleTab(cat.id)}
+                              className={`py-1.5 px-1 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 kanit-text cursor-pointer ${
+                                isActive
+                                  ? 'bg-white text-slate-800 shadow-xs border border-slate-200/60'
+                                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                              }`}
                             >
-                              {modalForm.tag?.trim() || 'ป้ายตัวอย่าง'}
-                            </span>
+                              <span className="text-xs shrink-0">{cat.icon}</span>
+                              <span>{shortName}</span>
+                            </button>
                           );
-                        })()}
+                        })}
                       </div>
-                    </div>
 
-                    {/* 3 Style Category Tabs */}
-                    <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 rounded-xl overflow-x-auto">
-                      {TAG_STYLE_CATEGORIES.map(cat => {
-                        const isActive = activeStyleTab === cat.id;
+                      {/* Active Category 8 Shades Grid */}
+                      {(() => {
+                        const currentCategory = TAG_STYLE_CATEGORIES.find(c => c.id === activeStyleTab) || TAG_STYLE_CATEGORIES[0];
                         return (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => setActiveStyleTab(cat.id)}
-                            className={`flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 kanit-text cursor-pointer whitespace-nowrap ${
-                              isActive
-                                ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60'
-                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                            }`}
-                          >
-                            <span>{cat.icon}</span>
-                            <span>{cat.name}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${isActive ? 'bg-sky-100 text-sky-700' : 'bg-slate-200/80 text-slate-500'}`}>8</span>
-                          </button>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 px-1">
+                              <span className="truncate pr-1">{currentCategory.desc}</span>
+                              <span className="font-mono text-[10px] text-sky-600 font-bold bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100 shrink-0">
+                                8 เฉดสี
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              {currentCategory.shades.map((shade) => {
+                                const isSelected = (modalForm.tagColor || 'gold_royal_metallic') === shade.id;
+                                return (
+                                  <button
+                                    key={shade.id}
+                                    type="button"
+                                    onClick={() => setModalForm(prev => ({ ...prev, tagColor: shade.id }))}
+                                    className={`p-2 rounded-xl border text-left transition-all flex flex-col justify-between gap-1 group relative cursor-pointer ${
+                                      isSelected 
+                                        ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-400/40 shadow-xs' 
+                                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-1">
+                                      <span className="text-[11px] font-bold text-slate-800 truncate leading-tight kanit-text" title={shade.name}>
+                                        {shade.name}
+                                      </span>
+                                      {isSelected ? (
+                                        <div className="w-3.5 h-3.5 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0">
+                                          <Check className="w-2 h-2" />
+                                        </div>
+                                      ) : (
+                                        <span className="text-[9px] text-slate-300 group-hover:text-slate-400">●</span>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Realistic gradient preview pill */}
+                                    <div className="py-0.5 flex justify-center">
+                                      <span 
+                                        className={`w-full text-center text-[10px] font-bold px-1.5 py-0.5 rounded-md truncate transition-transform ${shade.badgeClass || ''}`}
+                                        style={shade.style}
+                                      >
+                                        {modalForm.tag?.trim() || shade.name}
+                                      </span>
+                                    </div>
+
+                                    <span className="text-[9.5px] text-slate-400 font-light truncate leading-normal" title={shade.desc}>
+                                      {shade.desc}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         );
-                      })}
-                    </div>
+                      })()}
 
-                    {/* Active Category 8 Shades Grid */}
-                    {(() => {
-                      const currentCategory = TAG_STYLE_CATEGORIES.find(c => c.id === activeStyleTab) || TAG_STYLE_CATEGORIES[0];
-                      return (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 px-0.5">
-                            <span>{currentCategory.desc}</span>
-                            <span className="font-mono text-[10px] text-sky-600 font-medium">8 เฉดสีพรีเมียม</span>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {currentCategory.shades.map((shade) => {
-                              const isSelected = (modalForm.tagColor || 'gold_royal_metallic') === shade.id;
-                              return (
-                                <button
-                                  key={shade.id}
-                                  type="button"
-                                  onClick={() => setModalForm(prev => ({ ...prev, tagColor: shade.id }))}
-                                  className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-1.5 group relative cursor-pointer ${
-                                    isSelected 
-                                      ? 'border-sky-500 bg-sky-50/70 ring-2 ring-sky-400/40 shadow-xs' 
-                                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-100/50'
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-1">
-                                    <span className="text-[11px] font-bold text-slate-800 line-clamp-2 min-h-[28px] leading-tight kanit-text" title={shade.name}>
-                                      {shade.name}
-                                    </span>
-                                    {isSelected ? (
-                                      <div className="w-3.5 h-3.5 mt-0.5 rounded-full bg-sky-500 text-white flex items-center justify-center shrink-0">
-                                        <Check className="w-2 h-2" />
-                                      </div>
-                                    ) : (
-                                      <span className="text-[9px] text-slate-300 group-hover:text-slate-400 mt-0.5">●</span>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Realistic gradient preview pill */}
-                                  <div className="py-0.5 flex justify-center">
-                                    <span 
-                                      className={`w-full text-center text-[10px] font-bold px-1.5 py-0.5 rounded-md truncate transition-transform ${shade.badgeClass || ''}`}
-                                      style={shade.style}
-                                    >
-                                      {modalForm.tag?.trim() || shade.name}
-                                    </span>
-                                  </div>
-
-                                  <span className="text-[9.5px] text-slate-400 font-light line-clamp-1 leading-normal" title={shade.desc}>
-                                    {shade.desc}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Typography & Text Style Customization (ขอบตัวหนังสือ, สีตัวหนังสือ, เงาตัวหนังสือ) */}
-                    <div className="pt-3 border-t border-slate-200/80 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
-                          <Sliders className="w-3.5 h-3.5 text-sky-600" />
-                          <span>ปรับแต่งตัวหนังสือเพิ่มเติม (Typography & Effects)</span>
-                        </span>
-                        {(modalForm.customTextColor || (modalForm.customTextStroke && modalForm.customTextStroke !== 'none') || (modalForm.customTextShadow && modalForm.customTextShadow !== 'none')) && (
+                      {/* Typography & Text Style Customization (Clean Studio Inspector) */}
+                      <div className="pt-3 border-t border-slate-200/80 space-y-2.5">
+                        {/* Clean Accordion Header Bar */}
+                        <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-100/80 hover:bg-slate-100 border border-slate-200/70 transition-colors">
                           <button
                             type="button"
-                            onClick={() => setModalForm(prev => ({
-                              ...prev,
-                              customTextColor: '',
-                              customTextStroke: 'none',
-                              customTextShadow: 'none'
-                            }))}
-                            className="text-[11px] text-rose-500 hover:text-rose-600 font-medium cursor-pointer"
+                            onClick={() => setShowTypographyAdvanced(prev => !prev)}
+                            className="flex items-center gap-2 text-xs font-bold text-slate-800 kanit-text cursor-pointer flex-1 min-w-0"
                           >
-                            คืนค่าเริ่มต้นของสไตล์
+                            <Sliders className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                            <span className="truncate">ปรับแต่งตัวอักษร</span>
                           </button>
-                        )}
-                      </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {/* 1. Text Color */}
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
-                            สีตัวหนังสือ (Text Color)
-                          </label>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {TAG_TEXT_COLOR_SWATCHES.map((swatch, idx) => {
-                              const isSelected = (modalForm.customTextColor || '') === swatch.value;
-                              return (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => setModalForm(prev => ({ ...prev, customTextColor: swatch.value }))}
-                                  title={swatch.label}
-                                  className={`h-6 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 border transition-all cursor-pointer ${
-                                    isSelected 
-                                      ? 'border-sky-500 ring-2 ring-sky-400/40 shadow-xs' 
-                                      : 'border-slate-200 hover:border-slate-300'
-                                  }`}
-                                  style={{
-                                    backgroundColor: swatch.value || '#f1f5f9',
-                                    color: swatch.value ? (swatch.value === '#000000' || swatch.value === '#2E1700' ? '#ffffff' : '#0f172a') : '#64748b'
-                                  }}
-                                >
-                                  {swatch.value ? (
-                                    <span>{swatch.label}</span>
-                                  ) : (
-                                    <span>เริ่มต้น</span>
-                                  )}
-                                </button>
-                              );
-                            })}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {(modalForm.customTextColor || (modalForm.customTextStroke && modalForm.customTextStroke !== 'none') || (modalForm.customTextShadow && modalForm.customTextShadow !== 'none')) && (
+                              <button
+                                type="button"
+                                onClick={() => setModalForm(prev => ({
+                                  ...prev,
+                                  customTextColor: '',
+                                  customTextStroke: 'none',
+                                  customTextShadow: 'none'
+                                }))}
+                                className="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                                title="คืนค่าสีและรูปแบบเริ่มต้นตามสไตล์ป้าย"
+                              >
+                                รีเซ็ต
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => setShowTypographyAdvanced(prev => !prev)}
+                              className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-all cursor-pointer"
+                            >
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showTypographyAdvanced ? 'rotate-180' : ''}`} />
+                            </button>
                           </div>
                         </div>
 
-                        {/* 2. Text Stroke */}
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
-                            ขอบตัวหนังสือ (Stroke / Outline)
-                          </label>
-                          <select
-                            value={modalForm.customTextStroke || 'none'}
-                            onChange={(e) => setModalForm(prev => ({ ...prev, customTextStroke: e.target.value }))}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-sky-500 font-medium"
-                          >
-                            {TAG_TEXT_STROKE_OPTIONS.map(opt => (
-                              <option key={opt.id} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        {/* Accordion Content */}
+                        {showTypographyAdvanced && (
+                          <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-3.5 animate-in fade-in duration-150">
+                            {/* 1. Text Color Swatches as Clean Circular Dots */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[11px] font-bold text-slate-700">สีข้อความ</span>
+                                <span className="text-[10px] font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100 font-mono">
+                                  {(() => {
+                                    const current = (modalForm.customTextColor || '').toUpperCase();
+                                    if (!current) return 'ตามสไตล์ป้าย';
+                                    const matched = TAG_TEXT_COLOR_SWATCHES.find(s => !s.isCustom && s.value.toUpperCase() === current);
+                                    if (matched) return matched.label;
+                                    return current;
+                                  })()}
+                                </span>
+                              </div>
 
-                        {/* 3. Text Shadow */}
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
-                            เงาตัวหนังสือ (Drop Shadow)
-                          </label>
-                          <select
-                            value={modalForm.customTextShadow || 'none'}
-                            onChange={(e) => setModalForm(prev => ({ ...prev, customTextShadow: e.target.value }))}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:border-sky-500 font-medium"
-                          >
-                            {TAG_TEXT_SHADOW_OPTIONS.map(opt => (
-                              <option key={opt.id} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                              <div className="flex items-center justify-between gap-1.5 py-1.5 px-2 bg-slate-50/70 rounded-xl border border-slate-100">
+                                {TAG_TEXT_COLOR_SWATCHES.map((swatch, idx) => {
+                                  if (swatch.isCustom) {
+                                    const currentUpper = (modalForm.customTextColor || '').toUpperCase();
+                                    const isCustomSelected = !!currentUpper && !TAG_TEXT_COLOR_SWATCHES.slice(0, -1).some(s => s.value && s.value.toUpperCase() === currentUpper);
+                                    return (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => setIsColorPickerOpen(true)}
+                                        title="เลือกสีอิสระด้วยหลอดดูดสี (Photoshop Style)"
+                                        className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                          isCustomSelected 
+                                            ? 'ring-2 ring-sky-500 scale-105 shadow-md' 
+                                            : 'hover:scale-105 border border-white/70 shadow-2xs'
+                                        }`}
+                                        style={{
+                                          background: 'conic-gradient(from 180deg at 50% 50%, #f43f5e 0deg, #fb923c 45deg, #facc15 90deg, #4ade80 135deg, #38bdf8 180deg, #818cf8 225deg, #c084fc 270deg, #f43f5e 360deg)'
+                                        }}
+                                      >
+                                        {isCustomSelected ? (
+                                          <div 
+                                            className="w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-2xs"
+                                            style={{ backgroundColor: modalForm.customTextColor }}
+                                          >
+                                            <Pipette className="w-2.5 h-2.5 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]" />
+                                          </div>
+                                        ) : (
+                                          <Pipette className="w-3.5 h-3.5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]" />
+                                        )}
+                                      </button>
+                                    );
+                                  }
+
+                                  const isSelected = (modalForm.customTextColor || '') === swatch.value;
+                                  return (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => setModalForm(prev => ({ ...prev, customTextColor: swatch.value }))}
+                                      title={swatch.label}
+                                      className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                        isSelected 
+                                          ? 'ring-2 ring-sky-500 scale-105 shadow-sm' 
+                                          : 'hover:scale-105 border border-slate-200/90'
+                                      }`}
+                                      style={{
+                                        backgroundColor: swatch.value || '#f1f5f9',
+                                        borderColor: swatch.value === '#ffffff' ? '#cbd5e1' : undefined
+                                      }}
+                                    >
+                                      {!swatch.value ? (
+                                        <RotateCcw className={`w-3 h-3 ${isSelected ? 'text-sky-600' : 'text-slate-400'}`} />
+                                      ) : isSelected ? (
+                                        <Check className={`w-3.5 h-3.5 ${swatch.value === '#ffffff' || swatch.value === '#FFF49E' || swatch.value === '#FEF08A' ? 'text-slate-900' : 'text-white'}`} />
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* 2. Text Stroke and Shadow in 2 Strictly Equal Columns */}
+                            <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-100">
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1.5 h-4 leading-4 truncate">
+                                  เส้นขอบ
+                                </label>
+                                <select
+                                  value={modalForm.customTextStroke || 'none'}
+                                  onChange={(e) => setModalForm(prev => ({ ...prev, customTextStroke: e.target.value }))}
+                                  className="w-full h-9 px-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:border-sky-500 font-medium cursor-pointer"
+                                >
+                                  {TAG_TEXT_STROKE_OPTIONS.map(opt => (
+                                    <option key={opt.id} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1.5 h-4 leading-4 truncate">
+                                  เงาข้อความ
+                                </label>
+                                <select
+                                  value={modalForm.customTextShadow || 'none'}
+                                  onChange={(e) => setModalForm(prev => ({ ...prev, customTextShadow: e.target.value }))}
+                                  className="w-full h-9 px-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:border-sky-500 font-medium cursor-pointer"
+                                >
+                                  {TAG_TEXT_SHADOW_OPTIONS.map(opt => (
+                                    <option key={opt.id} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Display Presentation Options */}
-                  <div className="space-y-2.5">
+                  {/* Section B: Display Settings (visible if modalMobileTab === 'settings' on Mobile) */}
+                  <div className={`space-y-3 ${modalMobileTab === 'settings' ? 'block' : 'hidden lg:block'}`}>
+                    
+                    {/* Duration Settings */}
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-sky-600" />
+                          <span>ระยะเวลาแสดงผลต่อรอบ</span>
+                        </label>
+                        <span className="text-xs font-mono font-bold text-sky-600 bg-sky-50 border border-sky-200/60 px-2 py-0.5 rounded-lg">
+                          {modalForm.duration} วินาที
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={3}
+                          max={60}
+                          value={modalForm.duration}
+                          onChange={(e) => setModalForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 8 }))}
+                          className="flex-1 accent-sky-500 h-2 bg-slate-200 rounded-lg cursor-pointer"
+                        />
+                        <input
+                          type="number"
+                          min={3}
+                          max={60}
+                          value={modalForm.duration}
+                          onChange={(e) => setModalForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 8 }))}
+                          className="w-14 px-2 py-1 text-xs text-center rounded-xl bg-white border border-slate-200 focus:outline-none focus:border-sky-500 font-mono font-bold text-slate-800"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className="text-[10px] text-slate-400 font-light">ตั้งค่าด่วน:</span>
+                        {[5, 8, 10, 15, 30].map(sec => (
+                          <button
+                            key={sec}
+                            type="button"
+                            onClick={() => setModalForm(prev => ({ ...prev, duration: sec }))}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold transition-all cursor-pointer ${
+                              modalForm.duration === sec
+                                ? 'bg-sky-500 text-white shadow-2xs'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {sec}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Bottom Gradient Overlay Toggle */}
                     <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-3">
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 kanit-text">
-                          <span>เงาดำไล่ระดับด้านล่าง (Bottom Gradient Overlay)</span>
+                          <span>เงาดำไล่ระดับด้านล่าง (Bottom Gradient)</span>
                         </span>
                         <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                          เปิดเพื่อไล่ระดับเงาสีดำจากล่างขึ้นบนพอดีกับข้อความ (+5%) ช่วยให้อ่านหัวข้อชัดเจนขึ้นบนภาพสว่าง หรือปิดได้หากต้องการโชว์ภาพเต็ม 100% โดยไม่มีเงาดำ
+                          ไล่เงาสีดำจากล่างขึ้นบนพอดีกับข้อความ ช่วยให้อ่านหัวข้อชัดเจนขึ้นบนภาพสว่าง
                         </p>
                       </div>
                       <ToggleSwitch
@@ -1955,7 +2177,7 @@ export default function DisplayAdsManager({
 
                       {/* Sub-toggles: Selectively Toggle LOGO and Clinic Name */}
                       {(modalForm.showBrandHeader ?? true) && (
-                        <div className="pt-2.5 border-t border-slate-200/70 space-y-2.5 pl-2 sm:pl-3 bg-white/60 p-2.5 rounded-xl border border-slate-100">
+                        <div className="pt-2 border-t border-slate-200/70 space-y-2 pl-2 sm:pl-3 bg-white/60 p-2.5 rounded-xl border border-slate-100">
                           {/* Sub-toggle 1: LOGO */}
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-xs font-medium text-slate-700 flex items-center gap-2 kanit-text">
@@ -2013,7 +2235,7 @@ export default function DisplayAdsManager({
                           <span>แสดงนาฬิกามุมขวาบน</span>
                         </span>
                         <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                          เปิดเพื่อแสดงนาฬิกาที่มุมขวาบน หรือปิดหากสื่อโฆษณานี้มีโลโก้หรือเนื้อหาสำคัญอยู่ที่มุมขวาบน เพื่อไม่ให้บังเนื้อหา
+                          เปิดเพื่อแสดงเวลาดิจิทัล หรือปิดหากมีเนื้อหาสำคัญอยู่ที่มุมขวาบน
                         </p>
                       </div>
                       <ToggleSwitch
@@ -2031,7 +2253,7 @@ export default function DisplayAdsManager({
                             <span>เปิดเสียงวิดีโอ (Video Audio)</span>
                           </span>
                           <p className="text-[11px] text-slate-500 font-light leading-relaxed kanit-text">
-                            เปิดเพื่อให้วิดีโอเล่นเสียงออกลำโพงเมื่อเริ่มฉายบนหน้าจอ หรือปิดเพื่อเล่นแบบไม่มีเสียงเงียบๆ สบายๆ ในคลินิก
+                            เปิดเพื่อให้วิดีโอเล่นเสียงออกลำโพง หรือปิดเพื่อเล่นแบบไม่มีเสียงเงียบๆ สบายๆ ในคลินิก
                           </p>
                         </div>
                         <ToggleSwitch
@@ -2040,6 +2262,7 @@ export default function DisplayAdsManager({
                         />
                       </div>
                     )}
+
                   </div>
                 </div>
 
@@ -2047,27 +2270,42 @@ export default function DisplayAdsManager({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2.5 bg-slate-50/50">
+            <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 text-xs sm:text-sm font-medium transition-colors cursor-pointer"
               >
                 ยกเลิก
               </button>
-              <button
-                type="button"
-                onClick={handleSaveModalForm}
-                disabled={isUploading}
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 active:scale-95 text-white text-xs font-medium shadow-md shadow-sky-500/25 transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {editingAd ? 'บันทึกการแก้ไข' : 'เพิ่มสื่อ'}
-              </button>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveModalForm}
+                  disabled={isUploading}
+                  className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-md shadow-sky-500/25 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editingAd ? 'บันทึกการแก้ไข' : 'เพิ่มสื่อโฆษณา'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>,
         document.body
       )}
+
+      {/* Photoshop Style High-Precision Color Picker Modal */}
+      <PhotoshopColorPickerModal
+        isOpen={isColorPickerOpen}
+        onClose={() => setIsColorPickerOpen(false)}
+        initialColor={modalForm.customTextColor && modalForm.customTextColor.startsWith('#') ? modalForm.customTextColor : '#0284c7'}
+        onSelectColor={handleCustomTextColorSelect}
+        title="เครื่องมือเลือกสีตัวอักษร (Color Picker)"
+        subtitle="เลือกสีอิสระแบบ Photoshop สำหรับป้ายข้อความ"
+        zIndex={350}
+      />
     </div>
   );
 }

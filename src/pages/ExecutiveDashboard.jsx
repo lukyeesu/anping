@@ -1455,11 +1455,10 @@ const ExecutiveDashboard = ({
 
   useEffect(() => {
     const mainElement = document.getElementById('main-scroll-container') || document.querySelector('main');
-    if (!mainElement) return;
 
     const handleScroll = rAFThrottle((e) => {
-      const target = e.target || mainElement;
-      const scrollTop = target.scrollTop || 0;
+      const target = e?.target || mainElement;
+      const scrollTop = target?.scrollTop ?? window?.scrollY ?? document.documentElement.scrollTop ?? 0;
       if (headerRef.current) {
         if (scrollTop > 20) {
           headerRef.current.classList.add('is-scrolled');
@@ -1469,10 +1468,16 @@ const ExecutiveDashboard = ({
       }
     });
 
+    if (mainElement) {
+      mainElement.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
     // Check initial scroll status
     setTimeout(() => {
-      if (mainElement && headerRef.current) {
-        if (mainElement.scrollTop > 20) {
+      if (headerRef.current) {
+        const scrollTop = mainElement?.scrollTop ?? window?.scrollY ?? document.documentElement.scrollTop ?? 0;
+        if (scrollTop > 20) {
           headerRef.current.classList.add('is-scrolled');
         } else {
           headerRef.current.classList.remove('is-scrolled');
@@ -1480,8 +1485,10 @@ const ExecutiveDashboard = ({
       }
     }, 50);
 
-    mainElement.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainElement.removeEventListener('scroll', handleScroll);
+    return () => {
+      if (mainElement) mainElement.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   // Help parse dates from the database (CE or BE)
@@ -2880,7 +2887,7 @@ const ExecutiveDashboard = ({
   return (
     <div className="fade-in pb-10 w-full">
       {/* Header Panel */}
-      <div ref={headerRef} className="sticky z-40 w-full pointer-events-none transition-[top] duration-300 ease-in-out" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
+      <div ref={headerRef} className="sticky z-40 w-full pointer-events-none page-sticky-header transition-all duration-300 ease-in-out" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto exec-sticky-header">
           <div className="w-full mx-auto px-3.5 sm:px-6 md:px-8 2xl:px-12 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-2.5 sm:gap-3 py-2 sm:py-2.5 xl:py-3 exec-header-inner">
             

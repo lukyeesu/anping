@@ -895,6 +895,8 @@ export default function App() {
   // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ และเปิดขยายแท็บเมนูด้านล่าง ---
   const [showMobileBars, setShowMobileBars] = useState(true);
   const [isMobileNavExpanded, setIsMobileNavExpanded] = useState(false);
+  const isMobileNavExpandedRef = useRef(false);
+  isMobileNavExpandedRef.current = isMobileNavExpanded;
   const lastScrollY = React.useRef(0);
 
   // บันทึกสถานะลง LocalStorage เมื่อมีการเปลี่ยนแปลง (เฉพาะ PC)
@@ -1021,7 +1023,7 @@ export default function App() {
       }
 
       if (!isMobile) return;
-      if (isMobileNavExpanded) return;
+      if (isMobileNavExpandedRef.current) return;
 
       // ถ้าเลื่อนกลับไปบนสุด หรือยังอยู่ในช่วงส่วนหัว (<= 80px) ให้แสดงแถบเครื่องมือเสมอ ไม่ซ่อนกระตุก
       if (currentScrollY <= 80) {
@@ -1069,7 +1071,7 @@ export default function App() {
 
     window.addEventListener('scroll', handleGlobalScroll, { capture: true, passive: true });
     return () => window.removeEventListener('scroll', handleGlobalScroll, { capture: true });
-  }, [isMobile, isLoggedIn, isGlobalLoading, currentTab]);
+  }, [isMobile, isLoggedIn, isGlobalLoading, currentTab, isMobileNavExpanded]);
 
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   const [navUnsavedModal, setNavUnsavedModal] = useState({ isOpen: false, targetTab: null });
@@ -3203,6 +3205,7 @@ export default function App() {
 
       // เริ่มพับเก็บแผงควบคุมลงอย่างนุ่มนวลที่ 420ms
       navCollapseTimerRef.current = setTimeout(() => {
+        isMobileNavExpandedRef.current = false;
         setIsMobileNavExpanded(false);
         navCollapseTimerRef.current = null;
       }, 420);
@@ -3224,29 +3227,38 @@ export default function App() {
     };
   }, []);
 
-  // คำนวณความสูงจริงของเมนูแถวเพิ่มเติม (4 คอลัมน์) โดยใช้ ResizeObserver เพื่อความแม่นยำสูงสุด
+  // คำนวณความสูงจริงของเมนูแถวเพิ่มเติม เพื่อให้เมนูหลักลอยพ้นแถบนำทางของมือถือ 2-4px พอดี และมีระยะหายใจรอบขีดลากด้านบน
   useEffect(() => {
     const updateH = () => {
       let newH = 0;
-      if (extraContentRef.current) {
+      if (navSheetRef.current) {
+        const totalH = navSheetRef.current.offsetHeight;
+        const computedPb = parseFloat(window.getComputedStyle(navSheetRef.current).paddingBottom) || 14;
+        const mainRow = navSheetRef.current.querySelector('.max-w-sm');
+        const mainRowBottom = mainRow ? (mainRow.offsetTop + mainRow.offsetHeight) : 68;
+        // ความสูงส่วนที่มองเห็นตอนพับเก็บ = ขอบล่างของแถวไอคอนหลัก (mainRowBottom) + paddingBottom (14px)
+        const visibleH = mainRowBottom + computedPb;
+        const hiddenH = Math.max(0, totalH - visibleH);
+        if (hiddenH > 0) newH = hiddenH;
+      } else if (extraContentRef.current) {
         const h = extraContentRef.current.offsetHeight;
         if (h > 0) newH = h;
       }
       if (newH === 0 && otherMobileNavItems.length > 0) {
         const rows = Math.ceil(otherMobileNavItems.length / 4);
-        newH = rows * 76 + 16;
+        newH = rows * 78 + 30;
       }
       extraHeightRef.current = newH;
       setExtraHeight(prev => (prev === newH ? prev : newH));
     };
 
     updateH();
-    if (extraContentRef.current && typeof ResizeObserver !== 'undefined') {
+    if (navSheetRef.current && typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(updateH);
-      ro.observe(extraContentRef.current);
+      ro.observe(navSheetRef.current);
       return () => ro.disconnect();
     }
-  }, [otherMobileNavItems]);
+  }, [otherMobileNavItems, navSheetNode]);
 
   // ซิงค์สถานะการเปิด/ปิด (Visual Style Sync) ระหว่างแผงควบคุมและ Backdrop ให้ตรงกัน 100% เสมอ ป้องกันอาการบั๊กภาพค้างหรือไม่เบลอ
   useEffect(() => {
@@ -4374,7 +4386,7 @@ export default function App() {
         {/* ปรับแก้ Navbar มือถือ: Compact & Full เหมือนแบบเดิม พร้อม Expandable Quick Panel ดึงขึ้นเพื่อเลือกหน้าอื่น */}
         <div 
           ref={setNavSheetRef}
-          className="md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pt-1 pb-1.5 px-2 z-[45] transition-transform duration-300 ease-out select-none touch-none"
+          className="md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[45] transition-transform duration-300 ease-out select-none touch-none"
           style={{
             transform: isDraggingRef.current
               ? undefined
@@ -4385,7 +4397,7 @@ export default function App() {
                   : 'translateY(0px)'
           }}
         >
-          {/* Drag Handle Indicator (ขีดเส้นเรียบกะทัดรัด ไม่ดันความสูงของบาร์ให้หนาเทอะทะ) */}
+          {/* Drag Handle Indicator (ขีดเส้นเรียบกะทัดรัด พร้อมระยะหายใจไม่ให้เบียดกับไอคอน) */}
           {hasMoreNavItems && (
             <div 
               onClick={(e) => {
@@ -4396,16 +4408,16 @@ export default function App() {
                 }
                 setIsMobileNavExpanded(prev => !prev);
               }}
-              className="w-full flex items-center justify-center pt-0 pb-0.5 cursor-grab active:cursor-grabbing select-none group touch-none"
+              className="w-full flex items-center justify-center pt-0.5 pb-1.5 cursor-grab active:cursor-grabbing select-none group touch-none"
               aria-label={isMobileNavExpanded ? "พับเก็บเมนู" : "เปิดดูเมนูเพิ่มเติม"}
               role="button"
             >
-              <div className="w-8 h-1 rounded-full bg-slate-300/80 transition-transform duration-200 group-hover:scale-105" />
+              <div className="w-9 h-1 rounded-full bg-slate-300/80 transition-transform duration-200 group-hover:scale-105" />
             </div>
           )}
 
           {/* แถวที่ 1: 5 เมนูหลัก พร้อม Liquid Bubble กะทัดรัด สัดส่วนเต็ม กระชับ ไซส์เดิม 100% */}
-          <div className="relative flex w-full max-w-sm mx-auto h-14">
+          <div className="relative flex w-full max-w-sm mx-auto h-[50px]">
               {/* กล่องใส่ก้อน Bubble สีสันที่เลื่อนไปมา ขนาด 48px (w-12 h-12) พร้อม Liquid Tab Bar Animation 500ms นุ่มนวล ไม่กระตุก */}
               <div 
                 className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none will-change-transform" 
@@ -5031,17 +5043,21 @@ export default function App() {
           }
         }
 
-        /* --- Executive Dashboard Sticky Header (Opaque & Clean) --- */
+        /* --- Executive Dashboard Sticky Header (Frosted Glass / กระจกขุ่น เหมือนหน้าอื่น) --- */
         .exec-sticky-header {
-          background-color: #f8fafc;
-          border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-          transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+          background-color: rgba(248, 250, 252, 0.85);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+          box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+          transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, backdrop-filter 0.25s ease;
         }
         .is-scrolled .exec-sticky-header {
-          background-color: #ffffff;
-          border-bottom-color: rgba(203, 213, 225, 0.9);
-          box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+          background-color: rgba(255, 255, 255, 0.90) !important;
+          backdrop-filter: blur(16px) !important;
+          -webkit-backdrop-filter: blur(16px) !important;
+          border-bottom-color: rgba(226, 232, 240, 0.8) !important;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02) !important;
         }
         .exec-header-inner {
           transition: padding 0.25s ease;
