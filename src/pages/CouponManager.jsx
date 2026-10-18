@@ -11,7 +11,7 @@ import {
   RefreshCw, X, ChevronRight, ChevronLeft, ChevronUp, ArrowUpDown, Eye, Sparkles, 
   Tag, ShieldCheck, Clock, Scissors, FileText, Check, 
   AlertTriangle, Crown, Hash, Copy, Download, Sliders,
-  RotateCcw, Image as ImageIcon, Bookmark, ArrowRight, ExternalLink,
+  RotateCcw, RotateCw, Image as ImageIcon, Bookmark, ArrowRight, ExternalLink,
   FileSpreadsheet, MessageSquare, Move, Maximize2, Barcode, Pipette, Type, LayoutGrid, Palette, Upload, Loader2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -999,8 +999,10 @@ const StoryArtworkEditorModal = ({
     codeBgStyle: 'none',
     codeFontSize: 10,
     codeDistance: 3.5,
+    rotation: 0,
     ...(initialQrConfig || {})
   }));
+  const [isRotating, setIsRotating] = useState(false);
 
   // Local state for Expiry Date
   const [localExpiryConfig, setLocalExpiryConfig] = useState(() => ({
@@ -1233,6 +1235,27 @@ const StoryArtworkEditorModal = ({
             return { ...prev, termsX: nextX, termsY: nextY };
           });
         }
+      } else if (activeSticker === 'qr' && (e.key === '[' || e.key === '{')) {
+        e.preventDefault();
+        const step = e.shiftKey ? 15 : (e.altKey ? 1 : 5);
+        setLocalQrConfig(prev => ({
+          ...prev,
+          rotation: (Math.round(((prev.rotation || 0) - step + 360)) % 360)
+        }));
+      } else if (activeSticker === 'qr' && (e.key === ']' || e.key === '}')) {
+        e.preventDefault();
+        const step = e.shiftKey ? 15 : (e.altKey ? 1 : 5);
+        setLocalQrConfig(prev => ({
+          ...prev,
+          rotation: (Math.round(((prev.rotation || 0) + step)) % 360)
+        }));
+      } else if (activeSticker === 'qr' && (e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const step = e.shiftKey ? -90 : 90;
+        setLocalQrConfig(prev => ({
+          ...prev,
+          rotation: (Math.round(((prev.rotation || 0) + step + 360)) % 360)
+        }));
       } else if (e.key === 'Enter' && ['discount', 'header', 'terms'].includes(activeSticker)) {
         setInlineEditingLayer(activeSticker);
       } else if (e.key === 'Escape') {
@@ -1354,6 +1377,33 @@ const StoryArtworkEditorModal = ({
     };
   };
 
+  const handleStartRotate = (e, sticker) => {
+    e.stopPropagation();
+    if (isPinchingRef.current) return;
+    try {
+      e.currentTarget?.setPointerCapture?.(e.pointerId);
+    } catch {}
+    setActiveSticker(sticker);
+    if (sticker === 'qr') setActiveTab('qr');
+    if (!canvasRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const centerX = rect.left + ((Number.isFinite(localQrConfigRef.current.xPercent) ? localQrConfigRef.current.xPercent : 78) / 100) * rect.width;
+    const centerY = rect.top + ((Number.isFinite(localQrConfigRef.current.yPercent) ? localQrConfigRef.current.yPercent : 32) / 100) * rect.height;
+    const startPointerAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+    const initRotation = Number.isFinite(localQrConfigRef.current.rotation) ? localQrConfigRef.current.rotation : 0;
+
+    setIsRotating(true);
+    dragRef.current = {
+      action: 'rotate',
+      sticker,
+      centerX,
+      centerY,
+      startPointerAngle,
+      initRotation
+    };
+  };
+
   // Immediate pointer tracking (60 FPS direct animation frame) + Two-Finger Pinch Gesture
   useEffect(() => {
     const handlePointerMove = (e) => {
@@ -1367,7 +1417,7 @@ const StoryArtworkEditorModal = ({
           const rect = canvasRef.current.getBoundingClientRect();
           if (rect.width === 0 || rect.height === 0) return;
           const { x, y } = latestPointerRef.current;
-          const { action, sticker, startX, startY, initX, initY, initSize } = dragRef.current;
+          const { action, sticker, startX, startY, initX, initY, initSize, centerX, centerY, startPointerAngle, initRotation } = dragRef.current;
 
           if (action === 'drag') {
             const deltaXPercent = ((x - startX) / rect.width) * 100;
@@ -1416,6 +1466,25 @@ const StoryArtworkEditorModal = ({
               const newFont = Math.round(Math.max(6, Math.min(30, initSize + deltaFont)));
               setDesignConfig(prev => ({ ...prev, termsFontSize: newFont }));
             }
+          } else if (action === 'rotate') {
+            const currentAngle = Math.atan2(y - centerY, x - centerX) * (180 / Math.PI);
+            let delta = currentAngle - startPointerAngle;
+            let newRotation = (initRotation + delta) % 360;
+            if (newRotation < 0) newRotation += 360;
+
+            // Smart snap to 0°, 90°, 180°, 270° within 4 degrees; 45°, 135°, 225°, 315° within 2.5 degrees
+            const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315, 360];
+            for (const snap of snapAngles) {
+              const tolerance = (snap % 90 === 0) ? 4 : 2.5;
+              if (Math.abs(newRotation - snap) <= tolerance) {
+                newRotation = snap % 360;
+                break;
+              }
+            }
+            newRotation = Math.round(newRotation);
+            if (sticker === 'qr') {
+              setLocalQrConfig(prev => ({ ...prev, rotation: newRotation }));
+            }
           }
         });
       }
@@ -1423,6 +1492,7 @@ const StoryArtworkEditorModal = ({
 
     const handlePointerUp = () => {
       dragRef.current = null;
+      setIsRotating(false);
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
@@ -1454,6 +1524,7 @@ const StoryArtworkEditorModal = ({
         const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
         const midX = (t0.clientX + t1.clientX) / 2;
         const midY = (t0.clientY + t1.clientY) / 2;
+        const touchAngle = Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * (180 / Math.PI);
 
         // Check if either touch hit a sticker
         const sticker0 = t0.target?.closest?.('[data-sticker]')?.dataset?.sticker;
@@ -1506,7 +1577,9 @@ const StoryArtworkEditorModal = ({
           initMidX: midX,
           initMidY: midY,
           initX,
-          initY
+          initY,
+          initTouchAngle: touchAngle,
+          initRotation: Number.isFinite(localQrConfigRef.current.rotation) ? localQrConfigRef.current.rotation : 0
         };
         isPinchingRef.current = true;
         dragRef.current = null; // Cancel single drag to prevent conflicts
@@ -1521,6 +1594,7 @@ const StoryArtworkEditorModal = ({
         const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
         const midX = (t0.clientX + t1.clientX) / 2;
         const midY = (t0.clientY + t1.clientY) / 2;
+        const touchAngle = Math.atan2(t1.clientY - t0.clientY, t1.clientX - t0.clientX) * (180 / Math.PI);
 
         if (!rafIdRef.current) {
           rafIdRef.current = requestAnimationFrame(() => {
@@ -1529,7 +1603,7 @@ const StoryArtworkEditorModal = ({
             const rect = canvasRef.current.getBoundingClientRect();
             if (rect.width === 0 || rect.height === 0) return;
 
-            const { sticker, initDist, initSize, initMidX, initMidY, initX, initY } = pinchRef.current;
+            const { sticker, initDist, initSize, initMidX, initMidY, initX, initY, initTouchAngle, initRotation } = pinchRef.current;
             const scaleRatio = dist / initDist;
 
             // Two-finger repositioning + scaling
@@ -1540,7 +1614,18 @@ const StoryArtworkEditorModal = ({
 
             if (sticker === 'qr') {
               const newSize = Math.round(Math.max(8, Math.min(70, initSize * scaleRatio)) * 10) / 10;
-              setLocalQrConfig(prev => ({ ...prev, sizePercent: newSize, xPercent: newX, yPercent: newY }));
+              let nextRot = localQrConfigRef.current.rotation || 0;
+              if (Number.isFinite(initTouchAngle)) {
+                const deltaAngle = touchAngle - initTouchAngle;
+                let rot = ((initRotation || 0) + deltaAngle) % 360;
+                if (rot < 0) rot += 360;
+                if (Math.abs(rot - 0) <= 3 || Math.abs(rot - 360) <= 3) rot = 0;
+                else if (Math.abs(rot - 90) <= 3) rot = 90;
+                else if (Math.abs(rot - 180) <= 3) rot = 180;
+                else if (Math.abs(rot - 270) <= 3) rot = 270;
+                nextRot = Math.round(rot);
+              }
+              setLocalQrConfig(prev => ({ ...prev, sizePercent: newSize, xPercent: newX, yPercent: newY, rotation: nextRot }));
             } else if (sticker === 'expiry') {
               const newSize = Math.round(Math.max(6, Math.min(45, initSize * scaleRatio)) * 10) / 10;
               setLocalExpiryConfig(prev => ({ ...prev, sizePercent: newSize, xPercent: newX, yPercent: newY }));
@@ -1588,16 +1673,42 @@ const StoryArtworkEditorModal = ({
   const handleSave = async () => {
     let renderedCustomImgUrl = null;
     const isStrip = layoutType === 'strip';
+    const isImageBg = Boolean(designConfig.bgType === 'image' && effectiveArtwork);
+    const hasCustomTextOrLogo = Boolean(
+      designConfig.logoEnabled ||
+      (designConfig.headerText && designConfig.headerText.trim() !== '') ||
+      (designConfig.discountText && designConfig.discountText.trim() !== '') ||
+      (designConfig.termsText && designConfig.termsText.trim() !== '')
+    );
 
-    if (designConfig.bgType !== 'image' || !effectiveArtwork) {
+    // Bake artwork canvas if using studio gradient/solid background, OR if user added text/logo on Canva image
+    if (!isImageBg || hasCustomTextOrLogo) {
       try {
         if (typeof document !== 'undefined' && document.fonts) {
           await document.fonts.ready;
         }
 
         const artCanvas = document.createElement('canvas');
-        const w = isStrip ? 2362 : 1712;
-        const h = isStrip ? 638 : 1080;
+        let w = isStrip ? 2362 : 1712;
+        let h = isStrip ? 638 : 1080;
+
+        if (isImageBg && artworkNaturalDimensions?.width && artworkNaturalDimensions?.height) {
+          // Preserve natural resolution & aspect ratio of uploaded Canva artwork
+          w = artworkNaturalDimensions.width;
+          h = artworkNaturalDimensions.height;
+          const minDim = 1400;
+          const maxDim = 2400;
+          if (w < minDim && h < minDim) {
+            const scale = minDim / Math.min(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          } else if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+        }
+
         artCanvas.width = w;
         artCanvas.height = h;
         const artCtx = artCanvas.getContext('2d');
@@ -1607,7 +1718,18 @@ const StoryArtworkEditorModal = ({
           artCtx.imageSmoothingQuality = 'high';
 
           // 1. Draw Background
-          if (designConfig.bgType === 'solid') {
+          if (isImageBg) {
+            try {
+              const bgImg = new Image();
+              bgImg.crossOrigin = 'anonymous';
+              await new Promise(r => { bgImg.onload = r; bgImg.onerror = r; bgImg.src = effectiveArtwork; });
+              if (bgImg.naturalWidth > 0) {
+                artCtx.drawImage(bgImg, 0, 0, w, h);
+              }
+            } catch (err) {
+              console.warn('[Studio] Failed to draw background image during bake:', err);
+            }
+          } else if (designConfig.bgType === 'solid') {
             artCtx.fillStyle = designConfig.solidColor || '#064e3b';
             artCtx.fillRect(0, 0, w, h);
           } else {
@@ -1625,8 +1747,8 @@ const StoryArtworkEditorModal = ({
             artCtx.fillRect(0, 0, w, h);
           }
 
-          // 2. Metallic Sheen Overlay
-          if (designConfig.sheenEnabled) {
+          // 2. Metallic Sheen Overlay (applied only on gradient/solid backgrounds)
+          if (!isImageBg && designConfig.sheenEnabled) {
             const sGrad = artCtx.createLinearGradient(0, 0, w, h);
             sGrad.addColorStop(0, 'rgba(255,255,255,0.28)');
             sGrad.addColorStop(0.45, 'rgba(255,255,255,0.02)');
@@ -1635,8 +1757,8 @@ const StoryArtworkEditorModal = ({
             artCtx.fillRect(0, 0, w, h);
           }
 
-          // 3. Inner Border
-          if (designConfig.borderEnabled) {
+          // 3. Inner Border (applied only on gradient/solid backgrounds)
+          if (!isImageBg && designConfig.borderEnabled) {
             artCtx.save();
             artCtx.strokeStyle = 'rgba(255,255,255,0.28)';
             artCtx.lineWidth = 3.5;
@@ -1792,7 +1914,8 @@ const StoryArtworkEditorModal = ({
       codeColor: '#0f172a',
       codeBgStyle: 'none',
       codeFontSize: 10,
-      codeDistance: 3.5
+      codeDistance: 3.5,
+      rotation: 0
     });
     setLocalExpiryConfig({
       enabled: true,
@@ -2034,8 +2157,12 @@ const StoryArtworkEditorModal = ({
                 <span>แตะ/ลากวัตถุ</span>
               </div>
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
+                <RotateCw size={12} className="text-amber-400 shrink-0" />
+                <span>หมุน 360° (ลากปุ่มหมุน/กด R)</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
                 <span className="text-amber-400">🤏 2 นิ้ว:</span>
-                <span>กาง/หุบ ขยายสติ๊กเกอร์</span>
+                <span>กางหุบขยาย / บิดหมุน</span>
               </div>
               <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-zinc-900/80 border border-zinc-800/80 text-[11px] font-medium kanit-text text-zinc-300 shadow-2xs whitespace-nowrap shrink-0">
                 <span className="text-zinc-400">⌨️ ลูกศร:</span>
@@ -2349,7 +2476,8 @@ const StoryArtworkEditorModal = ({
                   top: `${localQrConfig.yPercent ?? 32}%`,
                   width: `${localQrConfig.sizePercent ?? 26}%`,
                   maxWidth: `${localQrConfig.sizePercent ?? 26}%`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: `translate(-50%, -50%) rotate(${localQrConfig.rotation || 0}deg)`,
+                  transformOrigin: 'center center',
                   touchAction: 'none',
                   userSelect: 'none',
                   WebkitUserSelect: 'none',
@@ -2407,6 +2535,28 @@ const StoryArtworkEditorModal = ({
                     title="ลากเพื่อย่อ-ขยายขนาด หรือใช้ 2 นิ้วกางหุบ"
                   >
                     <Move size={8} className="text-white transform rotate-45" />
+                  </div>
+                )}
+
+                {/* Rotate Handle for QR / Barcode (Canva / Figma Style) */}
+                {activeSticker === 'qr' && (
+                  <div
+                    onPointerDown={(e) => handleStartRotate(e, 'qr')}
+                    className="absolute -top-9 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing z-30 group/rot touch-none"
+                    title="ลากหมุน 360° (หรือปรับองศาที่แผงควบคุม)"
+                  >
+                    {/* Angle degree tooltip */}
+                    <div className={`mb-0.5 px-1.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-mono font-black shadow-lg whitespace-nowrap select-none transition-all pointer-events-none ${
+                      isRotating ? 'scale-110 ring-2 ring-white/60 shadow-amber-400/50' : 'scale-90 group-hover/rot:scale-100'
+                    }`}>
+                      {Math.round(localQrConfig.rotation || 0)}°
+                    </div>
+                    {/* Rotate button knob */}
+                    <div className="w-5.5 h-5.5 rounded-full bg-zinc-900 border-2 border-amber-400 shadow-xl flex items-center justify-center text-amber-400 hover:scale-110 active:scale-95 transition-transform">
+                      <RotateCw size={11} className="stroke-[2.5]" />
+                    </div>
+                    {/* Connecting stem line */}
+                    <div className="w-0.5 h-2 bg-amber-400/80 -mt-0.5" />
                   </div>
                 )}
               </div>
@@ -3222,6 +3372,119 @@ const StoryArtworkEditorModal = ({
                       </div>
                     </div>
 
+                    {/* Rotation 360° Slider & Presets */}
+                    <div className="p-2.5 bg-zinc-900/50 rounded-xl border border-zinc-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-zinc-300 kanit-text">
+                        <div className="flex items-center gap-1.5 font-semibold text-zinc-200">
+                          <RotateCw size={13} className="text-amber-400 shrink-0" />
+                          <span>การหมุนโค้ด (360°):</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-zinc-100 font-bold bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700 text-xs shadow-2xs">
+                            {Math.round(localQrConfig.rotation || 0)}°
+                          </span>
+                          {(localQrConfig.rotation || 0) !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setLocalQrConfig(prev => ({ ...prev, rotation: 0 }))}
+                              className="text-[10px] text-amber-400 hover:text-amber-300 px-1 py-0.5 rounded hover:bg-amber-400/10 kanit-text font-medium transition-colors cursor-pointer"
+                              title="รีเซ็ตเป็น 0°"
+                            >
+                              รีเซ็ต
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Slider 0° - 360° with fine step buttons */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLocalQrConfig(prev => ({
+                            ...prev,
+                            rotation: (Math.round(((prev.rotation || 0) - 1 + 360)) % 360)
+                          }))}
+                          className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold flex items-center justify-center hover:bg-zinc-700 text-xs shrink-0 active:scale-95 transition-all"
+                          title="หมุนทวนเข็ม 1°"
+                        >
+                          -1°
+                        </button>
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          step="1"
+                          value={Math.round(localQrConfig.rotation || 0)}
+                          onChange={(e) => setLocalQrConfig(prev => ({ ...prev, rotation: Number(e.target.value) % 360 }))}
+                          className="w-full cursor-pointer accent-amber-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setLocalQrConfig(prev => ({
+                            ...prev,
+                            rotation: (Math.round(((prev.rotation || 0) + 1)) % 360)
+                          }))}
+                          className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 font-bold flex items-center justify-center hover:bg-zinc-700 text-xs shrink-0 active:scale-95 transition-all"
+                          title="หมุนตามเข็ม 1°"
+                        >
+                          +1°
+                        </button>
+                      </div>
+
+                      {/* Preset Quick Angle Buttons (0°, 90°, 180°, 270°) */}
+                      <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                        {[
+                          { deg: 0, title: '0°', label: 'แนวนอน' },
+                          { deg: 90, title: '90°', label: 'ตั้งขวา' },
+                          { deg: 180, title: '180°', label: 'กลับหัว' },
+                          { deg: 270, title: '270°', label: 'ตั้งซ้าย' }
+                        ].map(preset => {
+                          const isSelected = Math.round(localQrConfig.rotation || 0) === preset.deg;
+                          return (
+                            <button
+                              key={preset.deg}
+                              type="button"
+                              onClick={() => setLocalQrConfig(prev => ({ ...prev, rotation: preset.deg }))}
+                              className={`py-1.5 px-1 rounded-lg border text-[11px] font-semibold kanit-text flex flex-col items-center justify-center transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-amber-400/20 text-amber-300 border-amber-400/60 shadow-xs ring-1 ring-amber-400/30'
+                                  : 'bg-zinc-800/60 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
+                              }`}
+                            >
+                              <span className="font-mono font-bold leading-tight">{preset.title}</span>
+                              <span className="text-[9px] text-zinc-400 font-normal">{preset.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* 90-degree quick turn buttons */}
+                      <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setLocalQrConfig(prev => ({
+                            ...prev,
+                            rotation: (Math.round(((prev.rotation || 0) - 90 + 360)) % 360)
+                          }))}
+                          className="py-1 px-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/80 text-[11px] text-zinc-300 font-medium kanit-text flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                          <RotateCcw size={12} className="text-zinc-400" />
+                          <span>หมุนซ้าย 90°</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLocalQrConfig(prev => ({
+                            ...prev,
+                            rotation: (Math.round(((prev.rotation || 0) + 90)) % 360)
+                          }))}
+                          className="py-1 px-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/80 text-[11px] text-zinc-300 font-medium kanit-text flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                        >
+                          <RotateCw size={12} className="text-zinc-400" />
+                          <span>หมุนขวา 90°</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Background Card Style Toggle */}
                     <div className="space-y-1.5 pt-1">
                       <label className="text-xs font-semibold text-zinc-300 kanit-text block">พื้นหลังกรอบโค้ด:</label>
@@ -3954,7 +4217,8 @@ const CouponManager = ({
       codeColor: '#0f172a',
       codeBgStyle: 'none',
       codeFontSize: 10,
-      codeDistance: 3.5
+      codeDistance: 3.5,
+      rotation: 0
     },
     // Custom Expiry Date Visual Positioning Editor
     expiryConfig: {
@@ -4887,7 +5151,8 @@ const CouponManager = ({
           whiteBg: true,
           showCode: true,
           codeColor: '#0f172a',
-          codeBgStyle: 'none'
+          codeBgStyle: 'none',
+          rotation: 0
         },
         expiryConfig: {
           enabled: true,
@@ -5283,8 +5548,9 @@ const CouponManager = ({
       }
 
       // 2. Draw Code (QR Code or Barcode) matching exact preview dimensions & center positioning
-      const qrCfg = coupon.qrConfig || coupon.qr_config || { codeType: 'qr', xPercent: 78, yPercent: 32, sizePercent: 26, whiteBg: true, showCode: true, codeColor: '#0f172a', codeBgStyle: 'none' };
+      const qrCfg = coupon.qrConfig || coupon.qr_config || { codeType: 'qr', xPercent: 78, yPercent: 32, sizePercent: 26, whiteBg: true, showCode: true, codeColor: '#0f172a', codeBgStyle: 'none', rotation: 0 };
       const isBarcode = qrCfg.codeType === 'barcode';
+      const qrRotation = Number(qrCfg.rotation) || 0;
 
       // Card geometry:
       const cardWidth = Math.round((qrCfg.sizePercent / 100) * width);
@@ -5305,6 +5571,13 @@ const CouponManager = ({
       const cardY = centerY - Math.round(cardHeight / 2);
       const codeX = cardX + pad;
       const codeY = cardY + pad;
+
+      if (qrRotation !== 0) {
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate((qrRotation * Math.PI) / 180);
+        ctx.translate(-centerX, -centerY);
+      }
 
       // Draw white card background if enabled
       if (qrCfg.whiteBg) {
@@ -5387,6 +5660,10 @@ const CouponManager = ({
         ctx.fillText(coupon.code, textX, textY);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
+      }
+
+      if (qrRotation !== 0) {
+        ctx.restore();
       }
 
       // 3. Draw Expiry Date according to expiryConfig
@@ -6181,7 +6458,7 @@ const CouponManager = ({
       isStrip = canvasIsStrip || isCouponStripMeta;
     }
 
-    const templateLabel = isStrip ? 'แถบยาวชิดขอบ (4 ใบ/หน้า A4)' : 'บัตรพรีเมียม 85.6 × 54 mm (10 ใบ/หน้า A4)';
+    const templateLabel = isStrip ? 'แถบยาวชิดขอบ (4 ใบ/หน้า A4)' : 'บัตรการ์ดชิดขอบ (10 ใบ/หน้า A4)';
 
     const chunkSize = isStrip ? 4 : 10;
     const pages = [];
@@ -6211,7 +6488,7 @@ const CouponManager = ({
         `;
       }
 
-      // Card layout: Pad empty slots so the last page keeps proper 2-column x 5-row grid layout and cutting marks
+      // Card layout: ชิดขอบ A4 เต็มแผ่น 100% (10 ใบ/หน้า: 2 คอลัมน์ x 5 แถว = 105 x 59.4 mm) ตัดง่ายจากขอบจรดขอบ
       const paddedCoupons = [...pageCoupons];
       while (paddedCoupons.length < chunkSize) {
         paddedCoupons.push(null);
@@ -6229,7 +6506,7 @@ const CouponManager = ({
       }).join('');
 
       return `
-        <div class="a4-page">
+        <div class="a4-page a4-card-page">
           <div class="grid-card">
             ${cardsHtml}
           </div>
@@ -6270,37 +6547,46 @@ const CouponManager = ({
             box-sizing: border-box;
             overflow: hidden;
             background: #ffffff;
+            display: block;
           }
           .a4-page:last-child {
             page-break-after: auto;
             break-after: auto;
           }
 
-          /* Template 2: Card Centering */
-          .a4-page:not(.a4-strip-page) {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+          /* TEMPLATE 2: CARD (ชิดขอบ A4 100%, 10 ใบ/หน้า A4: 2 คอลัมน์ x 5 แถว = 105 x 59.4 mm) - สุดขอบ A4 ตัดง่าย */
+          .a4-card-page {
+            display: block;
+            width: 210mm;
+            height: 297mm;
+            padding: 0;
+            margin: 0;
           }
-
-          /* TEMPLATE 2: CARD (85.6 x 54 mm, 10/page) - ตาราง 2 คอลัมน์ x 5 แถว พร้อมเส้นประตัด */
           .grid-card {
             display: grid;
-            grid-template-columns: repeat(2, 85.6mm);
-            grid-template-rows: repeat(5, 54mm);
+            grid-template-columns: repeat(2, 105mm);
+            grid-template-rows: repeat(5, 59.4mm);
             gap: 0;
-            width: 171.2mm;
-            height: 270mm;
-            margin: auto;
-            border: 0.35px solid #64748b;
+            width: 210mm;
+            width: 100%;
+            height: 297mm;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            border: none;
             box-sizing: border-box;
           }
           .t2-card-box {
-            width: 85.6mm;
-            height: 54mm;
-            border-right: 0.35px dashed #64748b;
-            border-bottom: 0.35px dashed #64748b;
+            width: 105mm;
+            width: 100%;
+            height: 59.4mm;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            position: relative;
             box-sizing: border-box;
+            border-right: 0.75px dashed #94a3b8;
+            border-bottom: 0.75px dashed #94a3b8;
             overflow: hidden;
             display: flex;
             align-items: center;
@@ -6308,6 +6594,8 @@ const CouponManager = ({
             background: #ffffff;
             page-break-inside: avoid;
             break-inside: avoid;
+            line-height: 0;
+            font-size: 0;
           }
           .t2-card-box:nth-child(2n) {
             border-right: none;
@@ -6319,10 +6607,14 @@ const CouponManager = ({
             background: #ffffff;
           }
           .t2-card-img {
-            width: 85.6mm;
-            height: 54mm;
-            object-fit: contain;
+            width: 105mm;
+            width: 100%;
+            height: 59.4mm;
+            height: 100%;
+            object-fit: fill;
             display: block;
+            margin: 0;
+            padding: 0;
           }
 
           /* TEMPLATE 1: STRIP (แถบยาวชิดขอบซ้ายขวา 100%, 4 ใบ/หน้า A4) - พร้อมเส้นประนำตัดบางๆ ระหว่างใบ 1 เส้น */
@@ -6408,6 +6700,30 @@ const CouponManager = ({
               width: 100% !important;
               height: auto !important;
               max-height: 74.25mm !important;
+            }
+            .a4-card-page {
+              width: 210mm !important;
+              height: 297mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .grid-card {
+              width: 210mm !important;
+              height: 297mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .t2-card-box {
+              width: 105mm !important;
+              height: 59.4mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .t2-card-img {
+              width: 105mm !important;
+              width: 100% !important;
+              height: 59.4mm !important;
+              height: 100% !important;
             }
           }
         </style>
@@ -7071,17 +7387,16 @@ const CouponManager = ({
 
                 {/* Infinite Scroll Sentinel / Load More for Individual Coupons */}
                 {individualVisibleCount < filteredIndividualCoupons.length && (
-                  <div ref={individualSentinelRef} className="col-span-full py-6 flex flex-col items-center justify-center gap-2.5">
-                    <div className="flex items-center gap-2 text-xs text-slate-500 kanit-text font-medium">
-                      <Loader2 size={16} className="animate-spin text-sky-500" />
-                      <span>กำลังโหลดคูปองเพิ่มเติม... (แสดงแล้ว {displayedIndividualCoupons.length} จาก {filteredIndividualCoupons.length} ใบ)</span>
+                  <div ref={individualSentinelRef} className="col-span-full py-6 flex flex-col items-center justify-center gap-2">
+                    <div className="text-xs text-slate-500 kanit-text font-medium">
+                      <span>(แสดงแล้ว {displayedIndividualCoupons.length} จาก {filteredIndividualCoupons.length} ใบ)</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIndividualVisibleCount(prev => Math.min(prev + 24, filteredIndividualCoupons.length))}
-                      className="px-4 py-2 rounded-xl text-xs font-bold kanit-text bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-2xs transition-all active:scale-95"
+                      className="px-5 py-2 rounded-xl text-xs font-bold kanit-text bg-slate-100 hover:bg-slate-200 text-slate-700 shadow-2xs transition-all active:scale-95 cursor-pointer"
                     >
-                      โหลดเพิ่มอีก 24 ใบ
+                      แสดงเพิ่มเติม
                     </button>
                   </div>
                 )}
@@ -7716,7 +8031,8 @@ const CouponManager = ({
                                 top: `${form.qrConfig.yPercent}%`,
                                 width: `${form.qrConfig.sizePercent}%`,
                                 maxWidth: `${form.qrConfig.sizePercent}%`,
-                                transform: 'translate(-50%, -50%)',
+                                transform: `translate(-50%, -50%) rotate(${form.qrConfig.rotation || 0}deg)`,
+                                transformOrigin: 'center center',
                                 boxSizing: 'border-box',
                                 padding: form.qrConfig.whiteBg ? '3.5%' : '0px',
                                 minWidth: 0
@@ -8741,16 +9057,15 @@ const CouponManager = ({
                 {/* Infinite Scroll Sentinel for Drill-Down Modal */}
                 {drillDownVisibleCount < currentDrillDownCoupons.length && (
                   <div ref={drillDownSentinelRef} className="col-span-full py-4 flex flex-col items-center justify-center gap-2">
-                    <div className="flex items-center gap-2 text-xs text-slate-500 kanit-text font-medium">
-                      <Loader2 size={15} className="animate-spin text-sky-500" />
-                      <span>กำลังโหลดเพิ่มเติม... (แสดงแล้ว {displayedDrillDownCoupons.length} จาก {currentDrillDownCoupons.length} ใบ)</span>
+                    <div className="text-xs text-slate-500 kanit-text font-medium">
+                      <span>(แสดงแล้ว {displayedDrillDownCoupons.length} จาก {currentDrillDownCoupons.length} ใบ)</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setDrillDownVisibleCount(prev => Math.min(prev + 24, currentDrillDownCoupons.length))}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold kanit-text bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-95"
+                      className="px-4 py-1.5 rounded-xl text-xs font-bold kanit-text bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all active:scale-95 cursor-pointer"
                     >
-                      โหลดเพิ่มอีก 24 ใบ
+                      แสดงเพิ่มเติม
                     </button>
                   </div>
                 )}

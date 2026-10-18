@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { QrCode, Camera, Zap, RefreshCw, Ticket, X } from 'lucide-react';
+import { QrCode, Barcode, Camera, Zap, RefreshCw, Ticket, X } from 'lucide-react';
 import jsQR from 'jsqr';
+import { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } from '@zxing/library';
 
 /**
- * Shared QR Scanner Modal
+ * Universal Scanner Modal (QR Code + 1D Barcodes)
+ * Hybrid engine: Native BarcodeDetector (GPU/C++) + jsQR (Fast 2D) + ZXing (Universal 1D/2D)
  * Reusable across POSSystem and CouponManager
  */
 const QrScannerModal = ({
   isOpen,
   onClose,
   onScan,
-  title = 'สแกน QR Code คูปอง',
-  subtitle = 'ส่องกล้องไปที่ QR Code บนคูปองของลูกค้า',
-  placeholder = 'เช่น CP-XXXX หรือ URL คูปอง',
-  inputLabel = 'หรือพิมพ์รหัสคูปอง',
+  title = 'สแกน QR Code / บาร์โค้ด',
+  subtitle = 'ส่องกล้องไปที่ QR Code หรือ Barcode บนสินค้า/คูปอง',
+  placeholder = 'เช่น CP-XXXX หรือรหัสบาร์โค้ด',
+  inputLabel = 'หรือพิมพ์รหัสด้วยตนเอง',
   actionButtonText = 'ใช้รหัส',
   showToast
 }) => {
@@ -24,6 +26,7 @@ const QrScannerModal = ({
   const [torchOn, setTorchOn] = useState(false);
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [manualInput, setManualInput] = useState('');
+  const [detectedFormat, setDetectedFormat] = useState(null);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -31,6 +34,63 @@ const QrScannerModal = ({
   const mediaStreamRef = useRef(null);
   const cameraSessionIdRef = useRef(0);
   const cameraFacingRef = useRef('environment');
+
+  const zxingReaderRef = useRef(null);
+  const barcodeDetectorRef = useRef(null);
+
+  // Initialize decoding engines
+  useEffect(() => {
+    // 1. Native BarcodeDetector for hardware-accelerated instant decoding (Chrome, Android, Edge)
+    if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+      try {
+        barcodeDetectorRef.current = new window.BarcodeDetector({
+          formats: [
+            'qr_code',
+            'code_128',
+            'code_39',
+            'code_93',
+            'ean_13',
+            'ean_8',
+            'upc_a',
+            'upc_e',
+            'itf',
+            'data_matrix',
+            'codabar'
+          ]
+        });
+      } catch (e) {
+        console.warn('[QrScannerModal] Native BarcodeDetector init:', e);
+      }
+    }
+
+    // 2. ZXing MultiFormat Reader as universal fallback (Safari iOS, Firefox, etc.)
+    try {
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.CODE_93,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.ITF,
+        BarcodeFormat.CODABAR,
+        BarcodeFormat.DATA_MATRIX
+      ]);
+      hints.set(DecodeHintType.TRY_HARDER, false);
+      zxingReaderRef.current = new BrowserMultiFormatReader(hints, 120);
+    } catch (e) {
+      console.warn('[QrScannerModal] ZXing init warning:', e);
+    }
+
+    return () => {
+      if (zxingReaderRef.current) {
+        try { zxingReaderRef.current.reset(); } catch (_) {}
+      }
+    };
+  }, []);
 
   const notify = useCallback((msg, type = 'info') => {
     if (typeof showToast === 'function') {
@@ -40,11 +100,37 @@ const QrScannerModal = ({
     }
   }, [showToast]);
 
+  // Audio & haptic feedback on successful detection
+  const playScanBeep = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      }
+    } catch (_) {}
+    if (navigator?.vibrate) {
+      try { navigator.vibrate(45); } catch (_) {}
+    }
+  }, []);
+
   const stopCamera = useCallback(() => {
     cameraSessionIdRef.current++;
     if (scanLoopRef.current) {
       cancelAnimationFrame(scanLoopRef.current);
       scanLoopRef.current = null;
+    }
+    if (zxingReaderRef.current) {
+      try { zxingReaderRef.current.reset(); } catch (_) {}
     }
     if (mediaStreamRef.current) {
       try {
@@ -59,6 +145,7 @@ const QrScannerModal = ({
     }
     setTorchOn(false);
     setScannerActive(false);
+    setDetectedFormat(null);
   }, []);
 
   const parseCode = useCallback((raw) => {
@@ -75,22 +162,24 @@ const QrScannerModal = ({
     return clean.toUpperCase();
   }, []);
 
-  const handleDetectedCode = useCallback((rawCode) => {
+  const handleDetectedCode = useCallback((rawCode, format = null) => {
     const clean = parseCode(rawCode);
     if (!clean) return;
+    setDetectedFormat(format);
+    playScanBeep();
     stopCamera();
     onClose();
     if (typeof onScan === 'function') {
       onScan(clean);
     }
-  }, [onClose, onScan, parseCode, stopCamera]);
+  }, [onClose, onScan, parseCode, playScanBeep, stopCamera]);
 
   const startCamera = useCallback(async (facing = cameraFacingRef.current) => {
     const sessionId = ++cameraSessionIdRef.current;
     try {
       setScannerActive(true);
       if (!navigator?.mediaDevices?.getUserMedia) {
-        notify('อุปกรณ์หรือเบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาพิมพ์รหัสคูปองแทน', 'warning');
+        notify('อุปกรณ์หรือเบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาพิมพ์รหัสแทน', 'warning');
         setScannerActive(false);
         return;
       }
@@ -135,33 +224,85 @@ const QrScannerModal = ({
       const cap = track?.getCapabilities ? track.getCapabilities() : {};
       setHasTorch(Boolean(cap?.torch));
 
-      const tick = () => {
+      // Throttled Hybrid Decode Loop (75ms interval = ~13 scans/sec, zero lag)
+      let isProcessingFrame = false;
+      let lastProcessTime = 0;
+
+      const tick = async () => {
         if (sessionId !== cameraSessionIdRef.current) return;
         const video = videoRef.current;
-        if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-          const canvas = canvasRef.current || document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imgData.data, imgData.width, imgData.height, {
-              inversionAttempts: 'dontInvert'
-            });
-            if (code && code.data) {
-              handleDetectedCode(code.data);
+        const now = performance.now();
+
+        if (video && video.readyState === video.HAVE_ENOUGH_DATA && !isProcessingFrame && (now - lastProcessTime >= 75)) {
+          isProcessingFrame = true;
+          lastProcessTime = now;
+
+          try {
+            let detectedText = null;
+            let formatFound = null;
+
+            // Tier 1: Hardware-Accelerated Native BarcodeDetector (Chrome/Android)
+            if (barcodeDetectorRef.current) {
+              try {
+                const barcodes = await barcodeDetectorRef.current.detect(video);
+                if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                  detectedText = barcodes[0].rawValue;
+                  formatFound = barcodes[0].format || 'barcode';
+                }
+              } catch (_) {}
+            }
+
+            // Tier 2: jsQR for instant QR code detection
+            if (!detectedText) {
+              const canvas = canvasRef.current || document.createElement('canvas');
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const ctx = canvas.getContext('2d', { willReadFrequently: true });
+              if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const qr = jsQR(imgData.data, imgData.width, imgData.height, {
+                  inversionAttempts: 'dontInvert'
+                });
+                if (qr && qr.data) {
+                  detectedText = qr.data;
+                  formatFound = 'qr_code';
+                }
+              }
+            }
+
+            // Tier 3: ZXing MultiFormat Reader for 1D Barcodes (Code 128, EAN-13, UPC, Code 39)
+            if (!detectedText && zxingReaderRef.current) {
+              try {
+                const result = zxingReaderRef.current.decode(video);
+                if (result && result.getText()) {
+                  detectedText = result.getText();
+                  formatFound = 'barcode';
+                }
+              } catch (_) {
+                // NotFoundException when frame has no readable code
+              }
+            }
+
+            if (detectedText && sessionId === cameraSessionIdRef.current) {
+              handleDetectedCode(detectedText, formatFound);
               return;
             }
+          } catch (e) {
+            // Ignore temporary frame decoding error
+          } finally {
+            isProcessingFrame = false;
           }
         }
+
         scanLoopRef.current = requestAnimationFrame(tick);
       };
+
       scanLoopRef.current = requestAnimationFrame(tick);
     } catch (err) {
       if (sessionId !== cameraSessionIdRef.current) return;
       console.warn('[QrScannerModal] Camera error:', err);
-      notify('ไม่สามารถเปิดกล้องได้ กรุณาพิมพ์รหัสคูปองแทน', 'warning');
+      notify('ไม่สามารถเปิดกล้องได้ กรุณาพิมพ์รหัสแทน', 'warning');
       setScannerActive(false);
     }
   }, [handleDetectedCode, notify]);
@@ -213,6 +354,7 @@ const QrScannerModal = ({
   useEffect(() => {
     if (isOpen) {
       setManualInput('');
+      setDetectedFormat(null);
       cameraFacingRef.current = 'environment';
       setCameraFacing('environment');
       startCamera('environment');
@@ -238,14 +380,15 @@ const QrScannerModal = ({
     >
       <div className="bg-white rounded-3xl w-full max-w-md max-h-[94dvh] shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-blue-50/50 shrink-0">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-indigo-50/30 to-blue-50/50 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-sky-500 text-white shadow-xs">
-              <QrCode size={18} />
+            <div className="p-2 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-xs flex items-center gap-1">
+              <QrCode size={16} />
+              <Barcode size={16} />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-800 text-base kanit-text">{title}</h3>
-              <p className="text-[11px] text-slate-500 kanit-text">{subtitle}</p>
+              <h3 className="font-extrabold text-slate-800 text-base kanit-text leading-tight">{title}</h3>
+              <p className="text-[11px] text-slate-500 kanit-text mt-0.5">{subtitle}</p>
             </div>
           </div>
           <button
@@ -254,7 +397,7 @@ const QrScannerModal = ({
               stopCamera();
               onClose();
             }}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -262,7 +405,7 @@ const QrScannerModal = ({
 
         {/* Body */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
-          {/* Camera Preview */}
+          {/* Camera Viewfinder */}
           <div className="relative w-full aspect-square bg-black rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
             <video ref={videoRef} className={`w-full h-full object-cover ${!scannerActive ? 'hidden' : ''}`} />
             <canvas ref={canvasRef} className="hidden" />
@@ -277,13 +420,20 @@ const QrScannerModal = ({
             {scannerActive && (
               /* Aiming Reticle Overlay */
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="w-[70%] max-w-[260px] aspect-square border-2 border-dashed border-sky-400/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                <div className="w-[74%] max-w-[270px] aspect-[4/3] border-2 border-dashed border-sky-400/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
                   <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-sky-400 rounded-tl-lg" />
                   <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-sky-400 rounded-tr-lg" />
                   <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-sky-400 rounded-bl-lg" />
                   <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-sky-400 rounded-br-lg" />
+                  
                   {/* Scanning Laser Animation */}
-                  <div className="absolute inset-x-2 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_8px_#38bdf8] animate-bounce" />
+                  <div className="absolute inset-x-2 top-0 h-0.5 bg-gradient-to-r from-transparent via-sky-400 to-transparent shadow-[0_0_10px_#38bdf8] animate-bounce" />
+
+                  {/* Dual Scan Mode Badge */}
+                  <div className="absolute -bottom-9 left-1/2 transform -translate-x-1/2 whitespace-nowrap bg-black/65 backdrop-blur-xs text-white/95 text-[10px] px-3 py-1 rounded-full border border-white/20 font-medium tracking-wide flex items-center gap-1.5 shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>รองรับ QR Code และ Barcode ทุกชนิด</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -313,7 +463,7 @@ const QrScannerModal = ({
               <button
                 type="submit"
                 disabled={!manualInput.trim()}
-                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold kanit-text transition-all shrink-0 shadow-xs"
+                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold kanit-text transition-all shrink-0 shadow-xs cursor-pointer"
               >
                 {actionButtonText}
               </button>
@@ -327,7 +477,7 @@ const QrScannerModal = ({
             <button
               type="button"
               onClick={toggleTorch}
-              className={`flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 border transition-all shadow-xs ${
+              className={`flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 border transition-all shadow-xs cursor-pointer ${
                 torchOn
                   ? 'bg-amber-400 border-amber-500 text-slate-900 shadow-amber-200'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
@@ -341,7 +491,7 @@ const QrScannerModal = ({
             type="button"
             onClick={flipCamera}
             disabled={!scannerActive || isSwitchingCamera}
-            className="flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 max-w-[190px] py-2.5 px-3.5 rounded-xl text-xs sm:text-sm font-bold kanit-text flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <RefreshCw size={16} className={`text-sky-500 ${isSwitchingCamera ? 'animate-spin' : ''}`} />
             <span>{isSwitchingCamera ? 'กำลังสลับกล้อง...' : 'สลับกล้อง'}</span>
