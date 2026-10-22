@@ -979,7 +979,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   // --- ฟังก์ชัน OCR และ Smart Card (คัดลอกและปรับปรุงจากระบบเวชระเบียนเพื่อให้ทำงานสมบูรณ์) ---
   const captureImageToBase64 = () => {
     const video = videoRef.current;
-    if (!video) return null;
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth; 
     canvas.height = video.videoHeight;
@@ -3212,8 +3212,8 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       </AnimatedModal>
 
       {/* Modal สำหรับกล้อง (Staff Manager) */}
-      {isScannerOpen && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/75 fade-in">
+      {isScannerOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget && !isScanning) setIsScannerOpen(false); }}>
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
@@ -3238,7 +3238,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                     )}
                 </div>
                 
-                <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover z-0"></video>
+                <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0"></video>
                 
                 <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/60 transition-all duration-300 ${isScanning ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
                     <Loader2 className="w-12 h-12 text-indigo-400 animate-spin mb-3" />
