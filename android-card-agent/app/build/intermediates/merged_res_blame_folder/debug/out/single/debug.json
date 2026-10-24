@@ -1,0 +1,86 @@
+[
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-mdpi\\ic_launcher_round.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\xml\\data_extraction_rules.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\drawable_ic_more_vert.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\drawable\\ic_more_vert.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xhdpi\\ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\drawable_shape_circle_green.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\drawable\\shape_circle_green.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-hdpi\\ic_launcher_round.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xhdpi\\ic_launcher_round.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-mdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-mdpi\\ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xxhdpi\\ic_launcher_round.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\drawable_shape_circle_red.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\drawable\\shape_circle_red.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xxxhdpi\\ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\drawable_ic_launcher.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\drawable\\ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-hdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-hdpi\\ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\xml_device_filter.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\xml\\device_filter.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\xml_file_paths.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\xml\\file_paths.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xxhdpi\\ic_launcher.png"
+    },
+    {
+        "merged": "com.anping.cardagent.app-merged_res-31:/raw_card_chime.mp3.flat",
+        "source": "com.anping.cardagent.app-main-33:/raw/card_chime.mp3"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\raw_card_chime.mp3.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\raw\\card_chime.mp3"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\drawable_shape_circle_yellow.xml.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\drawable\\shape_circle_yellow.xml"
+    },
+    {
+        "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xxxhdpi\\ic_launcher_round.png"
+    }
+]

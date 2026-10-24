@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { unlockAudio, playCardBeep, rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -26,6 +26,33 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isReadingCard, setIsReadingCard] = useState(false);
+  const [showAgentModal, setShowAgentModal] = useState(false);
+  const autoCardInsertedRef = useRef(false);
+  const isAutoReadingRef = useRef(false);
+
+  const handleDownloadApk = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      showToast('กำลังดาวน์โหลด APK...', 'info');
+      const res = await fetch('/anping-card-agent.apk');
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const apkBlob = new Blob([blob], { type: 'application/vnd.android.package-archive' });
+      const downloadUrl = window.URL.createObjectURL(apkBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = 'anping-card-agent.apk';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 5000);
+      showToast('ดาวน์โหลดเสร็จสมบูรณ์ กรุณากดติดตั้งไฟล์ APK', 'success');
+    } catch (err) {
+      console.warn('Fallback direct download', err);
+      window.location.href = '/anping-card-agent.apk';
+    }
+  };
   const [processingPdpaHn, setProcessingPdpaHn] = useState(null);
   const medModal = useModal();
   const [editingId, setEditingId] = useState(null);
@@ -1101,22 +1128,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 }]
             })
         });
-
         const data = await response.json();
         
         if (data.error) {
-            console.error("API Error:", data.error);
             showToast(`API Error: ${data.error.message}`, 'danger');
             if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         } else if (data.responses && data.responses[0] && data.responses[0].fullTextAnnotation) {
-            const text = data.responses[0].fullTextAnnotation.text;
-            parseIdCardText(text); // โยนข้อความที่อ่านได้เข้าฟังก์ชันสกัดข้อมูล
+            parseIdCardText(data.responses[0].fullTextAnnotation.text);
         } else {
-            showToast('ไม่พบข้อความบนบัตร กรุณาจัดบัตรให้อยู่ในกรอบ แสงสว่างเพียงพอ และสแกนใหม่', 'warning');
+            showToast('ไม่พบข้อความ กรุณาจัดบัตรให้ชัดเจนและสแกนใหม่', 'warning');
             if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         }
     } catch (error) {
-        console.error("OCR Request Error:", error);
         showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ Google Cloud Vision API', 'danger');
         if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
     } finally {
@@ -1125,57 +1148,237 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   };
 
   // --- ฟังก์ชันเชื่อมต่อกับโปรแกรมตัวกลางอ่านบัตร (Smart Card Reader) บน Localhost ---
-  const handleSmartCardRead = async () => {
-    setIsProcessing(true);
-    try {
-        // ยิง API ไปหาโปรแกรมตัวกลางในเครื่อง (Port 8181 หรือตามที่โปรแกรมตัวกลางกำหนด)
-        // หมายเหตุ: ต้องมีโปรแกรม Agent รันอยู่ที่เครื่องคอมพิวเตอร์ของผู้ใช้
-        const response = await fetch('http://localhost:8181/api/read-card', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            // ใส่ timeout ป้องกันการรอนานเกินไปหากไม่ได้เปิดโปรแกรมตัวกลาง
-            signal: AbortSignal.timeout(5000) 
-        });
+  const handleSmartCardRead = async (isAuto = false) => {
+    const isAutoMode = isAuto === true;
+    unlockAudio();
+    setIsReadingCard(true);
+    const isMobileDevice = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-        if (!response.ok) {
-            throw new Error('ไม่สามารถอ่านบัตรได้ กรุณาเสียบบัตรให้แน่น');
+    try {
+        let statusRes;
+        try {
+            statusRes = await fetch('http://127.0.0.1:8181/api/status', { 
+                method: 'GET', 
+                headers: { 'Content-Type': 'application/json' }, 
+                signal: AbortSignal.timeout(2000) 
+            }).catch(() => fetch('http://localhost:8181/api/status', { 
+                method: 'GET', 
+                headers: { 'Content-Type': 'application/json' }, 
+                signal: AbortSignal.timeout(2000) 
+            }));
+        } catch (agentErr) {
+            if (!isAutoMode) {
+                if (isMobileDevice) {
+                    setShowAgentModal(true);
+                } else {
+                    showToast('เชื่อมต่อเครื่องอ่านไม่ได้: ตรวจสอบว่าเปิดโปรแกรมอ่านบัตร (Agent) บนคอมพิวเตอร์แล้วหรือยัง', 'danger');
+                }
+            }
+            return;
         }
 
-        const data = await response.json();
-        
-        // ตัวอย่างการ Map ข้อมูลที่ได้จากโปรแกรมตัวกลาง (Format ขึ้นอยู่กับโปรแกรม Agent ที่ใช้)
-        // สมมติว่า Agent ส่ง JSON กลับมาเป็น { pid, titleName, fname, lname, dob, address... }
-        setFormData(prev => ({
-            ...prev,
-            idCard: data.pid || data.citizenId || '',
-            prefix: data.titleName || data.titleTH || '',
-            firstName: data.fname || data.firstNameTH || '',
-            lastName: data.lname || data.lastNameTH || '',
-            dob: data.dob ? `${data.dob.substring(6,8)}/${data.dob.substring(4,6)}/${data.dob.substring(0,4)}` : '', // แปลง YYYYMMDD เป็น DD/MM/YYYY
-            gender: data.gender === '1' || data.gender === 'Male' ? 'ชาย' : (data.gender === '2' || data.gender === 'Female' ? 'หญิง' : 'ไม่ระบุ'),
-            religion: data.religion || prev.religion, // <-- เพิ่มบรรทัดนี้เพื่ออัปเดตศาสนา
-            address: data.address || data.houseNo || '',
-            moo: data.moo || '',
-            subDistrict: data.subDistrict || data.tumbol || '',
-            district: data.district || data.amphur || '',
-            province: data.province || '',
+        if (!statusRes || !statusRes.ok) {
+            if (!isAutoMode) showToast('เซิร์ฟเวอร์อ่านบัตรขัดข้อง กรุณาลองใหม่อีกครั้ง', 'warning');
+            return;
+        }
+
+        const statusData = await statusRes.json().catch(() => ({}));
+
+        if (statusData.deviceConnected === false) {
+            if (!isAutoMode) showToast('ไม่พบอุปกรณ์อ่านบัตร: กรุณาเสียบสายเครื่องอ่านบัตรประชาชน (USB OTG)', 'warning');
+            return;
+        }
+
+        const readRes = await fetch('http://127.0.0.1:8181/api/read-card', { 
+            method: 'GET', 
+            headers: { 'Content-Type': 'application/json' }, 
+            signal: AbortSignal.timeout(4000) 
+        }).catch(() => fetch('http://localhost:8181/api/read-card', { 
+            method: 'GET', 
+            headers: { 'Content-Type': 'application/json' }, 
+            signal: AbortSignal.timeout(4000) 
         }));
 
-        showToast('ดึงข้อมูลจากบัตรประชาชนสำเร็จ', 'success');
+        if (!readRes || !readRes.ok) {
+            const errData = readRes ? await readRes.json().catch(() => ({})) : {};
+            const errMsg = errData.error || errData.message || '';
+            if (!isAutoMode) {
+                if ((readRes && readRes.status === 404) || errMsg.includes('ไม่พบบัตร')) {
+                    showToast('กรุณาเสียบบัตรประชาชนให้แน่น แล้วกดอ่านใหม่อีกครั้ง', 'warning');
+                } else {
+                    showToast(errMsg || 'ไม่สามารถอ่านบัตรได้ กรุณาลองใหม่', 'warning');
+                }
+            }
+            return;
+        }
+
+        const data = await readRes.json();
+        let gender = 'ไม่ระบุ';
+        const rawGender = String(data.gender || data.sex || '').toLowerCase().trim();
+        const rawPrefix = String(data.titleName || data.titleTH || data.prefix || '').trim();
+        const prefixLower = rawPrefix.toLowerCase();
+        const malePrefixes = ['นาย', 'นพ.', 'ด.ช.', 'เด็กชาย', 'พระ', 'ม.ร.ว.', 'mr.', 'mr', 'master'];
+        const femalePrefixes = ['นาง', 'นางสาว', 'ด.ญ.', 'เด็กหญิง', 'น.ส.', 'พญ.', 'mrs.', 'mrs', 'miss', 'ms.', 'ms'];
+
+        if (['1', 'ชาย', 'male', 'm'].includes(rawGender) || malePrefixes.some(p => prefixLower.includes(p))) {
+            gender = 'ชาย';
+        } else if (['2', 'หญิง', 'female', 'f'].includes(rawGender) || femalePrefixes.some(p => prefixLower.includes(p))) {
+            gender = 'หญิง';
+        }
+
+        let prefix = rawPrefix;
+        if (prefix === 'น.ส.' || prefix === 'น.ส') prefix = 'นางสาว';
+        if (prefix === 'ด.ช.' || prefix === 'ด.ช') prefix = 'ด.ช.';
+        if (prefix === 'ด.ญ.' || prefix === 'ด.ญ') prefix = 'ด.ญ.';
+
+        let dob = '';
+        if (data.dob) {
+            const dobStr = String(data.dob).trim();
+            if (dobStr.includes('/')) {
+                const parts = dobStr.split('/');
+                if (parts.length === 3) {
+                    const d = parts[0].padStart(2, '0');
+                    const m = parts[1].padStart(2, '0');
+                    let y = parseInt(parts[2], 10);
+                    if (y < 2400) y += 543;
+                    dob = `${d}/${m}/${y}`;
+                }
+            } else if (dobStr.includes('-')) {
+                const parts = dobStr.split('-');
+                if (parts.length === 3) {
+                    let y = parseInt(parts[0], 10);
+                    if (y < 2400) y += 543;
+                    const m = parts[1].padStart(2, '0');
+                    const d = parts[2].padStart(2, '0');
+                    dob = `${d}/${m}/${y}`;
+                }
+            } else if (dobStr.length === 8 && /^\d+$/.test(dobStr)) {
+                let y = parseInt(dobStr.substring(0, 4), 10);
+                if (y < 2400) y += 543;
+                const m = dobStr.substring(4, 6);
+                const d = dobStr.substring(6, 8);
+                dob = `${d}/${m}/${y}`;
+            } else {
+                dob = dobStr;
+            }
+        }
+
+        let religion = data.religion || data.faith || '';
+        religion = religion.replace(/^ศาสนา\s*/, '').trim();
+
+        const cid = String(data.pid || data.citizenId || data.idCard || '').trim();
+        const isNonThaiCid = /^[067]/.test(cid);
+        const nationality = (data.nationality || (isNonThaiCid ? '' : 'ไทย')).trim();
+        const ethnicity = (data.ethnicity || (isNonThaiCid ? '' : 'ไทย')).trim();
+
+        let address = (data.address || data.houseNo || data.homeNo || '').replace(/^ที่อยู่\s*/, '').replace(/^บ้านเลขที่\s*/, '').trim();
+        let moo = String(data.moo || '').replace(/[^0-9]/g, '').trim();
+        let road = (data.road || data.soi || data.trok || '').trim();
+        let subDistrict = (data.subDistrict || data.tumbol || '').replace(/^(?:ตำบล|แขวง|ต\.)\s*/, '').trim();
+        let district = (data.district || data.amphur || '').replace(/^(?:อำเภอ|เขต|อ\.)\s*/, '').trim();
+        let province = (data.province || '').replace(/^(?:จังหวัด|จ\.)\s*/, '').trim();
+        let zipcode = (data.zipcode || data.postcode || '').trim();
+
+        setFormData(prev => ({
+            ...prev,
+            idCard: data.pid || data.citizenId || data.idCard || prev.idCard,
+            prefix: prefix || prev.prefix,
+            firstName: (data.fname || data.firstNameTH || data.firstName || prev.firstName || '').trim(),
+            lastName: (data.lname || data.lastNameTH || data.lastName || prev.lastName || '').trim(),
+            dob: dob || prev.dob,
+            gender: gender !== 'ไม่ระบุ' ? gender : (prev.gender || ''),
+            religion: religion || prev.religion || '',
+            nationality: nationality || prev.nationality || (isNonThaiCid ? '' : 'ไทย'),
+            ethnicity: ethnicity || prev.ethnicity || (isNonThaiCid ? '' : 'ไทย'),
+            address: address || prev.address,
+            moo: moo || prev.moo,
+            road: road || prev.road,
+            subDistrict: subDistrict || prev.subDistrict,
+            district: district || prev.district,
+            province: province || prev.province,
+            zipcode: zipcode || prev.zipcode,
+            curAddress: prev.curAddress,
+            curMoo: prev.curMoo,
+            curRoad: prev.curRoad,
+            curSubDistrict: prev.curSubDistrict,
+            curDistrict: prev.curDistrict,
+            curProvince: prev.curProvince,
+            curZipcode: prev.curZipcode,
+        }));
+
+        playCardBeep();
+        showToast(isAutoMode ? 'ดึงข้อมูลจากบัตรประชาชนอัตโนมัติสำเร็จ' : 'ดึงข้อมูลจากบัตรประชาชนครบถ้วนทุกช่อง', 'success');
 
     } catch (error) {
         console.error("Smart Card Reader Error:", error);
-        if (error.name === 'TimeoutError' || error.message === 'Failed to fetch') {
-            showToast('เชื่อมต่อเครื่องอ่านไม่ได้: ตรวจสอบว่าเปิดโปรแกรมอ่านบัตร (Agent) แล้วหรือยัง', 'danger');
-        } else {
-            showToast(`ไม่สามารถอ่านบัตรได้: ${error.message}`, 'warning');
+        if (!isAutoMode) {
+            if (error.name === 'TimeoutError' || error.message === 'Failed to fetch') {
+                showToast('เชื่อมต่อเครื่องอ่านไม่ได้: ตรวจสอบว่าเปิดโปรแกรมอ่านบัตร (Agent) แล้วหรือยัง', 'danger');
+            } else {
+                showToast(`ไม่สามารถอ่านบัตรได้: ${error.message}`, 'warning');
+            }
         }
     } finally {
-        setIsProcessing(false);
+        setIsReadingCard(false);
     }
   };
+
+  // --- ระบบตรวจจับการเสียบบัตรประชาชนอัตโนมัติ (Auto-read on Card Inserted) ---
+  useEffect(() => {
+    if (!medModal.isOpen || isViewMode) {
+      autoCardInsertedRef.current = false;
+      return;
+    }
+
+    let isMounted = true;
+    const checkCardStatus = async () => {
+      if (isAutoReadingRef.current) return;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch('http://127.0.0.1:8181/api/status', { signal: controller.signal })
+          .catch(() => fetch('http://localhost:8181/api/status', { signal: controller.signal }))
+          .catch(() => null);
+        clearTimeout(timeoutId);
+
+        if (!isMounted || !res || !res.ok) {
+          autoCardInsertedRef.current = false;
+          return;
+        }
+
+        const status = await res.json().catch(() => null);
+        if (!status || !status.deviceConnected) {
+          autoCardInsertedRef.current = false;
+          return;
+        }
+
+        if (status.hasCard) {
+          if (!autoCardInsertedRef.current) {
+            autoCardInsertedRef.current = true;
+            isAutoReadingRef.current = true;
+            try {
+              await handleSmartCardRead(true);
+            } finally {
+              isAutoReadingRef.current = false;
+            }
+          }
+        } else {
+          autoCardInsertedRef.current = false;
+        }
+      } catch (_) {
+        autoCardInsertedRef.current = false;
+      }
+    };
+
+    const interval = setInterval(checkCardStatus, 1500);
+    checkCardStatus();
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      autoCardInsertedRef.current = false;
+    };
+  }, [medModal.isOpen, isViewMode]);
 
   // --- Constants ---
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
@@ -2859,13 +3062,23 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                       {!isViewMode && (
                         <>
                           {/* ปุ่มอ่านบัตรจากเครื่อง Smart Card Reader (เพิ่มใหม่) */}
-                          <button 
+                          <button
                             type="button" 
-                            onClick={handleSmartCardRead} 
-                            disabled={isProcessing}
-                            className="text-xs sm:text-sm px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-emerald-100 shadow-sm disabled:opacity-50"
+                            onClick={() => handleSmartCardRead(false)} 
+                            disabled={isReadingCard}
+                            className="text-xs sm:text-sm px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-emerald-100 shadow-sm disabled:opacity-50 cursor-pointer"
                           >
-                            <CreditCard size={16} /> <span className="hidden sm:inline">อ่านข้อมูลจากบัตร</span><span className="sm:hidden">อ่านบัตร</span>
+                            {isReadingCard ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin shrink-0"></div>
+                                <span className="hidden sm:inline">กำลังอ่านบัตร...</span>
+                                <span className="sm:hidden">กำลังอ่าน...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard size={16} /> <span className="hidden sm:inline">อ่านข้อมูลจากบัตร</span><span className="sm:hidden">อ่านบัตร</span>
+                              </>
+                            )}
                           </button>
 
                           {/* ปุ่มสแกนกล้อง (OCR) เดิม */}
@@ -2934,7 +3147,25 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">หมายเลขบัตรประชาชน/พาสปอร์ต</label><input type="text" className={`${theme.input} font-data`} value={formData.idCard} onChange={(e) => setFormData({...formData, idCard: e.target.value})} maxLength="13" /></div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">สัญชาติ</label><input type="text" className={`${theme.input} font-data`} value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} /></div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">เชื้อชาติ</label><input type="text" className={`${theme.input} font-data`} value={formData.ethnicity} onChange={(e) => setFormData({...formData, ethnicity: e.target.value})} /></div>
-                    <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ศาสนา</label><input type="text" className={`${theme.input} font-data`} value={formData.religion} onChange={(e) => setFormData({...formData, religion: e.target.value})} /></div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">ศาสนา</label>
+                                            <input 
+                        type="text" 
+                        list="med-religion-list"
+                        className={`${theme.input} font-data`} 
+                        value={formData.religion} 
+                        onChange={(e) => setFormData({...formData, religion: e.target.value})} 
+                        placeholder="ระบุศาสนา"
+                      />
+                      <datalist id="med-religion-list">
+                        <option value="พุทธ" />
+                        <option value="คริสต์" />
+                        <option value="อิสลาม" />
+                        <option value="พราหมณ์-ฮินดู" />
+                        <option value="ซิกข์" />
+                        <option value="ไม่ระบุ" />
+                      </datalist>
+                    </div>
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">อาชีพ</label><input type="text" className={`${theme.input} font-data`} value={formData.occupation} onChange={(e) => setFormData({...formData, occupation: e.target.value})} /></div>
                   </div>
                 </div>
@@ -4211,6 +4442,60 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       )}
 
       {/* Modal สำหรับกล้อง (Medical Records Scanner) */}
+      {showAgentModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget) setShowAgentModal(false); }}>
+          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center">
+                  <CreditCard size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 kanit-text text-base leading-tight">โปรแกรมอ่านบัตร Anping Agent</h3>
+                  <p className="text-xs text-slate-500 font-medium">สำหรับแท็บเล็ตและสมาร์ตโฟน Android</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowAgentModal(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3">
+                <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+                <div className="text-xs text-amber-800 leading-relaxed font-medium">
+                  ตรวจไม่พบโปรแกรมอ่านบัตรบนอุปกรณ์นี้ กรุณาติดตั้งแอปตัวกลางของคลินิก (Offline 100% ปลอดภัย ไม่ส่งข้อมูลออกภายนอก)
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="w-7 h-7 rounded-full bg-sky-500 text-white flex items-center justify-center font-bold text-xs shrink-0">1</div>
+                  <div className="text-xs text-slate-700 font-medium">ดาวน์โหลดไฟล์ APK และกดติดตั้ง (Install) ลงเครื่อง</div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="w-7 h-7 rounded-full bg-sky-500 text-white flex items-center justify-center font-bold text-xs shrink-0">2</div>
+                  <div className="text-xs text-slate-700 font-medium">เสียบสายเครื่องอ่านบัตร (USB OTG) เข้ากับแท็บเล็ต</div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="w-7 h-7 rounded-full bg-sky-500 text-white flex items-center justify-center font-bold text-xs shrink-0">3</div>
+                  <div className="text-xs text-slate-700 font-medium">กดอนุญาตสิทธิ์ USB แล้วกลับมากดปุ่มอ่านบัตรบนเว็บได้ทันที</div>
+                </div>
+              </div>
+
+              <button type="button" onClick={handleDownloadApk} className="w-full mt-2 py-3.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-2xl text-center shadow-lg shadow-sky-600/25 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm kanit-text">
+                <Download size={18} /> ดาวน์โหลด Anping Card Agent (APK)
+              </button>
+
+              <p className="text-[11px] text-slate-400 text-center font-medium">
+                * พัฒนาโดยอันผิงคลินิก ข้อมูลอยู่ในเครื่องแท็บเล็ต 100% ปลอดภัยสูงสุด
+              </p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {isScannerOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget && !isScanning) setIsScannerOpen(false); }}>
           <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">

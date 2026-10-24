@@ -251,9 +251,30 @@ export const getAgeString = (dobStr) => {
   if (!dobStr || dobStr.length < 10) return '-';
   const parts = dobStr.split('/');
   if (parts.length === 3) {
-    const dobDate = new Date(parseInt(parts[2], 10) - 543, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-    if (isNaN(dobDate.getTime())) return '-';
+    const d = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const yB = parseInt(parts[2], 10);
+    if (isNaN(yB) || yB < 2300) return '-';
+    const birthYearAD = yB - 543;
     const now = new Date();
+
+    // กรณีบัตรประชาชนผู้สูงอายุที่ไม่ทราบวันและเดือนเกิด (เช่น 00/00/2485)
+    if (d === 0 && m === 0) {
+      let years = now.getFullYear() - birthYearAD;
+      if (years < 0) years = 0;
+      return `${years} ปี (ประมาณ)`;
+    }
+
+    // กรณีไม่ทราบเฉพาะวันเกิด (เช่น 00/05/2485)
+    if (d === 0 && m > 0) {
+      let years = now.getFullYear() - birthYearAD;
+      let months = now.getMonth() - (m - 1);
+      if (months < 0) { years--; months += 12; }
+      return `${years} ปี ${months} เดือน`;
+    }
+
+    const dobDate = new Date(birthYearAD, m - 1, d);
+    if (isNaN(dobDate.getTime())) return '-';
     let years = now.getFullYear() - dobDate.getFullYear();
     let months = now.getMonth() - dobDate.getMonth();
     if (months < 0 || (months === 0 && now.getDate() < dobDate.getDate())) { years--; months += 12; }
@@ -2085,5 +2106,76 @@ export const syncCourseSessionsOnStatusChange = async ({
         return next;
       });
     }
+  }
+};
+
+
+// --- ระบบเสียงสัญญาณแจ้งเตือนสมัยใหม่ (Modern Notification Chime) ---
+let sharedAudioCtx = null;
+
+export const unlockAudio = () => {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!sharedAudioCtx) {
+      sharedAudioCtx = new AudioContextClass();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+  } catch (_) {}
+};
+
+export const playModernSynthChime = () => {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = sharedAudioCtx || new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const now = ctx.currentTime;
+    
+    // คอร์ด 4 โน้ต C6 (1046.5Hz) -> E6 (1318.5Hz) -> G6 (1567.9Hz) -> C7 (2093Hz) สไตล์เสียงแจ้งเตือนโมเดิร์น
+    const notes = [
+      { freq: 1046.5, delay: 0.00, dur: 0.35, gain: 0.18 },
+      { freq: 1318.5, delay: 0.06, dur: 0.40, gain: 0.20 },
+      { freq: 1567.9, delay: 0.12, dur: 0.55, gain: 0.22 },
+      { freq: 2093.0, delay: 0.18, dur: 0.65, gain: 0.15 }
+    ];
+
+    notes.forEach(({ freq, delay, dur, gain: noteGain }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(noteGain, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + delay);
+      osc.stop(now + delay + dur);
+    });
+  } catch (_) {}
+};
+
+export const playCardBeep = () => {
+  // 1. เล่นไฟล์เสียง chime_2364.mp3 ตอนเสียบบัตร/อ่านบัตรสำเร็จ
+  try {
+    const audio = new Audio('/sounds/chime_2364.mp3');
+    audio.volume = 0.75;
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        // Fallback รองกรณีเบราว์เซอร์บล็อกหรือโหลดไฟล์ไม่สำเร็จ
+        playModernSynthChime();
+      });
+    }
+    return;
+  } catch (_) {
+    playModernSynthChime();
   }
 };

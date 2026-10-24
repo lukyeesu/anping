@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
+import fs from 'fs'
+import path from 'path'
 import apiDbHandler from './api/db.js'
 import apiTtsHandler from './api/tts.js'
 import apiLineHandler from './api/line.js'
@@ -16,6 +18,18 @@ function apiDevMiddlewarePlugin() {
           const host = req.headers.host || 'localhost:5173';
           const urlObj = new URL(req.url, `http://${host}`);
           const pathname = urlObj.pathname;
+
+          if (pathname === '/anping-card-agent.apk' || pathname.endsWith('.apk')) {
+            const apkPath = path.resolve('public/anping-card-agent.apk');
+            if (fs.existsSync(apkPath)) {
+              res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+              res.setHeader('Content-Disposition', 'attachment; filename="anping-card-agent.apk"');
+              const stat = fs.statSync(apkPath);
+              res.setHeader('Content-Length', stat.size);
+              fs.createReadStream(apkPath).pipe(res);
+              return;
+            }
+          }
 
           if (pathname === '/api/media' || pathname.startsWith('/api/media?')) {
             const query = Object.fromEntries(urlObj.searchParams.entries());

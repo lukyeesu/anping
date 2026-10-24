@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 1. ดักจับตามคลาสอุปกรณ์ Smart Card Reader มาตรฐานสากล (Class 11 = CCID) -->
+    <usb-device class="11" />
+    <usb-device class="11" subclass="0" />
+    <usb-device class="11" subclass="0" protocol="0" />
+
+    <!-- 2. ดักจับชิปอ่านบัตรยอดนิยมทุกค่าย -->
+    <!-- Alcorlink / Alcor Micro (0x058F = 1423) -->
+    <usb-device vendor-id="1423" />
+    
+    <!-- Realtek Semiconductor (0x0BDA = 3034) -->
+    <usb-device vendor-id="3034" />
+    
+    <!-- ACS Advanced Card Systems (0x072F = 1839) -->
+    <usb-device vendor-id="1839" />
+
+    <!-- Broadcom Corp. (0x0A5C = 2652) -->
+    <usb-device vendor-id="2652" />
+
+    <!-- Gemalto (0x08E6 = 2278) -->
+    <usb-device vendor-id="2278" />
+
+    <!-- Feitian Technologies (0x096E = 2414) -->
+    <usb-device vendor-id="2414" />
+
+    <!-- SCM Microsystems / Identiv (0x04E6 = 1254) -->
+    <usb-device vendor-id="1254" />
+
+    <!-- Microchip (0x0424 = 1060) -->
+    <usb-device vendor-id="1060" />
+
+    <!-- Generic CCID / EMV Smartcard Reader (0x2CE3 = 11491) -->
+    <usb-device vendor-id="11491" />
+
+    <!-- Terminus Hub USB Readers (0x1A40 = 6720) -->
+    <usb-device vendor-id="6720" />
+</resources>

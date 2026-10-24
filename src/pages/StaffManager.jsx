@@ -5,7 +5,7 @@ import CalendarDay from './CalendarDay';
 import AnimatedModal from './AnimatedModal';
 import { daysTH } from '../global/constants';
 import QRCode from 'qrcode';
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, getStaffScheduleInfo, getStaffScheduleActiveStatus } from '../global/helpers';
+import { unlockAudio, playCardBeep, rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, getStaffScheduleInfo, getStaffScheduleActiveStatus } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -25,6 +25,9 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
   const [filterRole, setFilterRole] = useState('all');
   
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isReadingCard, setIsReadingCard] = useState(false);
+  const autoStaffCardInsertedRef = useRef(false);
+  const isAutoStaffReadingRef = useRef(false);
   const staffModal = useModal();
   const scheduleModal = useModal();
   const payrollModal = useModal();
@@ -1101,45 +1104,211 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
     }
   };
 
-  const handleSmartCardRead = async () => {
-    setIsProcessing(true);
+  const handleSmartCardRead = async (isAuto = false) => {
+    const isAutoMode = isAuto === true;
+    unlockAudio();
+    setIsReadingCard(true);
+    const isMobileDevice = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
     try {
-        const response = await fetch('http://localhost:8181/api/read-card', { 
+        let statusRes;
+        try {
+            statusRes = await fetch('http://127.0.0.1:8181/api/status', { 
+                method: 'GET', 
+                headers: { 'Content-Type': 'application/json' }, 
+                signal: AbortSignal.timeout(2000) 
+            }).catch(() => fetch('http://localhost:8181/api/status', { 
+                method: 'GET', 
+                headers: { 'Content-Type': 'application/json' }, 
+                signal: AbortSignal.timeout(2000) 
+            }));
+        } catch (agentErr) {
+            if (!isAutoMode) {
+                showToast('เชื่อมต่อเครื่องอ่านไม่ได้: ตรวจสอบว่าเปิดโปรแกรมอ่านบัตร (Agent) แล้วหรือยัง', 'danger');
+            }
+            return;
+        }
+
+        if (!statusRes || !statusRes.ok) {
+            if (!isAutoMode) showToast('เซิร์ฟเวอร์อ่านบัตรขัดข้อง กรุณาลองใหม่อีกครั้ง', 'warning');
+            return;
+        }
+
+        const statusData = await statusRes.json().catch(() => ({}));
+        if (statusData.deviceConnected === false) {
+            if (!isAutoMode) showToast('ไม่พบอุปกรณ์อ่านบัตร: กรุณาเสียบสายเครื่องอ่านบัตรประชาชน (USB OTG)', 'warning');
+            return;
+        }
+
+        const readRes = await fetch('http://127.0.0.1:8181/api/read-card', { 
             method: 'GET', 
             headers: { 'Content-Type': 'application/json' }, 
-            signal: AbortSignal.timeout(5000) 
-        });
-        
-        if (!response.ok) throw new Error('ไม่สามารถอ่านบัตรได้ กรุณาเสียบบัตรให้แน่น');
-        
-        const data = await response.json();
+            signal: AbortSignal.timeout(4000) 
+        }).catch(() => fetch('http://localhost:8181/api/read-card', { 
+            method: 'GET', 
+            headers: { 'Content-Type': 'application/json' }, 
+            signal: AbortSignal.timeout(4000) 
+        }));
+
+        if (!readRes || !readRes.ok) {
+            const errData = readRes ? await readRes.json().catch(() => ({})) : {};
+            const errMsg = errData.error || errData.message || '';
+            if (!isAutoMode) {
+                if ((readRes && readRes.status === 404) || errMsg.includes('ไม่พบบัตร')) {
+                    showToast('กรุณาเสียบบัตรประชาชนให้แน่น แล้วกดอ่านใหม่อีกครั้ง', 'warning');
+                } else {
+                    showToast(errMsg || 'ไม่สามารถอ่านบัตรได้ กรุณาลองใหม่', 'warning');
+                }
+            }
+            return;
+        }
+
+        const data = await readRes.json();
+        let prefix = (data.titleName || data.titleTH || data.prefix || '').trim();
+        let gender = 'ไม่ระบุ';
+        const rawGender = String(data.gender || data.sex || '').toLowerCase().trim();
+        const prefixLower = prefix.toLowerCase();
+        const malePrefixes = ['นาย', 'นพ.', 'ด.ช.', 'เด็กชาย', 'พระ', 'ม.ร.ว.', 'mr.', 'mr', 'master'];
+        const femalePrefixes = ['นาง', 'นางสาว', 'ด.ญ.', 'เด็กหญิง', 'น.ส.', 'พญ.', 'mrs.', 'mrs', 'miss', 'ms.', 'ms'];
+
+        if (['1', 'ชาย', 'male', 'm'].includes(rawGender) || malePrefixes.some(p => prefixLower.includes(p))) {
+            gender = 'ชาย';
+        } else if (['2', 'หญิง', 'female', 'f'].includes(rawGender) || femalePrefixes.some(p => prefixLower.includes(p))) {
+            gender = 'หญิง';
+        }
+
+        let dob = '';
+        if (data.dob) {
+            const raw = String(data.dob).trim();
+            if (raw.includes('/')) {
+                dob = raw;
+            } else if (raw.length === 8) {
+                const p1 = parseInt(raw.substring(0, 4), 10);
+                if (p1 > 1900) {
+                    dob = `${raw.substring(6, 8)}/${raw.substring(4, 6)}/${raw.substring(0, 4)}`;
+                } else {
+                    dob = `${raw.substring(0, 2)}/${raw.substring(2, 4)}/${raw.substring(4, 8)}`;
+                }
+            }
+        }
+
+        let religion = data.religion || data.faith || '';
+        religion = religion.replace(/^ศาสนา\s*/, '').trim();
+
+        const cid = String(data.pid || data.citizenId || data.idCard || '').trim();
+        const isNonThaiCid = /^[067]/.test(cid);
+        const nationality = (data.nationality || (isNonThaiCid ? '' : 'ไทย')).trim();
+        const ethnicity = (data.ethnicity || (isNonThaiCid ? '' : 'ไทย')).trim();
+
+        let address = (data.address || data.houseNo || data.homeNo || '').replace(/^ที่อยู่\s*/, '').replace(/^บ้านเลขที่\s*/, '').trim();
+        let moo = String(data.moo || '').replace(/[^0-9]/g, '').trim();
+        let road = (data.road || data.soi || data.trok || '').trim();
+        let subDistrict = (data.subDistrict || data.tumbol || '').replace(/^(?:ตำบล|แขวง|ต\.)\s*/, '').trim();
+        let district = (data.district || data.amphur || '').replace(/^(?:อำเภอ|เขต|อ\.)\s*/, '').trim();
+        let province = (data.province || '').replace(/^(?:จังหวัด|จ\.)\s*/, '').trim();
+        let zipcode = (data.zipcode || data.postcode || '').trim();
+
+        const firstName = (data.fname || data.firstNameTH || data.firstName || '').trim();
+        const lastName = (data.lname || data.lastNameTH || data.lastName || '').trim();
+        const fullName = `${prefix}${firstName} ${lastName}`.trim();
+
         setFormData(prev => ({
             ...prev, 
-            idCard: data.pid || data.citizenId || '', 
-            prefix: data.titleName || data.titleTH || '', 
-            firstName: data.fname || data.firstNameTH || '', 
-            lastName: data.lname || data.lastNameTH || '',
-            dob: data.dob ? `${data.dob.substring(6,8)}/${data.dob.substring(4,6)}/${data.dob.substring(0,4)}` : '',
-            gender: data.gender === '1' || data.gender === 'Male' ? 'ชาย' : (data.gender === '2' || data.gender === 'Female' ? 'หญิง' : 'ไม่ระบุ'),
-            religion: data.religion || prev.religion,
-            address: data.address || data.houseNo || '', 
-            moo: data.moo || '', 
-            subDistrict: data.subDistrict || data.tumbol || '', 
-            district: data.district || data.amphur || '', 
-            province: data.province || '',
+            idCard: data.pid || data.citizenId || data.idCard || prev.idCard, 
+            prefix: prefix || prev.prefix, 
+            firstName: firstName || prev.firstName, 
+            lastName: lastName || prev.lastName, 
+            name: fullName || prev.name, 
+            dob: dob || prev.dob, 
+            gender: gender !== 'ไม่ระบุ' ? gender : (prev.gender || ''), 
+            religion: religion || prev.religion || '', 
+            nationality: nationality || prev.nationality || (isNonThaiCid ? '' : 'ไทย'), 
+            ethnicity: ethnicity || prev.ethnicity || (isNonThaiCid ? '' : 'ไทย'), 
+            address: address || prev.address, 
+            moo: moo || prev.moo, 
+            road: road || prev.road, 
+            subDistrict: subDistrict || prev.subDistrict, 
+            district: district || prev.district, 
+            province: province || prev.province, 
+            zipcode: zipcode || prev.zipcode, 
+            curAddress: prev.curAddress, 
+            curMoo: prev.curMoo, 
+            curRoad: prev.curRoad, 
+            curSubDistrict: prev.curSubDistrict, 
+            curDistrict: prev.curDistrict, 
+            curProvince: prev.curProvince, 
+            curZipcode: prev.curZipcode, 
         }));
-        showToast('ดึงข้อมูลจากบัตรประชาชนสำเร็จ', 'success');
+        playCardBeep();
+        showToast(isAutoMode ? 'ดึงข้อมูลจากบัตรประชาชนอัตโนมัติสำเร็จ' : 'ดึงข้อมูลจากบัตรประชาชนครบถ้วนทุกช่อง', 'success');
     } catch (error) { 
         console.error("Smart Card Reader Error:", error);
-        if (error.name === 'TimeoutError' || error.message === 'Failed to fetch') {
-            showToast('เชื่อมต่อเครื่องอ่านไม่ได้: ตรวจสอบว่าเปิดโปรแกรมอ่านบัตร (Agent) แล้วหรือยัง', 'danger');
-        } else {
-            showToast(`ไม่สามารถอ่านบัตรได้: ${error.message}`, 'warning');
+        if (!isAutoMode) {
+            if (error.name === 'TimeoutError' || error.message === 'Failed to fetch') {
+                showToast('เชื่อมต่อเครื่องอ่านไม่ได้: ตรวจสอบว่าเปิดโปรแกรมอ่านบัตร (Agent) แล้วหรือยัง', 'danger');
+            } else {
+                showToast(`ไม่สามารถอ่านบัตรได้: ${error.message}`, 'warning');
+            }
         }
     } finally { 
-        setIsProcessing(false); 
+        setIsReadingCard(false); 
     }
   };
+
+  // --- ตรวจจับการเสียบบัตรอัตโนมัติในหน้าจัดการพนักงาน ---
+  useEffect(() => {
+    if (!staffModal.isOpen) {
+      autoStaffCardInsertedRef.current = false;
+      return;
+    }
+    let isMounted = true;
+    const checkCard = async () => {
+      if (isAutoStaffReadingRef.current) return;
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch('http://127.0.0.1:8181/api/status', { signal: controller.signal })
+          .catch(() => fetch('http://localhost:8181/api/status', { signal: controller.signal }))
+          .catch(() => null);
+        clearTimeout(tid);
+
+        if (!isMounted || !res || !res.ok) {
+          autoStaffCardInsertedRef.current = false;
+          return;
+        }
+
+        const status = await res.json().catch(() => null);
+        if (!status || !status.deviceConnected) {
+          autoStaffCardInsertedRef.current = false;
+          return;
+        }
+
+        if (status.hasCard) {
+          if (!autoStaffCardInsertedRef.current) {
+            autoStaffCardInsertedRef.current = true;
+            isAutoStaffReadingRef.current = true;
+            try {
+              await handleSmartCardRead(true);
+            } finally {
+              isAutoStaffReadingRef.current = false;
+            }
+          }
+        } else {
+          autoStaffCardInsertedRef.current = false;
+        }
+      } catch (_) {
+        autoStaffCardInsertedRef.current = false;
+      }
+    };
+
+    const iv = setInterval(checkCard, 1500);
+    checkCard();
+    return () => {
+      isMounted = false;
+      clearInterval(iv);
+      autoStaffCardInsertedRef.current = false;
+    };
+  }, [staffModal.isOpen]);
 
   const roleMap = useMemo(() => {
     const defaultMap = {
@@ -2373,8 +2542,8 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         </div>
       </div>
 
-      {/* --- Modal: Add/Edit Staff --- */}
-      <AnimatedModal isOpen={staffModal.isOpen} isClosing={staffModal.isClosing} onClose={staffModal.close} title={editingId ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่'} icon={UserCog} maxWidth="max-w-5xl">
+            {/* --- Modal: Add/Edit Staff --- */}
+            <AnimatedModal isOpen={staffModal.isOpen} isClosing={staffModal.isClosing} onClose={staffModal.close} title={editingId ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่'} icon={UserCog} maxWidth="max-w-5xl">
         <form onSubmit={handleSaveStaff} className="p-4 sm:p-6 space-y-6">
            
            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative z-[50]">
@@ -2750,7 +2919,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
            </div>
         </form>
       </AnimatedModal>
-
+      
       {/* --- Modal: Schedule (ปฏิทินตารางงานเต็มรูปแบบ) --- */}
       {scheduleModal.isOpen && createPortal(
         <div className={`fixed inset-0 z-[160] flex items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm ${scheduleModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
