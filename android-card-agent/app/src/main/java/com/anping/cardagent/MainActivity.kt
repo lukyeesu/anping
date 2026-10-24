@@ -279,7 +279,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.5.1"
+            userAgentString = "$userAgentString AnpingClinicApp/1.5.2"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
