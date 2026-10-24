@@ -40,10 +40,13 @@ class LocalHttpServer(
                 serverSocket = ServerSocket(port, 50, loopback)
                 Log.i(TAG, "Local HTTP Server started on 127.0.0.1:$port")
 
-                while (isRunning && !serverSocket!!.isClosed) {
+                while (isRunning && serverSocket != null && !serverSocket!!.isClosed) {
                     val clientSocket = serverSocket!!.accept()
                     executor.execute { handleClient(clientSocket) }
                 }
+            } catch (e: java.net.BindException) {
+                Log.w(TAG, "Port $port is already bound by another agent. Using existing agent server.")
+                isRunning = false
             } catch (e: Exception) {
                 if (isRunning) {
                     Log.e(TAG, "Server error: ${e.message}")

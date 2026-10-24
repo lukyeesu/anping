@@ -49,6 +49,10 @@ class CardReaderService : Service() {
     var onCardRemoved: (() -> Unit)? = null
     var latestCardData: CardModel? = null
 
+    private val readLock = Any()
+    @Volatile private var lastReadTime = 0L
+    @Volatile private var lastBeepTime = 0L
+
     private val serviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -220,12 +224,14 @@ class CardReaderService : Service() {
 
                     if (justRemoved) {
                         latestCardData = null
+                        lastReadTime = 0L
                         withContext(Dispatchers.Main) {
                             onCardRemoved?.invoke()
                         }
                     }
                     if (!hasCard) {
                         latestCardData = null
+                        lastReadTime = 0L
                     }
 
                     if (isConnected != lastConnected || hasCard != lastHasCard || readerName != lastReaderName) {
@@ -347,6 +353,7 @@ class CardReaderService : Service() {
                 ccidDriver = null
                 currentDevice = null
                 latestCardData = null
+                lastReadTime = 0L
                 updateNotification("เครื่องอ่านถูกดึงออกแล้ว (รอการเชื่อมต่อใหม่)")
                 onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
                 onCardRemoved?.invoke()
@@ -357,27 +364,44 @@ class CardReaderService : Service() {
     }
 
     fun readCard(includePhoto: Boolean = false): CardModel? {
-        val driver = ccidDriver ?: run {
-            checkConnectedDevices()
-            ccidDriver
-        } ?: return null
+        synchronized(readLock) {
+            val now = System.currentTimeMillis()
+            val cached = latestCardData
+            // ถ้าเพิ่งอ่านสำเร็จภายใน 4.5 วินาทีที่ผ่านมา และมีข้อมูลครบตามที่ขอ ให้คืนแคชทันที ป้องกันอ่านชิปซ้ำซ้อนและเสียงดังรัว
+            if (cached != null && (now - lastReadTime < 4500)) {
+                if (!includePhoto || cached.photoBase64.isNotEmpty()) {
+                    Log.i(TAG, "Returning cached card data for ${cached.citizenId}")
+                    return cached
+                }
+            }
 
-        val card = driver.readThaiCard(includePhoto)
-        if (card != null) {
-            latestCardData = card
-            playBeep()
-        } else {
-            latestCardData = null
+            val driver = ccidDriver ?: run {
+                checkConnectedDevices()
+                ccidDriver
+            } ?: return null
+
+            val card = driver.readThaiCard(includePhoto)
+            if (card != null) {
+                latestCardData = card
+                lastReadTime = System.currentTimeMillis()
+                playBeep()
+            } else {
+                latestCardData = null
+                lastReadTime = 0L
+            }
+            return card
         }
-        return card
     }
 
     fun playBeep() {
-        // ถ้าไม่ได้เปิดอยู่ที่หน้าจอแอป ให้เว็บแอพเป็นผู้ส่งเสียง เพื่อป้องกันเสียงดังซ้ำซ้อน
-        if (!MainActivity.isActivityVisible) {
-            Log.i(TAG, "playBeep skipped: MainActivity is not in foreground")
+        val now = System.currentTimeMillis()
+        // Debounce: ป้องกันเสียงเตือนดังซ้ำ 3-5 ครั้ง โดยจำกัดให้ดังได้สูงสุดเพียง 1 ครั้งต่อ 3.5 วินาที
+        if (now - lastBeepTime < 3500) {
+            Log.i(TAG, "playBeep debounced (cooldown 3.5s)")
             return
         }
+        lastBeepTime = now
+
         try {
             val mp = MediaPlayer.create(this, R.raw.card_chime)
             if (mp != null) {

@@ -13,7 +13,7 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, Crown, Ticket, Sparkles
+  Lock, Home, Save, UserCheck, Key, RotateCcw, Crown, Ticket, Sparkles, Eye, Copy
 } from 'lucide-react';
 import { theme } from '../global/theme';
 import { supabase } from '../lib/supabase';
@@ -28,6 +28,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const [isProcessing, setIsProcessing] = useState(false);
   const [isReadingCard, setIsReadingCard] = useState(false);
   const [showAgentModal, setShowAgentModal] = useState(false);
+  const [smartCardInspectData, setSmartCardInspectData] = useState(null);
+  const [showCardInspectModal, setShowCardInspectModal] = useState(false);
   const autoCardInsertedRef = useRef(false);
   const isAutoReadingRef = useRef(false);
 
@@ -1213,6 +1215,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         }
 
         const data = await readRes.json();
+        setSmartCardInspectData(data);
         let gender = 'ไม่ระบุ';
         const rawGender = String(data.gender || data.sex || '').toLowerCase().trim();
         const rawPrefix = String(data.titleName || data.titleTH || data.prefix || '').trim();
@@ -1379,6 +1382,17 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       autoCardInsertedRef.current = false;
     };
   }, [medModal.isOpen, isViewMode]);
+
+  // ซิงค์ข้อมูลบัตรจาก Native Event เข้าสู่ State สำหรับดูข้อมูลฉบับเต็ม
+  useEffect(() => {
+    const handleNativeSmartCard = (e) => {
+      if (e.detail) {
+        setSmartCardInspectData(e.detail);
+      }
+    };
+    window.addEventListener('smartcard-read', handleNativeSmartCard);
+    return () => window.removeEventListener('smartcard-read', handleNativeSmartCard);
+  }, []);
 
   // --- Constants ---
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
@@ -3080,6 +3094,24 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                               </>
                             )}
                           </button>
+
+                          {/* ปุ่มดูข้อมูลบัตรฉบับเต็ม (เมื่อเคยอ่านบัตรแล้ว) */}
+                          {smartCardInspectData && (
+                            <button
+                              type="button" 
+                              onClick={() => {
+                                if (typeof window !== 'undefined' && window.AndroidCardBridge && window.AndroidCardBridge.showCardInspector) {
+                                  window.AndroidCardBridge.showCardInspector();
+                                } else {
+                                  setShowCardInspectModal(true);
+                                }
+                              }}
+                              className="text-xs sm:text-sm px-3 py-1.5 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-sky-100 shadow-sm cursor-pointer"
+                              title="ดูข้อมูลและรูปถ่ายจากบัตรประชาชนฉบับเต็ม"
+                            >
+                              <Eye size={16} /> <span className="hidden sm:inline">ดูข้อมูลบัตรฉบับเต็ม</span><span className="sm:hidden">ดูบัตร</span>
+                            </button>
+                          )}
 
                           {/* ปุ่มสแกนกล้อง (OCR) เดิม */}
                           <button 
@@ -4989,6 +5021,117 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 </div>
               </>
             )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal ดูข้อมูลบัตรประชาชนฉบับเต็ม พร้อมรูปถ่ายและรายละเอียดทั้งหมด 16 รายการ */}
+      {showCardInspectModal && smartCardInspectData && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget) setShowCardInspectModal(false); }}>
+          <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in max-h-[calc(100vh-2rem)] border border-slate-100">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-xs">
+                  <CreditCard size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 kanit-text text-base leading-tight">ข้อมูลบัตรประชาชนฉบับเต็ม</h3>
+                  <p className="text-xs text-slate-500 font-medium">Smart Card Reader Inspection</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowCardInspectModal(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+              <div className="flex gap-4 items-center bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
+                {smartCardInspectData.photoBase64 ? (
+                  <img
+                    src={`data:image/jpeg;base64,${smartCardInspectData.photoBase64}`}
+                    alt="รูปถ่ายบัตรประชาชน"
+                    className="w-24 h-32 object-cover rounded-xl border border-slate-200 shadow-sm shrink-0 bg-white"
+                  />
+                ) : (
+                  <div className="w-24 h-32 rounded-xl bg-slate-200/70 border border-slate-200 flex flex-col items-center justify-center text-slate-400 shrink-0">
+                    <User size={32} />
+                    <span className="text-[10px] mt-1 font-medium">ไม่มีรูปภาพ</span>
+                  </div>
+                )}
+
+                <div className="flex-1 min-w-0 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-medium block">เลขประจำตัวประชาชน</span>
+                  <div className="text-base sm:text-lg font-bold text-sky-600 font-mono tracking-wide">
+                    {smartCardInspectData.citizenId || smartCardInspectData.pid || smartCardInspectData.idCard || '-'}
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-slate-800 truncate">
+                    {smartCardInspectData.titleTh || smartCardInspectData.prefixTh || smartCardInspectData.prefix || ''}{smartCardInspectData.firstNameTh || smartCardInspectData.fname || smartCardInspectData.firstName || ''} {smartCardInspectData.lastNameTh || smartCardInspectData.lname || smartCardInspectData.lastName || ''}
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-500 truncate">
+                    {smartCardInspectData.titleEn || smartCardInspectData.prefixEn || ''} {smartCardInspectData.firstNameEn || smartCardInspectData.fnameEn || ''} {smartCardInspectData.lastNameEn || smartCardInspectData.lnameEn || ''}
+                  </div>
+                  <div className="text-xs text-slate-500 pt-1">
+                    วันเกิด: {smartCardInspectData.dob || '-'} | เพศ: {smartCardInspectData.gender || smartCardInspectData.sex || '-'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-slate-400 block text-[11px] mb-0.5">สัญชาติ / ศาสนา</span>
+                  <span className="font-medium text-slate-700">
+                    {smartCardInspectData.nationality || 'ไทย'} / {smartCardInspectData.religion || 'ไม่ระบุ'}
+                  </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-slate-400 block text-[11px] mb-0.5">วันออกบัตร - หมดอายุ</span>
+                  <span className="font-medium text-slate-700">
+                    {smartCardInspectData.issueDate || '-'} ถึง {smartCardInspectData.expireDate || '-'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs sm:text-sm space-y-1">
+                <span className="text-slate-400 block text-[11px]">ที่อยู่ตามทะเบียนราษฎร์</span>
+                <div className="font-medium text-slate-700 leading-relaxed">
+                  {smartCardInspectData.address ? `บ้านเลขที่ ${smartCardInspectData.address} ` : ''}
+                  {smartCardInspectData.moo ? `หมู่ ${smartCardInspectData.moo} ` : ''}
+                  {smartCardInspectData.road ? `ถนน/ซอย ${smartCardInspectData.road} ` : ''}
+                  {smartCardInspectData.subDistrict ? `ต.${smartCardInspectData.subDistrict} ` : ''}
+                  {smartCardInspectData.district ? `อ.${smartCardInspectData.district} ` : ''}
+                  {smartCardInspectData.province ? `จ.${smartCardInspectData.province} ` : ''}
+                  {smartCardInspectData.zipcode ? `(${smartCardInspectData.zipcode})` : ''}
+                </div>
+              </div>
+
+              {smartCardInspectData.issuer && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs sm:text-sm">
+                  <span className="text-slate-400 block text-[11px] mb-0.5">ผู้ออกบัตร</span>
+                  <span className="font-medium text-slate-700">{smartCardInspectData.issuer}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowCardInspectModal(false)}
+                className="px-4 py-2 text-xs sm:text-sm rounded-xl text-slate-600 hover:bg-slate-200/60 font-medium transition-colors"
+              >
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleSmartCardRead(true);
+                  setShowCardInspectModal(false);
+                }}
+                className="px-5 py-2 text-xs sm:text-sm rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-medium transition-colors shadow-sm shadow-sky-500/20"
+              >
+                นำข้อมูลไปกรอกฟอร์ม
+              </button>
+            </div>
           </div>
         </div>,
         document.body

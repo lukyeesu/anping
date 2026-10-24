@@ -7,16 +7,21 @@ import android.app.PendingIntent
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.util.Base64
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.webkit.*
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +31,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.anping.cardagent.databinding.ActivityMainBinding
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -182,6 +188,16 @@ class MainActivity : AppCompatActivity() {
         // ตั้งค่า WebView
         setupWebView()
 
+        // ตั้งค่าคลิกที่ป้ายสถานะเครื่องอ่าน เพื่อเปิดดูข้อมูลบัตรฉบับเต็ม
+        binding.cardReaderPill.setOnClickListener {
+            val card = cardService?.getLatestCard()
+            if (card != null) {
+                showCardDetailDialog(card)
+            } else {
+                Toast.makeText(this, "ยังไม่มีข้อมูลบัตรประชาชน กรุณาเสียบบัตรในช่องอ่าน", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // ตั้งค่าปุ่ม Retry กรณีออฟไลน์
         binding.btnRetry.setOnClickListener {
             binding.layoutError.visibility = View.GONE
@@ -239,6 +255,12 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         val webView = binding.webView
 
+        // เปิด Hardware Acceleration และปิด Overscroll บน WebView เพื่อความลื่นไหล 60FPS
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        webView.overScrollMode = View.OVER_SCROLL_NEVER
+        webView.isVerticalScrollBarEnabled = false
+        webView.isHorizontalScrollBarEnabled = false
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -253,7 +275,9 @@ class MainActivity : AppCompatActivity() {
             setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.5.0"
+            @Suppress("DEPRECATION")
+            setRenderPriority(WebSettings.RenderPriority.HIGH)
+            userAgentString = "$userAgentString AnpingClinicApp/1.5.1"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -276,6 +300,18 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     cardService?.readCard(includePhoto = true)?.let { card ->
                         notifyWebCardInserted(card)
+                    }
+                }
+            }
+
+            @JavascriptInterface
+            fun showCardInspector() {
+                runOnUiThread {
+                    val card = cardService?.getLatestCard()
+                    if (card != null) {
+                        showCardDetailDialog(card)
+                    } else {
+                        Toast.makeText(this@MainActivity, "ยังไม่มีข้อมูลบัตรประชาชน กรุณาเสียบบัตรในช่องอ่าน", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -417,23 +453,116 @@ class MainActivity : AppCompatActivity() {
         binding.webView.evaluateJavascript(jsCode, null)
     }
 
+    private var pillDismissRunnable: Runnable? = null
+
     private fun updateReaderStatusPill(connected: Boolean, readerName: String, hasCard: Boolean) {
+        pillDismissRunnable?.let { binding.cardReaderPill.removeCallbacks(it) }
         binding.cardReaderPill.visibility = View.VISIBLE
+
         if (!connected) {
             binding.dotPillStatus.setBackgroundResource(R.drawable.shape_circle_red)
             binding.tvPillText.text = "ไม่มีเครื่องอ่านบัตร"
             binding.tvPillText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
-            binding.cardReaderPill.postDelayed({ binding.cardReaderPill.visibility = View.GONE }, 3000)
+            val r = Runnable { binding.cardReaderPill.visibility = View.GONE }
+            pillDismissRunnable = r
+            binding.cardReaderPill.postDelayed(r, 3000)
         } else if (hasCard) {
             binding.dotPillStatus.setBackgroundResource(R.drawable.shape_circle_green)
-            binding.tvPillText.text = "พบบัตรประชาชน (กำลังอ่านข้อมูล...)"
+            binding.tvPillText.text = "พบบัตรประชาชน (แตะดูข้อมูลฉบับเต็ม)"
             binding.tvPillText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-            binding.cardReaderPill.postDelayed({ binding.cardReaderPill.visibility = View.GONE }, 4000)
+            // เมื่อเสียบบัตรอยู่ ให้คงป้ายสถานะไว้ เพื่อให้เจ้าหน้าที่แตะเปิดดูข้อมูลได้ตลอดเวลา
         } else {
             binding.dotPillStatus.setBackgroundResource(R.drawable.shape_circle_yellow)
             binding.tvPillText.text = "เครื่องอ่านเชื่อมต่อแล้ว: $readerName"
             binding.tvPillText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
-            binding.cardReaderPill.postDelayed({ binding.cardReaderPill.visibility = View.GONE }, 3000)
+            val r = Runnable { binding.cardReaderPill.visibility = View.GONE }
+            pillDismissRunnable = r
+            binding.cardReaderPill.postDelayed(r, 3500)
+        }
+    }
+
+    private fun showCardDetailDialog(card: CardModel) {
+        try {
+            val dialogView = layoutInflater.inflate(R.layout.dialog_card_details, null)
+            val dialog = BottomSheetDialog(this)
+            dialog.setContentView(dialogView)
+
+            val ivPhoto = dialogView.findViewById<ImageView>(R.id.ivDialogPhoto)
+            val tvCid = dialogView.findViewById<TextView>(R.id.tvDialogCid)
+            val tvNameTh = dialogView.findViewById<TextView>(R.id.tvDialogNameTh)
+            val tvNameEn = dialogView.findViewById<TextView>(R.id.tvDialogNameEn)
+            val tvDates = dialogView.findViewById<TextView>(R.id.tvDialogDates)
+            val tvFullDetails = dialogView.findViewById<TextView>(R.id.tvDialogFullDetails)
+            val btnClose = dialogView.findViewById<Button>(R.id.btnDialogClose)
+            val btnCopy = dialogView.findViewById<Button>(R.id.btnDialogCopyCid)
+            val btnApply = dialogView.findViewById<Button>(R.id.btnDialogApply)
+
+            // 1. Photo
+            if (card.photoBase64.isNotEmpty()) {
+                try {
+                    val photoBytes = Base64.decode(card.photoBase64, Base64.DEFAULT)
+                    val bitmap = BitmapFactory.decodeByteArray(photoBytes, 0, photoBytes.size)
+                    if (bitmap != null) {
+                        ivPhoto.setImageBitmap(bitmap)
+                        ivPhoto.visibility = View.VISIBLE
+                    } else {
+                        ivPhoto.visibility = View.GONE
+                    }
+                } catch (_: Exception) {
+                    ivPhoto.visibility = View.GONE
+                }
+            } else {
+                ivPhoto.visibility = View.GONE
+            }
+
+            // 2. Format CID
+            val formattedCid = if (card.citizenId.length == 13) {
+                "${card.citizenId[0]}-${card.citizenId.substring(1, 5)}-${card.citizenId.substring(5, 10)}-${card.citizenId.substring(10, 12)}-${card.citizenId[12]}"
+            } else card.citizenId
+            tvCid.text = formattedCid
+
+            // 3. Names
+            tvNameTh.text = "${card.prefixTh}${card.firstNameTh} ${card.lastNameTh}".trim()
+            val enFull = "${card.prefixEn} ${card.firstNameEn} ${card.lastNameEn}".trim()
+            tvNameEn.text = if (enFull.isNotEmpty()) enFull else "-"
+            tvDates.text = "เกิด: ${card.dob} | เพศ: ${card.gender}"
+
+            // 4. Details text
+            val addressLine = buildString {
+                if (card.address.isNotEmpty()) append("บ้านเลขที่ ${card.address} ")
+                if (card.moo.isNotEmpty()) append("หมู่ ${card.moo} ")
+                if (card.road.isNotEmpty()) append("ถนน/ซอย ${card.road} ")
+                if (card.subDistrict.isNotEmpty()) append("ต.${card.subDistrict} ")
+                if (card.district.isNotEmpty()) append("อ.${card.district} ")
+                if (card.province.isNotEmpty()) append("จ.${card.province} ")
+            }.trim()
+
+            val fullText = """
+                สัญชาติ: ${card.nationality.ifEmpty { "ไทย" }} | ศาสนา: ${card.religion.ifEmpty { "ไม่ระบุ" }}
+                ที่อยู่ตามบัตร: ${addressLine.ifEmpty { card.address }}
+                วันออกบัตร: ${card.issueDate.ifEmpty { "-" }}
+                วันหมดอายุ: ${card.expireDate.ifEmpty { "-" }}
+                ผู้ออกบัตร: ${card.issuer.ifEmpty { "-" }}
+            """.trimIndent()
+            tvFullDetails.text = fullText
+
+            // 5. Actions
+            btnClose?.setOnClickListener { dialog.dismiss() }
+            btnCopy?.setOnClickListener {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("Citizen ID", card.citizenId)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(this, "คัดลอกเลขประจำตัวประชาชนแล้ว", Toast.LENGTH_SHORT).show()
+            }
+            btnApply?.setOnClickListener {
+                notifyWebCardInserted(card)
+                Toast.makeText(this, "ส่งข้อมูลเข้าสู่แบบฟอร์มแล้ว", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+
+            dialog.show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing card detail dialog: ${e.message}")
         }
     }
 

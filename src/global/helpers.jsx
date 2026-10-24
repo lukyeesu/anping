@@ -2163,7 +2163,11 @@ export const playModernSynthChime = () => {
 };
 
 export const playCardBeep = () => {
-  // 1. เล่นไฟล์เสียง chime_2364.mp3 ตอนเสียบบัตร/อ่านบัตรสำเร็จ
+  // หากรันอยู่บน Native Android App (AnpingClinic) ให้เสียงมาจาก Native Layer โดยตรง ไม่เล่นซ้ำซ้อน
+  if (typeof window !== 'undefined' && window.AndroidCardBridge) {
+    return;
+  }
+  // 1. เล่นไฟล์เสียง chime_2364.mp3 ตอนเสียบบัตร/อ่านบัตรสำเร็จ บนเบราว์เซอร์
   try {
     const audio = new Audio('/sounds/chime_2364.mp3');
     audio.volume = 0.75;

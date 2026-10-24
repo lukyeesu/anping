@@ -1,7 +1,7 @@
 [
     {
-        "merged": "com.anping.cardagent.app-mergeDebugResources-30:/layout/activity_main.xml",
-        "source": "com.anping.cardagent.app-main-33:/layout/activity_main.xml"
+        "merged": "com.anping.cardagent.app-mergeDebugResources-30:/layout/dialog_card_details.xml",
+        "source": "com.anping.cardagent.app-main-33:/layout/dialog_card_details.xml"
     },
     {
         "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-mergeDebugResources-30:\\layout\\activity_main.xml",

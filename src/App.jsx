@@ -3268,11 +3268,11 @@ export default function App() {
     navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
 
     if (isMobile && !showMobileBars && !isMobileNavExpanded) {
-      navSheetRef.current.style.transform = 'translateY(115%)';
+      navSheetRef.current.style.transform = 'translate3d(0, 115%, 0)';
     } else if (hasMoreNavItems && !isMobileNavExpanded) {
-      navSheetRef.current.style.transform = `translateY(${H}px)`;
+      navSheetRef.current.style.transform = `translate3d(0, ${H}px, 0)`;
     } else {
-      navSheetRef.current.style.transform = 'translateY(0px)';
+      navSheetRef.current.style.transform = 'translate3d(0, 0px, 0)';
     }
 
     if (navBackdropRef.current) {
@@ -3297,6 +3297,7 @@ export default function App() {
     let touchStartX = 0;
     let touchStartTime = 0;
     let isDraggingTouch = false;
+    let touchRafId = null;
 
     // --- 1. TOUCH EVENTS (สำหรับโทรศัพท์มือถือ / แท็บเล็ต) ---
     const handleTouchStart = (e) => {
@@ -3355,7 +3356,9 @@ export default function App() {
         }
       }
 
-      el.style.transform = `translateY(${targetTranslateY}px)`;
+      if (touchRafId) cancelAnimationFrame(touchRafId);
+      touchRafId = requestAnimationFrame(() => {
+        el.style.transform = `translate3d(0, ${targetTranslateY}px, 0)`;
 
       if (H > 0) {
         const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
@@ -3368,6 +3371,7 @@ export default function App() {
           extraContentRef.current.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
         }
       }
+      });
     };
 
     const handleTouchEnd = (e) => {
@@ -3375,6 +3379,7 @@ export default function App() {
         // เป็นเพียงการแตะเลือกเมนู (Clean Tap) -> ไม่แตะต้อง transform หรือ state ปล่อยให้ onClick ของปุ่มทำงานอย่างสมบูรณ์
         return;
       }
+      if (touchRafId) cancelAnimationFrame(touchRafId);
       isDraggingTouch = false;
       isDraggingRef.current = false;
 
@@ -3409,7 +3414,7 @@ export default function App() {
 
       const finalTranslateY = shouldExpand ? 0 : H;
       el.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
-      el.style.transform = `translateY(${finalTranslateY}px)`;
+      el.style.transform = `translate3d(0, ${finalTranslateY}px, 0)`;
 
       if (navBackdropRef.current) {
         navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
@@ -3466,7 +3471,9 @@ export default function App() {
           }
         }
 
-        el.style.transform = `translateY(${targetTranslateY}px)`;
+        if (touchRafId) cancelAnimationFrame(touchRafId);
+      touchRafId = requestAnimationFrame(() => {
+        el.style.transform = `translate3d(0, ${targetTranslateY}px, 0)`;
 
         if (H > 0) {
           const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
@@ -3479,11 +3486,13 @@ export default function App() {
             extraContentRef.current.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
           }
         }
-      };
+      });
+    };
 
       const handleMouseUp = (me) => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        if (touchRafId) cancelAnimationFrame(touchRafId);
 
         if (!isDraggingMouse) {
           return;
@@ -3519,7 +3528,7 @@ export default function App() {
 
         const finalTranslateY = shouldExpand ? 0 : H;
         el.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
-        el.style.transform = `translateY(${finalTranslateY}px)`;
+        el.style.transform = `translate3d(0, ${finalTranslateY}px, 0)`;
 
         if (navBackdropRef.current) {
           navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
@@ -4367,7 +4376,7 @@ export default function App() {
         {isMobile && hasMoreNavItems && (
           <div 
             ref={navBackdropRef}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[42] will-change-[opacity]"
+            className="fixed inset-0 bg-slate-900/40 z-[42] will-change-[opacity]"
             style={{
               opacity: isMobileNavExpanded ? 1 : 0,
               pointerEvents: isMobileNavExpanded ? 'auto' : 'none',
@@ -4386,15 +4395,15 @@ export default function App() {
         {/* ปรับแก้ Navbar มือถือ: Compact & Full เหมือนแบบเดิม พร้อม Expandable Quick Panel ดึงขึ้นเพื่อเลือกหน้าอื่น */}
         <div 
           ref={setNavSheetRef}
-          className="md:hidden fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[45] transition-transform duration-300 ease-out select-none touch-none"
+          className="md:hidden fixed bottom-0 left-0 w-full bg-white border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[45] will-change-transform transition-transform duration-300 ease-out select-none touch-none"
           style={{
             transform: isDraggingRef.current
               ? undefined
               : (isMobile && !showMobileBars && !isMobileNavExpanded)
-                ? 'translateY(115%)'
+                ? 'translate3d(0, 115%, 0)'
                 : hasMoreNavItems && !isMobileNavExpanded
-                  ? `translateY(${extraHeight}px)`
-                  : 'translateY(0px)'
+                  ? `translate3d(0, ${extraHeight}px, 0)`
+                  : 'translate3d(0, 0px, 0)'
           }}
         >
           {/* Drag Handle Indicator (ขีดเส้นเรียบกะทัดรัด พร้อมระยะหายใจไม่ให้เบียดกับไอคอน) */}

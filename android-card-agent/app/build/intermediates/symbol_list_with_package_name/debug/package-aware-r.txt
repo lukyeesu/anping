@@ -3190,6 +3190,9 @@ id bounce
 id bounceBoth
 id bounceEnd
 id bounceStart
+id btnDialogApply
+id btnDialogClose
+id btnDialogCopyCid
 id btnRetry
 id buttonPanel
 id cache_measures
@@ -3323,6 +3326,7 @@ id invisible
 id inward
 id italic
 id item_touch_helper_previous_elevation
+id ivDialogPhoto
 id jumpToEnd
 id jumpToStart
 id labeled
@@ -3570,6 +3574,11 @@ id transition_position
 id transition_scene_layoutid_cache
 id transition_transform
 id triangle
+id tvDialogCid
+id tvDialogDates
+id tvDialogFullDetails
+id tvDialogNameEn
+id tvDialogNameTh
 id tvErrorMessage
 id tvPillText
 id unchecked
@@ -3727,6 +3736,7 @@ layout design_navigation_menu
 layout design_navigation_menu_item
 layout design_text_input_end_icon
 layout design_text_input_start_icon
+layout dialog_card_details
 layout ime_base_split_test_activity
 layout ime_secondary_split_test_activity
 layout m3_alert_dialog
