@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     private var cardService: CardReaderService? = null
     private var isBound = false
     private var lastBackPressTime: Long = 0
+    @Volatile private var canWebScrollUp: Boolean = false
 
     // File Chooser สำหรับกล้องและรูปภาพ
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
@@ -268,7 +269,7 @@ class MainActivity : AppCompatActivity() {
             binding.webView.reload()
         }
         binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
-            binding.webView.scrollY > 0
+            canWebScrollUp || binding.webView.scrollY > 0
         }
 
         // ปิด offscreen layer type เพื่อให้ Chromium compositing ทำงานตรงกับ Hardware Surface (ลื่นไหล 60FPS)
@@ -293,13 +294,21 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.5.3"
+            userAgentString = "$userAgentString AnpingClinicApp/1.5.6"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
         webView.addJavascriptInterface(object {
             @JavascriptInterface
             fun isNativeApp(): Boolean = true
+
+            @JavascriptInterface
+            fun setCanScrollUp(canScrollUp: Boolean) {
+                canWebScrollUp = canScrollUp
+                runOnUiThread {
+                    binding.swipeRefreshLayout.isEnabled = !canScrollUp
+                }
+            }
 
             @JavascriptInterface
             fun getReaderStatus(): String {
@@ -414,11 +423,14 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 binding.layoutError.visibility = View.GONE
+                canWebScrollUp = false
+                binding.swipeRefreshLayout.isEnabled = true
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 binding.progressBar.visibility = View.GONE
                 binding.swipeRefreshLayout.isRefreshing = false
+                injectScrollDetection(view)
             }
 
             override fun onReceivedError(
@@ -427,6 +439,8 @@ class MainActivity : AppCompatActivity() {
                 description: String?,
                 failingUrl: String?
             ) {
+                binding.progressBar.visibility = View.GONE
+                binding.swipeRefreshLayout.isRefreshing = false
                 if (failingUrl == CLINIC_URL || failingUrl?.startsWith(CLINIC_URL) == true) {
                     binding.layoutError.visibility = View.VISIBLE
                     binding.tvErrorMessage.text = "ไม่สามารถเชื่อมต่อระบบอันผิงคลินิกได้\n($description)\n\nกรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่อีกครั้ง"
@@ -454,6 +468,69 @@ class MainActivity : AppCompatActivity() {
 
         // โหลดหน้าระบบอันผิงคลินิก
         webView.loadUrl(CLINIC_URL)
+    }
+
+    private fun injectScrollDetection(view: WebView?) {
+        val js = """
+            (function() {
+                if (window.__scrollDetectionInjected) return;
+                window.__scrollDetectionInjected = true;
+
+                function checkCanScrollUp(target) {
+                    try {
+                        if (target && target instanceof Element) {
+                            var el = target;
+                            while (el && el !== document.body && el !== document.documentElement) {
+                                if (el.scrollTop > 1) return true;
+                                el = el.parentElement;
+                            }
+                        }
+                        var main = document.getElementById('main-scroll-container');
+                        if (main && main.scrollTop > 1) return true;
+                        if (window.scrollY > 1 || document.documentElement.scrollTop > 1 || document.body.scrollTop > 1) return true;
+                        var scrollables = document.querySelectorAll('.overflow-y-auto, .overflow-auto');
+                        for (var i = 0; i < scrollables.length; i++) {
+                            if (scrollables[i].scrollTop > 1) return true;
+                        }
+                    } catch(e) {}
+                    return false;
+                }
+
+                var lastState = null;
+                function notifyState(canScroll) {
+                    if (lastState === canScroll) return;
+                    lastState = canScroll;
+                    if (window.AndroidCardBridge && typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+                        try {
+                            window.AndroidCardBridge.setCanScrollUp(canScroll);
+                        } catch(e) {}
+                    }
+                }
+
+                document.addEventListener('touchstart', function(e) {
+                    var target = (e.touches && e.touches[0]) ? e.touches[0].target : e.target;
+                    notifyState(checkCanScrollUp(target));
+                }, { capture: true, passive: true });
+
+                document.addEventListener('scroll', function(e) {
+                    var target = e.target;
+                    if (target && target.scrollTop !== undefined && target.scrollTop > 1) {
+                        notifyState(true);
+                    } else {
+                        notifyState(checkCanScrollUp(target));
+                    }
+                }, { capture: true, passive: true });
+
+                document.addEventListener('touchend', function() {
+                    setTimeout(function() {
+                        notifyState(checkCanScrollUp(null));
+                    }, 50);
+                }, { passive: true });
+
+                notifyState(checkCanScrollUp(null));
+            })();
+        """.trimIndent()
+        view?.evaluateJavascript(js, null)
     }
 
     private fun notifyWebCardInserted(card: CardModel) {

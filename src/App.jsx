@@ -3037,6 +3037,88 @@ export default function App() {
     };
   }, []);
 
+  // --- Android Card Agent / SwipeRefreshLayout Scroll Sync ---
+  // แจ้งเตือนสถานะการเลื่อนหน้าจอไปยัง Android WebView เพื่อป้องกัน SwipeRefreshLayout ขัดขวางการเลื่อนดูข้อมูลด้านบน (Scroll Up)
+  useEffect(() => {
+    let lastCanScrollUp = null;
+
+    const checkCanScrollUp = (target) => {
+      try {
+        if (target && target instanceof Element) {
+          let el = target;
+          while (el && el !== document.body && el !== document.documentElement) {
+            if (el.scrollTop > 1) return true;
+            el = el.parentElement;
+          }
+        }
+        const main = mainRef.current || document.getElementById('main-scroll-container');
+        if (main && main.scrollTop > 1) return true;
+        if (window.scrollY > 1 || document.documentElement.scrollTop > 1 || document.body.scrollTop > 1) return true;
+        const scrollables = document.querySelectorAll('.overflow-y-auto, .overflow-auto');
+        for (let i = 0; i < scrollables.length; i++) {
+          if (scrollables[i].scrollTop > 1) return true;
+        }
+      } catch (_) {}
+      return false;
+    };
+
+    const notifyNative = (canScroll) => {
+      if (lastCanScrollUp === canScroll) return;
+      lastCanScrollUp = canScroll;
+      if (window.AndroidCardBridge && typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+        try {
+          window.AndroidCardBridge.setCanScrollUp(canScroll);
+        } catch (_) {}
+      }
+    };
+
+    const handleTouchStart = (e) => {
+      const target = (e.touches && e.touches[0]) ? e.touches[0].target : e.target;
+      notifyNative(checkCanScrollUp(target));
+    };
+
+    const handleScroll = (e) => {
+      const target = e.target;
+      if (target && target.scrollTop !== undefined && target.scrollTop > 1) {
+        notifyNative(true);
+      } else {
+        notifyNative(checkCanScrollUp(target));
+      }
+    };
+
+    const handleTouchEnd = () => {
+      setTimeout(() => {
+        notifyNative(checkCanScrollUp(null));
+      }, 50);
+    };
+
+    document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+    document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    notifyNative(checkCanScrollUp(null));
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart, { capture: true });
+      document.removeEventListener('scroll', handleScroll, { capture: true });
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
+
+  // ซิงค์สถานะ Scroll เมื่อสลับแท็บเมนู
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (window.AndroidCardBridge && typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+        const main = mainRef.current || document.getElementById('main-scroll-container');
+        const canScroll = (main && main.scrollTop > 1) || window.scrollY > 1;
+        try {
+          window.AndroidCardBridge.setCanScrollUp(canScroll);
+        } catch (_) {}
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [currentTab]);
+
   // --- ผู้ป่วยถูกโหลดแบบ Server-side Pagination ทีละ 35 รายการตามต้องการ (ไม่ Preload 82 รายการลงมาทีเดียว เพื่อประหยัด Egress สูงสุด) ---
 
   // --- BroadcastChannel Listener (ซิงค์ข้อมูลระหว่างหลายแท็บในเครื่องเดียวกัน) ---

@@ -27,6 +27,7 @@ const QrScannerModal = ({
   const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [detectedFormat, setDetectedFormat] = useState(null);
+  const [focusRing, setFocusRing] = useState({ visible: false, x: 0, y: 0 });
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -34,6 +35,7 @@ const QrScannerModal = ({
   const mediaStreamRef = useRef(null);
   const cameraSessionIdRef = useRef(0);
   const cameraFacingRef = useRef('environment');
+  const focusTimerRef = useRef(null);
 
   const zxingReaderRef = useRef(null);
   const barcodeDetectorRef = useRef(null);
@@ -194,17 +196,30 @@ const QrScannerModal = ({
       let stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
           video: {
             facingMode: { ideal: facing },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1920, min: 1280 },
+            height: { ideal: 1080, min: 720 },
+            focusMode: { ideal: 'continuous' }
           }
         });
       } catch (idealErr) {
-        console.warn('[QrScannerModal] Ideal facingMode getUserMedia failed, fallback to basic video constraint:', idealErr);
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true
-        });
+        console.warn('[QrScannerModal] 1080p getUserMedia failed, fallback to 720p facingMode:', idealErr);
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: { ideal: facing },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          });
+        } catch (basicErr) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true
+          });
+        }
       }
 
       if (sessionId !== cameraSessionIdRef.current) {
@@ -221,8 +236,23 @@ const QrScannerModal = ({
         await videoRef.current.play().catch(() => {});
       }
       const track = stream.getVideoTracks()[0];
-      const cap = track?.getCapabilities ? track.getCapabilities() : {};
-      setHasTorch(Boolean(cap?.torch));
+      if (track) {
+        const cap = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+        setHasTorch(Boolean(cap?.torch));
+
+        const advObj = {};
+        if (cap.focusMode && Array.isArray(cap.focusMode) && cap.focusMode.includes('continuous')) {
+          advObj.focusMode = 'continuous';
+        }
+        if (cap.exposureMode && Array.isArray(cap.exposureMode) && cap.exposureMode.includes('continuous')) {
+          advObj.exposureMode = 'continuous';
+        }
+        if (Object.keys(advObj).length > 0 && typeof track.applyConstraints === 'function') {
+          try {
+            await track.applyConstraints({ advanced: [advObj] });
+          } catch (_) {}
+        }
+      }
 
       // Throttled Hybrid Decode Loop (75ms interval = ~13 scans/sec, zero lag)
       let isProcessingFrame = false;
@@ -351,6 +381,39 @@ const QrScannerModal = ({
     }
   }, [isSwitchingCamera, notify, startCamera, stopCamera]);
 
+  const handleTapToFocus = async (e) => {
+    if (!videoRef.current || !mediaStreamRef.current) return;
+    const rect = videoRef.current.getBoundingClientRect();
+    const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : rect.left + rect.width / 2);
+    const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : rect.top + rect.height / 2);
+
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    setFocusRing({ visible: true, x, y });
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      setFocusRing(prev => ({ ...prev, visible: false }));
+    }, 1200);
+
+    const track = mediaStreamRef.current.getVideoTracks()[0];
+    if (track && typeof track.applyConstraints === 'function') {
+      try {
+        const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+        const relX = Math.max(0, Math.min(1, x / rect.width));
+        const relY = Math.max(0, Math.min(1, y / rect.height));
+
+        if (caps.pointsOfInterest) {
+          await track.applyConstraints({
+            advanced: [{ pointsOfInterest: [{ x: relX, y: relY }] }]
+          });
+        } else if (caps.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+        }
+      } catch (_) {}
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setManualInput('');
@@ -363,6 +426,7 @@ const QrScannerModal = ({
     }
     return () => {
       stopCamera();
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     };
   }, [isOpen, startCamera, stopCamera]);
 
@@ -370,7 +434,7 @@ const QrScannerModal = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[20000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[20000] flex items-center justify-center p-0 md:p-4 bg-black/90 md:bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           stopCamera();
@@ -378,17 +442,17 @@ const QrScannerModal = ({
         }
       }}
     >
-      <div className="bg-white rounded-3xl w-full max-w-md max-h-[94dvh] shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+      <div className="bg-slate-900 md:bg-white w-full h-[100dvh] md:h-auto md:max-w-md md:rounded-3xl shadow-2xl border-0 md:border md:border-slate-100 overflow-hidden flex flex-col justify-between animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-indigo-50/30 to-blue-50/50 shrink-0">
+        <div className="p-4 sm:p-5 border-b border-slate-800 md:border-slate-100 flex items-center justify-between bg-slate-900 md:bg-gradient-to-r md:from-sky-50 md:via-indigo-50/30 md:to-blue-50/50 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-xs flex items-center gap-1">
               <QrCode size={16} />
               <Barcode size={16} />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-800 text-base kanit-text leading-tight">{title}</h3>
-              <p className="text-[11px] text-slate-500 kanit-text mt-0.5">{subtitle}</p>
+              <h3 className="font-extrabold text-white md:text-slate-800 text-base kanit-text leading-tight">{title}</h3>
+              <p className="text-[11px] text-slate-400 md:text-slate-500 kanit-text mt-0.5">{subtitle}</p>
             </div>
           </div>
           <button
@@ -397,18 +461,34 @@ const QrScannerModal = ({
               stopCamera();
               onClose();
             }}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-2 text-slate-400 hover:text-white md:hover:text-slate-600 rounded-full hover:bg-white/10 md:hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 flex flex-col justify-center">
           {/* Camera Viewfinder */}
-          <div className="relative w-full aspect-square bg-black rounded-2xl overflow-hidden flex items-center justify-center shadow-inner">
+          <div
+            className="relative w-full aspect-square bg-black rounded-2xl overflow-hidden flex items-center justify-center shadow-inner cursor-crosshair"
+            onClick={handleTapToFocus}
+          >
             <video ref={videoRef} className={`w-full h-full object-cover ${!scannerActive ? 'hidden' : ''}`} />
             <canvas ref={canvasRef} className="hidden" />
+
+            {/* Tap to Focus Ring */}
+            {focusRing.visible && (
+              <div
+                className="absolute pointer-events-none z-30 -translate-x-1/2 -translate-y-1/2"
+                style={{ left: focusRing.x, top: focusRing.y }}
+              >
+                <div className="w-16 h-16 border-2 border-amber-300 rounded-lg animate-ping opacity-75" />
+                <div className="w-16 h-16 border-2 border-amber-300 rounded-lg absolute inset-0 flex items-center justify-center shadow-[0_0_12px_rgba(252,211,77,0.8)]">
+                  <div className="w-1.5 h-1.5 bg-amber-300 rounded-full" />
+                </div>
+              </div>
+            )}
 
             {!scannerActive && (
               <div className="text-center p-6 text-white space-y-3">
@@ -449,7 +529,7 @@ const QrScannerModal = ({
             }}
             className="space-y-1.5"
           >
-            <label className="text-xs font-bold text-slate-600 kanit-text flex items-center gap-1">
+            <label className="text-xs font-bold text-slate-300 md:text-slate-600 kanit-text flex items-center gap-1">
               <Ticket size={13} className="text-sky-500" /> {inputLabel}
             </label>
             <div className="flex gap-2">
@@ -458,7 +538,7 @@ const QrScannerModal = ({
                 value={manualInput}
                 onChange={(e) => setManualInput(e.target.value.toUpperCase())}
                 placeholder={placeholder}
-                className="flex-1 px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 uppercase font-data outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                className="flex-1 px-3.5 py-2 bg-slate-800 md:bg-white border border-slate-700 md:border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-white md:text-slate-800 uppercase font-data outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
               />
               <button
                 type="submit"
@@ -472,7 +552,7 @@ const QrScannerModal = ({
         </div>
 
         {/* Footer: Camera Action Toolbar */}
-        <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-center gap-3 shrink-0">
+        <div className="p-3 sm:p-4 bg-slate-900 md:bg-slate-50 border-t border-slate-800 md:border-slate-100 flex items-center justify-center gap-3 shrink-0">
           {hasTorch && (
             <button
               type="button"

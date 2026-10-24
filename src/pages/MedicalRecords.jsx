@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase';
 import { subscribeStoreUpdates } from '../lib/offlineStore';
 import { dispatchClinicNotification } from '../lib/notificationHub';
 import { isPatientVipActive, getPatientVipStatus, calculateVipExpiry } from '../utils/couponHelpers';
+import IdCardScannerModal from '../components/IdCardScannerModal';
 
 const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, couponsData = [], setCouponsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats, integrationTokens = {} }) => {
   // --- 1. State Declarations ---
@@ -397,33 +398,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     return sortableItems;
   }, [filteredPatients, sortConfig]);
 
-  // สั่งให้เปิดกล้องจริงเมื่อเปิดหน้าต่างสแกน
-  useEffect(() => {
-    let active = true;
-    let stream = null;
-    if (isScannerOpen && navigator.mediaDevices) {
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then(s => {
-          if (!active) {
-            s.getTracks().forEach(track => track.stop());
-            return;
-          }
-          stream = s;
-          if (videoRef.current) videoRef.current.srcObject = s;
-        })
-        .catch(err => {
-          console.log("ไม่สามารถเปิดกล้องได้:", err);
-          showToast('อุปกรณ์ไม่รองรับ หรือไม่ได้อนุญาตให้ใช้กล้อง', 'warning');
-        });
-    }
-    return () => {
-      active = false;
-      if (videoRef.current) {
-          try { videoRef.current.srcObject = null; } catch (e) {}
-      }
-      if (stream) stream.getTracks().forEach(track => track.stop());
-    };
-  }, [isScannerOpen]);
+  // จัดการกล้องสแกนบัตรประชาชนผ่าน IdCardScannerModal (Full HD 1080p + Autofocus + Fullscreen)
 
   const initialFormState = {
     hn: '', prefix: '', firstName: '', lastName: '', nickname: '', dob: '', gender: '', idCard: '', nationality: 'ไทย', ethnicity: 'ไทย', religion: 'พุทธ', occupation: '',
@@ -1142,7 +1117,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
         }
     } catch (error) {
-        showToast('เกิดข้อผิดพลาดในการเชื่อมต่อ Google Cloud Vision API', 'danger');
+        showToast('ไม่สามารถเชื่อมต่อระบบสแกนได้ กรุณาลองใหม่อีกครั้ง', 'danger');
         if (videoRef.current) { try { videoRef.current.play(); } catch (e) {} }
     } finally {
         setIsScanning(false);
@@ -4581,57 +4556,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         document.body
       )}
 
-      {isScannerOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget && !isScanning) setIsScannerOpen(false); }}>
-          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
-                <ScanText className="text-indigo-500" /> สแกนบัตรประชาชน
-              </h3>
-              <button type="button" onClick={() => !isScanning && setIsScannerOpen(false)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-full transition-colors" disabled={isScanning}>
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 bg-slate-800 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden">
-                <div className="w-[85%] aspect-[8.5/5.4] border-2 border-white/50 rounded-2xl relative z-10 overflow-hidden shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-                    {/* มุมกล้อง (Corners) */}
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-2xl"></div>
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-2xl"></div>
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-2xl"></div>
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-2xl"></div>
-                    
-                    {/* แอนิเมชันเส้นสแกน */}
-                    {isScanning && (
-                        <div className="absolute left-0 right-0 h-1 bg-indigo-500 shadow-[0_0_15px_5px_rgba(99,102,241,0.5)]" style={{ animation: 'scanLine 2s linear infinite' }}></div>
-                    )}
-                </div>
-                
-                <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-0"></video>
-                
-                <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/60 transition-all duration-300 ${isScanning ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-                    <Loader2 className="w-12 h-12 text-indigo-400 animate-spin mb-3" />
-                    <p className="text-white font-bold kanit-text">กำลังประมวลผล OCR...</p>
-                    <p className="text-indigo-200 text-xs mt-1 kanit-text">กรุณารอสักครู่</p>
-                </div>
-            </div>
-            
-            <div className="p-5 bg-white flex flex-col gap-3">
-              <p className="text-sm text-slate-500 text-center kanit-text">จัดวางบัตรประชาชนให้อยู่ในกรอบ และมีแสงสว่างเพียงพอ</p>
-              <button 
-                  type="button"
-                  onClick={handleRealScan} 
-                  disabled={isScanning}
-                  className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 transition-all active:scale-95 flex items-center justify-center gap-2 kanit-text text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                  {isScanning ? <Loader2 size={24} className="animate-spin" /> : <Camera size={24} />} 
-                  {isScanning ? 'กำลังสแกน...' : 'ถ่ายภาพและดึงข้อมูล'}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <IdCardScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={(extractedData) => {
+          setFormData(prev => ({ ...prev, ...extractedData }));
+        }}
+        showToast={showToast}
+        title="สแกนบัตรประชาชน"
+      />
 
       {/* --- Modal เพิ่ม / แก้ไขคอร์สของคนไข้ (Manual Course Management) --- */}
       {isCourseModalOpen && createPortal(
