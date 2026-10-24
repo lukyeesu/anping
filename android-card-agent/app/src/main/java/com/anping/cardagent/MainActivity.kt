@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.5.6"
+            userAgentString = "$userAgentString AnpingClinicApp/1.5.7"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -305,9 +305,6 @@ class MainActivity : AppCompatActivity() {
             @JavascriptInterface
             fun setCanScrollUp(canScrollUp: Boolean) {
                 canWebScrollUp = canScrollUp
-                runOnUiThread {
-                    binding.swipeRefreshLayout.isEnabled = !canScrollUp
-                }
             }
 
             @JavascriptInterface
@@ -479,6 +476,8 @@ class MainActivity : AppCompatActivity() {
                 function checkCanScrollUp(target) {
                     try {
                         if (target && target instanceof Element) {
+                            if (target.closest('aside, header, nav, .no-pull-refresh, [role="dialog"], .is-dragging-sidebar')) return true;
+
                             var el = target;
                             while (el && el !== document.body && el !== document.documentElement) {
                                 if (el.scrollTop > 1) return true;
@@ -488,10 +487,6 @@ class MainActivity : AppCompatActivity() {
                         var main = document.getElementById('main-scroll-container');
                         if (main && main.scrollTop > 1) return true;
                         if (window.scrollY > 1 || document.documentElement.scrollTop > 1 || document.body.scrollTop > 1) return true;
-                        var scrollables = document.querySelectorAll('.overflow-y-auto, .overflow-auto');
-                        for (var i = 0; i < scrollables.length; i++) {
-                            if (scrollables[i].scrollTop > 1) return true;
-                        }
                     } catch(e) {}
                     return false;
                 }
