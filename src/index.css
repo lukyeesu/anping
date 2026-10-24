@@ -183,16 +183,21 @@ button, a, input, select, textarea, [role="button"], .cursor-pointer {
   transition: none !important;
 }
 
-/* Hardware GPU Acceleration for Main container (GPU Transform Slide) */
+/* Hardware GPU Acceleration & Layout Containment during animation */
 #main-scroll-container {
+  transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  will-change: transform;
 }
 
 .is-dragging-sidebar #main-scroll-container,
 .is-sidebar-animating #main-scroll-container {
   pointer-events: none !important;
+}
+
+.is-dragging-sidebar #main-scroll-container table,
+.is-sidebar-animating #main-scroll-container table {
+  table-layout: fixed !important;
 }
 
 

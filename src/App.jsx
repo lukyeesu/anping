@@ -900,19 +900,8 @@ export default function App() {
       sidebarRef.current.style.setProperty('--sidebar-text-opacity', '1');
       sidebarRef.current.style.setProperty('--sidebar-text-x', '0px');
     }
-    const main = mainRef.current || document.getElementById('main-scroll-container');
-    if (main && !isMobile) {
-      main.style.transition = `transform 260ms ${cubic}`;
-      main.style.transform = 'translate3d(176px, 0, 0)';
-    }
+    setIsSidebarExpanded(true);
     setTimeout(() => {
-      setIsSidebarExpanded(true);
-      if (main && !isMobile) {
-        main.style.transition = 'none';
-        main.style.marginLeft = '256px';
-        main.style.width = 'calc(100% - 256px)';
-        main.style.transform = 'translate3d(0, 0, 0)';
-      }
       if (document.body) {
         document.body.classList.remove('is-sidebar-animating');
       }
@@ -921,7 +910,7 @@ export default function App() {
       }
       isDraggingSidebarRef.current = false;
     }, 270);
-  }, [isMobile]);
+  }, []);
 
   const collapseSidebarSmoothly = useCallback(() => {
     if (document.body) {
@@ -935,19 +924,8 @@ export default function App() {
       sidebarRef.current.style.setProperty('--sidebar-text-opacity', '0');
       sidebarRef.current.style.setProperty('--sidebar-text-x', '-8px');
     }
-    const main = mainRef.current || document.getElementById('main-scroll-container');
-    if (main && !isMobile) {
-      main.style.transition = `transform 260ms ${cubic}`;
-      main.style.transform = 'translate3d(-176px, 0, 0)';
-    }
+    setIsSidebarExpanded(false);
     setTimeout(() => {
-      setIsSidebarExpanded(false);
-      if (main && !isMobile) {
-        main.style.transition = 'none';
-        main.style.marginLeft = '80px';
-        main.style.width = 'calc(100% - 80px)';
-        main.style.transform = 'translate3d(0, 0, 0)';
-      }
       if (document.body) {
         document.body.classList.remove('is-sidebar-animating');
       }
@@ -956,9 +934,9 @@ export default function App() {
       }
       isDraggingSidebarRef.current = false;
     }, 270);
-  }, [isMobile]);
+  }, []);
 
-  // --- ระบบ Gesture / Dragging สำหรับ PC & Tablet (รองรับทั้ง Mouse และ Touch เลื่อนตามด้วย GPU Transform 60-120 FPS ไร้ Reflow) ---
+  // --- ระบบ Gesture / Dragging สำหรับ PC & Tablet (รองรับทั้ง Mouse และ Touch เลื่อนตามกันแบบ In-flow ธรรมชาติ 60-120 FPS) ---
   const handleSidebarDragStart = useCallback((e) => {
     if (e.target.closest('input, textarea, select, .no-drag')) return;
     if (e.button !== undefined && e.button !== 0) return;
@@ -977,9 +955,6 @@ export default function App() {
     sidebarCurrentWidthRef.current = currentW;
     sidebarHasDraggedRef.current = false;
     isDraggingSidebarRef.current = false;
-
-    const main = mainRef.current || document.getElementById('main-scroll-container');
-    const wasExpanded = isSidebarExpanded;
 
     let isDetermined = false;
 
@@ -1009,9 +984,6 @@ export default function App() {
               sidebarRef.current.classList.add('is-dragging-sidebar');
               sidebarRef.current.style.transition = 'none';
             }
-            if (main && !isMobile) {
-              main.style.transition = 'none';
-            }
           }
         }
       }
@@ -1024,7 +996,6 @@ export default function App() {
         sidebarCurrentWidthRef.current = targetWidth;
 
         const progress = Math.max(0, Math.min(1, (targetWidth - 80) / (256 - 80)));
-        const slideOffset = wasExpanded ? (targetWidth - 256) : (targetWidth - 80);
 
         if (sidebarRafIdRef.current) cancelAnimationFrame(sidebarRafIdRef.current);
         sidebarRafIdRef.current = requestAnimationFrame(() => {
@@ -1032,9 +1003,6 @@ export default function App() {
             sidebarRef.current.style.width = `${targetWidth}px`;
             sidebarRef.current.style.setProperty('--sidebar-text-opacity', progress.toFixed(3));
             sidebarRef.current.style.setProperty('--sidebar-text-x', `${(1 - progress) * -8}px`);
-          }
-          if (main && !isMobile) {
-            main.style.transform = `translate3d(${slideOffset}px, 0, 0)`;
           }
         });
       }
@@ -1084,44 +1052,17 @@ export default function App() {
       const curW = sidebarCurrentWidthRef.current;
 
       let shouldExpand;
-      if (wasExpanded) {
+      if (isSidebarExpanded) {
         shouldExpand = !(curW < 195 || (totalDeltaX < -20 && velocityX < -0.22));
       } else {
         shouldExpand = (curW > 140 || (totalDeltaX > 20 && velocityX > 0.22));
       }
 
-      const cubic = 'cubic-bezier(0.32, 0.72, 0, 1)';
-      if (document.body) document.body.classList.add('is-sidebar-animating');
-
-      if (sidebarRef.current) {
-        sidebarRef.current.style.transition = `width 260ms ${cubic}`;
-        sidebarRef.current.style.width = shouldExpand ? '256px' : '80px';
-        sidebarRef.current.style.setProperty('--sidebar-text-opacity', shouldExpand ? '1' : '0');
-        sidebarRef.current.style.setProperty('--sidebar-text-x', shouldExpand ? '0px' : '-8px');
+      if (shouldExpand) {
+        expandSidebarSmoothly();
+      } else {
+        collapseSidebarSmoothly();
       }
-
-      if (main && !isMobile) {
-        main.style.transition = `transform 260ms ${cubic}`;
-        const targetTransformX = wasExpanded ? (shouldExpand ? 0 : -176) : (shouldExpand ? 176 : 0);
-        main.style.transform = `translate3d(${targetTransformX}px, 0, 0)`;
-      }
-
-      setTimeout(() => {
-        setIsSidebarExpanded(shouldExpand);
-        if (main && !isMobile) {
-          main.style.transition = 'none';
-          main.style.marginLeft = shouldExpand ? '256px' : '80px';
-          main.style.width = shouldExpand ? 'calc(100% - 256px)' : 'calc(100% - 80px)';
-          main.style.transform = 'translate3d(0, 0, 0)';
-        }
-        if (document.body) {
-          document.body.classList.remove('is-sidebar-animating');
-        }
-        if (sidebarRef.current) {
-          sidebarRef.current.style.transition = '';
-        }
-        isDraggingSidebarRef.current = false;
-      }, 270);
     };
 
     window.addEventListener('mousemove', onMove, { passive: false });
@@ -1129,7 +1070,7 @@ export default function App() {
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('touchend', onEnd);
     window.addEventListener('touchcancel', onEnd);
-  }, [isSidebarExpanded, isMobile]);
+  }, [isSidebarExpanded, expandSidebarSmoothly, collapseSidebarSmoothly]);
 
   // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ ---
   const [showMobileBars, setShowMobileBars] = useState(true);
@@ -3964,7 +3905,7 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Desktop / Tablet Sidebar (ทำงานแบบ GPU Slide Push: เลื่อนตามกัน 60-120 FPS ไร้การคำนวณ Reflow ตาราง) */}
+        {/* Desktop / Tablet Sidebar (ทำงานแบบ In-Flow Push: ขยาย/ย่อเลื่อนตามกันอย่างเป็นธรรมชาติ 60-120 FPS) */}
         <aside 
           ref={sidebarRef}
           onMouseDown={handleSidebarDragStart}
@@ -3974,9 +3915,10 @@ export default function App() {
             '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
             '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
             willChange: 'width',
+            transform: 'translate3d(0, 0, 0)',
             touchAction: 'pan-y'
           }}
-          className={`hidden md:flex flex-col absolute top-0 left-0 bottom-0 select-none ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] z-[52]`}
+          className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] z-[52]`}
         >
           {/* ขอบลากปรับขนาดด้านขวา (Drag Handle Strip) คลีน ไร้ไฮไลท์สีฟ้าตามที่ผู้ใช้ต้องการ */}
           <div 
@@ -4331,15 +4273,10 @@ export default function App() {
         <main 
           id="main-scroll-container" 
           ref={mainRef} 
-          className={`h-full min-w-0 flex flex-col relative custom-scrollbar ${currentTab === 'pos' ? 'overflow-hidden pb-0' : 'overflow-y-auto pb-24 md:pb-0'}`} 
+          className={`flex-1 min-w-0 flex flex-col relative custom-scrollbar ${currentTab === 'pos' ? 'overflow-hidden pb-0' : 'overflow-y-auto pb-24 md:pb-0'}`} 
           style={{ 
             overflowAnchor: 'none', 
             overscrollBehaviorY: 'auto', 
-            marginLeft: !isMobile ? (isSidebarExpanded ? '256px' : '80px') : '0px',
-            width: !isMobile ? (isSidebarExpanded ? 'calc(100% - 256px)' : 'calc(100% - 80px)') : '100%',
-            flex: isMobile ? '1 1 0%' : 'none',
-            willChange: 'transform',
-            transform: 'translate3d(0, 0, 0)',
             '--mobile-header-offset': (isMobile && showMobileBars) ? '61px' : '0px', 
             '--mobile-pos-top': (isMobile && showMobileBars) ? '61px' : '0px', 
             '--mobile-pos-bottom': (isMobile && showMobileBars) ? '64px' : '0px' 

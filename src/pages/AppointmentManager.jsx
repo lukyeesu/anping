@@ -1324,7 +1324,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                     {/* --- Desktop View (Table) --- */}
                     {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
                     <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
-                        <table className="w-full text-left border-collapse min-w-[900px] table-auto">
+                        <table className="w-full text-left border-collapse min-w-[900px] table-fixed">
                             <thead>
                               <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pb-4 font-medium pl-6 text-left w-[12%]">วันที่/เวลา</th><th className="pb-4 font-medium text-center w-[10%]">รหัส HN</th><th className="pb-4 font-medium text-left px-2 w-[18%]">ชื่อคนไข้</th><th className="pb-4 font-medium text-center w-[12%]">เบอร์โทร</th><th className="pb-4 font-medium text-left px-2 w-[15%]">แพทย์ผู้นัด</th><th className="pb-4 font-medium text-left px-2 w-[15%]">อาการ</th><th className="pb-4 font-medium text-center w-[10%]">สถานะ</th><th className="pb-4 font-medium text-right pr-6 w-[120px]">จัดการ</th></tr>
                             </thead>
