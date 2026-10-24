@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.anping.cardagent"
-    android:versionCode="12"
-    android:versionName="1.4.7" >
+    package="com.anping.clinic"
+    android:versionCode="13"
+    android:versionName="1.5.0" >
 
     <uses-sdk
         android:minSdkVersion="24"
@@ -13,6 +13,22 @@
         android:name="android.hardware.usb.host"
         android:required="true" />
 
+    <!-- สิทธิ์กล้องและการสแกนเต็มประสิทธิภาพ (Native Camera & Autofocus) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -20,12 +36,13 @@
 
     <!-- อนุญาตเชื่อมต่ออินเทอร์เน็ตสำหรับการดาวน์โหลดอัปเดตเวอร์ชันใหม่จากคลินิก และ Loopback 127.0.0.1 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <permission
-        android:name="com.anping.cardagent.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:name="com.anping.clinic.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         android:protectionLevel="signature" />
 
-    <uses-permission android:name="com.anping.cardagent.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+    <uses-permission android:name="com.anping.clinic.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 
     <application
         android:allowBackup="false"
@@ -34,11 +51,13 @@
         android:debuggable="true"
         android:extractNativeLibs="false"
         android:fullBackupContent="false"
+        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AnpingCardAgent" >
+        android:theme="@style/Theme.AnpingCardAgent"
+        android:usesCleartextTraffic="true" >
         <activity
             android:name="com.anping.cardagent.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
@@ -91,7 +110,7 @@
         <!-- FileProvider สำหรับติดตั้งการอัปเดตเวอร์ชันใหม่ในตัวแอป (In-App Update) -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.anping.cardagent.fileprovider"
+            android:authorities="com.anping.clinic.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true" >
             <meta-data
@@ -100,7 +119,7 @@
         </provider>
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="com.anping.cardagent.androidx-startup"
+            android:authorities="com.anping.clinic.androidx-startup"
             android:exported="false" >
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"

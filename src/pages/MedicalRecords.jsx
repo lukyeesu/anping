@@ -31,18 +31,18 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const autoCardInsertedRef = useRef(false);
   const isAutoReadingRef = useRef(false);
 
-  const handleDownloadApk = async (e) => {
+  const handleDownloadApk = async (e, filename = 'AnpingClinic.apk') => {
     if (e) e.preventDefault();
     try {
-      showToast('กำลังดาวน์โหลด APK...', 'info');
-      const res = await fetch('/anping-card-agent.apk');
+      showToast(`กำลังดาวน์โหลด ${filename}...`, 'info');
+      const res = await fetch(`/${filename}`);
       if (!res.ok) throw new Error('Download failed');
       const blob = await res.blob();
       const apkBlob = new Blob([blob], { type: 'application/vnd.android.package-archive' });
       const downloadUrl = window.URL.createObjectURL(apkBlob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = 'anping-card-agent.apk';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -50,7 +50,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       showToast('ดาวน์โหลดเสร็จสมบูรณ์ กรุณากดติดตั้งไฟล์ APK', 'success');
     } catch (err) {
       console.warn('Fallback direct download', err);
-      window.location.href = '/anping-card-agent.apk';
+      window.location.href = `/${filename}`;
     }
   };
   const [processingPdpaHn, setProcessingPdpaHn] = useState(null);
@@ -4483,9 +4483,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 </div>
               </div>
 
-              <button type="button" onClick={handleDownloadApk} className="w-full mt-2 py-3.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-2xl text-center shadow-lg shadow-sky-600/25 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm kanit-text">
-                <Download size={18} /> ดาวน์โหลด Anping Card Agent (APK)
-              </button>
+              <div className="space-y-2 mt-2">
+                <button 
+                  type="button" 
+                  onClick={(e) => handleDownloadApk(e, 'AnpingClinic.apk')} 
+                  className="w-full py-3.5 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-2xl text-center shadow-lg shadow-sky-600/25 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm kanit-text"
+                >
+                  <Download size={18} /> ดาวน์โหลด AnpingClinic (แอปเต็มตัว)
+                </button>
+                <button 
+                  type="button" 
+                  onClick={(e) => handleDownloadApk(e, 'anping-card-agent.apk')} 
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl text-center active:scale-95 transition-all flex items-center justify-center gap-2 text-xs kanit-text"
+                >
+                  <Download size={15} /> ดาวน์โหลด Anping Card Agent (ตัวอ่านบัตรอย่างเดียว)
+                </button>
+              </div>
 
               <p className="text-[11px] text-slate-400 text-center font-medium">
                 * พัฒนาโดยอันผิงคลินิก ข้อมูลอยู่ในเครื่องแท็บเล็ต 100% ปลอดภัยสูงสุด

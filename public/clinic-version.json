@@ -1,0 +1,6 @@
+{
+  "versionCode": 13,
+  "versionName": "1.5.0",
+  "apkUrl": "https://anpingclinic.vercel.app/AnpingClinic.apk",
+  "changelog": "- อัปเกรดเป็นแอปพลิเคชันเต็มรูปแบบ All-in-One (AnpingClinic) รันระบบคลินิกแบบเต็มจอ ไร้แถบเว็บเบราว์เซอร์\n- ฝังระบบอ่านบัตรประชาชนในตัว เสียบบัตรปุ๊บ ข้อมูลและรูปถ่ายเข้าสู่ฟอร์มทันทีในแอปเดียว\n- ยกระดับประสิทธิภาพการสแกนกล้องขั้นสูงสุด (Native Camera & Hardware Acceleration)\n- ใช้โลโก้แอปพลิเคชันทางการ Anping Clinic และระบบล้างไฟล์ขยะอัตโนมัติ"
+}

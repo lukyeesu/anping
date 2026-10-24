@@ -1,342 +1,133 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background"
-    android:padding="20dp">
+    android:background="#FFFFFF">
 
-    <!-- 3-Dots Menu Button (มุมขวาบน) -->
-    <ImageButton
-        android:id="@+id/btnMenu"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="เมนูเพิ่มเติม"
-        android:src="@drawable/ic_more_vert"
-        app:tint="@color/text_main"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- Header Section -->
-    <ImageView
-        android:id="@+id/ivIcon"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_marginTop="12dp"
-        android:src="@mipmap/ic_launcher"
+    <!-- WebView สำหรับรันระบบอันผิงคลินิกแบบเต็มจอ (Full Screen Kiosk / App Mode) -->
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/tvTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:text="อันผิงคลินิก (Anping Agent)"
-        android:textColor="@color/text_main"
-        android:textSize="19sp"
-        android:textStyle="bold"
+    <!-- แถบดาวน์โหลดโหลดหน้าเว็บแบบบางและทันสมัย (Top Loading Progress Bar) -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progressDrawable="@drawable/progress_bar_custom"
+        android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/ivIcon" />
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/tvSubtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="ตัวกลางอ่านบัตรประชาชน USB"
-        android:textColor="@color/text_sub"
-        android:textSize="13sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvTitle" />
-
-    <!-- 3 Status Cards Section (เซิร์ฟเวอร์, เครื่องอ่านบัตร, บัตรประชาชน) -->
+    <!-- หน้าจอแสดงผลกรณีไม่มีสัญญาณอินเทอร์เน็ต (Offline / Connection Error) -->
     <LinearLayout
-        android:id="@+id/layoutStatusGrid"
+        android:id="@+id/layoutError"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:orientation="horizontal"
-        app:layout_constraintTop_toBottomOf="@id/tvSubtitle">
-
-        <!-- ช่องที่ 1: เซิร์ฟเวอร์ภายใน (Server) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardServerStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="5dp"
-            app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="14dp"
-            app:cardElevation="1dp"
-            app:strokeColor="@color/card_border"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:id="@+id/dotServerStatus"
-                        android:layout_width="10dp"
-                        android:layout_height="10dp"
-                        android:background="@drawable/shape_circle_green" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:text="เซิร์ฟเวอร์"
-                        android:textColor="@color/text_sub"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvServerDetail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="พร้อมทำงาน\nพอร์ต 8181"
-                    android:textColor="@color/text_main"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- ช่องที่ 2: เครื่องอ่านบัตร (Reader) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardReaderStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="3dp"
-            app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="14dp"
-            app:cardElevation="1dp"
-            app:strokeColor="@color/card_border"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:id="@+id/dotReaderStatus"
-                        android:layout_width="10dp"
-                        android:layout_height="10dp"
-                        android:background="@drawable/shape_circle_red" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:text="เครื่องอ่าน"
-                        android:textColor="@color/text_sub"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvReaderDetail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="ยังไม่เชื่อมต่อ\nรอเสียบสาย OTG"
-                    android:textColor="@color/text_main"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- ช่องที่ 3: สถานะบัตรประชาชน (Smart Card) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardCardStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="5dp"
-            app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="14dp"
-            app:cardElevation="1dp"
-            app:strokeColor="@color/card_border"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <View
-                        android:id="@+id/dotCardStatus"
-                        android:layout_width="10dp"
-                        android:layout_height="10dp"
-                        android:background="@drawable/shape_circle_yellow" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:text="บัตรประชาชน"
-                        android:textColor="@color/text_sub"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvCardDetail"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="ยังไม่เสียบบัตร\nรอเสียบบัตร"
-                    android:textColor="@color/text_main"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-    </LinearLayout>
-
-    <!-- Preview Card -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/cardPreview"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginVertical="14dp"
-        app:cardBackgroundColor="@color/surface"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="2dp"
-        app:layout_constraintBottom_toTopOf="@id/layoutActions"
-        app:layout_constraintTop_toBottomOf="@id/layoutStatusGrid"
-        app:strokeColor="@color/card_border"
-        app:strokeWidth="1dp">
-
-        <ScrollView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:fillViewport="true"
-            android:padding="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <!-- Card Photo & Header Info Container (แสดงเมื่ออ่านบัตรได้) -->
-                <LinearLayout
-                    android:id="@+id/layoutPhotoContainer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:visibility="gone"
-                    android:layout_marginBottom="14dp">
-
-                    <com.google.android.material.imageview.ShapeableImageView
-                        android:id="@+id/ivCardPhoto"
-                        android:layout_width="85dp"
-                        android:layout_height="110dp"
-                        android:scaleType="centerCrop"
-                        android:background="@color/card_border"
-                        app:shapeAppearanceOverlay="@style/ShapeAppearance.MaterialComponents.MediumComponent"
-                        app:strokeColor="@color/card_border"
-                        app:strokeWidth="1dp" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="14dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:id="@+id/tvPreviewCid"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="@color/primary"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvPreviewNameTh"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:textColor="@color/text_main"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvPreviewNameEn"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textColor="@color/text_sub"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:id="@+id/tvPreviewDates"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:textColor="@color/text_sub"
-                            android:textSize="11sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvPreviewData"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:lineSpacingExtra="4dp"
-                    android:text="พร้อมใช้งาน: เมื่อเปิดหน้าเว็บคลินิกและกดปุ่ม 'อ่านข้อมูลจากบัตร' ข้อมูลจะถูกดึงเข้าสู่ฟอร์มเวชระเบียนอัตโนมัติ"
-                    android:textColor="@color/text_sub"
-                    android:textSize="12sp" />
-
-            </LinearLayout>
-        </ScrollView>
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- Actions Section -->
-    <LinearLayout
-        android:id="@+id/layoutActions"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
+        android:background="#FFFFFF"
+        android:gravity="center"
         android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:padding="32dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:layout_width="110dp"
+            android:layout_height="110dp"
+            android:contentDescription="โลโก้อันผิงคลินิก"
+            android:src="@drawable/anping_logo" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="อันผิงคลินิก (AnpingClinic)"
+            android:textColor="#0F172A"
+            android:textSize="21sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvErrorMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:text="ไม่สามารถเชื่อมต่อระบบคลินิกได้\nกรุณาตรวจสอบสัญญาณ WiFi หรืออินเทอร์เน็ตของเครื่อง"
+            android:textColor="#64748B"
+            android:textSize="14sp" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnTestRead"
-            android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:text="ทดสอบอ่านบัตรประชาชน"
+            android:id="@+id/btnRetry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="12dp"
+            android:text="ลองใหม่อีกครั้ง"
+            android:textColor="#FFFFFF"
             android:textSize="15sp"
-            android:textStyle="bold"
-            app:cornerRadius="14dp" />
+            app:backgroundTint="#0284C7"
+            app:cornerRadius="12dp" />
+
     </LinearLayout>
+
+    <!-- ป้ายแสดงสถานะเครื่องอ่านบัตรประชาชนแบบลอยตัว (Floating Status Pill) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardReaderPill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#F0FDF4"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="4dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:strokeColor="#BBF7D0"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp">
+
+            <View
+                android:id="@+id/dotPillStatus"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/shape_circle_green" />
+
+            <TextView
+                android:id="@+id/tvPillText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="เครื่องอ่านบัตรพร้อมใช้งาน"
+                android:textColor="#166534"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

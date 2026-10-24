@@ -24,6 +24,10 @@
         "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-hdpi\\ic_launcher_round.png"
     },
     {
+        "merged": "com.anping.cardagent.app-merged_res-31:/drawable_progress_bar_custom.xml.flat",
+        "source": "com.anping.cardagent.app-main-33:/drawable/progress_bar_custom.xml"
+    },
+    {
         "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\layout_activity_main.xml.flat",
         "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\layout\\activity_main.xml"
     },
@@ -60,6 +64,10 @@
         "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\xml\\device_filter.xml"
     },
     {
+        "merged": "com.anping.cardagent.app-merged_res-31:/drawable_anping_logo.png.flat",
+        "source": "com.anping.cardagent.app-main-33:/drawable/anping_logo.png"
+    },
+    {
         "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\xml_file_paths.xml.flat",
         "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\xml\\file_paths.xml"
     },
@@ -68,8 +76,8 @@
         "source": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-main-33:\\mipmap-xxhdpi\\ic_launcher.png"
     },
     {
-        "merged": "com.anping.cardagent.app-merged_res-31:/raw_card_chime.mp3.flat",
-        "source": "com.anping.cardagent.app-main-33:/raw/card_chime.mp3"
+        "merged": "com.anping.cardagent.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "com.anping.cardagent.app-main-33:/layout/activity_main.xml"
     },
     {
         "merged": "C:\\Users\\lukye\\.gradle\\daemon\\8.2\\com.anping.cardagent.app-merged_res-31:\\raw_card_chime.mp3.flat",

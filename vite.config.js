@@ -19,11 +19,12 @@ function apiDevMiddlewarePlugin() {
           const urlObj = new URL(req.url, `http://${host}`);
           const pathname = urlObj.pathname;
 
-          if (pathname === '/anping-card-agent.apk' || pathname.endsWith('.apk')) {
-            const apkPath = path.resolve('public/anping-card-agent.apk');
+          if (pathname.endsWith('.apk')) {
+            const filename = path.basename(pathname);
+            const apkPath = path.resolve('public', filename);
             if (fs.existsSync(apkPath)) {
               res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-              res.setHeader('Content-Disposition', 'attachment; filename="anping-card-agent.apk"');
+              res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
               const stat = fs.statSync(apkPath);
               res.setHeader('Content-Length', stat.size);
               fs.createReadStream(apkPath).pipe(res);

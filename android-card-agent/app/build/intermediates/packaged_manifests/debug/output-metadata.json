@@ -4,15 +4,15 @@
     "type": "PACKAGED_MANIFESTS",
     "kind": "Directory"
   },
-  "applicationId": "com.anping.cardagent",
+  "applicationId": "com.anping.clinic",
   "variantName": "debug",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 12,
-      "versionName": "1.4.7",
+      "versionCode": 13,
+      "versionName": "1.5.0",
       "outputFile": "AndroidManifest.xml"
     }
   ],

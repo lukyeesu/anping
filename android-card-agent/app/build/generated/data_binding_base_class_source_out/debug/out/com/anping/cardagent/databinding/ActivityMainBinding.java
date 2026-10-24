@@ -4,9 +4,9 @@ package com.anping.cardagent.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageButton;
-import android.widget.ImageView;
+import android.webkit.WebView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,7 +16,6 @@ import androidx.viewbinding.ViewBindings;
 import com.anping.cardagent.R;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
-import com.google.android.material.imageview.ShapeableImageView;
 import java.lang.NullPointerException;
 import java.lang.Override;
 import java.lang.String;
@@ -26,114 +25,42 @@ public final class ActivityMainBinding implements ViewBinding {
   private final ConstraintLayout rootView;
 
   @NonNull
-  public final ImageButton btnMenu;
+  public final MaterialButton btnRetry;
 
   @NonNull
-  public final MaterialButton btnTestRead;
+  public final MaterialCardView cardReaderPill;
 
   @NonNull
-  public final MaterialCardView cardCardStatus;
+  public final View dotPillStatus;
 
   @NonNull
-  public final MaterialCardView cardPreview;
+  public final LinearLayout layoutError;
 
   @NonNull
-  public final MaterialCardView cardReaderStatus;
+  public final ProgressBar progressBar;
 
   @NonNull
-  public final MaterialCardView cardServerStatus;
+  public final TextView tvErrorMessage;
 
   @NonNull
-  public final View dotCardStatus;
+  public final TextView tvPillText;
 
   @NonNull
-  public final View dotReaderStatus;
+  public final WebView webView;
 
-  @NonNull
-  public final View dotServerStatus;
-
-  @NonNull
-  public final ShapeableImageView ivCardPhoto;
-
-  @NonNull
-  public final ImageView ivIcon;
-
-  @NonNull
-  public final LinearLayout layoutActions;
-
-  @NonNull
-  public final LinearLayout layoutPhotoContainer;
-
-  @NonNull
-  public final LinearLayout layoutStatusGrid;
-
-  @NonNull
-  public final TextView tvCardDetail;
-
-  @NonNull
-  public final TextView tvPreviewCid;
-
-  @NonNull
-  public final TextView tvPreviewData;
-
-  @NonNull
-  public final TextView tvPreviewDates;
-
-  @NonNull
-  public final TextView tvPreviewNameEn;
-
-  @NonNull
-  public final TextView tvPreviewNameTh;
-
-  @NonNull
-  public final TextView tvReaderDetail;
-
-  @NonNull
-  public final TextView tvServerDetail;
-
-  @NonNull
-  public final TextView tvSubtitle;
-
-  @NonNull
-  public final TextView tvTitle;
-
-  private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull ImageButton btnMenu,
-      @NonNull MaterialButton btnTestRead, @NonNull MaterialCardView cardCardStatus,
-      @NonNull MaterialCardView cardPreview, @NonNull MaterialCardView cardReaderStatus,
-      @NonNull MaterialCardView cardServerStatus, @NonNull View dotCardStatus,
-      @NonNull View dotReaderStatus, @NonNull View dotServerStatus,
-      @NonNull ShapeableImageView ivCardPhoto, @NonNull ImageView ivIcon,
-      @NonNull LinearLayout layoutActions, @NonNull LinearLayout layoutPhotoContainer,
-      @NonNull LinearLayout layoutStatusGrid, @NonNull TextView tvCardDetail,
-      @NonNull TextView tvPreviewCid, @NonNull TextView tvPreviewData,
-      @NonNull TextView tvPreviewDates, @NonNull TextView tvPreviewNameEn,
-      @NonNull TextView tvPreviewNameTh, @NonNull TextView tvReaderDetail,
-      @NonNull TextView tvServerDetail, @NonNull TextView tvSubtitle, @NonNull TextView tvTitle) {
+  private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull MaterialButton btnRetry,
+      @NonNull MaterialCardView cardReaderPill, @NonNull View dotPillStatus,
+      @NonNull LinearLayout layoutError, @NonNull ProgressBar progressBar,
+      @NonNull TextView tvErrorMessage, @NonNull TextView tvPillText, @NonNull WebView webView) {
     this.rootView = rootView;
-    this.btnMenu = btnMenu;
-    this.btnTestRead = btnTestRead;
-    this.cardCardStatus = cardCardStatus;
-    this.cardPreview = cardPreview;
-    this.cardReaderStatus = cardReaderStatus;
-    this.cardServerStatus = cardServerStatus;
-    this.dotCardStatus = dotCardStatus;
-    this.dotReaderStatus = dotReaderStatus;
-    this.dotServerStatus = dotServerStatus;
-    this.ivCardPhoto = ivCardPhoto;
-    this.ivIcon = ivIcon;
-    this.layoutActions = layoutActions;
-    this.layoutPhotoContainer = layoutPhotoContainer;
-    this.layoutStatusGrid = layoutStatusGrid;
-    this.tvCardDetail = tvCardDetail;
-    this.tvPreviewCid = tvPreviewCid;
-    this.tvPreviewData = tvPreviewData;
-    this.tvPreviewDates = tvPreviewDates;
-    this.tvPreviewNameEn = tvPreviewNameEn;
-    this.tvPreviewNameTh = tvPreviewNameTh;
-    this.tvReaderDetail = tvReaderDetail;
-    this.tvServerDetail = tvServerDetail;
-    this.tvSubtitle = tvSubtitle;
-    this.tvTitle = tvTitle;
+    this.btnRetry = btnRetry;
+    this.cardReaderPill = cardReaderPill;
+    this.dotPillStatus = dotPillStatus;
+    this.layoutError = layoutError;
+    this.progressBar = progressBar;
+    this.tvErrorMessage = tvErrorMessage;
+    this.tvPillText = tvPillText;
+    this.webView = webView;
   }
 
   @Override
@@ -163,156 +90,56 @@ public final class ActivityMainBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.btnMenu;
-      ImageButton btnMenu = ViewBindings.findChildViewById(rootView, id);
-      if (btnMenu == null) {
+      id = R.id.btnRetry;
+      MaterialButton btnRetry = ViewBindings.findChildViewById(rootView, id);
+      if (btnRetry == null) {
         break missingId;
       }
 
-      id = R.id.btnTestRead;
-      MaterialButton btnTestRead = ViewBindings.findChildViewById(rootView, id);
-      if (btnTestRead == null) {
+      id = R.id.cardReaderPill;
+      MaterialCardView cardReaderPill = ViewBindings.findChildViewById(rootView, id);
+      if (cardReaderPill == null) {
         break missingId;
       }
 
-      id = R.id.cardCardStatus;
-      MaterialCardView cardCardStatus = ViewBindings.findChildViewById(rootView, id);
-      if (cardCardStatus == null) {
+      id = R.id.dotPillStatus;
+      View dotPillStatus = ViewBindings.findChildViewById(rootView, id);
+      if (dotPillStatus == null) {
         break missingId;
       }
 
-      id = R.id.cardPreview;
-      MaterialCardView cardPreview = ViewBindings.findChildViewById(rootView, id);
-      if (cardPreview == null) {
+      id = R.id.layoutError;
+      LinearLayout layoutError = ViewBindings.findChildViewById(rootView, id);
+      if (layoutError == null) {
         break missingId;
       }
 
-      id = R.id.cardReaderStatus;
-      MaterialCardView cardReaderStatus = ViewBindings.findChildViewById(rootView, id);
-      if (cardReaderStatus == null) {
+      id = R.id.progressBar;
+      ProgressBar progressBar = ViewBindings.findChildViewById(rootView, id);
+      if (progressBar == null) {
         break missingId;
       }
 
-      id = R.id.cardServerStatus;
-      MaterialCardView cardServerStatus = ViewBindings.findChildViewById(rootView, id);
-      if (cardServerStatus == null) {
+      id = R.id.tvErrorMessage;
+      TextView tvErrorMessage = ViewBindings.findChildViewById(rootView, id);
+      if (tvErrorMessage == null) {
         break missingId;
       }
 
-      id = R.id.dotCardStatus;
-      View dotCardStatus = ViewBindings.findChildViewById(rootView, id);
-      if (dotCardStatus == null) {
+      id = R.id.tvPillText;
+      TextView tvPillText = ViewBindings.findChildViewById(rootView, id);
+      if (tvPillText == null) {
         break missingId;
       }
 
-      id = R.id.dotReaderStatus;
-      View dotReaderStatus = ViewBindings.findChildViewById(rootView, id);
-      if (dotReaderStatus == null) {
+      id = R.id.webView;
+      WebView webView = ViewBindings.findChildViewById(rootView, id);
+      if (webView == null) {
         break missingId;
       }
 
-      id = R.id.dotServerStatus;
-      View dotServerStatus = ViewBindings.findChildViewById(rootView, id);
-      if (dotServerStatus == null) {
-        break missingId;
-      }
-
-      id = R.id.ivCardPhoto;
-      ShapeableImageView ivCardPhoto = ViewBindings.findChildViewById(rootView, id);
-      if (ivCardPhoto == null) {
-        break missingId;
-      }
-
-      id = R.id.ivIcon;
-      ImageView ivIcon = ViewBindings.findChildViewById(rootView, id);
-      if (ivIcon == null) {
-        break missingId;
-      }
-
-      id = R.id.layoutActions;
-      LinearLayout layoutActions = ViewBindings.findChildViewById(rootView, id);
-      if (layoutActions == null) {
-        break missingId;
-      }
-
-      id = R.id.layoutPhotoContainer;
-      LinearLayout layoutPhotoContainer = ViewBindings.findChildViewById(rootView, id);
-      if (layoutPhotoContainer == null) {
-        break missingId;
-      }
-
-      id = R.id.layoutStatusGrid;
-      LinearLayout layoutStatusGrid = ViewBindings.findChildViewById(rootView, id);
-      if (layoutStatusGrid == null) {
-        break missingId;
-      }
-
-      id = R.id.tvCardDetail;
-      TextView tvCardDetail = ViewBindings.findChildViewById(rootView, id);
-      if (tvCardDetail == null) {
-        break missingId;
-      }
-
-      id = R.id.tvPreviewCid;
-      TextView tvPreviewCid = ViewBindings.findChildViewById(rootView, id);
-      if (tvPreviewCid == null) {
-        break missingId;
-      }
-
-      id = R.id.tvPreviewData;
-      TextView tvPreviewData = ViewBindings.findChildViewById(rootView, id);
-      if (tvPreviewData == null) {
-        break missingId;
-      }
-
-      id = R.id.tvPreviewDates;
-      TextView tvPreviewDates = ViewBindings.findChildViewById(rootView, id);
-      if (tvPreviewDates == null) {
-        break missingId;
-      }
-
-      id = R.id.tvPreviewNameEn;
-      TextView tvPreviewNameEn = ViewBindings.findChildViewById(rootView, id);
-      if (tvPreviewNameEn == null) {
-        break missingId;
-      }
-
-      id = R.id.tvPreviewNameTh;
-      TextView tvPreviewNameTh = ViewBindings.findChildViewById(rootView, id);
-      if (tvPreviewNameTh == null) {
-        break missingId;
-      }
-
-      id = R.id.tvReaderDetail;
-      TextView tvReaderDetail = ViewBindings.findChildViewById(rootView, id);
-      if (tvReaderDetail == null) {
-        break missingId;
-      }
-
-      id = R.id.tvServerDetail;
-      TextView tvServerDetail = ViewBindings.findChildViewById(rootView, id);
-      if (tvServerDetail == null) {
-        break missingId;
-      }
-
-      id = R.id.tvSubtitle;
-      TextView tvSubtitle = ViewBindings.findChildViewById(rootView, id);
-      if (tvSubtitle == null) {
-        break missingId;
-      }
-
-      id = R.id.tvTitle;
-      TextView tvTitle = ViewBindings.findChildViewById(rootView, id);
-      if (tvTitle == null) {
-        break missingId;
-      }
-
-      return new ActivityMainBinding((ConstraintLayout) rootView, btnMenu, btnTestRead,
-          cardCardStatus, cardPreview, cardReaderStatus, cardServerStatus, dotCardStatus,
-          dotReaderStatus, dotServerStatus, ivCardPhoto, ivIcon, layoutActions,
-          layoutPhotoContainer, layoutStatusGrid, tvCardDetail, tvPreviewCid, tvPreviewData,
-          tvPreviewDates, tvPreviewNameEn, tvPreviewNameTh, tvReaderDetail, tvServerDetail,
-          tvSubtitle, tvTitle);
+      return new ActivityMainBinding((ConstraintLayout) rootView, btnRetry, cardReaderPill,
+          dotPillStatus, layoutError, progressBar, tvErrorMessage, tvPillText, webView);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

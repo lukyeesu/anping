@@ -11,10 +11,10 @@
     <color name="text_main">#0F172A</color>
     <color name="text_sub">#64748B</color>
     <color name="warning">#F59E0B</color>
-    <string name="app_name">Anping Card Agent</string>
+    <string name="app_name">AnpingClinic</string>
     <string name="btn_test_read">ทดสอบอ่านบัตร</string>
-    <string name="channel_desc">บริการเชื่อมต่อเครื่องอ่านบัตรประชาชนสำหรับเว็บคลินิก</string>
-    <string name="channel_name">Anping Smart Card Service</string>
+    <string name="channel_desc">บริการเชื่อมต่อเครื่องอ่านบัตรประชาชนสำหรับอันผิงคลินิก</string>
+    <string name="channel_name">Anping Clinic Service</string>
     <string name="status_device_connected">พบเครื่องอ่านบัตร: %s</string>
     <string name="status_reading">กำลังอ่านข้อมูลจากชิปบัตร...</string>
     <string name="status_ready">ระบบพร้อมทำงาน (พอร์ต 8181)</string>
