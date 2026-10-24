@@ -3320,7 +3320,19 @@ export default function App() {
 
   const expandMobileNav = useCallback(() => {
     isExpandedRef.current = true;
+    if (document.body) {
+      document.body.classList.add('is-nav-expanded');
+    }
+    if (window.AndroidCardBridge) {
+      if (typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+        window.AndroidCardBridge.setCanScrollUp(true);
+      }
+      if (typeof window.AndroidCardBridge.setSwipeRefreshEnabled === 'function') {
+        window.AndroidCardBridge.setSwipeRefreshEnabled(false);
+      }
+    }
     if (navSheetRef.current) {
+      navSheetRef.current.dataset.expanded = 'true';
       navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
       navSheetRef.current.style.transform = 'translate3d(0, 0px, 0)';
     }
@@ -3338,8 +3350,12 @@ export default function App() {
 
   const collapseMobileNav = useCallback(() => {
     isExpandedRef.current = false;
+    if (document.body) {
+      document.body.classList.remove('is-nav-expanded', 'is-nav-dragging');
+    }
     const H = extraHeightRef.current || 200;
     if (navSheetRef.current) {
+      navSheetRef.current.dataset.expanded = 'false';
       navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
       navSheetRef.current.style.transform = `translate3d(0, ${H}px, 0)`;
     }
@@ -3351,6 +3367,16 @@ export default function App() {
     if (extraContentRef.current) {
       extraContentRef.current.style.transition = 'opacity 320ms ease-out';
       extraContentRef.current.style.opacity = '0';
+    }
+    if (window.AndroidCardBridge) {
+      const main = mainRef.current || document.getElementById('main-scroll-container');
+      const canScroll = !!(main && main.scrollTop > 1);
+      if (typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+        window.AndroidCardBridge.setCanScrollUp(canScroll);
+      }
+      if (typeof window.AndroidCardBridge.setSwipeRefreshEnabled === 'function') {
+        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
+      }
     }
   }, []);
 
@@ -3500,6 +3526,14 @@ export default function App() {
     // --- 1. TOUCH EVENTS (สำหรับโทรศัพท์มือถือ / แท็บเล็ต) ---
     const handleTouchStart = (e) => {
       if (e.touches.length !== 1) return;
+      if (window.AndroidCardBridge) {
+        if (typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+          window.AndroidCardBridge.setCanScrollUp(true);
+        }
+        if (typeof window.AndroidCardBridge.setSwipeRefreshEnabled === 'function') {
+          window.AndroidCardBridge.setSwipeRefreshEnabled(false);
+        }
+      }
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
       touchStartTime = Date.now();
@@ -3519,6 +3553,17 @@ export default function App() {
 
         isDraggingTouch = true;
         isDraggingRef.current = true;
+        if (document.body) {
+          document.body.classList.add('is-nav-dragging');
+        }
+        if (window.AndroidCardBridge) {
+          if (typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
+            window.AndroidCardBridge.setCanScrollUp(true);
+          }
+          if (typeof window.AndroidCardBridge.setSwipeRefreshEnabled === 'function') {
+            window.AndroidCardBridge.setSwipeRefreshEnabled(false);
+          }
+        }
         el.style.transition = 'none';
         if (navBackdropRef.current) navBackdropRef.current.style.transition = 'none';
         if (extraContentRef.current) extraContentRef.current.style.transition = 'none';
@@ -3567,6 +3612,9 @@ export default function App() {
     };
 
     const handleTouchEnd = (e) => {
+      if (document.body) {
+        document.body.classList.remove('is-nav-dragging');
+      }
       if (!isDraggingTouch) {
         // เป็นเพียงการแตะเลือกเมนู (Clean Tap < 8px) -> ไม่แตะต้อง transform หรือ state ปล่อยให้ onClick ของปุ่มทำงานอย่างสมบูรณ์ทันที
         return;
@@ -3915,7 +3963,6 @@ export default function App() {
             '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
             '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
             willChange: 'width',
-            transform: 'translate3d(0, 0, 0)',
             touchAction: 'pan-y'
           }}
           className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] z-[52]`}
@@ -4602,9 +4649,16 @@ export default function App() {
         {isMobile && hasMoreNavItems && (
           <div 
             ref={navBackdropRef}
-            className="fixed inset-0 bg-slate-900/40 z-[42] will-change-[opacity] opacity-0 pointer-events-none"
+            data-bottom-sheet="true"
+            className="no-pull-refresh nav-backdrop fixed inset-0 bg-slate-900/40 z-[42] will-change-[opacity] opacity-0 pointer-events-none"
             style={{
               transition: 'opacity 300ms ease-out'
+            }}
+            onTouchStart={() => {
+              if (window.AndroidCardBridge) {
+                window.AndroidCardBridge.setCanScrollUp?.(true);
+                window.AndroidCardBridge.setSwipeRefreshEnabled?.(false);
+              }
             }}
             onClick={collapseMobileNav}
           />
@@ -4613,7 +4667,15 @@ export default function App() {
         {/* ปรับแก้ Navbar มือถือ: Compact & Full เหมือนแบบเดิม พร้อม Expandable Quick Panel ดึงขึ้นเพื่อเลือกหน้าอื่น */}
         <div 
           ref={setNavSheetRef}
-          className="md:hidden fixed bottom-0 left-0 w-full bg-white border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[50] will-change-transform select-none touch-none"
+          data-bottom-sheet="true"
+          data-expanded="false"
+          onTouchStartCapture={() => {
+            if (window.AndroidCardBridge) {
+              window.AndroidCardBridge.setCanScrollUp?.(true);
+              window.AndroidCardBridge.setSwipeRefreshEnabled?.(false);
+            }
+          }}
+          className="no-pull-refresh md:hidden fixed bottom-0 left-0 w-full bg-white border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[50] will-change-transform select-none touch-none"
           style={{
             transform: isDraggingRef.current
               ? undefined

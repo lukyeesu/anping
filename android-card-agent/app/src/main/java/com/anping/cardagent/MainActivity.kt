@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.2"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.3"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -305,6 +305,13 @@ class MainActivity : AppCompatActivity() {
             @JavascriptInterface
             fun setCanScrollUp(canScrollUp: Boolean) {
                 canWebScrollUp = canScrollUp
+            }
+
+            @JavascriptInterface
+            fun setSwipeRefreshEnabled(enabled: Boolean) {
+                runOnUiThread {
+                    binding.swipeRefreshLayout.isEnabled = enabled
+                }
             }
 
             @JavascriptInterface
@@ -475,8 +482,19 @@ class MainActivity : AppCompatActivity() {
 
                 function checkCanScrollUp(target) {
                     try {
+                        if (document.body && (
+                            document.body.classList.contains('is-nav-expanded') || 
+                            document.body.classList.contains('is-nav-dragging') ||
+                            document.body.classList.contains('is-sidebar-animating') ||
+                            document.body.classList.contains('is-dragging-sidebar')
+                        )) {
+                            return true;
+                        }
+                        var expandedSheet = document.querySelector('[data-bottom-sheet][data-expanded="true"]');
+                        if (expandedSheet) return true;
+
                         if (target && target instanceof Element) {
-                            if (target.closest('aside, header, nav, .no-pull-refresh, [role="dialog"], .is-dragging-sidebar')) return true;
+                            if (target.closest('aside, header, nav, .no-pull-refresh, [role="dialog"], .is-dragging-sidebar, [data-bottom-sheet], [data-drag-handle], .nav-backdrop')) return true;
 
                             var el = target;
                             while (el && el !== document.body && el !== document.documentElement) {
@@ -503,6 +521,11 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 document.addEventListener('touchstart', function(e) {
+                    var target = (e.touches && e.touches[0]) ? e.touches[0].target : e.target;
+                    notifyState(checkCanScrollUp(target));
+                }, { capture: true, passive: true });
+
+                document.addEventListener('touchmove', function(e) {
                     var target = (e.touches && e.touches[0]) ? e.touches[0].target : e.target;
                     notifyState(checkCanScrollUp(target));
                 }, { capture: true, passive: true });
