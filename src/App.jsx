@@ -859,11 +859,7 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   // --- State สำหรับ Expandable Sidebar (PC & Tablet) ---
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) return false;
-    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sidebarExpanded') : null;
-    return saved !== null ? JSON.parse(saved) : true;
-  });
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   // ตรวจสอบขนาดหน้าจอเพื่อตั้งค่า isMobile (เฉพาะส่วนรอยต่อ 768px)
   useEffect(() => {
@@ -1049,9 +1045,7 @@ export default function App() {
 
   // บันทึกสถานะลง LocalStorage เมื่อมีการเปลี่ยนแปลง (เฉพาะ PC / Tablet)
   useEffect(() => {
-    if (typeof localStorage !== 'undefined' && !isMobile) {
-      localStorage.setItem('sidebarExpanded', JSON.stringify(isSidebarExpanded));
-    }
+    // ไม่เซฟลง LocalStorage เพื่อให้เริ่มด้วยโหมด Clean 80px เสมอ
   }, [isSidebarExpanded, isMobile]);
 
   // --- เพิ่มระบบจำตำแหน่ง Scroll ของแต่ละหน้า ---
@@ -1160,6 +1154,7 @@ export default function App() {
       scrollPositions.current[currentTab] = mainRef.current.scrollTop;
     }
     setCurrentTab(tabId);
+    if (isSidebarExpanded) collapseSidebarSmoothly();
     if (isMobile) setIsSidebarExpanded(false); // พับเก็บอัตโนมัติเมื่อกดเลือกเมนู (เฉพาะ Mobile)
   };
 
@@ -3876,19 +3871,28 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Desktop / Tablet Sidebar (ทำงานด้วย GPU-Accelerated CSS Transition แบบ 60-120FPS ลื่นไหล ไม่บล็อกปุ่มกด) */}
-        <aside 
-          ref={sidebarRef}
-          onMouseDown={handleSidebarMouseDown}
-          onTouchStart={handleSidebarTouchStart}
-          style={{ 
-            width: isSidebarExpanded ? '256px' : '80px',
-            '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
-            '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
-            transition: 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)'
-          }}
-          className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] z-[52]`}
-        >
+        {/* Backdrop สำหรับปิดแถบเมนูเมื่อแตะข้างนอก (PC & Tablet) */}
+        {isSidebarExpanded && (
+          <div 
+            className="hidden md:block fixed inset-0 z-[55] bg-slate-900/5 transition-opacity duration-200"
+            onClick={() => collapseSidebarSmoothly()}
+          />
+        )}
+
+        {/* Desktop / Tablet Sidebar (ทำงานแบบ Overlay Floating Drawer: กว้าง 80px ใน Layout ถาวรเพื่อตัด Reflow 100% กางทับลอย 256px แบบ 60-120 FPS) */}
+        <div className="hidden md:block w-[80px] shrink-0 h-full relative z-[56]">
+          <aside 
+            ref={sidebarRef}
+            onMouseDown={handleSidebarMouseDown}
+            onTouchStart={handleSidebarTouchStart}
+            style={{ 
+              width: isSidebarExpanded ? '256px' : '80px',
+              '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
+              '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
+              transition: 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+            }}
+            className={`absolute top-0 left-0 bottom-0 flex flex-col select-none ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 ${isSidebarExpanded ? 'shadow-2xl shadow-slate-900/10' : 'shadow-none'} z-[60]`}
+          >
           {/* ขอบลากปรับขนาดด้านขวา (Drag Handle Strip) คลีน ไร้ไฮไลท์สีฟ้าตามที่ผู้ใช้ต้องการ */}
           <div 
             className="absolute top-0 right-0 w-3 h-full cursor-col-resize z-[70] hidden md:block" 
@@ -4136,6 +4140,7 @@ export default function App() {
             </div>
           </div>
         </aside>
+        </div>
         
         {/* --- Mobile Top Header --- */}
         <header 
