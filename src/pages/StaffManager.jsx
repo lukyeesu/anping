@@ -1140,11 +1140,11 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
             return;
         }
 
-        const readRes = await fetch('http://127.0.0.1:8181/api/read-card', { 
+        const readRes = await fetch('http://127.0.0.1:8181/api/read-card?photo=true', { 
             method: 'GET', 
             headers: { 'Content-Type': 'application/json' }, 
             signal: AbortSignal.timeout(4000) 
-        }).catch(() => fetch('http://localhost:8181/api/read-card', { 
+        }).catch(() => fetch('http://localhost:8181/api/read-card?photo=true', { 
             method: 'GET', 
             headers: { 'Content-Type': 'application/json' }, 
             signal: AbortSignal.timeout(4000) 

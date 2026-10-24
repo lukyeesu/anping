@@ -2162,7 +2162,16 @@ export const playModernSynthChime = () => {
   } catch (_) {}
 };
 
+let lastCardBeepTime = 0;
+
 export const playCardBeep = () => {
+  // ป้องกันการเล่นเสียงซ้ำซ้อนภายใน 1.8 วินาที
+  const now = Date.now();
+  if (now - lastCardBeepTime < 1800) {
+    return;
+  }
+  lastCardBeepTime = now;
+
   // หากรันอยู่บน Native Android App (AnpingClinic) ให้เสียงมาจาก Native Layer โดยตรง ไม่เล่นซ้ำซ้อน
   if (typeof window !== 'undefined' && window.AndroidCardBridge) {
     return;

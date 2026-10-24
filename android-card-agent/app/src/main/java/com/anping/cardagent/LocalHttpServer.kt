@@ -100,8 +100,8 @@ class LocalHttpServer(
                     return
                 }
 
-                // ถ้า URL มีพารามิเตอร์ photo=true หรือ includePhoto=true ให้อ่านรูปภาพใบหน้าด้วย
-                val includePhoto = path.contains("photo=true") || path.contains("includePhoto=true")
+                // ค่าเริ่มต้นให้อ่านรูปภาพใบหน้าเสมอ (ยกเว้นมีการระบุ photo=false หรือ includePhoto=false ชัดเจน)
+                val includePhoto = !path.contains("photo=false") && !path.contains("includePhoto=false")
                 val cardData = onReadCardRequested(includePhoto)
                 if (cardData != null) {
                     sendResponse(writer, 200, "OK", "application/json; charset=utf-8", cardData.toJson().toString())

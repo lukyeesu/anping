@@ -188,14 +188,15 @@ class MainActivity : AppCompatActivity() {
         // ตั้งค่า WebView
         setupWebView()
 
-        // ตั้งค่าคลิกที่ป้ายสถานะเครื่องอ่าน เพื่อเปิดดูข้อมูลบัตรฉบับเต็ม
+        // ตั้งค่าคลิกที่ป้ายสถานะเครื่องอ่าน เพื่อเปิดดูข้อมูลบัตรฉบับเต็มบน Web App
         binding.cardReaderPill.setOnClickListener {
-            val card = cardService?.getLatestCard()
-            if (card != null) {
-                showCardDetailDialog(card)
-            } else {
-                Toast.makeText(this, "ยังไม่มีข้อมูลบัตรประชาชน กรุณาเสียบบัตรในช่องอ่าน", Toast.LENGTH_SHORT).show()
-            }
+            binding.webView.evaluateJavascript("""
+                (function() {
+                    try {
+                        window.dispatchEvent(new CustomEvent('open-card-inspector'));
+                    } catch(e) {}
+                })();
+            """.trimIndent(), null)
         }
 
         // ตั้งค่าปุ่ม Retry กรณีออฟไลน์
@@ -255,11 +256,12 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         val webView = binding.webView
 
-        // เปิด Hardware Acceleration และปิด Overscroll บน WebView เพื่อความลื่นไหล 60FPS
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        // ปิด offscreen layer type เพื่อให้ Chromium compositing ทำงานตรงกับ Hardware Surface (ลื่นไหล 60FPS)
+        webView.setLayerType(View.LAYER_TYPE_NONE, null)
         webView.overScrollMode = View.OVER_SCROLL_NEVER
         webView.isVerticalScrollBarEnabled = false
         webView.isHorizontalScrollBarEnabled = false
+        webView.isNestedScrollingEnabled = true
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -270,13 +272,13 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            useWideViewPort = true
-            loadWithOverviewMode = true
-            setSupportZoom(true)
-            builtInZoomControls = true
+            // ปิด Zoom Controls ทั้งหมดเพื่อตัด Touch Latency (0ms Touch Response ทัชติดนิ้วทันที)
+            setSupportZoom(false)
+            builtInZoomControls = false
             displayZoomControls = false
-            @Suppress("DEPRECATION")
-            setRenderPriority(WebSettings.RenderPriority.HIGH)
+            // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
+            useWideViewPort = false
+            loadWithOverviewMode = false
             userAgentString = "$userAgentString AnpingClinicApp/1.5.1"
         }
 
@@ -305,14 +307,21 @@ class MainActivity : AppCompatActivity() {
             }
 
             @JavascriptInterface
+            fun getLatestCard(): String {
+                val card = cardService?.getLatestCard()
+                return card?.toJson()?.toString() ?: ""
+            }
+
+            @JavascriptInterface
             fun showCardInspector() {
                 runOnUiThread {
-                    val card = cardService?.getLatestCard()
-                    if (card != null) {
-                        showCardDetailDialog(card)
-                    } else {
-                        Toast.makeText(this@MainActivity, "ยังไม่มีข้อมูลบัตรประชาชน กรุณาเสียบบัตรในช่องอ่าน", Toast.LENGTH_SHORT).show()
-                    }
+                    binding.webView.evaluateJavascript("""
+                        (function() {
+                            try {
+                                window.dispatchEvent(new CustomEvent('open-card-inspector'));
+                            } catch(e) {}
+                        })();
+                    """.trimIndent(), null)
                 }
             }
         }, "AndroidCardBridge")
@@ -498,21 +507,24 @@ class MainActivity : AppCompatActivity() {
             val btnApply = dialogView.findViewById<Button>(R.id.btnDialogApply)
 
             // 1. Photo
-            if (card.photoBase64.isNotEmpty()) {
+            val rawPhoto = if (card.photoBase64.startsWith("data:")) {
+                card.photoBase64.substringAfter("base64,")
+            } else card.photoBase64
+
+            if (rawPhoto.isNotEmpty()) {
                 try {
-                    val photoBytes = Base64.decode(card.photoBase64, Base64.DEFAULT)
+                    val photoBytes = Base64.decode(rawPhoto, Base64.DEFAULT)
                     val bitmap = BitmapFactory.decodeByteArray(photoBytes, 0, photoBytes.size)
                     if (bitmap != null) {
-                        ivPhoto.setImageBitmap(bitmap)
-                        ivPhoto.visibility = View.VISIBLE
+                        ivPhoto?.setImageBitmap(bitmap)
                     } else {
-                        ivPhoto.visibility = View.GONE
+                        ivPhoto?.setImageResource(R.drawable.anping_logo)
                     }
                 } catch (_: Exception) {
-                    ivPhoto.visibility = View.GONE
+                    ivPhoto?.setImageResource(R.drawable.anping_logo)
                 }
             } else {
-                ivPhoto.visibility = View.GONE
+                ivPhoto?.setImageResource(R.drawable.anping_logo)
             }
 
             // 2. Format CID

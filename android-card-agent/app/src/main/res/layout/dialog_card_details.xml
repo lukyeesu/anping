@@ -98,7 +98,7 @@
                         android:layout_height="match_parent"
                         android:scaleType="centerCrop"
                         android:contentDescription="รูปถ่ายจากบัตรประชาชน"
-                        tools:src="@drawable/anping_logo" />
+                        android:src="@drawable/anping_logo" />
                 </com.google.android.material.card.MaterialCardView>
 
                 <!-- ID & Name Info -->

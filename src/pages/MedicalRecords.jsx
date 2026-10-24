@@ -1191,11 +1191,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             return;
         }
 
-        const readRes = await fetch('http://127.0.0.1:8181/api/read-card', { 
+        const readRes = await fetch('http://127.0.0.1:8181/api/read-card?photo=true', { 
             method: 'GET', 
             headers: { 'Content-Type': 'application/json' }, 
             signal: AbortSignal.timeout(4000) 
-        }).catch(() => fetch('http://localhost:8181/api/read-card', { 
+        }).catch(() => fetch('http://localhost:8181/api/read-card?photo=true', { 
             method: 'GET', 
             headers: { 'Content-Type': 'application/json' }, 
             signal: AbortSignal.timeout(4000) 
@@ -1216,102 +1216,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
         const data = await readRes.json();
         setSmartCardInspectData(data);
-        let gender = 'ไม่ระบุ';
-        const rawGender = String(data.gender || data.sex || '').toLowerCase().trim();
-        const rawPrefix = String(data.titleName || data.titleTH || data.prefix || '').trim();
-        const prefixLower = rawPrefix.toLowerCase();
-        const malePrefixes = ['นาย', 'นพ.', 'ด.ช.', 'เด็กชาย', 'พระ', 'ม.ร.ว.', 'mr.', 'mr', 'master'];
-        const femalePrefixes = ['นาง', 'นางสาว', 'ด.ญ.', 'เด็กหญิง', 'น.ส.', 'พญ.', 'mrs.', 'mrs', 'miss', 'ms.', 'ms'];
-
-        if (['1', 'ชาย', 'male', 'm'].includes(rawGender) || malePrefixes.some(p => prefixLower.includes(p))) {
-            gender = 'ชาย';
-        } else if (['2', 'หญิง', 'female', 'f'].includes(rawGender) || femalePrefixes.some(p => prefixLower.includes(p))) {
-            gender = 'หญิง';
-        }
-
-        let prefix = rawPrefix;
-        if (prefix === 'น.ส.' || prefix === 'น.ส') prefix = 'นางสาว';
-        if (prefix === 'ด.ช.' || prefix === 'ด.ช') prefix = 'ด.ช.';
-        if (prefix === 'ด.ญ.' || prefix === 'ด.ญ') prefix = 'ด.ญ.';
-
-        let dob = '';
-        if (data.dob) {
-            const dobStr = String(data.dob).trim();
-            if (dobStr.includes('/')) {
-                const parts = dobStr.split('/');
-                if (parts.length === 3) {
-                    const d = parts[0].padStart(2, '0');
-                    const m = parts[1].padStart(2, '0');
-                    let y = parseInt(parts[2], 10);
-                    if (y < 2400) y += 543;
-                    dob = `${d}/${m}/${y}`;
-                }
-            } else if (dobStr.includes('-')) {
-                const parts = dobStr.split('-');
-                if (parts.length === 3) {
-                    let y = parseInt(parts[0], 10);
-                    if (y < 2400) y += 543;
-                    const m = parts[1].padStart(2, '0');
-                    const d = parts[2].padStart(2, '0');
-                    dob = `${d}/${m}/${y}`;
-                }
-            } else if (dobStr.length === 8 && /^\d+$/.test(dobStr)) {
-                let y = parseInt(dobStr.substring(0, 4), 10);
-                if (y < 2400) y += 543;
-                const m = dobStr.substring(4, 6);
-                const d = dobStr.substring(6, 8);
-                dob = `${d}/${m}/${y}`;
-            } else {
-                dob = dobStr;
-            }
-        }
-
-        let religion = data.religion || data.faith || '';
-        religion = religion.replace(/^ศาสนา\s*/, '').trim();
-
-        const cid = String(data.pid || data.citizenId || data.idCard || '').trim();
-        const isNonThaiCid = /^[067]/.test(cid);
-        const nationality = (data.nationality || (isNonThaiCid ? '' : 'ไทย')).trim();
-        const ethnicity = (data.ethnicity || (isNonThaiCid ? '' : 'ไทย')).trim();
-
-        let address = (data.address || data.houseNo || data.homeNo || '').replace(/^ที่อยู่\s*/, '').replace(/^บ้านเลขที่\s*/, '').trim();
-        let moo = String(data.moo || '').replace(/[^0-9]/g, '').trim();
-        let road = (data.road || data.soi || data.trok || '').trim();
-        let subDistrict = (data.subDistrict || data.tumbol || '').replace(/^(?:ตำบล|แขวง|ต\.)\s*/, '').trim();
-        let district = (data.district || data.amphur || '').replace(/^(?:อำเภอ|เขต|อ\.)\s*/, '').trim();
-        let province = (data.province || '').replace(/^(?:จังหวัด|จ\.)\s*/, '').trim();
-        let zipcode = (data.zipcode || data.postcode || '').trim();
-
-        setFormData(prev => ({
-            ...prev,
-            idCard: data.pid || data.citizenId || data.idCard || prev.idCard,
-            prefix: prefix || prev.prefix,
-            firstName: (data.fname || data.firstNameTH || data.firstName || prev.firstName || '').trim(),
-            lastName: (data.lname || data.lastNameTH || data.lastName || prev.lastName || '').trim(),
-            dob: dob || prev.dob,
-            gender: gender !== 'ไม่ระบุ' ? gender : (prev.gender || ''),
-            religion: religion || prev.religion || '',
-            nationality: nationality || prev.nationality || (isNonThaiCid ? '' : 'ไทย'),
-            ethnicity: ethnicity || prev.ethnicity || (isNonThaiCid ? '' : 'ไทย'),
-            address: address || prev.address,
-            moo: moo || prev.moo,
-            road: road || prev.road,
-            subDistrict: subDistrict || prev.subDistrict,
-            district: district || prev.district,
-            province: province || prev.province,
-            zipcode: zipcode || prev.zipcode,
-            curAddress: prev.curAddress,
-            curMoo: prev.curMoo,
-            curRoad: prev.curRoad,
-            curSubDistrict: prev.curSubDistrict,
-            curDistrict: prev.curDistrict,
-            curProvince: prev.curProvince,
-            curZipcode: prev.curZipcode,
-        }));
-
-        playCardBeep();
-        showToast(isAutoMode ? 'ดึงข้อมูลจากบัตรประชาชนอัตโนมัติสำเร็จ' : 'ดึงข้อมูลจากบัตรประชาชนครบถ้วนทุกช่อง', 'success');
-
+        populateFormFromCard(data, isAutoMode);
     } catch (error) {
         console.error("Smart Card Reader Error:", error);
         if (!isAutoMode) {
@@ -1326,13 +1231,145 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     }
   };
 
-  // --- ระบบตรวจจับการเสียบบัตรประชาชนอัตโนมัติ (Auto-read on Card Inserted) ---
-  useEffect(() => {
-    if (!medModal.isOpen || isViewMode) {
-      autoCardInsertedRef.current = false;
-      return;
+  // แยกฟังก์ชันกรอกข้อมูลลงแบบฟอร์มคนไข้จากบัตรประชาชน (Smart Card Auto Populate)
+  const populateFormFromCard = (data, isAutoMode = true) => {
+    if (!data) return;
+    let gender = 'ไม่ระบุ';
+    const rawGender = String(data.gender || data.sex || '').toLowerCase().trim();
+    const rawPrefix = String(data.titleName || data.titleTH || data.prefix || data.prefixTh || '').trim();
+    const prefixLower = rawPrefix.toLowerCase();
+    const malePrefixes = ['นาย', 'นพ.', 'ด.ช.', 'เด็กชาย', 'พระ', 'ม.ร.ว.', 'mr.', 'mr', 'master'];
+    const femalePrefixes = ['นาง', 'นางสาว', 'ด.ญ.', 'เด็กหญิง', 'น.ส.', 'พญ.', 'mrs.', 'mrs', 'miss', 'ms.', 'ms'];
+
+    if (['1', 'ชาย', 'male', 'm'].includes(rawGender) || malePrefixes.some(p => prefixLower.includes(p))) {
+        gender = 'ชาย';
+    } else if (['2', 'หญิง', 'female', 'f'].includes(rawGender) || femalePrefixes.some(p => prefixLower.includes(p))) {
+        gender = 'หญิง';
     }
 
+    let prefix = rawPrefix;
+    if (prefix === 'น.ส.' || prefix === 'น.ส') prefix = 'นางสาว';
+    if (prefix === 'ด.ช.' || prefix === 'ด.ช') prefix = 'ด.ช.';
+    if (prefix === 'ด.ญ.' || prefix === 'ด.ญ') prefix = 'ด.ญ.';
+
+    let dob = '';
+    if (data.dob) {
+        const dobStr = String(data.dob).trim();
+        if (dobStr.includes('/')) {
+            const parts = dobStr.split('/');
+            if (parts.length === 3) {
+                const d = parts[0].padStart(2, '0');
+                const m = parts[1].padStart(2, '0');
+                let y = parseInt(parts[2], 10);
+                if (y < 2400) y += 543;
+                dob = `${d}/${m}/${y}`;
+            }
+        } else if (dobStr.includes('-')) {
+            const parts = dobStr.split('-');
+            if (parts.length === 3) {
+                let y = parseInt(parts[0], 10);
+                if (y < 2400) y += 543;
+                const m = parts[1].padStart(2, '0');
+                const d = parts[2].padStart(2, '0');
+                dob = `${d}/${m}/${y}`;
+            }
+        } else if (dobStr.length === 8 && /^\d+$/.test(dobStr)) {
+            let y = parseInt(dobStr.substring(0, 4), 10);
+            if (y < 2400) y += 543;
+            const m = dobStr.substring(4, 6);
+            const d = dobStr.substring(6, 8);
+            dob = `${d}/${m}/${y}`;
+        } else {
+            dob = dobStr;
+        }
+    }
+
+    let religion = data.religion || data.faith || '';
+    religion = religion.replace(/^ศาสนา\s*/, '').trim();
+
+    const cid = String(data.pid || data.citizenId || data.idCard || '').trim();
+    const isNonThaiCid = /^[067]/.test(cid);
+    const nationality = (data.nationality || (isNonThaiCid ? '' : 'ไทย')).trim();
+    const ethnicity = (data.ethnicity || (isNonThaiCid ? '' : 'ไทย')).trim();
+
+    let address = (data.address || data.houseNo || data.homeNo || '').replace(/^ที่อยู่\s*/, '').replace(/^บ้านเลขที่\s*/, '').trim();
+    let moo = String(data.moo || '').replace(/[^0-9]/g, '').trim();
+    let road = (data.road || data.soi || data.trok || '').trim();
+    let subDistrict = (data.subDistrict || data.tumbol || '').replace(/^(?:ตำบล|แขวง|ต\.)\s*/, '').trim();
+    let district = (data.district || data.amphur || '').replace(/^(?:อำเภอ|เขต|อ\.)\s*/, '').trim();
+    let province = (data.province || '').replace(/^(?:จังหวัด|จ\.)\s*/, '').trim();
+    let zipcode = (data.zipcode || data.postcode || '').trim();
+
+    setFormData(prev => ({
+        ...prev,
+        idCard: cid || prev.idCard,
+        prefix: prefix || prev.prefix,
+        firstName: (data.fname || data.firstNameTH || data.firstNameTh || data.firstName || prev.firstName || '').trim(),
+        lastName: (data.lname || data.lastNameTH || data.lastNameTh || data.lastName || prev.lastName || '').trim(),
+        dob: dob || prev.dob,
+        gender: gender !== 'ไม่ระบุ' ? gender : (prev.gender || ''),
+        religion: religion || prev.religion || '',
+        nationality: nationality || prev.nationality || (isNonThaiCid ? '' : 'ไทย'),
+        ethnicity: ethnicity || prev.ethnicity || (isNonThaiCid ? '' : 'ไทย'),
+        address: address || prev.address,
+        moo: moo || prev.moo,
+        road: road || prev.road,
+        subDistrict: subDistrict || prev.subDistrict,
+        district: district || prev.district,
+        province: province || prev.province,
+        zipcode: zipcode || prev.zipcode,
+    }));
+
+    playCardBeep();
+    showToast(isAutoMode ? 'ดึงข้อมูลจากบัตรประชาชนอัตโนมัติสำเร็จ' : 'ดึงข้อมูลจากบัตรประชาชนครบถ้วนทุกช่อง', 'success');
+  };
+
+  // --- ระบบตรวจจับและซิงค์ข้อมูลบัตรประชาชนแบบ Real-Time (Auto-read / Auto-reset เมื่อเสียบหรือถอดบัตร) ---
+  useEffect(() => {
+    // 1. รับ Event จาก Android Full App (ทำงานแบบ Native USB Push)
+    const handleNativeSmartCard = (e) => {
+      if (e.detail) {
+        setSmartCardInspectData(e.detail);
+        if (medModal.isOpen && !isViewMode) {
+          populateFormFromCard(e.detail, true);
+        }
+      }
+    };
+
+    const handleNativeCardRemoved = () => {
+      setSmartCardInspectData(null);
+      autoCardInsertedRef.current = false;
+    };
+
+    const handleOpenInspector = () => {
+      if (typeof window !== 'undefined' && window.AndroidCardBridge && window.AndroidCardBridge.getLatestCard) {
+        try {
+          const raw = window.AndroidCardBridge.getLatestCard();
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && (parsed.citizenId || parsed.pid)) {
+              setSmartCardInspectData(parsed);
+            }
+          }
+        } catch (_) {}
+      }
+      setShowCardInspectModal(true);
+    };
+
+    window.addEventListener('smartcard-read', handleNativeSmartCard);
+    window.addEventListener('smartcard-removed', handleNativeCardRemoved);
+    window.addEventListener('open-card-inspector', handleOpenInspector);
+
+    // ถ้าทำงานบน Native Android App ให้ใช้ Native Events เท่านั้น (ไม่เปลือง CPU Polling)
+    if (typeof window !== 'undefined' && window.AndroidCardBridge) {
+      return () => {
+        window.removeEventListener('smartcard-read', handleNativeSmartCard);
+        window.removeEventListener('smartcard-removed', handleNativeCardRemoved);
+        window.removeEventListener('open-card-inspector', handleOpenInspector);
+      };
+    }
+
+    // 2. HTTP Polling สำหรับ Browser + Smart Card Agent PC (Port 8181)
     let isMounted = true;
     const checkCardStatus = async () => {
       if (isAutoReadingRef.current) return;
@@ -1345,13 +1382,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         clearTimeout(timeoutId);
 
         if (!isMounted || !res || !res.ok) {
-          autoCardInsertedRef.current = false;
           return;
         }
 
         const status = await res.json().catch(() => null);
         if (!status || !status.deviceConnected) {
-          autoCardInsertedRef.current = false;
+          if (autoCardInsertedRef.current) {
+            autoCardInsertedRef.current = false;
+            setSmartCardInspectData(null);
+          }
           return;
         }
 
@@ -1360,16 +1399,32 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             autoCardInsertedRef.current = true;
             isAutoReadingRef.current = true;
             try {
-              await handleSmartCardRead(true);
+              const readRes = await fetch('http://127.0.0.1:8181/api/read-card?photo=true', {
+                signal: AbortSignal.timeout(4000)
+              }).catch(() => fetch('http://localhost:8181/api/read-card?photo=true', {
+                signal: AbortSignal.timeout(4000)
+              }));
+
+              if (readRes && readRes.ok) {
+                const data = await readRes.json();
+                setSmartCardInspectData(data);
+                if (medModal.isOpen && !isViewMode) {
+                  populateFormFromCard(data, true);
+                }
+              }
             } finally {
               isAutoReadingRef.current = false;
             }
           }
         } else {
-          autoCardInsertedRef.current = false;
+          // เมื่อถอดบัตรออกจากเครื่องอ่าน รีเซ็ตข้อมูลฉบับเต็มทันทีแบบ Real-Time
+          if (autoCardInsertedRef.current) {
+            autoCardInsertedRef.current = false;
+            setSmartCardInspectData(null);
+          }
         }
       } catch (_) {
-        autoCardInsertedRef.current = false;
+        // silent
       }
     };
 
@@ -1379,20 +1434,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     return () => {
       isMounted = false;
       clearInterval(interval);
-      autoCardInsertedRef.current = false;
+      window.removeEventListener('smartcard-read', handleNativeSmartCard);
+      window.removeEventListener('smartcard-removed', handleNativeCardRemoved);
+      window.removeEventListener('open-card-inspector', handleOpenInspector);
     };
   }, [medModal.isOpen, isViewMode]);
-
-  // ซิงค์ข้อมูลบัตรจาก Native Event เข้าสู่ State สำหรับดูข้อมูลฉบับเต็ม
-  useEffect(() => {
-    const handleNativeSmartCard = (e) => {
-      if (e.detail) {
-        setSmartCardInspectData(e.detail);
-      }
-    };
-    window.addEventListener('smartcard-read', handleNativeSmartCard);
-    return () => window.removeEventListener('smartcard-read', handleNativeSmartCard);
-  }, []);
 
   // --- Constants ---
   const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
@@ -3095,17 +3141,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                             )}
                           </button>
 
-                          {/* ปุ่มดูข้อมูลบัตรฉบับเต็ม (เมื่อเคยอ่านบัตรแล้ว) */}
-                          {smartCardInspectData && (
+                          {/* ปุ่มดูข้อมูลบัตรฉบับเต็ม */}
+                          {(smartCardInspectData || (typeof window !== 'undefined' && window.AndroidCardBridge)) && (
                             <button
                               type="button" 
-                              onClick={() => {
-                                if (typeof window !== 'undefined' && window.AndroidCardBridge && window.AndroidCardBridge.showCardInspector) {
-                                  window.AndroidCardBridge.showCardInspector();
-                                } else {
-                                  setShowCardInspectModal(true);
-                                }
-                              }}
+                              onClick={() => setShowCardInspectModal(true)}
                               className="text-xs sm:text-sm px-3 py-1.5 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-sky-100 shadow-sm cursor-pointer"
                               title="ดูข้อมูลและรูปถ่ายจากบัตรประชาชนฉบับเต็ม"
                             >
@@ -5026,8 +5066,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         document.body
       )}
 
-      {/* Modal ดูข้อมูลบัตรประชาชนฉบับเต็ม พร้อมรูปถ่ายและรายละเอียดทั้งหมด 16 รายการ */}
-      {showCardInspectModal && smartCardInspectData && typeof document !== 'undefined' && createPortal(
+      {/* Modal ดูข้อมูลบัตรประชาชนฉบับเต็ม พร้อมรูปถ่ายและรายละเอียดทั้งหมด (Auto-update & Auto-reset) */}
+      {showCardInspectModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget) setShowCardInspectModal(false); }}>
           <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in max-h-[calc(100vh-2rem)] border border-slate-100">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -5045,93 +5085,124 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
               </button>
             </div>
 
-            <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
-              <div className="flex gap-4 items-center bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
-                {smartCardInspectData.photoBase64 ? (
-                  <img
-                    src={`data:image/jpeg;base64,${smartCardInspectData.photoBase64}`}
-                    alt="รูปถ่ายบัตรประชาชน"
-                    className="w-24 h-32 object-cover rounded-xl border border-slate-200 shadow-sm shrink-0 bg-white"
-                  />
-                ) : (
-                  <div className="w-24 h-32 rounded-xl bg-slate-200/70 border border-slate-200 flex flex-col items-center justify-center text-slate-400 shrink-0">
-                    <User size={32} />
-                    <span className="text-[10px] mt-1 font-medium">ไม่มีรูปภาพ</span>
-                  </div>
-                )}
+            {smartCardInspectData ? (
+              <>
+                <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+                  <div className="flex gap-4 items-center bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
+                    {(() => {
+                      const rawPhoto = smartCardInspectData.photoBase64 || smartCardInspectData.photo || smartCardInspectData.image || '';
+                      const photoSrc = rawPhoto ? (rawPhoto.startsWith('data:') ? rawPhoto : `data:image/jpeg;base64,${rawPhoto}`) : null;
+                      return photoSrc ? (
+                        <img
+                          src={photoSrc}
+                          alt="รูปถ่ายบัตรประชาชน"
+                          className="w-24 h-32 object-cover rounded-xl border border-slate-200 shadow-sm shrink-0 bg-white"
+                        />
+                      ) : (
+                        <div className="w-24 h-32 rounded-xl bg-slate-200/70 border border-slate-200 flex flex-col items-center justify-center text-slate-400 shrink-0">
+                          <User size={32} />
+                          <span className="text-[10px] mt-1 font-medium">ไม่มีรูปภาพ</span>
+                        </div>
+                      );
+                    })()}
 
-                <div className="flex-1 min-w-0 space-y-1">
-                  <span className="text-[11px] text-slate-400 font-medium block">เลขประจำตัวประชาชน</span>
-                  <div className="text-base sm:text-lg font-bold text-sky-600 font-mono tracking-wide">
-                    {smartCardInspectData.citizenId || smartCardInspectData.pid || smartCardInspectData.idCard || '-'}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-medium block">เลขประจำตัวประชาชน</span>
+                      <div className="text-base sm:text-lg font-bold text-sky-600 font-mono tracking-wide">
+                        {smartCardInspectData.citizenId || smartCardInspectData.pid || smartCardInspectData.idCard || '-'}
+                      </div>
+                      <div className="text-sm sm:text-base font-bold text-slate-800 truncate">
+                        {smartCardInspectData.titleTh || smartCardInspectData.prefixTh || smartCardInspectData.prefix || ''}{smartCardInspectData.firstNameTh || smartCardInspectData.fname || smartCardInspectData.firstName || ''} {smartCardInspectData.lastNameTh || smartCardInspectData.lname || smartCardInspectData.lastName || ''}
+                      </div>
+                      <div className="text-xs sm:text-sm text-slate-500 truncate">
+                        {smartCardInspectData.titleEn || smartCardInspectData.prefixEn || ''} {smartCardInspectData.firstNameEn || smartCardInspectData.fnameEn || ''} {smartCardInspectData.lastNameEn || smartCardInspectData.lnameEn || ''}
+                      </div>
+                      <div className="text-xs text-slate-500 pt-1">
+                        วันเกิด: {smartCardInspectData.dob || '-'} | เพศ: {smartCardInspectData.gender || smartCardInspectData.sex || '-'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm sm:text-base font-bold text-slate-800 truncate">
-                    {smartCardInspectData.titleTh || smartCardInspectData.prefixTh || smartCardInspectData.prefix || ''}{smartCardInspectData.firstNameTh || smartCardInspectData.fname || smartCardInspectData.firstName || ''} {smartCardInspectData.lastNameTh || smartCardInspectData.lname || smartCardInspectData.lastName || ''}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-slate-400 block text-[11px] mb-0.5">สัญชาติ / ศาสนา</span>
+                      <span className="font-medium text-slate-700">
+                        {smartCardInspectData.nationality || 'ไทย'} / {smartCardInspectData.religion || 'ไม่ระบุ'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-slate-400 block text-[11px] mb-0.5">วันออกบัตร - หมดอายุ</span>
+                      <span className="font-medium text-slate-700">
+                        {smartCardInspectData.issueDate || '-'} ถึง {smartCardInspectData.expireDate || '-'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs sm:text-sm text-slate-500 truncate">
-                    {smartCardInspectData.titleEn || smartCardInspectData.prefixEn || ''} {smartCardInspectData.firstNameEn || smartCardInspectData.fnameEn || ''} {smartCardInspectData.lastNameEn || smartCardInspectData.lnameEn || ''}
+
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs sm:text-sm space-y-1">
+                    <span className="text-slate-400 block text-[11px]">ที่อยู่ตามทะเบียนราษฎร์</span>
+                    <div className="font-medium text-slate-700 leading-relaxed">
+                      {smartCardInspectData.address ? `บ้านเลขที่ ${smartCardInspectData.address} ` : ''}
+                      {smartCardInspectData.moo ? `หมู่ ${smartCardInspectData.moo} ` : ''}
+                      {smartCardInspectData.road ? `ถนน/ซอย ${smartCardInspectData.road} ` : ''}
+                      {smartCardInspectData.subDistrict ? `ต.${smartCardInspectData.subDistrict} ` : ''}
+                      {smartCardInspectData.district ? `อ.${smartCardInspectData.district} ` : ''}
+                      {smartCardInspectData.province ? `จ.${smartCardInspectData.province} ` : ''}
+                      {smartCardInspectData.zipcode ? `(${smartCardInspectData.zipcode})` : ''}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500 pt-1">
-                    วันเกิด: {smartCardInspectData.dob || '-'} | เพศ: {smartCardInspectData.gender || smartCardInspectData.sex || '-'}
-                  </div>
+
+                  {smartCardInspectData.issuer && (
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs sm:text-sm">
+                      <span className="text-slate-400 block text-[11px] mb-0.5">ผู้ออกบัตร</span>
+                      <span className="font-medium text-slate-700">{smartCardInspectData.issuer}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowCardInspectModal(false)}
+                    className="px-4 py-2 text-xs sm:text-sm rounded-xl text-slate-600 hover:bg-slate-200/60 font-medium transition-colors"
+                  >
+                    ปิด
+                  </button>
+                  {medModal.isOpen && !isViewMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        populateFormFromCard(smartCardInspectData, false);
+                        setShowCardInspectModal(false);
+                      }}
+                      className="px-5 py-2 text-xs sm:text-sm rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-medium transition-colors shadow-sm shadow-sky-500/20"
+                    >
+                      นำข้อมูลไปกรอกฟอร์ม
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="p-8 text-center flex flex-col items-center justify-center space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center animate-pulse border border-amber-100 shadow-sm">
+                  <CreditCard size={32} />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-slate-800 kanit-text text-base">ไม่พบบัตรประชาชน / บัตรถูกถอดออก</h4>
+                  <p className="text-xs sm:text-sm text-slate-500 kanit-text max-w-sm mx-auto leading-relaxed">
+                    กรุณาเสียบบัตรประชาชนในเครื่องอ่าน ระบบจะตรวจจับและดึงข้อมูลพร้อมรูปถ่ายขึ้นจอโดยอัตโนมัติแบบ Real-time
+                  </p>
+                </div>
+                <div className="pt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCardInspectModal(false)}
+                    className="px-5 py-2 text-xs sm:text-sm rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
+                  >
+                    ปิดหน้าต่าง
+                  </button>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-slate-400 block text-[11px] mb-0.5">สัญชาติ / ศาสนา</span>
-                  <span className="font-medium text-slate-700">
-                    {smartCardInspectData.nationality || 'ไทย'} / {smartCardInspectData.religion || 'ไม่ระบุ'}
-                  </span>
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-slate-400 block text-[11px] mb-0.5">วันออกบัตร - หมดอายุ</span>
-                  <span className="font-medium text-slate-700">
-                    {smartCardInspectData.issueDate || '-'} ถึง {smartCardInspectData.expireDate || '-'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs sm:text-sm space-y-1">
-                <span className="text-slate-400 block text-[11px]">ที่อยู่ตามทะเบียนราษฎร์</span>
-                <div className="font-medium text-slate-700 leading-relaxed">
-                  {smartCardInspectData.address ? `บ้านเลขที่ ${smartCardInspectData.address} ` : ''}
-                  {smartCardInspectData.moo ? `หมู่ ${smartCardInspectData.moo} ` : ''}
-                  {smartCardInspectData.road ? `ถนน/ซอย ${smartCardInspectData.road} ` : ''}
-                  {smartCardInspectData.subDistrict ? `ต.${smartCardInspectData.subDistrict} ` : ''}
-                  {smartCardInspectData.district ? `อ.${smartCardInspectData.district} ` : ''}
-                  {smartCardInspectData.province ? `จ.${smartCardInspectData.province} ` : ''}
-                  {smartCardInspectData.zipcode ? `(${smartCardInspectData.zipcode})` : ''}
-                </div>
-              </div>
-
-              {smartCardInspectData.issuer && (
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs sm:text-sm">
-                  <span className="text-slate-400 block text-[11px] mb-0.5">ผู้ออกบัตร</span>
-                  <span className="font-medium text-slate-700">{smartCardInspectData.issuer}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowCardInspectModal(false)}
-                className="px-4 py-2 text-xs sm:text-sm rounded-xl text-slate-600 hover:bg-slate-200/60 font-medium transition-colors"
-              >
-                ปิด
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleSmartCardRead(true);
-                  setShowCardInspectModal(false);
-                }}
-                className="px-5 py-2 text-xs sm:text-sm rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-medium transition-colors shadow-sm shadow-sky-500/20"
-              >
-                นำข้อมูลไปกรอกฟอร์ม
-              </button>
-            </div>
+            )}
           </div>
         </div>,
         document.body

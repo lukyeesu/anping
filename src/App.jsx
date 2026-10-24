@@ -18,7 +18,8 @@ import {
   ShoppingCart, Tag, Minus, Banknote, QrCode, Receipt, ScanText, Camera, Upload, History, Activity,
   TrendingUp, TrendingDown, Download, Filter, Printer, ShoppingBag, XCircle,
   UserCog, BadgeCheck, Wallet, CalendarClock, DollarSign, Award, CalendarX2, HeartPulse, UserPlus, Mail, CheckSquare, Volume2, Megaphone, Link, ExternalLink, LogOut,
-  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard, FlaskConical, Ticket
+  Lock, Home, Save, UserCheck, Key, RotateCcw, CloudDownload, Database, Keyboard, FlaskConical, Ticket,
+  BookOpen
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
@@ -3681,13 +3682,14 @@ export default function App() {
         
         {/* Backdrop สำหรับ Mobile เมื่อกางเมนู (ใช้ CSS Transition ธรรมดา ไม่กิน CPU) */}
         <div 
-          className={`md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          className={`md:hidden fixed inset-0 bg-slate-900/60 z-[100] transition-opacity duration-200 ${isSidebarExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
           onClick={() => setIsSidebarExpanded(false)}
         />
 
         {/* Mobile Slide Menu (สร้างแยกมาต่างหาก ทำงานด้วย CSS Transform ล้วนๆ ลื่นไหล 100%) */}
         <aside 
-          className={`md:hidden fixed inset-y-0 left-0 z-[110] w-[260px] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarExpanded ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`md:hidden fixed inset-y-0 left-0 z-[110] w-[260px] bg-white shadow-2xl flex flex-col will-change-transform transform transition-transform duration-250 ease-out ${isSidebarExpanded ? 'translate-x-0' : '-translate-x-full'}`}
+          style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden' }}
         >
           <div className="p-6 flex items-center min-h-[89px] border-b border-slate-100/50 shrink-0">
             <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
@@ -3838,7 +3840,7 @@ export default function App() {
                     <span>โปรไฟล์</span>
                   </button>
 
-                  {/* Row 3: แป้นพิมพ์ลัด */}
+                  {/* Row 3: คู่มือการใช้ */}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -3848,8 +3850,8 @@ export default function App() {
                     className="w-full text-left px-3 py-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center justify-between"
                   >
                     <div className="flex items-center gap-2">
-                      <Keyboard size={14} className="opacity-80 text-slate-500" />
-                      <span>แป้นพิมพ์ลัด</span>
+                      <BookOpen size={14} className="opacity-80 text-sky-500" />
+                      <span>คู่มือการใช้</span>
                     </div>
                     <kbd className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">Shift+?</kbd>
                   </button>
@@ -3892,7 +3894,7 @@ export default function App() {
                     <span>โปรไฟล์</span>
                   </button>
 
-                  {/* Row 3: แป้นพิมพ์ลัด */}
+                  {/* Row 3: คู่มือการใช้ */}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -3902,8 +3904,8 @@ export default function App() {
                     className="w-full text-left px-3 py-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center justify-between"
                   >
                     <div className="flex items-center gap-2">
-                      <Keyboard size={14} className="opacity-80 text-slate-500" />
-                      <span>แป้นพิมพ์ลัด</span>
+                      <BookOpen size={14} className="opacity-80 text-sky-500" />
+                      <span>คู่มือการใช้</span>
                     </div>
                     <kbd className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">Shift+?</kbd>
                   </button>
@@ -3957,7 +3959,7 @@ export default function App() {
         
         {/* --- Mobile Top Header --- */}
         <header 
-          className="mobile-top-header md:hidden fixed top-0 left-0 right-0 h-[61px] box-border flex items-center justify-between px-3.5 py-2.5 sm:px-5 sm:py-3 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 z-[45] shadow-sm"
+          className="mobile-top-header md:hidden fixed top-0 left-0 right-0 h-[61px] box-border flex items-center justify-between px-3.5 py-2.5 sm:px-5 sm:py-3 bg-white/95 border-b border-slate-200/80 z-[45] shadow-sm"
           style={{ 
             transform: (isMobile && !showMobileBars) ? 'translateY(-61px)' : 'translateY(0px)', 
             transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)' 
@@ -4000,7 +4002,7 @@ export default function App() {
 
             {/* Mobile Profile Dropdown */}
             {isMobileProfileDropdownOpen && (
-              <div className="absolute top-12 right-0 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/50 p-2 z-[999] animate-scale-up text-left space-y-1 w-48">
+              <div className="absolute top-12 right-0 bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1 w-48">
                 {/* Row 1: ชื่อและตำแหน่ง (ไม่เอารูป) */}
                 <div className="px-3 py-2 border-b border-slate-100/50 select-none text-left">
                   <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
@@ -4020,7 +4022,7 @@ export default function App() {
                   <span>โปรไฟล์</span>
                 </button>
 
-                {/* Row 3: แป้นพิมพ์ลัด */}
+                {/* Row 3: คู่มือการใช้ */}
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
@@ -4030,8 +4032,8 @@ export default function App() {
                   className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 rounded-xl font-bold kanit-text transition-colors flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <Keyboard size={14} className="opacity-80 text-slate-500" />
-                    <span>แป้นพิมพ์ลัด</span>
+                    <BookOpen size={14} className="opacity-80 text-sky-500" />
+                    <span>คู่มือการใช้</span>
                   </div>
                   <kbd className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-bold">Shift+?</kbd>
                 </button>
