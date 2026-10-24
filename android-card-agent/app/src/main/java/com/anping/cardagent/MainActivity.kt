@@ -126,6 +126,15 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // ล้างไฟล์อัปเดตตกค้าง (update.apk) ในแคชทันทีที่เปิดแอป ไม่ให้เป็นไฟล์ขยะรกเครื่อง
+        try {
+            val oldApk = File(cacheDir, "update.apk")
+            if (oldApk.exists()) {
+                oldApk.delete()
+                Log.i("MainActivity", "Cleaned up old update.apk on launch")
+            }
+        } catch (_: Exception) {}
+
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
 
         // เริ่มต้น Background Service ทันที
