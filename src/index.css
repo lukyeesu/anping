@@ -177,3 +177,10 @@ button, a, input, select, textarea, [role="button"], .cursor-pointer {
   scrollbar-width: none;
 }
 
+/* Sidebar Dragging and Text Reveal Transitions */
+.is-dragging-sidebar .sidebar-text-label,
+.is-dragging-sidebar .sidebar-compact-icon {
+  transition: none !important;
+}
+
+

@@ -883,346 +883,184 @@ export default function App() {
   }, []);
 
   const sidebarRef = React.useRef(null);
-  const isSidebarExpandedRef = React.useRef(isSidebarExpanded);
-  isSidebarExpandedRef.current = isSidebarExpanded;
-
-  // Refs สำหรับการลากขยาย/ย่อเมนูด้านซ้ายบน PC & Tablet แบบ 60-120FPS
   const isDraggingSidebarRef = React.useRef(false);
-  const sidebarDragStartXRef = React.useRef(0);
-  const sidebarDragStartYRef = React.useRef(0);
-  const sidebarStartWidthRef = React.useRef(80);
-  const sidebarCurrentWidthRef = React.useRef(80);
-  const sidebarHasDraggedRef = React.useRef(false);
-  const sidebarStartTimeRef = React.useRef(0);
-  const sidebarRafIdRef = React.useRef(null);
-  const sidebarPointerIdRef = React.useRef(null);
 
-  // Refs สำหรับ Mobile Drawer
-  const mobileSidebarRef = React.useRef(null);
-  const mobileBackdropRef = React.useRef(null);
+  // --- ระบบ Dragging สำหรับ Desktop / Tablet Sidebar (รองรับทั้ง Mouse และ Touch ลื่นไหล 60-120FPS) ---
+  const handleSidebarMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('input, textarea, select, .no-drag')) return;
 
-  // ระบบ Dragging เมนูด้านซ้าย (PC, Tablet & Mobile Landscape) จับลากได้ทั้งแถบเมนูแบบ 60-120FPS
-  const handleSidebarDragStart = useCallback((e) => {
-    // ป้องกันการลากเฉพาะเมื่อกำลังพิมพ์ข้อความใน Input/Textarea หรือส่วนที่กำหนดไม่ให้ลาก
-    if (e.target.closest('input, textarea, .no-drag-zone')) {
-      return;
-    }
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startTime = Date.now();
+    const startWidth = isSidebarExpanded ? 256 : 80;
+    let isDragging = false;
+    let rafId = null;
 
-    // สำหรับเมาส์: รองรับเฉพาะคลิกซ้าย (button 0) เท่านั้น ไม่รบกวนคลิกขวา
-    if (e.button !== undefined && e.button !== 0) {
-      return;
-    }
+    const onMouseMove = (me) => {
+      const deltaX = me.clientX - startX;
+      const deltaY = me.clientY - startY;
 
-    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-
-    sidebarDragStartXRef.current = clientX;
-    sidebarDragStartYRef.current = clientY;
-    sidebarStartTimeRef.current = Date.now();
-    sidebarStartWidthRef.current = isSidebarExpandedRef.current ? 256 : 80;
-    sidebarCurrentWidthRef.current = sidebarStartWidthRef.current;
-    sidebarHasDraggedRef.current = false;
-    isDraggingSidebarRef.current = false;
-
-    const onPointerMove = (moveEvent) => {
-      const curX = moveEvent.clientX !== undefined ? moveEvent.clientX : (moveEvent.touches && moveEvent.touches[0] ? moveEvent.touches[0].clientX : 0);
-      const curY = moveEvent.clientY !== undefined ? moveEvent.clientY : (moveEvent.touches && moveEvent.touches[0] ? moveEvent.touches[0].clientY : 0);
-      const deltaX = curX - sidebarDragStartXRef.current;
-      const deltaY = curY - sidebarDragStartYRef.current;
-
-      // ป้องกันการแย่งคำสั่ง: ถ้ายังไม่ได้ลาก และผู้ใช้ขยับแนวตั้งมากกว่าแนวนอน -> ปล่อยให้ Scroll ในรายการเมนูทำงาน
-      if (!isDraggingSidebarRef.current) {
-        if (Math.abs(deltaY) > Math.abs(deltaX)) {
-          return;
-        }
-        if (Math.abs(deltaX) < 6) {
-          return;
-        }
-        // เริ่มต้นการลากเมนู
+      if (!isDragging) {
+        if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+        if (Math.abs(deltaX) < 8) return;
+        isDragging = true;
         isDraggingSidebarRef.current = true;
-        sidebarHasDraggedRef.current = true;
-
-        if (sidebarRef.current) {
-          sidebarRef.current.style.transition = 'none';
-          sidebarRef.current.style.willChange = 'width';
-          if (e.pointerId !== undefined && sidebarRef.current.setPointerCapture) {
-            try {
-              sidebarRef.current.setPointerCapture(e.pointerId);
-            } catch (err) {}
-          }
-        }
-        if (mainRef.current) {
-          mainRef.current.style.pointerEvents = 'none';
-        }
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'col-resize';
+        if (sidebarRef.current) {
+          sidebarRef.current.classList.add('is-dragging-sidebar');
+        }
       }
 
-      if (moveEvent.cancelable) {
-        moveEvent.preventDefault();
-      }
+      const targetWidth = Math.max(80, Math.min(256, startWidth + deltaX));
+      const progress = Math.max(0, Math.min(1, (targetWidth - 85) / 115));
+      const translateX = ((1 - progress) * -8).toFixed(1);
 
-      // คำนวณความกว้างใหม่ (80px ถึง 256px)
-      let targetWidth = sidebarStartWidthRef.current + deltaX;
-      targetWidth = Math.max(80, Math.min(256, targetWidth));
-      sidebarCurrentWidthRef.current = targetWidth;
-
-      const progress = Math.max(0, Math.min(1, (targetWidth - 80) / (256 - 80)));
-
-      if (sidebarRafIdRef.current) {
-        cancelAnimationFrame(sidebarRafIdRef.current);
-      }
-      sidebarRafIdRef.current = requestAnimationFrame(() => {
-        if (!sidebarRef.current) return;
-        sidebarRef.current.style.width = `${targetWidth}px`;
-        sidebarRef.current.style.setProperty('--sidebar-w', `${targetWidth}px`);
-        sidebarRef.current.style.setProperty('--drag-progress', progress.toFixed(3));
-
-        // อัปเดตข้อความในเมนูให้ค่อยๆ ปรากฏ/จางลงตามระยะนิ้ว โดยไม่ผ่าน React State
-        const fadeLabels = sidebarRef.current.querySelectorAll('.sidebar-label-fade');
-        fadeLabels.forEach(el => {
-          el.style.opacity = progress.toFixed(3);
-          el.style.transform = `translateX(${(1 - progress) * -8}px)`;
-          el.style.pointerEvents = progress > 0.6 ? 'auto' : 'none';
-        });
-
-        // จัดการไอคอนเลือกสาขาแบบย่อ
-        const collapsedBranchIcon = sidebarRef.current.querySelector('.sidebar-collapsed-branch');
-        if (collapsedBranchIcon) {
-          collapsedBranchIcon.style.opacity = (1 - progress).toFixed(3);
-          collapsedBranchIcon.style.pointerEvents = progress < 0.4 ? 'auto' : 'none';
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (sidebarRef.current) {
+          sidebarRef.current.style.transition = 'none';
+          sidebarRef.current.style.width = `${targetWidth}px`;
+          sidebarRef.current.style.setProperty('--sidebar-text-opacity', progress.toFixed(3));
+          sidebarRef.current.style.setProperty('--sidebar-text-x', `${translateX}px`);
         }
       });
     };
 
-    const onPointerUp = (upEvent) => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-      window.removeEventListener('touchmove', onPointerMove);
-      window.removeEventListener('touchend', onPointerUp);
-      window.removeEventListener('touchcancel', onPointerUp);
-
-      if (e.pointerId !== undefined && sidebarRef.current && sidebarRef.current.releasePointerCapture) {
-        try {
-          sidebarRef.current.releasePointerCapture(e.pointerId);
-        } catch (err) {}
-      }
-
-      if (sidebarRafIdRef.current) {
-        cancelAnimationFrame(sidebarRafIdRef.current);
-      }
-
+    const onMouseUp = (me) => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      if (mainRef.current) {
-        mainRef.current.style.pointerEvents = '';
-      }
+      if (rafId) cancelAnimationFrame(rafId);
 
-      if (!sidebarHasDraggedRef.current) {
-        // เป็นเพียงการคลิก (Clean Click) ปล่อยให้ onClick ทำงานปกติ
-        isDraggingSidebarRef.current = false;
-        return;
-      }
+      if (!isDragging) return;
 
-      // ดักจับและระงับ Event click ไม่ให้กระตุ้นปุ่มในเมนูตอนปล่อยนิ้ว/เมาส์
-      const blockClick = (clickEvent) => {
-        clickEvent.preventDefault();
-        clickEvent.stopPropagation();
-        clickEvent.stopImmediatePropagation();
-      };
-      window.addEventListener('click', blockClick, { capture: true, once: true });
-      setTimeout(() => {
-        window.removeEventListener('click', blockClick, { capture: true });
-        sidebarHasDraggedRef.current = false;
-      }, 100);
-
-      // คำนวณ Snap Decision จากระยะที่ลากและความเร็วสะบัดนิ้ว (Velocity)
-      const upX = upEvent.clientX !== undefined ? upEvent.clientX : (upEvent.changedTouches && upEvent.changedTouches[0] ? upEvent.changedTouches[0].clientX : sidebarDragStartXRef.current);
-      const totalDeltaX = upX - sidebarDragStartXRef.current;
-      const elapsed = Math.max(1, Date.now() - sidebarStartTimeRef.current);
+      const totalDeltaX = me.clientX - startX;
+      const elapsed = Math.max(1, Date.now() - startTime);
       const velocityX = totalDeltaX / elapsed;
-
-      const currentW = sidebarCurrentWidthRef.current;
-      const wasExpanded = isSidebarExpandedRef.current;
-
+      const wasExpanded = isSidebarExpanded;
       let shouldExpand = wasExpanded;
+
       if (!wasExpanded) {
-        // เดิมย่ออยู่: ถ้ารูดขวาเกิน 130px หรือสะบัดนิ้วขวาเร็ว (velocityX > 0.25)
-        if (currentW > 130 || (totalDeltaX > 20 && velocityX > 0.25)) {
+        if (totalDeltaX > 35 || (totalDeltaX > 15 && velocityX > 0.3)) {
           shouldExpand = true;
-        } else {
-          shouldExpand = false;
         }
       } else {
-        // เดิมขยายอยู่: ถ้ารูดซ้ายเหลือต่ำกว่า 206px หรือสะบัดนิ้วซ้ายเร็ว (velocityX < -0.25)
-        if (currentW < 206 || (totalDeltaX < -20 && velocityX < -0.25)) {
+        if (totalDeltaX < -35 || (totalDeltaX < -15 && velocityX < -0.3)) {
           shouldExpand = false;
-        } else {
-          shouldExpand = true;
         }
       }
 
-      // เล่นแอนิเมชันคืนรูปอย่างนุ่มนวลแบบ Spring Transition
       if (sidebarRef.current) {
-        sidebarRef.current.style.transition = 'width 280ms cubic-bezier(0.32, 0.72, 0, 1)';
+        sidebarRef.current.classList.remove('is-dragging-sidebar');
+        sidebarRef.current.style.transition = 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)';
         sidebarRef.current.style.width = shouldExpand ? '256px' : '80px';
-        sidebarRef.current.style.setProperty('--drag-progress', shouldExpand ? '1' : '0');
-
-        const fadeLabels = sidebarRef.current.querySelectorAll('.sidebar-label-fade');
-        fadeLabels.forEach(el => {
-          el.style.transition = 'opacity 200ms ease-out, transform 200ms ease-out';
-          el.style.opacity = shouldExpand ? '1' : '0';
-          el.style.transform = shouldExpand ? 'translateX(0px)' : 'translateX(-8px)';
-          el.style.pointerEvents = shouldExpand ? 'auto' : 'none';
-        });
-
-        const collapsedBranchIcon = sidebarRef.current.querySelector('.sidebar-collapsed-branch');
-        if (collapsedBranchIcon) {
-          collapsedBranchIcon.style.transition = 'opacity 200ms ease-out';
-          collapsedBranchIcon.style.opacity = shouldExpand ? '0' : '1';
-          collapsedBranchIcon.style.pointerEvents = shouldExpand ? 'none' : 'auto';
-        }
+        sidebarRef.current.style.setProperty('--sidebar-text-opacity', shouldExpand ? '1' : '0');
+        sidebarRef.current.style.setProperty('--sidebar-text-x', shouldExpand ? '0px' : '-8px');
       }
-
       setIsSidebarExpanded(shouldExpand);
-      isDraggingSidebarRef.current = false;
 
-      // เคลียร์ inline transitions หลังจบแอนิเมชัน เพื่อให้ CSS Classes ปกติควบคุมต่อ
       setTimeout(() => {
-        if (sidebarRef.current && !isDraggingSidebarRef.current) {
-          sidebarRef.current.style.transition = '';
-          sidebarRef.current.style.willChange = 'auto';
-
-          const fadeLabels = sidebarRef.current.querySelectorAll('.sidebar-label-fade');
-          fadeLabels.forEach(el => {
-            el.style.transition = '';
-            el.style.opacity = '';
-            el.style.transform = '';
-            el.style.pointerEvents = '';
-          });
-
-          const collapsedBranchIcon = sidebarRef.current.querySelector('.sidebar-collapsed-branch');
-          if (collapsedBranchIcon) {
-            collapsedBranchIcon.style.transition = '';
-            collapsedBranchIcon.style.opacity = '';
-            collapsedBranchIcon.style.pointerEvents = '';
-          }
-        }
-      }, 320);
+        isDraggingSidebarRef.current = false;
+      }, 50);
     };
 
-    window.addEventListener('pointermove', onPointerMove, { passive: false });
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
-    window.addEventListener('touchmove', onPointerMove, { passive: false });
-    window.addEventListener('touchend', onPointerUp);
-    window.addEventListener('touchcancel', onPointerUp);
-  }, []);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [isSidebarExpanded]);
 
-  // ระบบ Drag-to-Close สำหรับเมนู Slide บน Mobile (< 768px)
-  const handleMobileSidebarTouchStart = useCallback((e) => {
-    if (e.touches.length !== 1) return;
-    if (e.target.closest('input, textarea, .no-drag-zone')) return;
+  const handleSidebarTouchStart = useCallback((e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    if (e.target.closest('input, textarea, select, .no-drag')) return;
+
     const startX = e.touches[0].clientX;
     const startY = e.touches[0].clientY;
     const startTime = Date.now();
-    let isDraggingDrawer = false;
-    let hasMoved = false;
+    const startWidth = isSidebarExpanded ? 256 : 80;
+    let isDragging = false;
+    let rafId = null;
 
-    const el = mobileSidebarRef.current;
-    const backdrop = mobileBackdropRef.current;
-    if (!el) return;
+    const onTouchMove = (te) => {
+      if (!te.touches || te.touches.length !== 1) return;
+      const deltaX = te.touches[0].clientX - startX;
+      const deltaY = te.touches[0].clientY - startY;
 
-    const onTouchMove = (moveEvent) => {
-      if (moveEvent.touches.length !== 1) return;
-      const curX = moveEvent.touches[0].clientX;
-      const curY = moveEvent.touches[0].clientY;
-      const deltaX = curX - startX;
-      const deltaY = curY - startY;
-
-      if (!isDraggingDrawer) {
+      if (!isDragging) {
         if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-        if (deltaX > 0) return;
-        if (Math.abs(deltaX) < 8) return;
-
-        isDraggingDrawer = true;
-        hasMoved = true;
-        el.style.transition = 'none';
-        if (backdrop) backdrop.style.transition = 'none';
+        if (Math.abs(deltaX) < 10) return;
+        isDragging = true;
+        isDraggingSidebarRef.current = true;
+        if (sidebarRef.current) {
+          sidebarRef.current.classList.add('is-dragging-sidebar');
+        }
       }
 
-      if (moveEvent.cancelable) moveEvent.preventDefault();
+      if (te.cancelable) te.preventDefault();
 
-      const clampedX = Math.min(0, Math.max(-260, deltaX));
-      el.style.transform = `translate3d(${clampedX}px, 0, 0)`;
+      const targetWidth = Math.max(80, Math.min(256, startWidth + deltaX));
+      const progress = Math.max(0, Math.min(1, (targetWidth - 85) / 115));
+      const translateX = ((1 - progress) * -8).toFixed(1);
 
-      if (backdrop) {
-        const opacity = Math.max(0, 1 + (clampedX / 260));
-        backdrop.style.opacity = opacity.toFixed(3);
-      }
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (sidebarRef.current) {
+          sidebarRef.current.style.transition = 'none';
+          sidebarRef.current.style.width = `${targetWidth}px`;
+          sidebarRef.current.style.setProperty('--sidebar-text-opacity', progress.toFixed(3));
+          sidebarRef.current.style.setProperty('--sidebar-text-x', `${translateX}px`);
+        }
+      });
     };
 
-    const onTouchEnd = (endEvent) => {
+    const onTouchEnd = (te) => {
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', onTouchEnd);
+      if (rafId) cancelAnimationFrame(rafId);
 
-      if (!hasMoved) return;
+      if (!isDragging) return;
 
-      // ดักจับและระงับ Event click บนมือถือไม่ให้กระตุ้นปุ่มในเมนูตอนรูดปิด
-      const blockClick = (clickEvent) => {
-        clickEvent.preventDefault();
-        clickEvent.stopPropagation();
-        clickEvent.stopImmediatePropagation();
-      };
-      window.addEventListener('click', blockClick, { capture: true, once: true });
-      setTimeout(() => {
-        window.removeEventListener('click', blockClick, { capture: true });
-      }, 100);
-
-      const endX = endEvent.changedTouches && endEvent.changedTouches[0] ? endEvent.changedTouches[0].clientX : startX;
+      const endX = te.changedTouches && te.changedTouches[0] ? te.changedTouches[0].clientX : startX;
       const totalDeltaX = endX - startX;
       const elapsed = Math.max(1, Date.now() - startTime);
       const velocityX = totalDeltaX / elapsed;
+      const wasExpanded = isSidebarExpanded;
+      let shouldExpand = wasExpanded;
 
-      // ถ้าปัดไปทางซ้ายเกิน 50px หรือสะบัดนิ้วซ้ายเร็ว -> สั่งปิดเมนู
-      const shouldClose = totalDeltaX < -50 || (totalDeltaX < -15 && velocityX < -0.3);
-
-      el.style.transition = 'transform 250ms cubic-bezier(0.32, 0.72, 0, 1)';
-      if (backdrop) backdrop.style.transition = 'opacity 250ms ease-out';
-
-      if (shouldClose) {
-        el.style.transform = 'translate3d(-100%, 0, 0)';
-        if (backdrop) backdrop.style.opacity = '0';
-        setIsSidebarExpanded(false);
+      if (!wasExpanded) {
+        if (totalDeltaX > 35 || (totalDeltaX > 15 && velocityX > 0.3)) {
+          shouldExpand = true;
+        }
       } else {
-        el.style.transform = 'translate3d(0, 0, 0)';
-        if (backdrop) backdrop.style.opacity = '1';
+        if (totalDeltaX < -35 || (totalDeltaX < -15 && velocityX < -0.3)) {
+          shouldExpand = false;
+        }
       }
 
+      if (sidebarRef.current) {
+        sidebarRef.current.classList.remove('is-dragging-sidebar');
+        sidebarRef.current.style.transition = 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)';
+        sidebarRef.current.style.width = shouldExpand ? '256px' : '80px';
+        sidebarRef.current.style.setProperty('--sidebar-text-opacity', shouldExpand ? '1' : '0');
+        sidebarRef.current.style.setProperty('--sidebar-text-x', shouldExpand ? '0px' : '-8px');
+      }
+      setIsSidebarExpanded(shouldExpand);
+
       setTimeout(() => {
-        if (el) {
-          el.style.transition = '';
-          el.style.transform = '';
-        }
-        if (backdrop) {
-          backdrop.style.transition = '';
-          backdrop.style.opacity = '';
-        }
-      }, 260);
+        isDraggingSidebarRef.current = false;
+      }, 50);
     };
 
     window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('touchend', onTouchEnd);
     window.addEventListener('touchcancel', onTouchEnd);
-  }, []);
+  }, [isSidebarExpanded]);
 
-  // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ และเปิดขยายแท็บเมนูด้านล่าง ---
+  // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ ---
   const [showMobileBars, setShowMobileBars] = useState(true);
-  const [isMobileNavExpanded, setIsMobileNavExpanded] = useState(false);
   const isMobileNavExpandedRef = useRef(false);
-  isMobileNavExpandedRef.current = isMobileNavExpanded;
   const lastScrollY = React.useRef(0);
 
   // บันทึกสถานะลง LocalStorage เมื่อมีการเปลี่ยนแปลง (เฉพาะ PC / Tablet)
@@ -1317,14 +1155,14 @@ export default function App() {
 
     window.addEventListener('scroll', handleGlobalScroll, { capture: true, passive: true });
     return () => window.removeEventListener('scroll', handleGlobalScroll, { capture: true });
-  }, [isMobile, isLoggedIn, isGlobalLoading, currentTab, isMobileNavExpanded]);
+  }, [isMobile, isLoggedIn, isGlobalLoading, currentTab]);
 
   const [hasUnsavedSettings, setHasUnsavedSettings] = useState(false);
   const [navUnsavedModal, setNavUnsavedModal] = useState({ isOpen: false, targetTab: null });
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
   const handleTabClick = (tabId) => {
-    if (!isMobile && hasDragged.current) return;
+    if (isDraggingSidebarRef.current) return;
     if (tabId === currentTab) return;
 
     // หากมีข้อมูลการตั้งค่าที่ยังไม่ได้บันทึก ให้เด้งป๊อปอัพแจ้งเตือนก่อนเปลี่ยนหน้า
@@ -3348,10 +3186,12 @@ export default function App() {
     const activeBtn = extraGridRef.current.querySelector('[data-active="true"]');
     if (activeBtn) {
       const iconEl = activeBtn.querySelector('.extra-nav-icon');
-      const x = activeBtn.offsetLeft + (iconEl ? iconEl.offsetLeft : (activeBtn.offsetWidth - 48) / 2);
-      const y = activeBtn.offsetTop + (iconEl ? iconEl.offsetTop : 4);
+      const gridRect = extraGridRef.current.getBoundingClientRect();
+      const targetRect = iconEl ? iconEl.getBoundingClientRect() : activeBtn.getBoundingClientRect();
+      const x = targetRect.left - gridRect.left;
+      const y = targetRect.top - gridRect.top;
       if (animate) {
-        extraBubbleRef.current.style.transition = 'transform 450ms cubic-bezier(0.34, 1.15, 0.64, 1), opacity 200ms ease-out';
+        extraBubbleRef.current.style.transition = 'transform 350ms cubic-bezier(0.34, 1.15, 0.64, 1), opacity 200ms ease-out';
       } else {
         extraBubbleRef.current.style.transition = 'none';
       }
@@ -3362,13 +3202,6 @@ export default function App() {
     }
   }, []);
 
-  // ซิงค์ตำแหน่ง Bubble เมื่อแผงควบคุมถูกเปิดออก โดยวางตำแหน่งทันทีที่เฟรมแรก (0ms)
-  useEffect(() => {
-    if (isMobileNavExpanded) {
-      updateExtraBubble(false);
-    }
-  }, [isMobileNavExpanded, updateExtraBubble]);
-
   useEffect(() => {
     if (!extraGridRef.current || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => updateExtraBubble(false));
@@ -3377,6 +3210,7 @@ export default function App() {
   }, [updateExtraBubble]);
 
   // ควบคุมความสูงและการลากเลื่อน (Touch Dragging) แผงควบคุมตามนิ้วมือแบบ Real-time 60/120fps
+  // ใช้ GPU-Accelerated Direct DOM Animation 100% ไม่สั่ง setState เพื่อป้องกันไม่ให้ทั้ง App.jsx เกิดการ Re-render (0 re-renders)
   const navSheetRef = useRef(null);
   const [navSheetNode, setNavSheetNode] = useState(null);
   const setNavSheetRef = useCallback((node) => {
@@ -3386,27 +3220,58 @@ export default function App() {
   const isDraggingRef = useRef(false);
   const navBackdropRef = useRef(null);
   const extraContentRef = useRef(null);
-  const [extraHeight, setExtraHeight] = useState(200);
   const extraHeightRef = useRef(200);
-  const isExpandedRef = useRef(isMobileNavExpanded);
-  isExpandedRef.current = isMobileNavExpanded;
-  const navCollapseTimerRef = useRef(null);
-  const navPageSwitchTimerRef = useRef(null);
+  const isExpandedRef = isMobileNavExpandedRef;
 
-  // นำทางไปยังแท็บที่เลือก โดยปล่อยให้วงกลม Liquid Bubble เลื่อนไปหาไอคอนเป้าหมายให้เห็นอนิเมชั่นอย่างชัดเจนก่อน แล้วจึงค่อยๆ พับเก็บแผงควบคุมลง
+  const expandMobileNav = useCallback(() => {
+    isExpandedRef.current = true;
+    if (navSheetRef.current) {
+      navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
+      navSheetRef.current.style.transform = 'translate3d(0, 0px, 0)';
+    }
+    if (navBackdropRef.current) {
+      navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
+      navBackdropRef.current.style.opacity = '1';
+      navBackdropRef.current.style.pointerEvents = 'auto';
+    }
+    if (extraContentRef.current) {
+      extraContentRef.current.style.transition = 'opacity 320ms ease-out';
+      extraContentRef.current.style.opacity = '1';
+    }
+    updateExtraBubble(false);
+  }, [updateExtraBubble]);
+
+  const collapseMobileNav = useCallback(() => {
+    isExpandedRef.current = false;
+    const H = extraHeightRef.current || 200;
+    if (navSheetRef.current) {
+      navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
+      navSheetRef.current.style.transform = `translate3d(0, ${H}px, 0)`;
+    }
+    if (navBackdropRef.current) {
+      navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
+      navBackdropRef.current.style.opacity = '0';
+      navBackdropRef.current.style.pointerEvents = 'none';
+    }
+    if (extraContentRef.current) {
+      extraContentRef.current.style.transition = 'opacity 320ms ease-out';
+      extraContentRef.current.style.opacity = '0';
+    }
+  }, []);
+
+  const toggleMobileNav = useCallback(() => {
+    if (isExpandedRef.current) {
+      collapseMobileNav();
+    } else {
+      expandMobileNav();
+    }
+  }, [expandMobileNav, collapseMobileNav]);
+
+  // นำทางไปยังแท็บที่เลือก สลับหน้าทันที และพับเก็บแผงควบคุมลงอย่างนุ่มนวล โดยแตะเพียงครั้งเดียวก็ทำงาน 100%
   const handleNavSelect = useCallback((tabId, clickedElement) => {
-    if (navCollapseTimerRef.current) {
-      clearTimeout(navCollapseTimerRef.current);
-      navCollapseTimerRef.current = null;
-    }
-    if (navPageSwitchTimerRef.current) {
-      clearTimeout(navPageSwitchTimerRef.current);
-      navPageSwitchTimerRef.current = null;
-    }
-
     if (tabId === currentTab) {
-      if (isMobileNavExpanded) {
-        setIsMobileNavExpanded(false);
+      if (isExpandedRef.current) {
+        collapseMobileNav();
       }
       return;
     }
@@ -3414,66 +3279,67 @@ export default function App() {
     // 1. ตอบสนอง UI ทันที 0ms: ให้วงกลมสีฟ้าเริ่มเลื่อนและไฮไลต์ไอคอนทันที
     setNavActiveTab(tabId);
 
-    // 2. ถ้าเป็นแท็บในแถวเพิ่มเติม (4 คอลัมน์): เคลื่อน Bubble ทันทีตั้งแต่เฟรมแรก (0ms) ด้วยพิกัด layout ของปุ่ม
+    // 2. ถ้าเป็นแท็บในแถวเพิ่มเติม (4 คอลัมน์): เคลื่อน Bubble ทันทีตั้งแต่เฟรมแรก (0ms) ด้วยพิกัด layout ที่แม่นยำระดับ Subpixel
     const isOtherTab = otherMobileNavItems.some(item => item.id === tabId);
     if (isOtherTab && extraGridRef.current && extraBubbleRef.current) {
       const btn = clickedElement || extraGridRef.current.querySelector(`[data-tab-id="${tabId}"]`);
       if (btn) {
         const iconEl = btn.querySelector('.extra-nav-icon');
-        const x = btn.offsetLeft + (iconEl ? iconEl.offsetLeft : (btn.offsetWidth - 48) / 2);
-        const y = btn.offsetTop + (iconEl ? iconEl.offsetTop : 4);
-        const wasHidden = extraBubbleRef.current.style.opacity === '0' || !extraBubbleRef.current.style.opacity;
-        if (wasHidden) {
-          extraBubbleRef.current.style.transition = 'none';
-          extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(0.6)`;
-          extraBubbleRef.current.style.opacity = '0';
-          void extraBubbleRef.current.offsetHeight;
-          extraBubbleRef.current.style.transition = 'transform 350ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 200ms ease-out';
-          extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
-          extraBubbleRef.current.style.opacity = '1';
-        } else {
-          extraBubbleRef.current.style.transition = 'transform 450ms cubic-bezier(0.34, 1.15, 0.64, 1), opacity 200ms ease-out';
-          extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
-          extraBubbleRef.current.style.opacity = '1';
-        }
+        const gridRect = extraGridRef.current.getBoundingClientRect();
+        const targetRect = iconEl ? iconEl.getBoundingClientRect() : btn.getBoundingClientRect();
+        const x = targetRect.left - gridRect.left;
+        const y = targetRect.top - gridRect.top;
+        extraBubbleRef.current.style.transition = 'transform 350ms cubic-bezier(0.34, 1.15, 0.64, 1), opacity 200ms ease-out';
+        extraBubbleRef.current.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1)`;
+        extraBubbleRef.current.style.opacity = '1';
       }
     } else if (extraBubbleRef.current) {
       extraBubbleRef.current.style.opacity = '0';
     }
 
-    // 3. ปล่อยให้วงกลมสีฟ้าแล่นสไลด์แบบ 60 FPS อย่างลื่นไหลเต็มตาก่อนสลับหน้าจริง
-    if (isMobileNavExpanded) {
-      // สลับหน้าจริงเมื่อ Bubble วิ่งเสร็จเรียบร้อย (~300ms)
-      navPageSwitchTimerRef.current = setTimeout(() => {
-        handleTabClick(tabId);
-        navPageSwitchTimerRef.current = null;
-      }, 300);
-
-      // เริ่มพับเก็บแผงควบคุมลงอย่างนุ่มนวลที่ 420ms
-      navCollapseTimerRef.current = setTimeout(() => {
-        isMobileNavExpandedRef.current = false;
-        setIsMobileNavExpanded(false);
-        navCollapseTimerRef.current = null;
-      }, 420);
-    } else {
-      // สำหรับเมนูหลัก 5 ปุ่ม: ให้วงกลมสีฟ้าเริ่มแล่นสไลด์ก่อน 180ms ก่อนเริ่มเรนเดอร์หน้าใหม่ เพื่อความนุ่มนวลเหมือนเดิม 100%
-      navPageSwitchTimerRef.current = setTimeout(() => {
-        React.startTransition(() => {
-          handleTabClick(tabId);
-        });
-        navPageSwitchTimerRef.current = null;
-      }, 180);
+    // 3. สลับหน้าและพับเก็บแผงควบคุมลงทันที ไม่ต้องมี timeout หน่วงเวลา เพื่อให้แตะครั้งเดียวติด 100% ไม่หลุด
+    if (isExpandedRef.current) {
+      collapseMobileNav();
     }
-  }, [handleTabClick, isMobileNavExpanded, currentTab, otherMobileNavItems]);
+    handleTabClick(tabId);
+  }, [handleTabClick, collapseMobileNav, currentTab, otherMobileNavItems]);
 
-  useEffect(() => {
-    return () => {
-      if (navCollapseTimerRef.current) clearTimeout(navCollapseTimerRef.current);
-      if (navPageSwitchTimerRef.current) clearTimeout(navPageSwitchTimerRef.current);
-    };
+  // ตัวจัดการการแตะปุ่มเมนูมือถือแบบ Zero-latency Touch:
+  // ตรวจจับที่ touchend โดยตรง ไม่ต้องรอ synthetic click ของเบราว์เซอร์ ซึ่งมักถูกบล็อกขณะแผงควบคุมกำลังเคลื่อนที่
+  const lastNavTouchTimeRef = useRef(0);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+
+  const handleButtonTouchStart = useCallback((e) => {
+    if (e.touches && e.touches[0]) {
+      touchStartPosRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY
+      };
+    }
   }, []);
 
+  const handleButtonTouchEnd = useCallback((tabId, e) => {
+    if (e.changedTouches && e.changedTouches[0]) {
+      const deltaX = Math.abs(e.changedTouches[0].clientX - touchStartPosRef.current.x);
+      const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartPosRef.current.y);
+      // หากขยับนิ้วเกิน 8px ถือเป็นการลากแผงเมนู ไม่ใช่การแตะเลือกแท็บ
+      if (deltaX >= 8 || deltaY >= 8) return;
+    }
+    // สัมผัสนิ่งๆ แตะเลือกเมนู (Clean Tap): บันทึกเวลาเพื่อป้องกัน synthetic click ซ้ำซ้อน
+    lastNavTouchTimeRef.current = Date.now();
+    handleNavSelect(tabId, e.currentTarget);
+  }, [handleNavSelect]);
+
+  const handleButtonClick = useCallback((tabId, e) => {
+    // ป้องกัน synthetic click ที่เบราว์เซอร์ส่งตามมาหลังจาก touchend (ภายใน 450ms)
+    if (Date.now() - lastNavTouchTimeRef.current < 450) {
+      return;
+    }
+    handleNavSelect(tabId, e.currentTarget);
+  }, [handleNavSelect]);
+
   // คำนวณความสูงจริงของเมนูแถวเพิ่มเติม เพื่อให้เมนูหลักลอยพ้นแถบนำทางของมือถือ 2-4px พอดี และมีระยะหายใจรอบขีดลากด้านบน
+  // อัปเดตผ่าน extraHeightRef โดยตรง ไม่เรียก setState เพื่อป้องกันไม่ให้ทั้ง App เกิดการ Re-render กระพริบ
   useEffect(() => {
     const updateH = () => {
       let newH = 0;
@@ -3495,7 +3361,9 @@ export default function App() {
         newH = rows * 78 + 30;
       }
       extraHeightRef.current = newH;
-      setExtraHeight(prev => (prev === newH ? prev : newH));
+      if (navSheetRef.current && !isExpandedRef.current && !isDraggingRef.current) {
+        navSheetRef.current.style.transform = `translate3d(0, ${newH}px, 0)`;
+      }
     };
 
     updateH();
@@ -3506,35 +3374,24 @@ export default function App() {
     }
   }, [otherMobileNavItems, navSheetNode]);
 
-  // ซิงค์สถานะการเปิด/ปิด (Visual Style Sync) ระหว่างแผงควบคุมและ Backdrop ให้ตรงกัน 100% เสมอ ป้องกันอาการบั๊กภาพค้างหรือไม่เบลอ
+  // ซิงค์สถานะการเปิด/ปิด เมื่อมีการเลื่อน Scroll ของหน้าจอมือถือ (ซ่อน/แสดงแถบ)
   useEffect(() => {
     if (!navSheetRef.current || isDraggingRef.current) return;
-    const H = extraHeightRef.current || extraHeight || 250;
+    const H = extraHeightRef.current || 200;
 
     navSheetRef.current.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
 
-    if (isMobile && !showMobileBars && !isMobileNavExpanded) {
+    if (isMobile && !showMobileBars && !isExpandedRef.current) {
       navSheetRef.current.style.transform = 'translate3d(0, 115%, 0)';
-    } else if (hasMoreNavItems && !isMobileNavExpanded) {
+    } else if (hasMoreNavItems && !isExpandedRef.current) {
       navSheetRef.current.style.transform = `translate3d(0, ${H}px, 0)`;
     } else {
       navSheetRef.current.style.transform = 'translate3d(0, 0px, 0)';
     }
-
-    if (navBackdropRef.current) {
-      navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
-      navBackdropRef.current.style.opacity = isMobileNavExpanded ? '1' : '0';
-      navBackdropRef.current.style.pointerEvents = isMobileNavExpanded ? 'auto' : 'none';
-    }
-
-    if (extraContentRef.current) {
-      extraContentRef.current.style.transition = 'opacity 320ms ease-out';
-      extraContentRef.current.style.opacity = isMobileNavExpanded ? '1' : '0';
-      extraContentRef.current.style.pointerEvents = isMobileNavExpanded ? 'auto' : 'none';
-    }
-  }, [isMobileNavExpanded, extraHeight, hasMoreNavItems, showMobileBars, isMobile]);
+  }, [hasMoreNavItems, showMobileBars, isMobile]);
 
   // ระบบ Interactive Dragging รูดตามนิ้วมือแบบ Real-time เหมือน Control Center / Quick Panel
+  // จับและลากได้ทั้งผืนแผงควบคุม (ทั้งปุ่มและที่ว่าง) โดยหากเป็นการแตะนิ่งๆ (Clean Tap) จะสั่งเปลี่ยนหน้าทันทีในคลิกเดียว
   useEffect(() => {
     const el = navSheetNode;
     if (!el || !hasMoreNavItems) return;
@@ -3548,10 +3405,6 @@ export default function App() {
     // --- 1. TOUCH EVENTS (สำหรับโทรศัพท์มือถือ / แท็บเล็ต) ---
     const handleTouchStart = (e) => {
       if (e.touches.length !== 1) return;
-      if (navCollapseTimerRef.current) {
-        clearTimeout(navCollapseTimerRef.current);
-        navCollapseTimerRef.current = null;
-      }
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
       touchStartTime = Date.now();
@@ -3566,7 +3419,6 @@ export default function App() {
       const deltaX = touchX - touchStartX;
 
       if (!isDraggingTouch) {
-        // ต้องขยับเกิน 8px และเน้นไปทางแนวตั้งเท่านั้น จึงจะเริ่มการลากแผงควบคุม (Intentional Drag)
         if (Math.abs(deltaY) < 8) return;
         if (Math.abs(deltaX) > Math.abs(deltaY)) return; // ปัดแนวนอน ไม่ใช่การลากแผงนี้
 
@@ -3581,7 +3433,7 @@ export default function App() {
         e.preventDefault();
       }
 
-      const H = extraHeightRef.current || extraHeight || 200;
+      const H = extraHeightRef.current || 200;
       let targetTranslateY = 0;
 
       if (!isExpandedRef.current) {
@@ -3606,23 +3458,22 @@ export default function App() {
       touchRafId = requestAnimationFrame(() => {
         el.style.transform = `translate3d(0, ${targetTranslateY}px, 0)`;
 
-      if (H > 0) {
-        const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
-        if (navBackdropRef.current) {
-          navBackdropRef.current.style.opacity = progress.toFixed(3);
-          navBackdropRef.current.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+        if (H > 0) {
+          const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
+          if (navBackdropRef.current) {
+            navBackdropRef.current.style.opacity = progress.toFixed(3);
+            navBackdropRef.current.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+          }
+          if (extraContentRef.current) {
+            extraContentRef.current.style.opacity = progress.toFixed(3);
+          }
         }
-        if (extraContentRef.current) {
-          extraContentRef.current.style.opacity = progress.toFixed(3);
-          extraContentRef.current.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
-        }
-      }
       });
     };
 
     const handleTouchEnd = (e) => {
       if (!isDraggingTouch) {
-        // เป็นเพียงการแตะเลือกเมนู (Clean Tap) -> ไม่แตะต้อง transform หรือ state ปล่อยให้ onClick ของปุ่มทำงานอย่างสมบูรณ์
+        // เป็นเพียงการแตะเลือกเมนู (Clean Tap < 8px) -> ไม่แตะต้อง transform หรือ state ปล่อยให้ onClick ของปุ่มทำงานอย่างสมบูรณ์ทันที
         return;
       }
       if (touchRafId) cancelAnimationFrame(touchRafId);
@@ -3634,7 +3485,7 @@ export default function App() {
       const elapsed = Math.max(1, Date.now() - touchStartTime);
       const velocityY = totalDeltaY / elapsed;
 
-      const H = extraHeightRef.current || extraHeight || 200;
+      const H = extraHeightRef.current || 200;
       const wasExpanded = isExpandedRef.current;
       let shouldExpand = wasExpanded;
 
@@ -3650,49 +3501,28 @@ export default function App() {
         }
       }
 
-      // ป้องกัน click event ทะลุไปโดนปุ่มใต้ปลายนิ้วขณะปล่อยการลาก
-      const preventClick = (ce) => {
-        ce.stopPropagation();
-        ce.preventDefault();
-      };
-      window.addEventListener('click', preventClick, { capture: true, once: true });
-      setTimeout(() => window.removeEventListener('click', preventClick, { capture: true }), 150);
-
-      const finalTranslateY = shouldExpand ? 0 : H;
-      el.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
-      el.style.transform = `translate3d(0, ${finalTranslateY}px, 0)`;
-
-      if (navBackdropRef.current) {
-        navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
-        navBackdropRef.current.style.opacity = shouldExpand ? '1' : '0';
-        navBackdropRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
+      if (shouldExpand) {
+        expandMobileNav();
+      } else {
+        collapseMobileNav();
       }
-      if (extraContentRef.current) {
-        extraContentRef.current.style.transition = 'opacity 320ms ease-out';
-        extraContentRef.current.style.opacity = shouldExpand ? '1' : '0';
-        extraContentRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
-      }
-
-      isExpandedRef.current = shouldExpand;
-      setIsMobileNavExpanded(shouldExpand);
     };
 
     // --- 2. MOUSE EVENTS (สำหรับคอมพิวเตอร์ PC / แล็ปท็อป เวลาย่อขนาดหน้าจอ) ---
     const handleMouseDown = (e) => {
       if (e.button !== 0) return; // คลิกซ้ายเท่านั้น
-      if (navCollapseTimerRef.current) {
-        clearTimeout(navCollapseTimerRef.current);
-        navCollapseTimerRef.current = null;
-      }
 
       const mStartY = e.clientY;
+      const mStartX = e.clientX;
       const mStartTime = Date.now();
       let isDraggingMouse = false;
 
       const handleMouseMove = (me) => {
         const deltaY = me.clientY - mStartY;
+        const deltaX = me.clientX - mStartX;
         if (!isDraggingMouse) {
           if (Math.abs(deltaY) < 6) return;
+          if (Math.abs(deltaX) > Math.abs(deltaY)) return;
           isDraggingMouse = true;
           isDraggingRef.current = true;
           el.style.transition = 'none';
@@ -3700,7 +3530,7 @@ export default function App() {
           if (extraContentRef.current) extraContentRef.current.style.transition = 'none';
         }
 
-        const H = extraHeightRef.current || extraHeight || 200;
+        const H = extraHeightRef.current || 200;
         let targetTranslateY = 0;
 
         if (!isExpandedRef.current) {
@@ -3718,22 +3548,21 @@ export default function App() {
         }
 
         if (touchRafId) cancelAnimationFrame(touchRafId);
-      touchRafId = requestAnimationFrame(() => {
-        el.style.transform = `translate3d(0, ${targetTranslateY}px, 0)`;
+        touchRafId = requestAnimationFrame(() => {
+          el.style.transform = `translate3d(0, ${targetTranslateY}px, 0)`;
 
-        if (H > 0) {
-          const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
-          if (navBackdropRef.current) {
-            navBackdropRef.current.style.opacity = progress.toFixed(3);
-            navBackdropRef.current.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+          if (H > 0) {
+            const progress = Math.max(0, Math.min(1, 1 - (targetTranslateY / H)));
+            if (navBackdropRef.current) {
+              navBackdropRef.current.style.opacity = progress.toFixed(3);
+              navBackdropRef.current.style.pointerEvents = progress > 0.05 ? 'auto' : 'none';
+            }
+            if (extraContentRef.current) {
+              extraContentRef.current.style.opacity = progress.toFixed(3);
+            }
           }
-          if (extraContentRef.current) {
-            extraContentRef.current.style.opacity = progress.toFixed(3);
-            extraContentRef.current.style.pointerEvents = progress > 0.5 ? 'auto' : 'none';
-          }
-        }
-      });
-    };
+        });
+      };
 
       const handleMouseUp = (me) => {
         window.removeEventListener('mousemove', handleMouseMove);
@@ -3750,7 +3579,7 @@ export default function App() {
         const elapsed = Math.max(1, Date.now() - mStartTime);
         const velocityY = totalDeltaY / elapsed;
 
-        const H = extraHeightRef.current || extraHeight || 200;
+        const H = extraHeightRef.current || 200;
         const wasExpanded = isExpandedRef.current;
         let shouldExpand = wasExpanded;
 
@@ -3764,31 +3593,11 @@ export default function App() {
           }
         }
 
-        // ป้องกัน click event ทะลุไปโดนปุ่มใต้เมาส์ขณะปล่อยการลาก
-        const preventClick = (ce) => {
-          ce.stopPropagation();
-          ce.preventDefault();
-        };
-        window.addEventListener('click', preventClick, { capture: true, once: true });
-        setTimeout(() => window.removeEventListener('click', preventClick, { capture: true }), 150);
-
-        const finalTranslateY = shouldExpand ? 0 : H;
-        el.style.transition = 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)';
-        el.style.transform = `translate3d(0, ${finalTranslateY}px, 0)`;
-
-        if (navBackdropRef.current) {
-          navBackdropRef.current.style.transition = 'opacity 320ms ease-out';
-          navBackdropRef.current.style.opacity = shouldExpand ? '1' : '0';
-          navBackdropRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
+        if (shouldExpand) {
+          expandMobileNav();
+        } else {
+          collapseMobileNav();
         }
-        if (extraContentRef.current) {
-          extraContentRef.current.style.transition = 'opacity 320ms ease-out';
-          extraContentRef.current.style.opacity = shouldExpand ? '1' : '0';
-          extraContentRef.current.style.pointerEvents = shouldExpand ? 'auto' : 'none';
-        }
-
-        isExpandedRef.current = shouldExpand;
-        setIsMobileNavExpanded(shouldExpand);
       };
 
       window.addEventListener('mousemove', handleMouseMove);
@@ -3808,7 +3617,7 @@ export default function App() {
       el.removeEventListener('touchcancel', handleTouchEnd);
       el.removeEventListener('mousedown', handleMouseDown);
     };
-  }, [navSheetNode, hasMoreNavItems, extraHeight]);
+  }, [navSheetNode, hasMoreNavItems]);
 
 
 
@@ -3927,17 +3736,28 @@ export default function App() {
         
         {/* Backdrop สำหรับ Mobile เมื่อกางเมนู (ใช้ CSS Transition ธรรมดา ไม่กิน CPU) */}
         <div 
-          ref={mobileBackdropRef}
           className={`md:hidden fixed inset-0 bg-slate-900/60 z-[100] transition-opacity duration-200 ${isSidebarExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
           onClick={() => setIsSidebarExpanded(false)}
         />
 
-        {/* Mobile Slide Menu (สร้างแยกมาต่างหาก ทำงานด้วย CSS Transform ล้วนๆ ลื่นไหล 100% พร้อม Touch-Drag to Close) */}
+        {/* Mobile Slide Menu (สร้างแยกมาต่างหาก ทำงานด้วย CSS Transform ล้วนๆ ลื่นไหล 100%) */}
         <aside 
-          ref={mobileSidebarRef}
-          onTouchStart={handleMobileSidebarTouchStart}
           className={`md:hidden fixed inset-y-0 left-0 z-[110] w-[260px] bg-white shadow-2xl flex flex-col will-change-transform transform transition-transform duration-250 ease-out ${isSidebarExpanded ? 'translate-x-0' : '-translate-x-full'}`}
           style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden' }}
+          onTouchStart={(e) => {
+            if (e.touches && e.touches[0]) {
+              e.currentTarget.dataset.startX = e.touches[0].clientX;
+            }
+          }}
+          onTouchEnd={(e) => {
+            const startX = parseFloat(e.currentTarget.dataset.startX);
+            if (e.changedTouches && e.changedTouches[0] && !isNaN(startX)) {
+              const deltaX = e.changedTouches[0].clientX - startX;
+              if (deltaX < -40) {
+                setIsSidebarExpanded(false);
+              }
+            }
+          }}
         >
           <div className="p-6 flex items-center min-h-[89px] border-b border-slate-100/50 shrink-0">
             <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
@@ -3964,7 +3784,7 @@ export default function App() {
                 <button 
                   key={item.id} 
                   onClick={() => handleTabClick(item.id)} 
-                  className={`flex items-center py-3 px-3 w-full rounded-2xl transition-all duration-200 kanit-text ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+                  className={`flex items-center py-3 px-3 w-full rounded-2xl transition-all duration-200 kanit-text ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-normal' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-normal'}`}
                 >
                   <div className="shrink-0 w-6 flex items-center justify-center">
                     <item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />
@@ -3990,120 +3810,43 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Mobile Edge Gesture Detector: ลากนิ้วจากขอบซ้ายจอเพื่อเปิดเมนูแบบ Native */}
-        <div 
-          className={`md:hidden fixed top-0 bottom-0 left-0 w-4 z-[39] ${isSidebarExpanded ? 'pointer-events-none' : 'pointer-events-auto'}`}
-          onTouchStart={(e) => {
-            if (isSidebarExpanded) return;
-            if (e.touches.length !== 1) return;
-            const startX = e.touches[0].clientX;
-            const startY = e.touches[0].clientY;
-            const startTime = Date.now();
-            let isDraggingOpen = false;
-
-            const el = mobileSidebarRef.current;
-            const backdrop = mobileBackdropRef.current;
-            if (!el) return;
-
-            const onEdgeTouchMove = (moveEvent) => {
-              if (moveEvent.touches.length !== 1) return;
-              const curX = moveEvent.touches[0].clientX;
-              const curY = moveEvent.touches[0].clientY;
-              const deltaX = curX - startX;
-              const deltaY = curY - startY;
-
-              if (!isDraggingOpen) {
-                if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-                if (deltaX < 8) return;
-
-                isDraggingOpen = true;
-                el.style.transition = 'none';
-                if (backdrop) {
-                  backdrop.style.transition = 'none';
-                  backdrop.style.pointerEvents = 'auto';
-                }
-              }
-
-              if (moveEvent.cancelable) moveEvent.preventDefault();
-
-              const translateX = Math.max(-260, Math.min(0, -260 + deltaX));
-              el.style.transform = `translate3d(${translateX}px, 0, 0)`;
-
-              if (backdrop) {
-                const opacity = Math.max(0, Math.min(1, (260 + translateX) / 260));
-                backdrop.style.opacity = opacity.toFixed(3);
-              }
-            };
-
-            const onEdgeTouchEnd = (endEvent) => {
-              window.removeEventListener('touchmove', onEdgeTouchMove);
-              window.removeEventListener('touchend', onEdgeTouchEnd);
-              window.removeEventListener('touchcancel', onEdgeTouchEnd);
-
-              if (!isDraggingOpen) return;
-
-              const endX = endEvent.changedTouches && endEvent.changedTouches[0] ? endEvent.changedTouches[0].clientX : startX;
-              const totalDeltaX = endX - startX;
-              const elapsed = Math.max(1, Date.now() - startTime);
-              const velocityX = totalDeltaX / elapsed;
-
-              const shouldOpen = totalDeltaX > 50 || (totalDeltaX > 20 && velocityX > 0.3);
-
-              el.style.transition = 'transform 250ms cubic-bezier(0.32, 0.72, 0, 1)';
-              if (backdrop) backdrop.style.transition = 'opacity 250ms ease-out';
-
-              if (shouldOpen) {
-                el.style.transform = 'translate3d(0, 0, 0)';
-                if (backdrop) backdrop.style.opacity = '1';
-                setIsSidebarExpanded(true);
-              } else {
-                el.style.transform = 'translate3d(-100%, 0, 0)';
-                if (backdrop) backdrop.style.opacity = '0';
-              }
-
-              setTimeout(() => {
-                if (el) {
-                  el.style.transition = '';
-                  el.style.transform = '';
-                }
-                if (backdrop) {
-                  backdrop.style.transition = '';
-                  backdrop.style.opacity = '';
-                  if (!shouldOpen) backdrop.style.pointerEvents = 'none';
-                }
-              }, 260);
-            };
-
-            window.addEventListener('touchmove', onEdgeTouchMove, { passive: false });
-            window.addEventListener('touchend', onEdgeTouchEnd);
-            window.addEventListener('touchcancel', onEdgeTouchEnd);
-          }}
-        />
-
-        {/* Desktop / Tablet Sidebar (ทำงานด้วย CSS Width Transition & Hardware-Accelerated Touch/Mouse Drag 60-120FPS) */}
+        {/* Desktop / Tablet Sidebar (ทำงานด้วย GPU-Accelerated CSS Transition แบบ 60-120FPS ลื่นไหล ไม่บล็อกปุ่มกด) */}
         <aside 
           ref={sidebarRef}
-          onPointerDown={handleSidebarDragStart}
-          style={{ width: isSidebarExpanded ? '256px' : '80px', touchAction: 'pan-y' }}
-          className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} transition-[width] duration-250 ease-out ${theme.glassPanel} border-r border-slate-200/50 z-[52]`}
+          onMouseDown={handleSidebarMouseDown}
+          onTouchStart={handleSidebarTouchStart}
+          style={{ 
+            width: isSidebarExpanded ? '256px' : '80px',
+            '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
+            '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
+            transition: isDraggingSidebarRef.current ? 'none' : 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+          }}
+          className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} ${theme.glassPanel} border-r border-slate-200/50 z-[52]`}
         >
-          {/* แถบลากปรับขนาดด้านขวาของเมนู (Drag Handle) สำหรับเมาส์และทัชสกรีน */}
+          {/* ขอบลากปรับขนาดด้านขวา (Drag Handle Strip) คลีน ไร้ไฮไลท์สีฟ้าตามที่ผู้ใช้ต้องการ */}
           <div 
-            onPointerDown={handleSidebarDragStart}
-            className="sidebar-drag-handle hidden md:flex absolute top-0 right-0 w-3.5 h-full cursor-col-resize z-[70] items-center justify-center group/handle touch-none select-none -mr-1.5"
-            title="ลากเพื่อย่อ/ขยายเมนู (Drag to resize)"
-          >
-            <div className="w-1 h-8 rounded-full bg-slate-300 group-hover/handle:bg-sky-400 group-hover/handle:h-12 transition-all opacity-0 group-hover/handle:opacity-100" />
-          </div>
+            className="absolute top-0 right-0 w-3 h-full cursor-col-resize z-[70] hidden md:block" 
+            title="คลิกลากเพื่อย่อ/ขยายเมนู"
+          />
 
-          {/* Header & Logo (คลิกเพื่อย่อ/ขยาย หรือ ลากเพื่อย่อ/ขยายได้ทันที) */}
+          {/* Header & Logo (คลิกเพื่อย่อ/ขยาย หรือ ปัดซ้ายขวาได้ คลีน ไร้ลูกศร) */}
           <div 
             onClick={() => {
-              if (sidebarHasDraggedRef.current) return;
-              setIsSidebarExpanded(prev => !prev);
+              if (isDraggingSidebarRef.current) return;
+              setIsSidebarExpanded(prev => {
+                const next = !prev;
+                if (sidebarRef.current) {
+                  sidebarRef.current.classList.remove('is-dragging-sidebar');
+                  sidebarRef.current.style.transition = 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)';
+                  sidebarRef.current.style.width = next ? '256px' : '80px';
+                  sidebarRef.current.style.setProperty('--sidebar-text-opacity', next ? '1' : '0');
+                  sidebarRef.current.style.setProperty('--sidebar-text-x', next ? '0px' : '-8px');
+                }
+                return next;
+              });
             }}
-            className="flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0 cursor-pointer hover:bg-slate-50/70 transition-colors group select-none touch-none"
-            title={isSidebarExpanded ? "คลิกหรือลากเพื่อย่อเมนู" : "คลิกหรือลากเพื่อขยายเมนู"}
+            className="flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0 cursor-pointer hover:bg-slate-50/70 transition-colors group select-none"
+            title={isSidebarExpanded ? "คลิกเพื่อย่อเมนู" : "คลิกเพื่อขยายเมนู"}
           >
             <div className="w-[80px] shrink-0 flex items-center justify-center">
               <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30 group-hover:scale-105 transition-transform">
@@ -4111,17 +3854,27 @@ export default function App() {
               </div>
             </div>
             <div 
-              className={`sidebar-label-fade whitespace-nowrap min-w-[150px] transition-all duration-200 ${isSidebarExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}
+              className="sidebar-text-label flex-1 flex flex-col justify-center pr-4 whitespace-nowrap min-w-0 pointer-events-none will-change-transform"
+              style={{
+                opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
+                transform: 'translate3d(var(--sidebar-text-x, ' + (isSidebarExpanded ? '0px' : '-8px') + '), 0, 0)',
+                transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1), transform 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+              }}
             >
-              <h2 className="font-bold text-slate-800 leading-tight kanit-text">Clinic<span className="text-sky-500">Hub</span></h2>
-              <p className="text-xs text-slate-400 kanit-text">Management System</p>
+              <h2 className="font-bold text-slate-800 leading-tight kanit-text truncate">Clinic<span className="text-sky-500">Hub</span></h2>
+              <p className="text-xs text-slate-400 kanit-text truncate">Management System</p>
             </div>
           </div>
 
           <div className={`flex flex-col h-full ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'}`}>
-            <div className="px-4 py-4 relative z-[60] min-h-[72px] flex items-center justify-center shrink-0">
+            <div className="px-4 py-4 relative z-[60] min-h-[72px] flex items-center shrink-0 overflow-hidden">
               <div 
-                className={`sidebar-label-fade w-full absolute px-4 transition-all duration-200 ${isSidebarExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                className="sidebar-text-label w-full absolute left-0 px-4 will-change-transform"
+                style={{
+                  opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
+                  pointerEvents: isSidebarExpanded ? 'auto' : 'none',
+                  transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                }}
               >
                 <CustomSelect
                     value={currentBranch}
@@ -4131,8 +3884,23 @@ export default function App() {
                 />            
               </div>
               <div 
-                onClick={() => setIsSidebarExpanded(true)}
-                className={`sidebar-collapsed-branch absolute transition-all duration-200 ${!isSidebarExpanded ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                onClick={() => {
+                  if (isDraggingSidebarRef.current) return;
+                  setIsSidebarExpanded(true);
+                  if (sidebarRef.current) {
+                    sidebarRef.current.classList.remove('is-dragging-sidebar');
+                    sidebarRef.current.style.transition = 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)';
+                    sidebarRef.current.style.width = '256px';
+                    sidebarRef.current.style.setProperty('--sidebar-text-opacity', '1');
+                    sidebarRef.current.style.setProperty('--sidebar-text-x', '0px');
+                  }
+                }}
+                className="sidebar-compact-icon w-[80px] absolute left-0 flex items-center justify-center will-change-transform"
+                style={{
+                  opacity: 'calc(1 - var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + '))',
+                  pointerEvents: !isSidebarExpanded ? 'auto' : 'none',
+                  transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                }}
               >
                 <div title="เลือกสาขา (คลิกเพื่อขยาย)" className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 border border-slate-100 hover:bg-sky-50 hover:text-sky-600 transition-colors cursor-pointer">
                   <Building2 size={20} />
@@ -4140,31 +3908,43 @@ export default function App() {
               </div>
             </div>
 
-            <nav className="flex-1 px-3.5 py-2 flex flex-col overflow-y-auto overflow-x-hidden relative gap-1 custom-scrollbar" style={{ touchAction: 'pan-y' }}>
-              {filteredNavItems.map((item) => (
-                <button 
-                  key={item.id} 
-                  onClick={() => {
-                    if (sidebarHasDraggedRef.current) return;
-                    handleTabClick(item.id);
-                  }} 
-                  title={!isSidebarExpanded ? item.label : undefined}
-                  className={`w-full flex items-center h-11 rounded-2xl transition-colors duration-150 kanit-text overflow-hidden shrink-0 ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-medium' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
-                  style={{ touchAction: 'pan-y' }}
-                >
-                  <div className="w-[52px] shrink-0 h-11 flex items-center justify-center pointer-events-none">
-                    <item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />
-                  </div>
-                  <span 
-                    className={`sidebar-label-fade whitespace-nowrap overflow-hidden flex items-center text-left transition-all duration-200 pointer-events-none ${isSidebarExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`}
+            <nav className="flex-1 px-4 py-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative">
+              {filteredNavItems.map((item) => {
+                const isActive = currentTab === item.id;
+                return (
+                  <button 
+                    key={item.id} 
+                    type="button"
+                    onClick={() => {
+                      if (isDraggingSidebarRef.current) return;
+                      handleTabClick(item.id);
+                    }} 
+                    title={!isSidebarExpanded ? item.label : undefined}
+                    className={`w-full h-11 flex items-center rounded-2xl transition-colors duration-150 kanit-text overflow-hidden shrink-0 relative ${
+                      isActive 
+                        ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-normal' 
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-normal'
+                    }`}
                   >
-                    {item.label}
-                  </span>
-                </button>
-              ))}
+                    <div className="w-12 h-11 shrink-0 flex items-center justify-center pointer-events-none">
+                      <item.icon size={20} className={isActive ? 'opacity-100' : 'opacity-70'} />
+                    </div>
+                    <span 
+                      className="sidebar-text-label whitespace-nowrap overflow-hidden text-left font-normal text-sm pl-1 pointer-events-none will-change-transform"
+                      style={{
+                        opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
+                        transform: 'translate3d(var(--sidebar-text-x, ' + (isSidebarExpanded ? '0px' : '-8px') + '), 0, 0)',
+                        transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1), transform 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
             </nav>
 
-            <div id="profile-container-pc" className="p-4 border-t border-slate-100/50 overflow-visible min-h-[80px] flex items-center justify-center relative shrink-0">
+            <div id="profile-container-pc" className="px-4 py-3 border-t border-slate-100/50 min-h-[76px] flex items-center relative shrink-0 overflow-visible">
               {/* Dropdown Menu (Expanded) */}
               {isProfileDropdownOpen && isSidebarExpanded && (
                 <div className="absolute bottom-20 left-4 right-4 bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1">
@@ -4274,13 +4054,12 @@ export default function App() {
               {/* Single Unified Profile Bar */}
               <div 
                 onClick={() => {
-                  if (sidebarHasDraggedRef.current) return;
+                  if (isDraggingSidebarRef.current) return;
                   setIsProfileDropdownOpen(prev => !prev);
                 }}
-                className="w-full flex items-center cursor-pointer hover:bg-slate-50/80 py-2 rounded-2xl transition-colors select-none"
-                style={{ touchAction: 'pan-y' }}
+                className="w-full h-11 flex items-center cursor-pointer hover:bg-slate-50/80 rounded-2xl transition-colors select-none overflow-hidden"
               >
-                <div className="w-[52px] shrink-0 flex items-center justify-center">
+                <div className="w-12 shrink-0 flex items-center justify-center">
                   {currentUser.photo ? (
                     <img src={currentUser.photo} className="w-9 h-9 rounded-full object-cover border border-slate-200 ring-2 ring-white shadow-sm" alt={currentUser.name} />
                   ) : (
@@ -4290,10 +4069,15 @@ export default function App() {
                   )}
                 </div>
                 <div 
-                  className={`sidebar-label-fade text-left flex-1 min-w-0 pr-2 transition-all duration-200 ${isSidebarExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 pointer-events-none'}`}
+                  className="sidebar-text-label text-left flex-1 min-w-0 pr-2 pl-1 pointer-events-none will-change-transform"
+                  style={{
+                    opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
+                    transform: 'translate3d(var(--sidebar-text-x, ' + (isSidebarExpanded ? '0px' : '-8px') + '), 0, 0)',
+                    transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1), transform 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                  }}
                 >
-                  <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
-                  <p className="text-[11px] font-medium text-emerald-600 kanit-text mt-0.5 truncate">{currentUser.position || roleLabels[currentUser.role] || currentUser.category || 'ออนไลน์'}</p>
+                  <div className="font-normal text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
+                  <p className="text-[11px] font-light text-emerald-600 kanit-text mt-0.5 truncate">{currentUser.position || roleLabels[currentUser.role] || currentUser.category || 'ออนไลน์'}</p>
                 </div>
               </div>
             </div>
@@ -4721,52 +4505,42 @@ export default function App() {
         {isMobile && hasMoreNavItems && (
           <div 
             ref={navBackdropRef}
-            className="fixed inset-0 bg-slate-900/40 z-[42] will-change-[opacity]"
+            className="fixed inset-0 bg-slate-900/40 z-[42] will-change-[opacity] opacity-0 pointer-events-none"
             style={{
-              opacity: isMobileNavExpanded ? 1 : 0,
-              pointerEvents: isMobileNavExpanded ? 'auto' : 'none',
               transition: 'opacity 300ms ease-out'
             }}
-            onClick={() => {
-              if (navCollapseTimerRef.current) {
-                clearTimeout(navCollapseTimerRef.current);
-                navCollapseTimerRef.current = null;
-              }
-              setIsMobileNavExpanded(false);
-            }}
+            onClick={collapseMobileNav}
           />
         )}
 
         {/* ปรับแก้ Navbar มือถือ: Compact & Full เหมือนแบบเดิม พร้อม Expandable Quick Panel ดึงขึ้นเพื่อเลือกหน้าอื่น */}
         <div 
           ref={setNavSheetRef}
-          className="md:hidden fixed bottom-0 left-0 w-full bg-white border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[45] will-change-transform transition-transform duration-300 ease-out select-none touch-none"
+          className="md:hidden fixed bottom-0 left-0 w-full bg-white border border-b-0 border-slate-200/80 rounded-t-[1.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] pt-1.5 pb-[calc(max(0.875rem,env(safe-area-inset-bottom)))] px-2 z-[50] will-change-transform select-none touch-none"
           style={{
             transform: isDraggingRef.current
               ? undefined
-              : (isMobile && !showMobileBars && !isMobileNavExpanded)
+              : (isMobile && !showMobileBars && !isExpandedRef.current)
                 ? 'translate3d(0, 115%, 0)'
-                : hasMoreNavItems && !isMobileNavExpanded
-                  ? `translate3d(0, ${extraHeight}px, 0)`
-                  : 'translate3d(0, 0px, 0)'
+                : hasMoreNavItems && !isExpandedRef.current
+                  ? `translate3d(0, ${extraHeightRef.current}px, 0)`
+                  : 'translate3d(0, 0px, 0)',
+            transition: 'transform 320ms cubic-bezier(0.32, 0.72, 0, 1)'
           }}
         >
           {/* Drag Handle Indicator (ขีดเส้นเรียบกะทัดรัด พร้อมระยะหายใจไม่ให้เบียดกับไอคอน) */}
           {hasMoreNavItems && (
             <div 
+              data-drag-handle="true"
               onClick={(e) => {
                 e.stopPropagation();
-                if (navCollapseTimerRef.current) {
-                  clearTimeout(navCollapseTimerRef.current);
-                  navCollapseTimerRef.current = null;
-                }
-                setIsMobileNavExpanded(prev => !prev);
+                toggleMobileNav();
               }}
               className="w-full flex items-center justify-center pt-0.5 pb-1.5 cursor-grab active:cursor-grabbing select-none group touch-none"
-              aria-label={isMobileNavExpanded ? "พับเก็บเมนู" : "เปิดดูเมนูเพิ่มเติม"}
+              aria-label="เปิดดูเมนูเพิ่มเติม"
               role="button"
             >
-              <div className="w-9 h-1 rounded-full bg-slate-300/80 transition-transform duration-200 group-hover:scale-105" />
+              <div className="w-9 h-1 rounded-full bg-slate-300/80 transition-transform duration-200 group-hover:scale-105 pointer-events-none" />
             </div>
           )}
 
@@ -4785,22 +4559,25 @@ export default function App() {
                 <div className="w-12 h-12 bg-gradient-to-tr from-sky-400 to-sky-600 rounded-full shadow-lg shadow-sky-500/40" />
               </div>
 
-              {/* Nav Buttons: ปุ่มรับการกดคลิก ไอคอนขนาด 24px ชัดเจนเต็มตา */}
+              {/* Nav Buttons: ปุ่มรับการกดคลิก ไอคอนขนาด 24px ชัดเจนเต็มตา แตะครั้งเดียวสลับหน้าทันที 100% */}
               {mobileNavItems.map((item) => {
                   const isActive = effectiveNavTab === item.id;
                   return (
                       <button 
                           key={item.id} 
+                          type="button"
                           data-tab-id={item.id}
-                          onClick={(e) => handleNavSelect(item.id, e.currentTarget)} 
-                          className={`relative z-10 flex-1 flex items-center justify-center transition-colors duration-500 ${isActive ? 'text-white' : 'text-slate-400 hover:text-sky-500'}`}
+                          onClick={(e) => handleButtonClick(item.id, e)} 
+                          onTouchStart={handleButtonTouchStart}
+                          onTouchEnd={(e) => handleButtonTouchEnd(item.id, e)}
+                          className={`relative z-10 flex-1 flex items-center justify-center transition-colors duration-300 touch-manipulation cursor-pointer select-none active:opacity-75 ${isActive ? 'text-white' : 'text-slate-400'}`}
                           title={item.label}
                           aria-label={item.label}
                       >
                           <item.icon 
                               size={24} 
                               strokeWidth={isActive ? 2.5 : 2} 
-                              className={`transition-transform duration-500 ease-in-out ${isActive ? 'scale-110' : 'scale-100'}`}
+                              className={`transition-transform duration-300 ease-in-out pointer-events-none ${isActive ? 'scale-110' : 'scale-100'}`}
                           />
                       </button>
                   );
@@ -4811,11 +4588,7 @@ export default function App() {
           {hasMoreNavItems && (
             <div 
               ref={extraContentRef}
-              className="w-full max-w-sm mx-auto pt-2 pb-[calc(max(1.25rem,env(safe-area-inset-bottom)))] transition-opacity duration-300"
-              style={{
-                opacity: isMobileNavExpanded ? 1 : 0,
-                pointerEvents: isMobileNavExpanded ? 'auto' : 'none'
-              }}
+              className="w-full max-w-sm mx-auto pt-2 pb-[calc(max(1.25rem,env(safe-area-inset-bottom)))] transition-opacity duration-300 opacity-0 pointer-events-auto"
             >
               <div id="extra-mobile-nav-grid" ref={extraGridRef} className="grid grid-cols-4 gap-x-2 gap-y-2 px-1 relative">
                 {/* Sliding Liquid Bubble Indicator สำหรับเมนูแถวเพิ่มเติม (ขนาด w-12 h-12 เท่ากับเมนูหลัก 100%) */}
@@ -4835,22 +4608,24 @@ export default function App() {
                       type="button"
                       data-tab-id={item.id}
                       data-active={isActive ? "true" : "false"}
-                      onClick={(e) => handleNavSelect(item.id, e.currentTarget)}
-                      className="flex flex-col items-center justify-center py-1 px-0.5 rounded-xl active:scale-95 transition-all text-center group relative z-10"
+                      onClick={(e) => handleButtonClick(item.id, e)}
+                      onTouchStart={handleButtonTouchStart}
+                      onTouchEnd={(e) => handleButtonTouchEnd(item.id, e)}
+                      className="flex flex-col items-center justify-center py-1 px-0.5 rounded-xl active:bg-sky-50/70 transition-colors duration-200 text-center relative z-10 touch-manipulation cursor-pointer select-none"
                       aria-label={item.label}
                       title={item.label}
                     >
-                      <div className="extra-nav-icon w-12 h-12 flex items-center justify-center transition-colors duration-300">
+                      <div className="extra-nav-icon w-12 h-12 flex items-center justify-center transition-colors duration-300 pointer-events-none">
                         <item.icon 
                           size={24} 
                           strokeWidth={isActive ? 2.5 : 2} 
-                          className={`transition-all duration-300 ease-in-out ${
-                            isActive ? 'scale-110 text-white' : 'scale-100 text-slate-400 group-hover:text-sky-500'
+                          className={`transition-transform duration-300 ease-in-out ${
+                            isActive ? 'scale-110 text-white' : 'scale-100 text-slate-500'
                           }`}
                         />
                       </div>
-                      <span className={`text-[11px] font-light kanit-text leading-tight mt-1 text-center truncate max-w-[76px] line-clamp-1 px-0.5 transition-colors duration-300 ${
-                        isActive ? 'text-sky-600 font-medium' : 'text-slate-500 group-hover:text-slate-700'
+                      <span className={`text-[11px] font-light kanit-text leading-tight mt-1 text-center truncate max-w-[76px] line-clamp-1 px-0.5 transition-colors duration-300 pointer-events-none ${
+                        isActive ? 'text-sky-600 font-medium' : 'text-slate-600'
                       }`}>
                         {item.label}
                       </span>
