@@ -880,8 +880,18 @@ export default function App() {
 
   const sidebarRef = React.useRef(null);
   const isDraggingSidebarRef = React.useRef(false);
+  const sidebarHasDraggedRef = React.useRef(false);
+  const sidebarStartWidthRef = React.useRef(80);
+  const sidebarCurrentWidthRef = React.useRef(80);
+  const sidebarStartTimeRef = React.useRef(0);
+  const sidebarDragStartXRef = React.useRef(0);
+  const sidebarDragStartYRef = React.useRef(0);
+  const sidebarRafIdRef = React.useRef(null);
 
   const expandSidebarSmoothly = useCallback(() => {
+    if (document.body) {
+      document.body.classList.add('is-sidebar-animating');
+    }
     if (sidebarRef.current) {
       sidebarRef.current.classList.remove('is-dragging-sidebar');
       sidebarRef.current.style.transition = 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)';
@@ -889,13 +899,22 @@ export default function App() {
       sidebarRef.current.style.setProperty('--sidebar-text-opacity', '1');
       sidebarRef.current.style.setProperty('--sidebar-text-x', '0px');
     }
+    setIsSidebarExpanded(true);
     setTimeout(() => {
-      setIsSidebarExpanded(true);
+      if (document.body) {
+        document.body.classList.remove('is-sidebar-animating');
+      }
+      if (sidebarRef.current) {
+        sidebarRef.current.style.transition = '';
+      }
       isDraggingSidebarRef.current = false;
     }, 270);
   }, []);
 
   const collapseSidebarSmoothly = useCallback(() => {
+    if (document.body) {
+      document.body.classList.add('is-sidebar-animating');
+    }
     if (sidebarRef.current) {
       sidebarRef.current.classList.remove('is-dragging-sidebar');
       sidebarRef.current.style.transition = 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)';
@@ -903,139 +922,152 @@ export default function App() {
       sidebarRef.current.style.setProperty('--sidebar-text-opacity', '0');
       sidebarRef.current.style.setProperty('--sidebar-text-x', '-8px');
     }
+    setIsSidebarExpanded(false);
     setTimeout(() => {
-      setIsSidebarExpanded(false);
+      if (document.body) {
+        document.body.classList.remove('is-sidebar-animating');
+      }
+      if (sidebarRef.current) {
+        sidebarRef.current.style.transition = '';
+      }
       isDraggingSidebarRef.current = false;
     }, 270);
   }, []);
 
-  // --- ระบบ Dragging สำหรับ Desktop (Mouse) ---
-  const handleSidebarMouseDown = useCallback((e) => {
-    if (e.button !== 0) return;
+  // --- ระบบ Gesture / Dragging สำหรับ PC & Tablet (รองรับทั้ง Mouse และ Touch ลากตามนิ้วแบบ Real-time 60-120 FPS) ---
+  const handleSidebarDragStart = useCallback((e) => {
     if (e.target.closest('input, textarea, select, .no-drag')) return;
+    if (e.button !== undefined && e.button !== 0) return;
 
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startTime = Date.now();
-    let isDragging = false;
+    const isTouch = !!e.touches;
+    if (isTouch && e.touches.length !== 1) return;
 
-    const onMouseMove = (me) => {
-      const deltaX = me.clientX - startX;
-      const deltaY = me.clientY - startY;
+    const startX = isTouch ? e.touches[0].clientX : e.clientX;
+    const startY = isTouch ? e.touches[0].clientY : e.clientY;
 
-      if (!isDragging) {
-        if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-        if (Math.abs(deltaX) < 10) return;
-        isDragging = true;
-        isDraggingSidebarRef.current = true;
+    sidebarDragStartXRef.current = startX;
+    sidebarDragStartYRef.current = startY;
+    sidebarStartTimeRef.current = Date.now();
+    const currentW = sidebarRef.current ? sidebarRef.current.getBoundingClientRect().width : (isSidebarExpanded ? 256 : 80);
+    sidebarStartWidthRef.current = currentW;
+    sidebarCurrentWidthRef.current = currentW;
+    sidebarHasDraggedRef.current = false;
+    isDraggingSidebarRef.current = false;
+
+    let isDetermined = false;
+
+    const onMove = (moveEv) => {
+      const curTouch = moveEv.touches ? moveEv.touches[0] : null;
+      const curX = curTouch ? curTouch.clientX : moveEv.clientX;
+      const curY = curTouch ? curTouch.clientY : moveEv.clientY;
+      const deltaX = curX - startX;
+      const deltaY = curY - startY;
+
+      if (!isDraggingSidebarRef.current) {
+        if (!isDetermined) {
+          // หากเลื่อนแนวตั้งมากกว่าแนวนอน -> ปล่อยให้ Scroll ในรายการเมนูทำงานตามธรรมชาติ
+          if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 8) {
+            cleanup();
+            return;
+          }
+          // หากเลื่อนแนวนอนเกิน 8px -> เข้าสู่โหมดลากย่อ/ขยายแท็บ
+          if (Math.abs(deltaX) > 8) {
+            isDetermined = true;
+            isDraggingSidebarRef.current = true;
+            sidebarHasDraggedRef.current = true;
+            if (document.body) {
+              document.body.classList.add('is-dragging-sidebar');
+            }
+            if (sidebarRef.current) {
+              sidebarRef.current.classList.add('is-dragging-sidebar');
+              sidebarRef.current.style.transition = 'none';
+            }
+          }
+        }
+      }
+
+      if (isDraggingSidebarRef.current) {
+        if (moveEv.cancelable) moveEv.preventDefault();
+
+        let targetWidth = sidebarStartWidthRef.current + deltaX;
+        targetWidth = Math.max(80, Math.min(256, targetWidth));
+        sidebarCurrentWidthRef.current = targetWidth;
+
+        const progress = Math.max(0, Math.min(1, (targetWidth - 80) / (256 - 80)));
+
+        if (sidebarRafIdRef.current) cancelAnimationFrame(sidebarRafIdRef.current);
+        sidebarRafIdRef.current = requestAnimationFrame(() => {
+          if (sidebarRef.current) {
+            sidebarRef.current.style.width = `${targetWidth}px`;
+            sidebarRef.current.style.setProperty('--sidebar-text-opacity', progress.toFixed(3));
+            sidebarRef.current.style.setProperty('--sidebar-text-x', `${(1 - progress) * -8}px`);
+          }
+        });
       }
     };
 
-    const onMouseUp = (me) => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+      if (sidebarRafIdRef.current) cancelAnimationFrame(sidebarRafIdRef.current);
+    };
 
-      if (!isDragging) return;
+    const onEnd = (endEv) => {
+      cleanup();
 
-      const totalDeltaX = me.clientX - startX;
-      const elapsed = Math.max(1, Date.now() - startTime);
-      const velocityX = totalDeltaX / elapsed;
-
-      if (!isSidebarExpanded && (totalDeltaX > 25 || velocityX > 0.3)) {
-        expandSidebarSmoothly();
-      } else if (isSidebarExpanded && (totalDeltaX < -25 || velocityX < -0.3)) {
-        collapseSidebarSmoothly();
-      } else {
-        if (isSidebarExpanded) expandSidebarSmoothly();
-        else collapseSidebarSmoothly();
+      if (document.body) {
+        document.body.classList.remove('is-dragging-sidebar');
+      }
+      if (sidebarRef.current) {
+        sidebarRef.current.classList.remove('is-dragging-sidebar');
       }
 
-      setTimeout(() => {
+      if (!sidebarHasDraggedRef.current) {
         isDraggingSidebarRef.current = false;
+        return;
+      }
+
+      // ดักระงับคลิกสังเคราะห์ที่เกิดหลังการลากปล่อย เพื่อไม่ให้เปลี่ยนแท็บโดยไม่ได้ตั้งใจ
+      const blockClick = (clickEv) => {
+        clickEv.preventDefault();
+        clickEv.stopPropagation();
+        clickEv.stopImmediatePropagation();
+      };
+      window.addEventListener('click', blockClick, { capture: true, once: true });
+      setTimeout(() => {
+        window.removeEventListener('click', blockClick, { capture: true });
+        sidebarHasDraggedRef.current = false;
       }, 100);
-    };
 
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }, [isSidebarExpanded, expandSidebarSmoothly, collapseSidebarSmoothly]);
+      const endTouch = endEv.changedTouches ? endEv.changedTouches[0] : null;
+      const endX = endTouch ? endTouch.clientX : (endEv.clientX !== undefined ? endEv.clientX : startX);
+      const totalDeltaX = endX - startX;
+      const elapsed = Math.max(1, Date.now() - sidebarStartTimeRef.current);
+      const velocityX = totalDeltaX / elapsed;
+      const curW = sidebarCurrentWidthRef.current;
 
-  // --- ระบบ Gesture สำหรับ Tablet / Touch: จับได้ทั้งแท็บ ปัดซ้าย/ขวา กาง-หุบลื่นไหล 60-120 FPS ---
-  const handleSidebarTouchStart = useCallback((e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    // จับได้ทั้งแท็บเหมือนเดิม! ไม่บล็อกปุ่ม
-    if (e.target.closest('input, textarea, select, .no-drag')) return;
-
-    const startX = e.touches[0].clientX;
-    const startY = e.touches[0].clientY;
-    const startTime = Date.now();
-    let isGestureDetermined = false;
-    let isHorizontalSwipe = false;
-
-    const onTouchMove = (te) => {
-      if (!te.touches || te.touches.length !== 1) return;
-      const currentX = te.touches[0].clientX;
-      const currentY = te.touches[0].clientY;
-      const deltaX = currentX - startX;
-      const deltaY = currentY - startY;
-
-      if (!isGestureDetermined) {
-        // หากผู้ใช้เลื่อนแนวตั้งมากกว่าแนวนอน -> ปล่อยให้เลื่อนดูเมนูตามปกติ (Vertical Scroll)
-        if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 8) {
-          isGestureDetermined = true;
-          isHorizontalSwipe = false;
-          window.removeEventListener('touchmove', onTouchMove);
-          return;
-        }
-        // หากผู้ใช้ลากหรือปัดแนวนอนเกิน 12px -> เข้าสู่โหมดปัดเมนู (Horizontal Swipe)
-        if (Math.abs(deltaX) > 12) {
-          isGestureDetermined = true;
-          isHorizontalSwipe = true;
-          isDraggingSidebarRef.current = true;
-        }
+      let shouldExpand;
+      if (isSidebarExpanded) {
+        shouldExpand = !(curW < 195 || (totalDeltaX < -20 && velocityX < -0.22));
+      } else {
+        shouldExpand = (curW > 140 || (totalDeltaX > 20 && velocityX > 0.22));
       }
 
-      if (isHorizontalSwipe) {
-        if (te.cancelable) te.preventDefault();
-
-        // ปัดไปทางขวาเพื่อกางเมนู (เมื่อเมนูหุบอยู่)
-        if (!isSidebarExpanded && deltaX > 18) {
-          window.removeEventListener('touchmove', onTouchMove);
-          expandSidebarSmoothly();
-        }
-        // ปัดไปทางซ้ายเพื่อหุบเมนู (เมื่อเมนูกางอยู่)
-        else if (isSidebarExpanded && deltaX < -18) {
-          window.removeEventListener('touchmove', onTouchMove);
-          collapseSidebarSmoothly();
-        }
+      if (shouldExpand) {
+        expandSidebarSmoothly();
+      } else {
+        collapseSidebarSmoothly();
       }
     };
 
-    const onTouchEnd = (te) => {
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.removeEventListener('touchcancel', onTouchEnd);
-
-      if (isHorizontalSwipe) {
-        const endX = te.changedTouches && te.changedTouches[0] ? te.changedTouches[0].clientX : startX;
-        const totalDeltaX = endX - startX;
-        const elapsed = Math.max(1, Date.now() - startTime);
-        const velocityX = totalDeltaX / elapsed;
-
-        if (!isSidebarExpanded && (totalDeltaX > 20 || velocityX > 0.25)) {
-          expandSidebarSmoothly();
-        } else if (isSidebarExpanded && (totalDeltaX < -20 || velocityX < -0.25)) {
-          collapseSidebarSmoothly();
-        }
-
-        setTimeout(() => {
-          isDraggingSidebarRef.current = false;
-        }, 120);
-      }
-    };
-
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', onTouchEnd);
-    window.addEventListener('touchcancel', onTouchEnd);
+    window.addEventListener('mousemove', onMove, { passive: false });
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
   }, [isSidebarExpanded, expandSidebarSmoothly, collapseSidebarSmoothly]);
 
   // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ ---
@@ -3871,31 +3903,25 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Backdrop สำหรับปิดแถบเมนูเมื่อแตะข้างนอก (PC & Tablet) */}
-        {isSidebarExpanded && (
-          <div 
-            className="hidden md:block fixed inset-0 z-[55] bg-slate-900/5 transition-opacity duration-200"
-            onClick={() => collapseSidebarSmoothly()}
-          />
-        )}
-
-        {/* Desktop / Tablet Sidebar (ทำงานแบบ Overlay Floating Drawer: กว้าง 80px ใน Layout ถาวรเพื่อตัด Reflow 100% กางทับลอย 256px แบบ 60-120 FPS) */}
-        <div className="hidden md:block w-[80px] shrink-0 h-full relative z-[56]">
-          <aside 
-            ref={sidebarRef}
-            onMouseDown={handleSidebarMouseDown}
-            onTouchStart={handleSidebarTouchStart}
-            style={{ 
-              width: isSidebarExpanded ? '256px' : '80px',
-              '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
-              '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
-              transition: 'width 260ms cubic-bezier(0.32, 0.72, 0, 1)'
-            }}
-            className={`absolute top-0 left-0 bottom-0 flex flex-col select-none ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 ${isSidebarExpanded ? 'shadow-2xl shadow-slate-900/10' : 'shadow-none'} z-[60]`}
-          >
+        {/* Desktop / Tablet Sidebar (ทำงานแบบ In-Flow Push: ขยาย/ย่อแบบเลื่อนตามกัน พร้อม GPU Layer Containment 60-120 FPS) */}
+        <aside 
+          ref={sidebarRef}
+          onMouseDown={handleSidebarDragStart}
+          onTouchStart={handleSidebarDragStart}
+          style={{ 
+            width: isSidebarExpanded ? '256px' : '80px',
+            '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
+            '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
+            willChange: 'width',
+            touchAction: 'pan-y'
+          }}
+          className={`hidden md:flex flex-col h-full relative select-none shrink-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'} bg-white border-r border-slate-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] z-[52]`}
+        >
           {/* ขอบลากปรับขนาดด้านขวา (Drag Handle Strip) คลีน ไร้ไฮไลท์สีฟ้าตามที่ผู้ใช้ต้องการ */}
           <div 
-            className="absolute top-0 right-0 w-3 h-full cursor-col-resize z-[70] hidden md:block" 
+            onMouseDown={handleSidebarDragStart}
+            onTouchStart={handleSidebarDragStart}
+            className="sidebar-drag-handle hidden md:flex absolute top-0 right-0 w-3 h-full cursor-col-resize z-[70] touch-none select-none" 
             title="คลิกลากเพื่อย่อ/ขยายเมนู"
           />
 
@@ -4140,7 +4166,6 @@ export default function App() {
             </div>
           </div>
         </aside>
-        </div>
         
         {/* --- Mobile Top Header --- */}
         <header 
