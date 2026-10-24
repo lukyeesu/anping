@@ -27,6 +27,7 @@ id dotPillStatus
 id ivDialogPhoto
 id layoutError
 id progressBar
+id swipeRefreshLayout
 id tvDialogCid
 id tvDialogDates
 id tvDialogFullDetails

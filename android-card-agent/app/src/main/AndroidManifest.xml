@@ -53,6 +53,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- ดักจับการเสียบ USB เข้าสู่ MainActivity โดยตรง เพื่อให้ Android จำสิทธิ์ "เปิดเสมอ/Always allow" ถาวร -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+
             <!-- ดักจับ Deep Link ปลุกแอปจากหน้าเว็บคลินิก (anpingagent://open) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -63,23 +71,6 @@
                     android:scheme="anpingagent" />
             </intent-filter>
 
-        </activity>
-
-        <!-- กิจกรรมโปร่งใสดักจับการเสียบ USB เพื่อให้ระบบ Android แสดงตัวเลือก "เปิดเสมอ/จำค่าเริ่มต้น" โดยไม่ขัดจังหวะหน้าจอเบราว์เซอร์ -->
-        <activity
-            android:name=".UsbAttachActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:launchMode="singleInstance">
-            <intent-filter>
-                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
-            </intent-filter>
-            <meta-data
-                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-                android:resource="@xml/device_filter" />
         </activity>
 
         <!-- Service รัน Localhost Server 8181 เบื้องหลัง -->

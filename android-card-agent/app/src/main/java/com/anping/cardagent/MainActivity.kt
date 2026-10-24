@@ -182,6 +182,9 @@ class MainActivity : AppCompatActivity() {
 
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
 
+        // ตรวจจับอุปกรณ์ USB กรณีที่เปิดแอปขึ้นมาจาก Intent การเสียบสายโดยตรง
+        handleUsbDeviceIntent(intent)
+
         // ขอสิทธิ์กล้องสำหรับระบบสแกนเอกสาร / QR / บาร์โค้ด
         checkAndRequestCameraPermission()
 
@@ -256,9 +259,20 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         val webView = binding.webView
 
+        // ตั้งค่า Pull-to-Refresh ผ่าน SwipeRefreshLayout
+        binding.swipeRefreshLayout.setColorSchemeColors(
+            ContextCompat.getColor(this, android.R.color.holo_blue_dark),
+            ContextCompat.getColor(this, android.R.color.holo_green_dark)
+        )
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            binding.webView.reload()
+        }
+        binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
+            binding.webView.scrollY > 0
+        }
+
         // ปิด offscreen layer type เพื่อให้ Chromium compositing ทำงานตรงกับ Hardware Surface (ลื่นไหล 60FPS)
         webView.setLayerType(View.LAYER_TYPE_NONE, null)
-        webView.overScrollMode = View.OVER_SCROLL_NEVER
         webView.isVerticalScrollBarEnabled = false
         webView.isHorizontalScrollBarEnabled = false
         webView.isNestedScrollingEnabled = true
@@ -279,7 +293,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.5.2"
+            userAgentString = "$userAgentString AnpingClinicApp/1.5.3"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -299,9 +313,17 @@ class MainActivity : AppCompatActivity() {
 
             @JavascriptInterface
             fun readCardNow() {
-                runOnUiThread {
-                    cardService?.readCard(includePhoto = true)?.let { card ->
-                        notifyWebCardInserted(card)
+                // รันการอ่านบัตรบน Background Thread (Dispatchers.IO) ป้องกัน Main UI Thread ค้าง (แก้ปัญหา ANR แอปไม่ตอบสนอง 100%)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val card = cardService?.readCard(includePhoto = true)
+                        if (card != null) {
+                            withContext(Dispatchers.Main) {
+                                notifyWebCardInserted(card)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "readCardNow error: ${e.message}")
                     }
                 }
             }
@@ -396,6 +418,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 binding.progressBar.visibility = View.GONE
+                binding.swipeRefreshLayout.isRefreshing = false
             }
 
             override fun onReceivedError(
@@ -594,6 +617,30 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUsbDeviceIntent(intent)
+    }
+
+    private fun handleUsbDeviceIntent(intent: Intent?) {
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            }
+            device?.let {
+                if (usbManager?.hasPermission(it) == true) {
+                    cardService?.initDriver(it)
+                } else {
+                    requestUsbPermission(it)
+                }
+            }
+        }
     }
 
     private fun requestUsbPermission(device: UsbDevice) {

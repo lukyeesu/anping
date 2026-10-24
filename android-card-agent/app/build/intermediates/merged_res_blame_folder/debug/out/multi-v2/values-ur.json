@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.anping.cardagent.app-mergeDebugResources-29:/values-ur/values-ur.xml",
+            "outputFile": "com.anping.cardagent.app-mergeDebugResources-30:/values-ur/values-ur.xml",
             "map": [
                 {
                     "source": "C:\\Users\\lukye\\.gradle\\caches\\transforms-3\\a41e6a68a8051e59a1bea027c058f81a\\transformed\\appcompat-1.6.1\\res\\values-ur\\values-ur.xml",

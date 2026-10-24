@@ -380,7 +380,12 @@ class CardReaderService : Service() {
                 ccidDriver
             } ?: return null
 
-            val card = driver.readThaiCard(includePhoto)
+            val card = try {
+                driver.readThaiCard(includePhoto)
+            } catch (e: Exception) {
+                Log.e(TAG, "readThaiCard error: ${e.message}")
+                null
+            }
             if (card != null) {
                 latestCardData = card
                 lastReadTime = System.currentTimeMillis()

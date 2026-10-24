@@ -7,15 +7,23 @@
     android:layout_height="match_parent"
     android:background="#FFFFFF">
 
-    <!-- WebView สำหรับรันระบบอันผิงคลินิกแบบเต็มจอ (Full Screen Kiosk / App Mode) -->
-    <WebView
-        android:id="@+id/webView"
+    <!-- SwipeRefreshLayout สำหรับลากนิ้วลงเพื่อรีเฟรชหน้าเว็บ (Pull-to-Refresh) -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- WebView สำหรับรันระบบอันผิงคลินิกแบบเต็มจอ (Full Screen Kiosk / App Mode) -->
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <!-- แถบดาวน์โหลดโหลดหน้าเว็บแบบบางและทันสมัย (Top Loading Progress Bar) -->
     <ProgressBar

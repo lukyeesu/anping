@@ -11,6 +11,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
 import com.anping.cardagent.R;
@@ -40,6 +41,9 @@ public final class ActivityMainBinding implements ViewBinding {
   public final ProgressBar progressBar;
 
   @NonNull
+  public final SwipeRefreshLayout swipeRefreshLayout;
+
+  @NonNull
   public final TextView tvErrorMessage;
 
   @NonNull
@@ -51,13 +55,15 @@ public final class ActivityMainBinding implements ViewBinding {
   private ActivityMainBinding(@NonNull ConstraintLayout rootView, @NonNull MaterialButton btnRetry,
       @NonNull MaterialCardView cardReaderPill, @NonNull View dotPillStatus,
       @NonNull LinearLayout layoutError, @NonNull ProgressBar progressBar,
-      @NonNull TextView tvErrorMessage, @NonNull TextView tvPillText, @NonNull WebView webView) {
+      @NonNull SwipeRefreshLayout swipeRefreshLayout, @NonNull TextView tvErrorMessage,
+      @NonNull TextView tvPillText, @NonNull WebView webView) {
     this.rootView = rootView;
     this.btnRetry = btnRetry;
     this.cardReaderPill = cardReaderPill;
     this.dotPillStatus = dotPillStatus;
     this.layoutError = layoutError;
     this.progressBar = progressBar;
+    this.swipeRefreshLayout = swipeRefreshLayout;
     this.tvErrorMessage = tvErrorMessage;
     this.tvPillText = tvPillText;
     this.webView = webView;
@@ -120,6 +126,12 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.swipeRefreshLayout;
+      SwipeRefreshLayout swipeRefreshLayout = ViewBindings.findChildViewById(rootView, id);
+      if (swipeRefreshLayout == null) {
+        break missingId;
+      }
+
       id = R.id.tvErrorMessage;
       TextView tvErrorMessage = ViewBindings.findChildViewById(rootView, id);
       if (tvErrorMessage == null) {
@@ -139,7 +151,8 @@ public final class ActivityMainBinding implements ViewBinding {
       }
 
       return new ActivityMainBinding((ConstraintLayout) rootView, btnRetry, cardReaderPill,
-          dotPillStatus, layoutError, progressBar, tvErrorMessage, tvPillText, webView);
+          dotPillStatus, layoutError, progressBar, swipeRefreshLayout, tvErrorMessage, tvPillText,
+          webView);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
