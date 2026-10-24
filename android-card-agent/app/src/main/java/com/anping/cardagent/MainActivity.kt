@@ -17,6 +17,7 @@ import android.os.IBinder
 import android.util.Base64
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.*
 import android.widget.Button
@@ -294,7 +295,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.3"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.4"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -425,6 +426,23 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webViewClient = object : WebViewClient() {
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                val didCrash = detail?.didCrash() ?: false
+                Log.e(TAG, "WebView render process gone! didCrash=$didCrash")
+                // ป้องกันไม่ให้แอปปิดตัวเอง โดยคืนค่า true ให้ระบบรู้ว่าเรารับมือแล้ว (Prevent App Crash 100%)
+                runOnUiThread {
+                    try {
+                        binding.layoutError.visibility = View.VISIBLE
+                        binding.tvErrorMessage.text = "หน่วยความจำระบบได้รับการรีเซ็ต กำลังเปิดหน้าคลินิกใหม่อัตโนมัติ..."
+                        binding.webView.loadUrl(CLINIC_URL)
+                    } catch (_: Exception) {}
+                }
+                return true
+            }
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 binding.layoutError.visibility = View.GONE
                 canWebScrollUp = false

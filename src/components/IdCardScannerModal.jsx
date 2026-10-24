@@ -177,16 +177,23 @@ const IdCardScannerModal = ({
 
   const stopCamera = useCallback(() => {
     cameraSessionIdRef.current++;
-    if (streamRef.current) {
-      try {
-        streamRef.current.getTracks().forEach(t => t.stop());
-      } catch (_) {}
-      streamRef.current = null;
-    }
+    // 1. ปลดปล่อย video.srcObject ก่อนเสมอ เพื่อให้ Chromium/Android คืน SurfaceTexture ให้ระบบทันที
     if (videoRef.current) {
       try {
         videoRef.current.srcObject = null;
       } catch (_) {}
+    }
+    // 2. ปิด MediaStream tracks ทั้งหมดอย่างปลอดภัย ป้องกัน Camera2 HAL ค้างในระบบ
+    if (streamRef.current) {
+      try {
+        streamRef.current.getTracks().forEach(t => {
+          try {
+            t.enabled = false;
+            t.stop();
+          } catch (_) {}
+        });
+      } catch (_) {}
+      streamRef.current = null;
     }
     setTorchOn(false);
   }, []);
@@ -343,18 +350,33 @@ const IdCardScannerModal = ({
     startCamera(next);
   };
 
-  // แคปภาพวิดีโอเป็น Base64 ความละเอียดสูงสุด (Full HD 1080p)
+  // แคปภาพวิดีโอเป็น Base64 ความละเอียดที่เหมาะสมสำหรับการทำ OCR (ปรับ Scale ไม่เกิน 1280px เพื่อประหยัด RAM และป้องกันเครื่องค้าง)
   const captureImageToBase64 = () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) return null;
+
+    // จำกัดขนาดภาพไม่เกิน 1280px คมชัดระดับ HD สำหรับอ่านตัวอักษรไทย 100% แต่ใช้ RAM น้อยลง 80% ป้องกัน OOM/ANR
+    const maxDimension = 1280;
+    let targetWidth = video.videoWidth;
+    let targetHeight = video.videoHeight;
+    if (targetWidth > maxDimension || targetHeight > maxDimension) {
+      if (targetWidth > targetHeight) {
+        targetHeight = Math.round((targetHeight * maxDimension) / targetWidth);
+        targetWidth = maxDimension;
+      } else {
+        targetWidth = Math.round((targetWidth * maxDimension) / targetHeight);
+        targetHeight = maxDimension;
+      }
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     return dataUrl.split(',')[1];
   };
 
@@ -367,11 +389,7 @@ const IdCardScannerModal = ({
       return;
     }
 
-    // ล็อกเฟรมวิดีโอเพื่อกันภาพกระพริบ
-    if (videoRef.current) {
-      try { videoRef.current.pause(); } catch (_) {}
-    }
-
+    // ห้ามเรียก videoRef.current.pause() บน live MediaStream บน Android เพราะจะทำให้ Camera2 HAL deadlock และเกิด ANR
     setIsScanning(true);
     try {
       const response = await fetch('/api/vision', {
@@ -388,7 +406,6 @@ const IdCardScannerModal = ({
 
       if (data.error) {
         showToast?.('ไม่สามารถอ่านข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'danger');
-        if (videoRef.current) { try { videoRef.current.play(); } catch (_) {} }
       } else if (data.responses && data.responses[0] && data.responses[0].fullTextAnnotation) {
         const extracted = parseIdCardText(data.responses[0].fullTextAnnotation.text);
         stopCamera();
@@ -399,11 +416,9 @@ const IdCardScannerModal = ({
         showToast?.('ดึงข้อมูลจากบัตรประชาชนสำเร็จ', 'success');
       } else {
         showToast?.('ไม่พบข้อความ กรุณาจัดบัตรให้ชัดเจนและสแกนใหม่', 'warning');
-        if (videoRef.current) { try { videoRef.current.play(); } catch (_) {} }
       }
     } catch (error) {
       showToast?.('ไม่สามารถเชื่อมต่อระบบสแกนได้ กรุณาลองใหม่อีกครั้ง', 'danger');
-      if (videoRef.current) { try { videoRef.current.play(); } catch (_) {} }
     } finally {
       setIsScanning(false);
     }

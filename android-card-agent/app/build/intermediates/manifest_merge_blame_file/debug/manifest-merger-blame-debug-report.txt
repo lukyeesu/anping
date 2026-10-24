@@ -1,8 +1,8 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 3    package="com.anping.clinic"
-4    android:versionCode="26"
-5    android:versionName="1.6.3" >
+4    android:versionCode="27"
+5    android:versionName="1.6.4" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="24"
@@ -82,7 +82,7 @@
 45-->[androidx.core:core:1.12.0] C:\Users\lukye\.gradle\caches\transforms-3\217cd4443c329c3de6d6b6409afab4f6\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
 46
 47    <application
-47-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:32:5-94:19
+47-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:32:5-95:19
 48        android:allowBackup="false"
 48-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:33:9-36
 49        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
@@ -99,167 +99,169 @@
 55-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:36:9-43
 56        android:label="@string/app_name"
 56-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:37:9-41
-57        android:roundIcon="@mipmap/ic_launcher_round"
-57-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:38:9-54
-58        android:supportsRtl="true"
-58-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:39:9-35
-59        android:theme="@style/Theme.AnpingCardAgent"
-59-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:40:9-53
-60        android:usesCleartextTraffic="true" >
-60-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:41:9-44
-61        <activity
-61-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:45:9-74:20
-62            android:name="com.anping.cardagent.MainActivity"
-62-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:46:13-41
-63            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
-63-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:48:13-91
-64            android:exported="true"
-64-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:47:13-36
-65            android:launchMode="singleTop" >
-65-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:49:13-43
-66            <intent-filter>
-66-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:51:13-54:29
-67                <action android:name="android.intent.action.MAIN" />
-67-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:52:17-69
-67-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:52:25-66
-68
-69                <category android:name="android.intent.category.LAUNCHER" />
-69-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:53:17-77
-69-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:53:27-74
-70            </intent-filter>
-71
-72            <!-- ดักจับการเสียบ USB เข้าสู่ MainActivity โดยตรง เพื่อให้ Android จำสิทธิ์ "เปิดเสมอ/Always allow" ถาวร -->
-73            <intent-filter>
-73-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:57:13-59:29
-74                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
-74-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:58:17-90
-74-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:58:25-87
-75            </intent-filter>
-76
-77            <meta-data
-77-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:60:13-62:57
-78                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-78-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:61:17-79
-79                android:resource="@xml/device_filter" />
-79-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:62:17-54
-80
-81            <!-- ดักจับ Deep Link ปลุกแอปจากหน้าเว็บคลินิก (anpingagent://open) -->
-82            <intent-filter>
-82-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:65:13-72:29
-83                <action android:name="android.intent.action.VIEW" />
-83-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:66:17-69
-83-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:66:25-66
-84
-85                <category android:name="android.intent.category.DEFAULT" />
-85-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:67:17-76
-85-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:67:27-73
-86                <category android:name="android.intent.category.BROWSABLE" />
-86-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:68:17-78
-86-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:68:27-75
-87
-88                <data
-88-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:69:17-71:52
-89                    android:host="open"
-89-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:70:21-40
-90                    android:scheme="anpingagent" />
-90-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:71:21-49
-91            </intent-filter>
-92        </activity>
-93
-94        <!-- Service รัน Localhost Server 8181 เบื้องหลัง -->
-95        <service
-95-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:77:9-81:63
-96            android:name="com.anping.cardagent.CardReaderService"
-96-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:78:13-46
-97            android:enabled="true"
-97-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:79:13-35
-98            android:exported="false"
-98-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:80:13-37
-99            android:foregroundServiceType="connectedDevice" />
-99-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:81:13-60
-100
-101        <!-- FileProvider สำหรับติดตั้งการอัปเดตเวอร์ชันใหม่ในตัวแอป (In-App Update) -->
-102        <provider
-103            android:name="androidx.core.content.FileProvider"
-103-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:85:13-62
-104            android:authorities="com.anping.clinic.fileprovider"
-104-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:86:13-64
-105            android:exported="false"
-105-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:87:13-37
-106            android:grantUriPermissions="true" >
-106-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:88:13-47
-107            <meta-data
-107-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:89:13-91:54
-108                android:name="android.support.FILE_PROVIDER_PATHS"
-108-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:90:17-67
-109                android:resource="@xml/file_paths" />
-109-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:91:17-51
-110        </provider>
-111        <provider
-111-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
-112            android:name="androidx.startup.InitializationProvider"
-112-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
-113            android:authorities="com.anping.clinic.androidx-startup"
-113-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
-114            android:exported="false" >
-114-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
-115            <meta-data
-115-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
-116                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-116-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
-117                android:value="androidx.startup" />
-117-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
-118            <meta-data
-118-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\lukye\.gradle\caches\transforms-3\1faaae82af36cb3649b5058de05e4cbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
-119                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-119-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\lukye\.gradle\caches\transforms-3\1faaae82af36cb3649b5058de05e4cbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
-120                android:value="androidx.startup" />
-120-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\lukye\.gradle\caches\transforms-3\1faaae82af36cb3649b5058de05e4cbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
-121            <meta-data
-121-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
-122                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-122-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
-123                android:value="androidx.startup" />
-123-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
-124        </provider>
-125
-126        <receiver
-126-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
-127            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-127-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
-128            android:directBootAware="false"
-128-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
-129            android:enabled="true"
-129-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
-130            android:exported="true"
-130-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
-131            android:permission="android.permission.DUMP" >
-131-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
-132            <intent-filter>
-132-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
-133                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-133-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
-133-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
-134            </intent-filter>
-135            <intent-filter>
-135-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
-136                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-136-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
-136-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
-137            </intent-filter>
-138            <intent-filter>
-138-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
-139                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-139-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
-139-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
-140            </intent-filter>
-141            <intent-filter>
-141-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
-142                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-142-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
-142-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
-143            </intent-filter>
-144        </receiver>
-145    </application>
-146
-147</manifest>
+57        android:largeHeap="true"
+57-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:43:9-33
+58        android:roundIcon="@mipmap/ic_launcher_round"
+58-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:38:9-54
+59        android:supportsRtl="true"
+59-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:39:9-35
+60        android:theme="@style/Theme.AnpingCardAgent"
+60-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:40:9-53
+61        android:usesCleartextTraffic="true" >
+61-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:41:9-44
+62        <activity
+62-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:46:9-75:20
+63            android:name="com.anping.cardagent.MainActivity"
+63-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:47:13-41
+64            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard"
+64-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:49:13-115
+65            android:exported="true"
+65-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:48:13-36
+66            android:launchMode="singleTop" >
+66-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:50:13-43
+67            <intent-filter>
+67-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:52:13-55:29
+68                <action android:name="android.intent.action.MAIN" />
+68-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:53:17-69
+68-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:53:25-66
+69
+70                <category android:name="android.intent.category.LAUNCHER" />
+70-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:54:17-77
+70-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:54:27-74
+71            </intent-filter>
+72
+73            <!-- ดักจับการเสียบ USB เข้าสู่ MainActivity โดยตรง เพื่อให้ Android จำสิทธิ์ "เปิดเสมอ/Always allow" ถาวร -->
+74            <intent-filter>
+74-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:58:13-60:29
+75                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+75-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:59:17-90
+75-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:59:25-87
+76            </intent-filter>
+77
+78            <meta-data
+78-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:61:13-63:57
+79                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+79-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:62:17-79
+80                android:resource="@xml/device_filter" />
+80-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:63:17-54
+81
+82            <!-- ดักจับ Deep Link ปลุกแอปจากหน้าเว็บคลินิก (anpingagent://open) -->
+83            <intent-filter>
+83-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:66:13-73:29
+84                <action android:name="android.intent.action.VIEW" />
+84-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:67:17-69
+84-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:67:25-66
+85
+86                <category android:name="android.intent.category.DEFAULT" />
+86-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:68:17-76
+86-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:68:27-73
+87                <category android:name="android.intent.category.BROWSABLE" />
+87-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:69:17-78
+87-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:69:27-75
+88
+89                <data
+89-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:70:17-72:52
+90                    android:host="open"
+90-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:71:21-40
+91                    android:scheme="anpingagent" />
+91-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:72:21-49
+92            </intent-filter>
+93        </activity>
+94
+95        <!-- Service รัน Localhost Server 8181 เบื้องหลัง -->
+96        <service
+96-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:78:9-82:63
+97            android:name="com.anping.cardagent.CardReaderService"
+97-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:79:13-46
+98            android:enabled="true"
+98-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:80:13-35
+99            android:exported="false"
+99-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:81:13-37
+100            android:foregroundServiceType="connectedDevice" />
+100-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:82:13-60
+101
+102        <!-- FileProvider สำหรับติดตั้งการอัปเดตเวอร์ชันใหม่ในตัวแอป (In-App Update) -->
+103        <provider
+104            android:name="androidx.core.content.FileProvider"
+104-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:86:13-62
+105            android:authorities="com.anping.clinic.fileprovider"
+105-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:87:13-64
+106            android:exported="false"
+106-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:88:13-37
+107            android:grantUriPermissions="true" >
+107-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:89:13-47
+108            <meta-data
+108-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:90:13-92:54
+109                android:name="android.support.FILE_PROVIDER_PATHS"
+109-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:91:17-67
+110                android:resource="@xml/file_paths" />
+110-->D:\Webapp Clinic\anping clinic\anping\android-card-agent\app\src\main\AndroidManifest.xml:92:17-51
+111        </provider>
+112        <provider
+112-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+113            android:name="androidx.startup.InitializationProvider"
+113-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
+114            android:authorities="com.anping.clinic.androidx-startup"
+114-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
+115            android:exported="false" >
+115-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
+116            <meta-data
+116-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+117                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+117-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
+118                android:value="androidx.startup" />
+118-->[androidx.emoji2:emoji2:1.2.0] C:\Users\lukye\.gradle\caches\transforms-3\11131d099be9c123d2514ae5f1228212\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
+119            <meta-data
+119-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\lukye\.gradle\caches\transforms-3\1faaae82af36cb3649b5058de05e4cbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
+120                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+120-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\lukye\.gradle\caches\transforms-3\1faaae82af36cb3649b5058de05e4cbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
+121                android:value="androidx.startup" />
+121-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\lukye\.gradle\caches\transforms-3\1faaae82af36cb3649b5058de05e4cbf\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
+122            <meta-data
+122-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+123                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+123-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+124                android:value="androidx.startup" />
+124-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+125        </provider>
+126
+127        <receiver
+127-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+128            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+128-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+129            android:directBootAware="false"
+129-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+130            android:enabled="true"
+130-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+131            android:exported="true"
+131-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+132            android:permission="android.permission.DUMP" >
+132-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+133            <intent-filter>
+133-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+134                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+134-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+134-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+135            </intent-filter>
+136            <intent-filter>
+136-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+137                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+137-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+137-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+138            </intent-filter>
+139            <intent-filter>
+139-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+140                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+140-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+140-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+141            </intent-filter>
+142            <intent-filter>
+142-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+143                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+143-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+143-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\lukye\.gradle\caches\transforms-3\6630f9e478ec6811137c4ffff203277a\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+144            </intent-filter>
+145        </receiver>
+146    </application>
+147
+148</manifest>
