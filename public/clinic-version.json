@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "1.5.7",
+  "versionCode": 21,
+  "versionName": "1.5.8",
   "apkUrl": "https://anpingclinic.vercel.app/AnpingClinic.apk",
-  "changelog": "- เพิ่มประสิทธิภาพความลื่นไหลระดับ 60-120 FPS สำหรับเมนูด้านซ้ายบนแอป Android\n- ยกเลิก GPU Gaussian Blur (backdrop-filter) ขณะแอนิเมชันเพื่อลดภาระชิปกราฟิก\n- ปรับปรุงระบบ Touch Gestures และแยกการตรวจจับการเลื่อนจอให้ตอบสนองทันที 0ms"
+  "changelog": "- จับและปัดเลื่อนแถบเมนูได้ทั้งแผงอย่างอิสระ (Full Panel Touch Gesture)\n- ปรับปรุงการสลับสถานะกาง/หุบเมนูด้วยความเร็ว 60-120 FPS แบบไร้รอยต่อ\n- แก้ไขปัญหาหน่วงตอนเลื่อนเมนูบนแท็บเล็ตและอุปกรณ์จอสัมผัส"
 }
