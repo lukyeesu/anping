@@ -22,6 +22,15 @@ import { dispatchClinicNotification } from '../lib/notificationHub';
 import { isPatientVipActive, getPatientVipStatus, calculateVipExpiry } from '../utils/couponHelpers';
 import IdCardScannerModal from '../components/IdCardScannerModal';
 
+const formatCitizenId = (id) => {
+  if (!id) return '-';
+  const digits = String(id).replace(/\D/g, '');
+  if (digits.length === 13) {
+    return `${digits[0]}-${digits.slice(1, 5)}-${digits.slice(5, 10)}-${digits.slice(10, 12)}-${digits[12]}`;
+  }
+  return id;
+};
+
 const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, couponsData = [], setCouponsData, currentBranch, branchesData = [], staffData = [], callAppScript, showToast, isGlobalLoading, posProducts = [], showGlobalAlert, globalAlert, setPdpaQrModal, currentUser, fetchPatientTreatments, fetchPatientsPaginated, fetchPatientStats, integrationTokens = {} }) => {
   // --- 1. State Declarations ---
   const [search, setSearch] = useState('');
@@ -1262,7 +1271,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     let religion = data.religion || data.faith || '';
     religion = religion.replace(/^ศาสนา\s*/, '').trim();
 
-    const cid = String(data.pid || data.citizenId || data.idCard || '').trim();
+    const cid = String(data.pid || data.citizenId || data.idCard || '').replace(/\D/g, '').trim();
     const isNonThaiCid = /^[067]/.test(cid);
     const nationality = (data.nationality || (isNonThaiCid ? '' : 'ไทย')).trim();
     const ethnicity = (data.ethnicity || (isNonThaiCid ? '' : 'ไทย')).trim();
@@ -4560,7 +4569,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={(extractedData) => {
-          setFormData(prev => ({ ...prev, ...extractedData }));
+          const cleanId = (extractedData.idCard || '').replace(/\D/g, '');
+          setFormData(prev => ({
+            ...prev,
+            ...extractedData,
+            ...(cleanId ? { idCard: cleanId } : {})
+          }));
         }}
         showToast={showToast}
         title="สแกนบัตรประชาชน"
@@ -5042,7 +5056,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     <div className="flex-1 min-w-0 space-y-1">
                       <span className="text-[11px] text-slate-400 font-medium block">เลขประจำตัวประชาชน</span>
                       <div className="text-base sm:text-lg font-bold text-sky-600 font-mono tracking-wide">
-                        {smartCardInspectData.citizenId || smartCardInspectData.pid || smartCardInspectData.idCard || '-'}
+                        {formatCitizenId(smartCardInspectData.citizenId || smartCardInspectData.pid || smartCardInspectData.idCard)}
                       </div>
                       <div className="text-sm sm:text-base font-bold text-slate-800 truncate">
                         {smartCardInspectData.titleTh || smartCardInspectData.prefixTh || smartCardInspectData.prefix || ''}{smartCardInspectData.firstNameTh || smartCardInspectData.fname || smartCardInspectData.firstName || ''} {smartCardInspectData.lastNameTh || smartCardInspectData.lname || smartCardInspectData.lastName || ''}

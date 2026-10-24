@@ -295,7 +295,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.4"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.5"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -570,7 +570,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun notifyWebCardInserted(card: CardModel) {
-        val jsonStr = card.toJson().toString()
+        val cleanCard = card.copy(citizenId = card.citizenId.replace(Regex("\\D"), ""))
+        val jsonStr = cleanCard.toJson().toString()
         // ส่ง Event เข้าไปในหน้าเว็บผ่าน CustomEvent
         val jsCode = """
             (function() {
@@ -664,8 +665,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             // 2. Format CID
-            val formattedCid = if (card.citizenId.length == 13) {
-                "${card.citizenId[0]}-${card.citizenId.substring(1, 5)}-${card.citizenId.substring(5, 10)}-${card.citizenId.substring(10, 12)}-${card.citizenId[12]}"
+            val cleanCid = card.citizenId.replace(Regex("\\D"), "")
+            val formattedCid = if (cleanCid.length == 13) {
+                "${cleanCid[0]}-${cleanCid.substring(1, 5)}-${cleanCid.substring(5, 10)}-${cleanCid.substring(10, 12)}-${cleanCid[12]}"
             } else card.citizenId
             tvCid.text = formattedCid
 
@@ -698,12 +700,14 @@ class MainActivity : AppCompatActivity() {
             btnClose?.setOnClickListener { dialog.dismiss() }
             btnCopy?.setOnClickListener {
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("Citizen ID", card.citizenId)
+                val cleanCid = card.citizenId.replace(Regex("\\D"), "")
+                val clip = ClipData.newPlainText("Citizen ID", cleanCid)
                 clipboard.setPrimaryClip(clip)
                 Toast.makeText(this, "คัดลอกเลขประจำตัวประชาชนแล้ว", Toast.LENGTH_SHORT).show()
             }
             btnApply?.setOnClickListener {
-                notifyWebCardInserted(card)
+                val cleanCid = card.citizenId.replace(Regex("\\D"), "")
+                notifyWebCardInserted(card.copy(citizenId = cleanCid))
                 Toast.makeText(this, "ส่งข้อมูลเข้าสู่แบบฟอร์มแล้ว", Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
