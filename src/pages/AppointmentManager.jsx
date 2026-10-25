@@ -1002,18 +1002,29 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
 
 
+  // --- Responsive View Detection for Virtualization ---
+  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  useEffect(() => {
+    const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- Virtualization for Desktop Table & Mobile Cards ---
   const tableVirtualizer = useVirtualRows({
-    count: filteredData.length,
+    count: isDesktopView ? filteredData.length : 0,
     estimateSize: 72,
     overscan: 5,
+    enabled: isDesktopView,
     getItemKey: useCallback((index) => filteredData[index]?.id || index, [filteredData])
   });
 
   const cardVirtualizer = useVirtualRows({
-    count: filteredData.length,
+    count: !isDesktopView ? filteredData.length : 0,
     estimateSize: 145,
     overscan: 5,
+    gap: 16,
+    enabled: !isDesktopView,
     getItemKey: useCallback((index) => filteredData[index]?.id || index, [filteredData])
   });
 
@@ -1338,9 +1349,10 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 pointer-events-auto">
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0 sm:p-0">
                 <div className="px-2 sm:px-4 py-4">
-                    {/* --- Desktop View (Table) --- */}
-                    {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
-                    <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
+                    {/* Render active view only: prevents duplicate DOM tree and double-virtualization */}
+                    {isDesktopView ? (
+                      /* --- Desktop View (Table) --- */
+                      <div className="overflow-x-auto overflow-y-hidden">
                         <table className="w-full text-left border-collapse min-w-[900px] table-fixed">
                             <thead>
                               <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pb-4 font-medium pl-6 text-left w-[12%]">วันที่/เวลา</th><th className="pb-4 font-medium text-center w-[10%]">รหัส HN</th><th className="pb-4 font-medium text-left px-2 w-[18%]">ชื่อคนไข้</th><th className="pb-4 font-medium text-center w-[12%]">เบอร์โทร</th><th className="pb-4 font-medium text-left px-2 w-[15%]">แพทย์ผู้นัด</th><th className="pb-4 font-medium text-left px-2 w-[15%]">อาการ</th><th className="pb-4 font-medium text-center w-[10%]">สถานะ</th><th className="pb-4 font-medium text-right pr-6 w-[120px]">จัดการ</th></tr>
@@ -1386,10 +1398,10 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                               )}
                             </tbody>
                         </table>
-                    </div>
-
-                    {/* --- Mobile View (Cards) --- */}
-                    <div className="lg:hidden space-y-4 mt-2">
+                      </div>
+                    ) : (
+                      /* --- Mobile View (Cards) --- */
+                      <div className="space-y-4 mt-2">
                         {isGlobalLoading ? (
                             Array.from({ length: 3 }).map((_, i) => (
                                 <div key={`skel-mob-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -1436,7 +1448,8 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                               ไม่พบข้อมูลการนัดหมาย
                             </div>
                         )}
-                    </div>
+                      </div>
+                    )}
                 </div>
           </div>
         </div>

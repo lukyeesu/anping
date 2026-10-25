@@ -2507,11 +2507,20 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     });
       };
 
+  // --- Responsive View Detection for Virtualization ---
+  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  useEffect(() => {
+    const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- TanStack Virtual Virtualizers for 60+ FPS Scroll & Responsive Sidebar ---
   const tableVirtualizer = useVirtualRows({
-    count: sortedPatients.length,
+    count: isDesktopView ? sortedPatients.length : 0,
     estimateSize: 68,
     overscan: 5,
+    enabled: isDesktopView,
     getItemKey: (idx) => {
       const p = sortedPatients[idx];
       return p ? (getPatientId(p) || idx) : idx;
@@ -2519,9 +2528,11 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   });
 
   const cardVirtualizer = useVirtualRows({
-    count: sortedPatients.length,
+    count: !isDesktopView ? sortedPatients.length : 0,
     estimateSize: 240,
     overscan: 4,
+    gap: 16,
+    enabled: !isDesktopView,
     getItemKey: (idx) => {
       const p = sortedPatients[idx];
       return p ? (getPatientId(p) || idx) : idx;
@@ -2845,10 +2856,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
           <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden flex flex-col min-h-[400px]">
               <div className="px-2 sm:px-4 py-4">
-                
-                {/* --- Desktop View (Table) --- */}
-                {/* แก้ไข: เพิ่ม overflow-y-hidden เพื่อป้องกัน Scrollbar กระพริบ */}
-                <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
+                {/* Render active view only: prevents duplicate DOM tree and double-virtualization */}
+                {isDesktopView ? (
+                  /* --- Desktop View (Table) --- */
+                  <div className="overflow-x-auto overflow-y-hidden">
                   <table className="w-full text-left border-collapse min-w-[1100px] table-fixed">
                       <thead>
                         <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[14%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อคนไข้</th><th className="w-[8%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อเล่น</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">เพศ</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">อายุ</th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[13%]" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[10%]" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th><th className="w-[140px] pt-6 pb-4 font-medium text-right pr-4 kanit-text">จัดการ</th></tr>
@@ -2933,9 +2944,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     </tbody>
                   </table>
                 </div>
-
-                {/* --- Mobile View (Cards) --- */}
-                <div className="lg:hidden space-y-4 mt-2">
+              ) : (
+                /* --- Mobile View (Cards) --- */
+                <div className="space-y-4 mt-2">
                     {isGlobalLoading ? (
                         Array.from({ length: 3 }).map((_, i) => (
                             <div key={`skel-med-mob-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -3033,6 +3044,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         </>
                     )}
                 </div>
+              )}
 
                 {/* แสดงสถานะเมื่อกำลังโหลดข้อมูลแถวถัดไป หรือโหลดครบหมดแล้ว */}
                 {isLoadingMore && (

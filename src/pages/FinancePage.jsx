@@ -1665,11 +1665,20 @@ const FinancePage = ({
 
 
 
+  // --- Responsive View Detection for Virtualization ---
+  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  useEffect(() => {
+    const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- TanStack Virtual Virtualizers for 60+ FPS Scroll & Responsive Sidebar ---
   const tableVirtualizer = useVirtualRows({
-    count: visibleTransactions.length,
+    count: isDesktopView ? visibleTransactions.length : 0,
     estimateSize: 64,
     overscan: 5,
+    enabled: isDesktopView,
     getItemKey: (idx) => {
       const tx = visibleTransactions[idx];
       return tx ? (tx.id || idx) : idx;
@@ -1677,9 +1686,11 @@ const FinancePage = ({
   });
 
   const cardVirtualizer = useVirtualRows({
-    count: visibleTransactions.length,
+    count: !isDesktopView ? visibleTransactions.length : 0,
     estimateSize: 180,
     overscan: 4,
+    gap: 12,
+    enabled: !isDesktopView,
     getItemKey: (idx) => {
       const tx = visibleTransactions[idx];
       return tx ? (tx.id || idx) : idx;
@@ -2528,8 +2539,10 @@ const FinancePage = ({
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
         <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden flex flex-col min-h-[400px]">
           <div className="px-2 sm:px-4 py-4">
-              {/* --- Desktop View (Table) --- */}
-              <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
+              {/* Render active view only: prevents duplicate DOM tree and double-virtualization */}
+              {isDesktopView ? (
+                /* --- Desktop View (Table) --- */
+                <div className="overflow-x-auto overflow-y-hidden">
                 <table className="table-auto w-full text-left border-collapse min-w-[900px]">
                   <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm"><th className="w-[13%] p-4 font-medium text-left pl-6 w-[120px] kanit-text">วันที่/เวลา</th><th className="w-[11%] p-4 font-medium kanit-text w-[120px]">เลขที่บิล</th><th className="w-[21%] p-4 font-medium kanit-text">รายละเอียด</th><th className="w-[11%] p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th><th className="w-[11%] p-4 font-medium text-center kanit-text w-[120px]">ช่องทาง</th><th className="w-[13%] p-4 font-medium text-right w-[150px] kanit-text">จำนวนเงิน</th><th className="w-[11%] p-4 font-medium text-center w-[100px] kanit-text">สถานะ</th><th className="w-[9%] p-4 font-medium text-right pr-6 w-[100px] kanit-text">ดำเนินการ</th></tr>
@@ -2591,9 +2604,9 @@ const FinancePage = ({
                   </tbody>
                 </table>
               </div>
-
-              {/* --- Mobile View (Cards) --- */}
-              <div className="lg:hidden space-y-3 mt-2">
+            ) : (
+              /* --- Mobile View (Cards) --- */
+              <div className="space-y-3 mt-2">
                 {isGlobalLoading ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <div key={`skel-mob-fin-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -2639,6 +2652,7 @@ const FinancePage = ({
                     ))}
                 </div>
               </div>
+            )}
           </div>
         </div>
       </div>

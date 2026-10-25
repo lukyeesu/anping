@@ -149,7 +149,7 @@ const NumberTicker = ({
 
   return (
     <span 
-      className={`inline-block font-data font-black tabular-nums transition-all duration-150 ${className}`}
+      className={`inline-block font-data font-black tabular-nums ${className}`}
       style={{ fontVariantNumeric: 'tabular-nums' }}
       title={targetVal.toLocaleString('th-TH')}
     >
@@ -3096,7 +3096,7 @@ const ExecutiveDashboard = ({
                   <button
                     type="button"
                     onClick={handleOpenExecRange}
-                    className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-xl border border-slate-200/60 shadow-sm backdrop-blur-md transition-all text-xs font-bold kanit-text shrink-0"
+                    className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-xl border border-slate-200/60 shadow-sm transition-all text-xs font-bold kanit-text shrink-0"
                   >
                     <CalendarIcon size={14} className="text-emerald-500" />
                     <span>{formatExecDisplayRange(customStartDate, customEndDate)}</span>
@@ -3151,7 +3151,7 @@ const ExecutiveDashboard = ({
                   <NumberTicker value={summary.income} isLoading={isGlobalLoading || isDashboardLoading} />
                 </h3>
                 {isCompareActive && compareDiffStats && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/20 backdrop-blur-md">
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/30 border border-white/10">
                     <span className={compareDiffStats.incDiff >= 0 ? 'text-emerald-200' : 'text-rose-200'}>
                       {compareDiffStats.incDiff >= 0 ? '▲ +' : '▼ '}{compareDiffStats.incPct.toFixed(1)}%
                     </span>
@@ -3159,7 +3159,7 @@ const ExecutiveDashboard = ({
                   </div>
                 )}
               </div>
-              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/20 flex items-center justify-center border border-white/20 shrink-0">
                 <TrendingUp size={20} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
               </div>
             </div>
@@ -3179,7 +3179,7 @@ const ExecutiveDashboard = ({
                   <NumberTicker value={summary.expense} isLoading={isGlobalLoading || isDashboardLoading} />
                 </h3>
                 {isCompareActive && compareDiffStats && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/20 backdrop-blur-md">
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/30 border border-white/10">
                     <span className={compareDiffStats.expDiff <= 0 ? 'text-emerald-200' : 'text-rose-200'}>
                       {compareDiffStats.expDiff >= 0 ? '▲ +' : '▼ '}{compareDiffStats.expPct.toFixed(1)}%
                     </span>
@@ -3187,7 +3187,7 @@ const ExecutiveDashboard = ({
                   </div>
                 )}
               </div>
-              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/20 flex items-center justify-center border border-white/20 shrink-0">
                 <TrendingDown size={20} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
               </div>
             </div>
@@ -3207,7 +3207,7 @@ const ExecutiveDashboard = ({
                   <NumberTicker value={summary.netProfit} isLoading={isGlobalLoading || isDashboardLoading} />
                 </h3>
                 {isCompareActive && compareDiffStats && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/20 backdrop-blur-md">
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold bg-black/30 border border-white/10">
                     <span className={compareDiffStats.profitDiff >= 0 ? 'text-emerald-200' : 'text-rose-200'}>
                       {compareDiffStats.profitDiff >= 0 ? '▲ +' : '▼ '}{compareDiffStats.profitPct.toFixed(1)}%
                     </span>
@@ -3215,7 +3215,7 @@ const ExecutiveDashboard = ({
                   </div>
                 )}
               </div>
-              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 rounded-xl sm:rounded-2xl bg-white/20 flex items-center justify-center border border-white/20 shrink-0">
                 <Wallet size={20} className="sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
               </div>
             </div>

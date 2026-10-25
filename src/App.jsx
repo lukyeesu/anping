@@ -3057,7 +3057,19 @@ export default function App() {
 
     const checkCanScrollUp = (target) => {
       try {
+        if (document.body && (
+          document.body.classList.contains('is-sidebar-animating') ||
+          document.body.classList.contains('is-dragging-sidebar') ||
+          document.body.classList.contains('is-nav-expanded') ||
+          document.body.classList.contains('is-nav-dragging')
+        )) {
+          return true;
+        }
+
         if (target && target instanceof Element) {
+          if (target.closest('aside, header, nav, .sidebar-drag-handle, [role="dialog"], .no-pull-refresh, [data-bottom-sheet], [data-drag-handle], .nav-backdrop')) {
+            return true;
+          }
           let el = target;
           while (el && el !== document.body && el !== document.documentElement) {
             if (el.scrollTop > 1) return true;
@@ -3872,8 +3884,8 @@ export default function App() {
 
   return (
     <div className={`w-full h-full h-[100dvh] max-h-[100dvh] bg-slate-50 flex relative overflow-hidden text-slate-800 ${isMobile && !showMobileBars ? 'mobile-bars-hidden' : 'mobile-bars-visible'}`}>
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-sky-200/40 blur-[100px] pointer-events-none z-0"></div>
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-200/30 blur-[100px] pointer-events-none z-0"></div>
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.25)_0%,transparent_70%)] pointer-events-none z-0"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-[radial-gradient(circle,rgba(52,211,153,0.2)_0%,transparent_70%)] pointer-events-none z-0"></div>
 
       <div className={`flex h-full h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden w-full max-w-full flex-col md:flex-row relative ${isMobile && !showMobileBars ? 'mobile-bars-hidden' : 'mobile-bars-visible'}`}>
         

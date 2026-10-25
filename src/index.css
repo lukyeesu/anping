@@ -94,12 +94,13 @@ button, a, input, select, textarea, [role="button"], .cursor-pointer {
     transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Anti-flicker GPU compositing for mobile WebKit & Chromium engines */
-[class*="backdrop-blur"] {
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
+/* Prevent WebView GPU layer thrashing & raster tile drops during sidebar resize */
+body.is-sidebar-animating [class*="backdrop-blur"],
+body.is-dragging-sidebar [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-transform: none !important;
+    transform: none !important;
 }
 
 @media (max-width: 768px) {

@@ -17,7 +17,12 @@ export function useVirtualRows({
   estimateSize = 72,
   overscan = 5,
   getItemKey,
-  getScrollElement
+  getScrollElement,
+  enabled = true,
+  scrollMargin = 0,
+  gap = 0,
+  paddingStart = 0,
+  paddingEnd = 0
 }) {
   const defaultGetScrollElement = useCallback(() => {
     if (typeof getScrollElement === 'function') {
@@ -35,6 +40,11 @@ export function useVirtualRows({
     getScrollElement: defaultGetScrollElement,
     estimateSize: () => estimateSize,
     overscan,
+    enabled,
+    scrollMargin,
+    gap,
+    paddingStart,
+    paddingEnd,
     ...(getItemKey ? { getItemKey } : {})
   });
 }
