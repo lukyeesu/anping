@@ -22,6 +22,7 @@ import { theme } from '../global/theme';
 import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
 import ClinicStatementModal from '../components/ClinicStatementModal';
+import useVirtualRows from '../hooks/useVirtualRows';
 
 const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', suffix = '', formatter, className = '', title }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -1664,6 +1665,175 @@ const FinancePage = ({
 
 
 
+  // --- TanStack Virtual Virtualizers for 60+ FPS Scroll & Responsive Sidebar ---
+  const tableVirtualizer = useVirtualRows({
+    count: visibleTransactions.length,
+    estimateSize: 64,
+    overscan: 5,
+    getItemKey: (idx) => {
+      const tx = visibleTransactions[idx];
+      return tx ? (tx.id || idx) : idx;
+    }
+  });
+
+  const cardVirtualizer = useVirtualRows({
+    count: visibleTransactions.length,
+    estimateSize: 180,
+    overscan: 4,
+    getItemKey: (idx) => {
+      const tx = visibleTransactions[idx];
+      return tx ? (tx.id || idx) : idx;
+    }
+  });
+
+  const tableVirtualItems = tableVirtualizer.getVirtualItems();
+  const tableTotalSize = tableVirtualizer.getTotalSize();
+
+  const cardVirtualItems = cardVirtualizer.getVirtualItems();
+  const cardTotalSize = cardVirtualizer.getTotalSize();
+
+  const renderTxTableRow = (tx, virtualRow) => {
+    return (
+      <tr 
+        key={virtualRow.key} 
+        ref={tableVirtualizer.measureElement}
+        data-index={virtualRow.index}
+        onClick={() => openDetailModal(tx)} 
+        className="border-b border-slate-50 last:border-0 hover:bg-sky-50/50 transition-colors group cursor-pointer"
+      >
+        <td className="p-4 pl-6 text-left">
+          <div className="flex flex-col items-start">
+            <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
+            <span className="text-xs font-data text-slate-500 mt-0.5">{formatTime(tx.date)} น.</span>
+          </div>
+        </td>
+        <td className="p-4">
+          <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
+        </td>
+        <td className="p-4">
+          <div className="flex flex-col gap-1">
+            {tx.patientName && (
+              <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
+                {tx.patientName}
+              </span>
+            )}
+            {tx.note && tx.note !== tx.patientName && (
+              <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note}>
+                {tx.note}
+              </span>
+            )}
+            {!tx.note && !tx.patientName && (
+              <span className="font-data line-clamp-2 leading-tight text-sm text-slate-700">-</span>
+            )}
+          </div>
+        </td>
+        <td className="p-4">
+          <div className="flex flex-col items-start justify-center">
+            {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>}
+            {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100">ระบบ POS</span>}
+          </div>
+        </td>
+        <td className="p-4 text-center">
+           <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+             {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
+           </span>
+        </td>
+        <td className="p-4 text-right">
+          <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+          </span>
+        </td>
+        <td className="p-4 text-center">
+          <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+             <CheckCircle2 size={12} /> {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
+          </span>
+        </td>
+        <td className="p-4 pr-6 text-right" onClick={(e) => e.stopPropagation()}>
+           <div className="flex items-center justify-end gap-1">
+               <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเสร็จ">
+                  <Printer size={16}/>
+               </button>
+               <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
+                  <Pencil size={16}/>
+               </button>
+               <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
+                  <Trash2 size={16}/>
+               </button>
+           </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const renderTxMobileCard = (tx, virtualRow) => {
+    return (
+      <div 
+        key={virtualRow.key} 
+        ref={cardVirtualizer.measureElement}
+        data-index={virtualRow.index}
+        onClick={() => openDetailModal(tx)} 
+        className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98]"
+      >
+          <div className="flex justify-between items-start mb-2.5">
+              <div className="flex flex-col gap-1">
+                  <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
+                  <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatTime(tx.date)} น.</div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                  {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
+              </span>
+          </div>
+          
+          <div className="mb-1">
+              {tx.patientName && (
+                  <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{tx.patientName}</div>
+              )}
+              {tx.note && tx.note !== tx.patientName && (
+                  <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
+                      {tx.note}
+                  </div>
+              )}
+              {!tx.note && !tx.patientName && (
+                  <div className="text-xs text-slate-800 font-bold kanit-text line-clamp-2 mt-1">-</div>
+              )}
+          </div>
+
+          <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div className="flex flex-col gap-1.5 min-w-0 pr-2">
+                  <div className="flex items-center gap-1.5">
+                      {!tx.isAuto ? (
+                          <span className="text-[11px] font-bold text-slate-700 kanit-text truncate">{tx.category}</span>
+                      ) : (
+                          <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200">ระบบ POS</span>
+                      )}
+                  </div>
+                  <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5">
+                      {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : <><Package size={12}/> {tx.method}</>}
+                  </div>
+              </div>
+              <div className="text-right flex flex-col gap-1 shrink-0">
+                  <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                  </div>
+              </div>
+          </div>
+
+          {/* Actions Row */}
+          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
+              <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
+                  <Printer size={14} /> พิมพ์
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
+                  <Pencil size={14} /> แก้ไข
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
+                  <Trash2 size={14} /> ลบ
+              </button>
+          </div>
+      </div>
+    );
+  };
+
   const handleEditTransaction = (tx) => {
       if (tx.isAuto || tx.category === 'รายได้จาก POS') {
         const originalTx = (posHistoryData || []).find(p => p.id === tx.id || p.receiptNo === tx.id || p.receipt_no === tx.id) || tx.rawTx || tx;
@@ -2378,71 +2548,24 @@ const FinancePage = ({
                           <td className="p-4 pr-6"><div className="flex gap-2 justify-end"><div className="w-full max-w-[24px] h-[24px] bg-slate-200 animate-pulse rounded-lg"></div><div className="w-full max-w-[24px] h-[24px] bg-slate-200 animate-pulse rounded-lg"></div></div></td>
                         </tr>
                       ))
-                    ) : visibleTransactions.length > 0 ? (
-                      visibleTransactions.map((tx) => (
-                        <tr key={tx.id} onClick={() => openDetailModal(tx)} className="border-b border-slate-50 last:border-0 hover:bg-sky-50/50 transition-colors group cursor-pointer">
-                          <td className="p-4 pl-6 text-left">
-                            <div className="flex flex-col items-start">
-                              <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
-                              <span className="text-xs font-data text-slate-500 mt-0.5">{formatTime(tx.date)} น.</span>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex flex-col gap-1">
-                              {tx.patientName && (
-                                <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
-                                  {tx.patientName}
-                                </span>
-                              )}
-                              {tx.note && tx.note !== tx.patientName && (
-                                <span className={`font-data line-clamp-2 leading-tight ${tx.patientName ? 'text-xs text-slate-500' : 'text-sm text-slate-700'}`} title={tx.note}>
-                                  {tx.note}
-                                </span>
-                              )}
-                              {!tx.note && !tx.patientName && (
-                                <span className="font-data line-clamp-2 leading-tight text-sm text-slate-700">-</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex flex-col items-start justify-center">
-                              {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>}
-                              {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100">ระบบ POS</span>}
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                             <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
-                               {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
-                             </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
-                            </span>
-                          </td>
-                          <td className="p-4 text-center">
-                            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                               <CheckCircle2 size={12} /> {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
-                            </span>
-                          </td>
-                          <td className="p-4 pr-6 text-right" onClick={(e) => e.stopPropagation()}>
-                             <div className="flex items-center justify-end gap-1">
-                                 <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเสร็จ">
-                                    <Printer size={16}/>
-                                 </button>
-                                 <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
-                                    <Pencil size={16}/>
-                                 </button>
-                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
-                                    <Trash2 size={16}/>
-                                 </button>
-                             </div>
-                          </td>
-                        </tr>
-                      ))
+                    ) : tableVirtualItems.length > 0 ? (
+                      <>
+                        {tableVirtualItems[0].start > 0 && (
+                          <tr>
+                            <td colSpan={8} style={{ height: `${tableVirtualItems[0].start}px`, padding: 0, border: 0 }} />
+                          </tr>
+                        )}
+                        {tableVirtualItems.map((virtualRow) => {
+                          const tx = visibleTransactions[virtualRow.index];
+                          if (!tx) return null;
+                          return renderTxTableRow(tx, virtualRow);
+                        })}
+                        {tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end > 0 && (
+                          <tr>
+                            <td colSpan={8} style={{ height: `${tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end}px`, padding: 0, border: 0 }} />
+                          </tr>
+                        )}
+                      </>
                     ) : (
                       <tr>
                         <td colSpan="8" className="p-10 text-center text-slate-400">
@@ -2481,67 +2604,20 @@ const FinancePage = ({
                         </div>
                     </div>
                   ))
-                ) : visibleTransactions.length > 0 ? (
-                  visibleTransactions.map((tx) => (
-                    <div key={tx.id} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all space-row-animation active:scale-[0.98]">
-                        <div className="flex justify-between items-start mb-2.5">
-                            <div className="flex flex-col gap-1">
-                                <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
-                                <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatTime(tx.date)} น.</div>
-                            </div>
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                                {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
-                            </span>
-                        </div>
-                        
-                        <div className="mb-1">
-                            {tx.patientName && (
-                                <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{tx.patientName}</div>
-                            )}
-                            {tx.note && tx.note !== tx.patientName && (
-                                <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
-                                    {tx.note}
-                                </div>
-                            )}
-                            {!tx.note && !tx.patientName && (
-                                <div className="text-xs text-slate-800 font-bold kanit-text line-clamp-2 mt-1">-</div>
-                            )}
-                        </div>
-
-                        <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                            <div className="flex flex-col gap-1.5 min-w-0 pr-2">
-                                <div className="flex items-center gap-1.5">
-                                    {!tx.isAuto ? (
-                                        <span className="text-[11px] font-bold text-slate-700 kanit-text truncate">{tx.category}</span>
-                                    ) : (
-                                        <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200">ระบบ POS</span>
-                                    )}
-                                </div>
-                                <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5">
-                                    {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : <><Package size={12}/> {tx.method}</>}
-                                </div>
-                            </div>
-                            <div className="text-right flex flex-col gap-1 shrink-0">
-                                <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Actions Row */}
-                        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
-                            <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                                <Printer size={14} /> พิมพ์
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                                <Pencil size={14} /> แก้ไข
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                                <Trash2 size={14} /> ลบ
-                            </button>
-                        </div>
-                    </div>
-                  ))
+                ) : cardVirtualItems.length > 0 ? (
+                  <>
+                    {cardVirtualItems[0].start > 0 && (
+                      <div style={{ height: `${cardVirtualItems[0].start}px` }} />
+                    )}
+                    {cardVirtualItems.map((virtualRow) => {
+                      const tx = visibleTransactions[virtualRow.index];
+                      if (!tx) return null;
+                      return renderTxMobileCard(tx, virtualRow);
+                    })}
+                    {cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end > 0 && (
+                      <div style={{ height: `${cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end}px` }} />
+                    )}
+                  </>
                 ) : (
                   <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                     <Receipt size={40} className="mx-auto mb-3 opacity-30" />

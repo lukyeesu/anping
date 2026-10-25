@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import CustomSelect from './CustomSelect';
 import CalendarView from './CalendarView';
 import CalendarDay from './CalendarDay';
+import { useVirtualRows } from '../hooks/useVirtualRows';
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -1001,176 +1002,192 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
 
 
-  // --- 1. Component Separation & 2. React.memo (via useMemo) ---
-  // ป้องกันการ Re-render ตารางใหม่ทั้งหมดเมื่อ Header ทำแอนิเมชัน (isApptHeaderScrolled เปลี่ยนค่า)
-  const memoizedApptTableRows = useMemo(() => {
-    return filteredData.slice(0, visibleCount).map((appt, index) => {
-        const effectiveDt = getEffectiveApptDatetimeStr(appt);
-        const dtParts = effectiveDt.split(' ');
-        const datePart = dtParts[0] || '-';
-        const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
+  // --- Virtualization for Desktop Table & Mobile Cards ---
+  const tableVirtualizer = useVirtualRows({
+    count: filteredData.length,
+    estimateSize: 72,
+    overscan: 5,
+    getItemKey: useCallback((index) => filteredData[index]?.id || index, [filteredData])
+  });
 
-        const patientObj = (patientsData || []).find(p => {
-          const pid = getPatientId(p);
-          return pid === appt.hn || (p.hn && p.hn === appt.hn) || (p.id && String(p.id) === String(appt.hn));
-        });
-        const isVip = isPatientVipActive(patientObj);
+  const cardVirtualizer = useVirtualRows({
+    count: filteredData.length,
+    estimateSize: 145,
+    overscan: 5,
+    getItemKey: useCallback((index) => filteredData[index]?.id || index, [filteredData])
+  });
 
-        return (
-        <tr 
-          key={`${appt.id || 'appt'}-${index}`} 
+  const tableVirtualItems = tableVirtualizer.getVirtualItems();
+  const cardVirtualItems = cardVirtualizer.getVirtualItems();
+  const tableTotalSize = tableVirtualizer.getTotalSize();
+  const cardTotalSize = cardVirtualizer.getTotalSize();
+
+  const renderApptTableRow = useCallback((appt, virtualRow) => {
+    const effectiveDt = getEffectiveApptDatetimeStr(appt);
+    const dtParts = effectiveDt.split(' ');
+    const datePart = dtParts[0] || '-';
+    const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
+
+    const patientObj = (patientsData || []).find(p => {
+      const pid = getPatientId(p);
+      return pid === appt.hn || (p.hn && p.hn === appt.hn) || (p.id && String(p.id) === String(appt.hn));
+    });
+    const isVip = isPatientVipActive(patientObj);
+
+    return (
+      <tr 
+        key={virtualRow.key}
+        data-index={virtualRow.index}
+        ref={tableVirtualizer.measureElement}
+        onClick={() => handleOpenApptEdit(appt, true)} 
+        className={
+          isVip
+            ? "border-b border-amber-300/80 bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 transition-all duration-200 text-sm align-middle cursor-pointer group font-data shadow-xs"
+            : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group font-data"
+        }
+      >
+        <td className={`py-4 pl-6 font-medium text-left ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-slate-700'}`}>
+            <div className="flex flex-col items-start gap-1">
+            <span>{datePart}</span>
+            {timePart && <span className={`text-sm font-medium ${isVip ? 'text-amber-800/80' : 'text-slate-500'}`}>{timePart}</span>}
+            </div>
+        </td>
+        <td className={`py-4 font-medium text-center kanit-text ${isVip ? 'text-amber-950 font-bold' : 'text-sky-600'}`}>{appt.hn}</td>
+        <td className="py-4 text-left px-2">
+            <div className="flex items-center flex-wrap gap-2">
+                <span className={`font-bold ${isVip ? 'text-amber-950' : 'text-slate-700'}`}>{appt.patientName}</span>
+                {isVip && (
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
+                    <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                  </span>
+                )}
+                {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}
+            </div>
+        </td>
+        <td className="py-4 text-center">
+            <div className="flex justify-center">
+            {formatPhoneDisplay(appt.phone) ? (
+                <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
+                <Phone size={14} /> {formatPhoneDisplay(appt.phone)}
+                </a>
+            ) : <span className="text-slate-400">-</span>}
+            </div>
+        </td>
+        <td className="py-4 text-slate-600 text-left px-2">{appt.doctor}</td>
+        <td className="py-4 text-slate-500 text-left px-2 max-w-[200px] truncate">{appt.reason}</td>
+        <td className="py-4 text-center kanit-text">
+            <div className="flex justify-center">
+              {(() => {
+                const info = getStatusInfo(getEffectiveApptStatus(appt));
+                return (
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${info.colorClass}`}>
+                    {info.label}
+                  </span>
+                );
+              })()}
+            </div>
+        </td>
+        <td className="py-4 text-center">
+            <div className="flex justify-center gap-2 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg"><Pencil size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={18} /></button>
+            </div>
+        </td>
+      </tr>
+    );
+  }, [patientsData]);
+
+  const renderApptMobileCard = useCallback((appt, virtualRow) => {
+    const effectiveDt = getEffectiveApptDatetimeStr(appt);
+    const dtParts = effectiveDt.split(' ');
+    const datePart = dtParts[0] || '-';
+    const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
+    const patientObj = (patientsData || []).find(p => {
+      const pid = getPatientId(p);
+      return pid === appt.hn || (p.hn && p.hn === appt.hn) || (p.id && String(p.id) === String(appt.hn));
+    });
+    const isVip = isPatientVipActive(patientObj);
+
+    return (
+        <div 
+          key={virtualRow.key}
+          data-index={virtualRow.index}
+          ref={cardVirtualizer.measureElement}
           onClick={() => handleOpenApptEdit(appt, true)} 
-          className={
+          className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] ${
             isVip
-              ? "border-b border-amber-300/80 bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 transition-all duration-200 text-sm align-middle cursor-pointer group font-data space-row-animation shadow-xs"
-              : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group font-data space-row-animation"
-          }
+              ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
+              : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
+          }`} 
         >
-            <td className={`py-4 pl-6 font-medium text-left ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-slate-700'}`}>
-                <div className="flex flex-col items-start gap-1">
-                <span>{datePart}</span>
-                {timePart && <span className={`text-sm font-medium ${isVip ? 'text-amber-800/80' : 'text-slate-500'}`}>{timePart}</span>}
-                </div>
-            </td>
-            <td className={`py-4 font-medium text-center kanit-text ${isVip ? 'text-amber-950 font-bold' : 'text-sky-600'}`}>{appt.hn}</td>
-            <td className="py-4 text-left px-2">
-                <div className="flex items-center flex-wrap gap-2">
-                    <span className={`font-bold ${isVip ? 'text-amber-950' : 'text-slate-700'}`}>{appt.patientName}</span>
+            {/* แถวที่ 1: รหัส HN, สถานะ และปุ่มจัดการ */}
+            <div className="flex justify-between items-center mb-1.5">
+                <div className="flex items-center gap-3">
+                    <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{appt.hn}</span>
                     {isVip && (
                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
                         <Crown size={10} className="fill-amber-200 text-white" /> VIP
                       </span>
                     )}
-                    {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}
-                </div>
-            </td>
-            <td className="py-4 text-center">
-                <div className="flex justify-center">
-                {formatPhoneDisplay(appt.phone) ? (
-                    <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
-                    <Phone size={14} /> {formatPhoneDisplay(appt.phone)}
-                    </a>
-                ) : <span className="text-slate-400">-</span>}
-                </div>
-            </td>
-            <td className="py-4 text-slate-600 text-left px-2">{appt.doctor}</td>
-            <td className="py-4 text-slate-500 text-left px-2 max-w-[200px] truncate">{appt.reason}</td>
-            <td className="py-4 text-center kanit-text">
-                <div className="flex justify-center">
-                  {(() => {
-                    const info = getStatusInfo(getEffectiveApptStatus(appt));
-                    return (
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${info.colorClass}`}>
-                        {info.label}
-                      </span>
-                    );
-                  })()}
-                </div>
-            </td>
-            <td className="py-4 text-center">
-                <div className="flex justify-center gap-2 transition-opacity">
-                <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg"><Pencil size={18} /></button>
-                <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={18} /></button>
-                </div>
-            </td>
-        </tr>
-        )
-    });
-  }, [filteredData, visibleCount, patientsData]); // 3. Virtualization Concept: โหลดเท่าที่จำเป็น (ตามค่า visibleCount)
-
-  const memoizedApptMobileCards = useMemo(() => {
-    return filteredData.slice(0, visibleCount).map((appt, index) => {
-        const effectiveDt = getEffectiveApptDatetimeStr(appt);
-        const dtParts = effectiveDt.split(' ');
-        const datePart = dtParts[0] || '-';
-        const timePart = dtParts[1] ? dtParts[1].replace('น.', '').trim() : '';
-        const patientObj = (patientsData || []).find(p => {
-          const pid = getPatientId(p);
-          return pid === appt.hn || (p.hn && p.hn === appt.hn) || (p.id && String(p.id) === String(appt.hn));
-        });
-        const isVip = isPatientVipActive(patientObj);
-
-        return (
-            <div 
-              key={`mobile-appt-${appt.id || index}`} 
-              onClick={() => handleOpenApptEdit(appt, true)} 
-              className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all space-row-animation active:scale-[0.98] ${
-                isVip
-                  ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
-                  : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
-              }`} 
-              style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}
-            >
-                
-                {/* แถวที่ 1: รหัส HN, สถานะ และปุ่มจัดการ */}
-                <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center gap-3">
-                        <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{appt.hn}</span>
-                        {isVip && (
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
-                            <Crown size={10} className="fill-amber-200 text-white" /> VIP
-                          </span>
-                        )}
-                        {(() => {
-                          const info = getStatusInfo(getEffectiveApptStatus(appt));
-                          return (
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${info.colorClass}`}>
-                              {info.label}
-                            </span>
-                          );
-                        })()}
-                    </div>
-                </div>
-
-                {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
-                <div className="mb-3">
-                    <h4 className="font-bold text-slate-800 text-lg font-data leading-tight flex items-center flex-wrap gap-2">{appt.patientName} {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}</h4>
-                    <div className="mt-1.5">
-                        {formatPhoneDisplay(appt.phone) ? (
-                            <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
-                                <Phone size={12} className="text-sky-500" /> {formatPhoneDisplay(appt.phone)}
-                            </a>
-                        ) : <span className="text-[10px] text-slate-400 block">- ไม่มีเบอร์ติดต่อ -</span>}
-                    </div>
-                </div>
-
-                {/* แถวที่ 3: ข้อมูลนัดหมาย (จัดกลุ่มในกล่องสีเทาให้อ่านง่าย) */}
-                <div className={`p-3 rounded-xl border flex flex-col gap-2 ${isVip ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' : 'bg-slate-50 border-slate-100'}`}>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
-                        <div className="min-w-0 flex-1 truncate">
-                            <span className="font-medium text-slate-600 font-data">{datePart}</span>
-                            {timePart && <span className="text-sky-600 font-bold ml-1.5">{timePart}</span>}
-                        </div>
-                    </div>
-                    <div className="flex items-start gap-2 text-xs">
-                       <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 mt-0.5"><Stethoscope size={10} /></div>
-                       <div className="flex-1 min-w-0 pt-0.5">
-                           <div className="flex items-center gap-1.5 mb-1">
-                               <span className="font-medium text-slate-500">แพทย์:</span>
-                               <span className="font-bold text-slate-700 truncate">{appt.doctor || '-'}</span>
-                           </div>
-                           <div className="flex items-start gap-1.5">
-                               <span className="font-medium text-slate-500 shrink-0">อาการ:</span>
-                               <span className="text-slate-600 font-data line-clamp-2 leading-snug">{appt.reason || '-'}</span>
-                           </div>
-                       </div>
-                   </div>
-                </div>
-
-                {/* แถวที่ 4: ปุ่มจัดการ (ย้ายมาไว้ด้านล่าง สัดส่วน 1:1) */}
-                <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-sm kanit-text">
-                        <Trash2 size={16} /> ลบ
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-sm kanit-text">
-                        <Pencil size={16} /> แก้ไข
-                    </button>
+                    {(() => {
+                      const info = getStatusInfo(getEffectiveApptStatus(appt));
+                      return (
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${info.colorClass}`}>
+                          {info.label}
+                        </span>
+                      );
+                    })()}
                 </div>
             </div>
-        );
-    });
-  }, [filteredData, visibleCount]);
+
+            {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
+            <div className="mb-3">
+                <h4 className="font-bold text-slate-800 text-lg font-data leading-tight flex items-center flex-wrap gap-2">{appt.patientName} {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}</h4>
+                <div className="mt-1.5">
+                    {formatPhoneDisplay(appt.phone) ? (
+                        <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
+                            <Phone size={12} className="text-sky-500" /> {formatPhoneDisplay(appt.phone)}
+                        </a>
+                    ) : <span className="text-[10px] text-slate-400 block">- ไม่มีเบอร์ติดต่อ -</span>}
+                </div>
+            </div>
+
+            {/* แถวที่ 3: ข้อมูลนัดหมาย (จัดกลุ่มในกล่องสีเทาให้อ่านง่าย) */}
+            <div className={`p-3 rounded-xl border flex flex-col gap-2 ${isVip ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="flex items-center gap-2 text-xs">
+                    <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
+                    <div className="min-w-0 flex-1 truncate">
+                        <span className="font-medium text-slate-600 font-data">{datePart}</span>
+                        {timePart && <span className="text-sky-600 font-bold ml-1.5">{timePart}</span>}
+                    </div>
+                </div>
+                <div className="flex items-start gap-2 text-xs">
+                   <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 mt-0.5"><Stethoscope size={10} /></div>
+                   <div className="flex-1 min-w-0 pt-0.5">
+                       <div className="flex items-center gap-1.5 mb-1">
+                           <span className="font-medium text-slate-500">แพทย์:</span>
+                           <span className="font-bold text-slate-700 truncate">{appt.doctor || '-'}</span>
+                       </div>
+                       <div className="flex items-start gap-1.5">
+                           <span className="font-medium text-slate-500 shrink-0">อาการ:</span>
+                           <span className="text-slate-600 font-data line-clamp-2 leading-snug">{appt.reason || '-'}</span>
+                       </div>
+                   </div>
+               </div>
+            </div>
+
+            {/* แถวที่ 4: ปุ่มจัดการ (ย้ายมาไว้ด้านล่าง สัดส่วน 1:1) */}
+            <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
+                <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                    <Trash2 size={16} /> ลบ
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-sm kanit-text">
+                    <Pencil size={16} /> แก้ไข
+                </button>
+            </div>
+        </div>
+    );
+  }, [patientsData]);
 
   // --- 4. เพิ่ม React.memo (useMemo) ให้ปฏิทิน ป้องกันการเรนเดอร์ใหม่มหาศาลตอนเลื่อนจอ ---
   const memoizedCalendarView = useMemo(() => {
@@ -1342,19 +1359,31 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                     <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                                   </tr>
                                 ))
-                              ) : memoizedApptTableRows}
-                              {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
-                                  <tr key={`skel-more-${i}`} className="border-b border-slate-50">
-                                    <td className="py-4 pl-6"><div className="flex flex-col items-start gap-2"><div className="h-4 w-full max-w-[64px] bg-slate-200 rounded animate-pulse"></div><div className="h-3 w-full max-w-[48px] bg-slate-100 rounded animate-pulse"></div></div></td>
-                                    <td className="py-4"><div className="h-4 w-full max-w-[64px] bg-slate-200 rounded animate-pulse mx-auto"></div></td>
-                                    <td className="py-4 px-2"><div className="h-4 w-full max-w-[128px] bg-slate-200 rounded animate-pulse"></div></td>
-                                    <td className="py-4"><div className="h-8 w-full max-w-[96px] bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
-                                    <td className="py-4 px-2"><div className="h-4 w-full max-w-[96px] bg-slate-200 rounded animate-pulse"></div></td>
-                                    <td className="py-4 px-2"><div className="h-4 w-full max-w-[128px] bg-slate-200 rounded animate-pulse"></div></td>
-                                    <td className="py-4"><div className="h-6 w-full max-w-[64px] bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
-                                    <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
-                                  </tr>
-                              ))}
+                              ) : tableVirtualItems.length > 0 ? (
+                                <>
+                                  {tableVirtualItems[0].start > 0 && (
+                                    <tr>
+                                      <td colSpan={8} style={{ height: `${tableVirtualItems[0].start}px`, padding: 0, border: 0 }} />
+                                    </tr>
+                                  )}
+                                  {tableVirtualItems.map((virtualRow) => {
+                                    const appt = filteredData[virtualRow.index];
+                                    if (!appt) return null;
+                                    return renderApptTableRow(appt, virtualRow);
+                                  })}
+                                  {tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end > 0 && (
+                                    <tr>
+                                      <td colSpan={8} style={{ height: `${tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end}px`, padding: 0, border: 0 }} />
+                                    </tr>
+                                  )}
+                                </>
+                              ) : (
+                                <tr>
+                                  <td colSpan={8} className="text-center py-10 text-slate-400 kanit-text bg-slate-50/50">
+                                    ไม่พบข้อมูลการนัดหมาย
+                                  </td>
+                                </tr>
+                              )}
                             </tbody>
                         </table>
                     </div>
@@ -1388,35 +1417,24 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                     </div>
                                 </div>
                             ))
-                        ) : (
+                        ) : cardVirtualItems.length > 0 ? (
                             <>
-                                {memoizedApptMobileCards}
-                                {!isGlobalLoading && filteredData.length === 0 && (
-                                    <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลการนัดหมาย</div>
-                                )}
-                                {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
-                                    <div key={`skel-mob-more-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
-                                        <div className="flex justify-between items-center mb-1.5">
-                                            <div className="h-5 w-full max-w-[64px] bg-slate-200 rounded animate-pulse"></div>
-                                            <div className="h-5 w-full max-w-[64px] bg-slate-200 rounded-md animate-pulse"></div>
-                                        </div>
-                                        <div className="mb-3">
-                                            <div className="h-6 w-full max-w-[160px] bg-slate-200 rounded animate-pulse mb-2"></div>
-                                            <div className="h-6 w-full max-w-[96px] bg-slate-200 rounded-lg animate-pulse"></div>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-full max-w-[20px] h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
-                                                <div className="h-4 w-full max-w-[128px] bg-slate-200 rounded animate-pulse"></div>
-                                            </div>
-                                            <div className="flex items-start gap-2">
-                                                <div className="w-full max-w-[20px] h-5 rounded-full bg-slate-200 animate-pulse shrink-0"></div>
-                                                <div className="h-4 w-full max-w-[192px] bg-slate-200 rounded animate-pulse"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                              {cardVirtualItems[0].start > 0 && (
+                                <div style={{ height: `${cardVirtualItems[0].start}px` }} />
+                              )}
+                              {cardVirtualItems.map((virtualRow) => {
+                                const appt = filteredData[virtualRow.index];
+                                if (!appt) return null;
+                                return renderApptMobileCard(appt, virtualRow);
+                              })}
+                              {cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end > 0 && (
+                                <div style={{ height: `${cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end}px` }} />
+                              )}
                             </>
+                        ) : (
+                            <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                              ไม่พบข้อมูลการนัดหมาย
+                            </div>
                         )}
                     </div>
                 </div>

@@ -21,6 +21,7 @@ import { subscribeStoreUpdates } from '../lib/offlineStore';
 import { dispatchClinicNotification } from '../lib/notificationHub';
 import { isPatientVipActive, getPatientVipStatus, calculateVipExpiry } from '../utils/couponHelpers';
 import IdCardScannerModal from '../components/IdCardScannerModal';
+import useVirtualRows from '../hooks/useVirtualRows';
 
 const formatCitizenId = (id) => {
   if (!id) return '-';
@@ -2506,219 +2507,242 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     });
       };
 
-  // --- 1. Component Separation & 2. React.memo (via useMemo) ---
-  // การใช้ useMemo ห่อหุ้มการเรนเดอร์ตาราง จะทำหน้าที่เหมือน React.memo และแยก Component ออกมาในตัว
-  // เพื่อป้องกันไม่ให้เบราว์เซอร์ต้องวาดข้อมูล 600 แถวใหม่ทุกครั้งที่ Header มีการขยับ (isRecordsScrolled เปลี่ยน)
-  const memoizedPatientTableRows = useMemo(() => {
-    return sortedPatients.map((patient, index) => {
-      const txCount = getPatientTreatmentCount(patient);
-      const isVip = isPatientVipActive(patient);
-      return (
-        <tr 
-          key={`${getPatientId(patient)}-${index}`} 
+  // --- TanStack Virtual Virtualizers for 60+ FPS Scroll & Responsive Sidebar ---
+  const tableVirtualizer = useVirtualRows({
+    count: sortedPatients.length,
+    estimateSize: 68,
+    overscan: 5,
+    getItemKey: (idx) => {
+      const p = sortedPatients[idx];
+      return p ? (getPatientId(p) || idx) : idx;
+    }
+  });
+
+  const cardVirtualizer = useVirtualRows({
+    count: sortedPatients.length,
+    estimateSize: 240,
+    overscan: 4,
+    getItemKey: (idx) => {
+      const p = sortedPatients[idx];
+      return p ? (getPatientId(p) || idx) : idx;
+    }
+  });
+
+  const tableVirtualItems = tableVirtualizer.getVirtualItems();
+  const tableTotalSize = tableVirtualizer.getTotalSize();
+
+  const cardVirtualItems = cardVirtualizer.getVirtualItems();
+  const cardTotalSize = cardVirtualizer.getTotalSize();
+
+  const renderPatientTableRow = (patient, virtualRow) => {
+    const txCount = getPatientTreatmentCount(patient);
+    const isVip = isPatientVipActive(patient);
+    return (
+      <tr 
+        key={virtualRow.key} 
+        ref={tableVirtualizer.measureElement}
+        data-index={virtualRow.index}
+        onClick={() => handleOpenEdit(patient, true)} 
+        className={
+          isVip 
+            ? "border-b border-amber-300 bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 transition-all duration-200 group cursor-pointer text-sm font-data shadow-xs" 
+            : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data"
+        }
+      >
+        <td className={`py-4 pl-6 font-medium kanit-text ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-sky-600'}`}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={isVip ? "font-bold text-amber-950 tracking-wide" : ""}>{getPatientId(patient)}</span>
+          </div>
+        </td>
+        <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{getPatientFullName(patient)}</td>
+        <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-900' : 'text-slate-600'}`}>{patient.nickname || '-'}</td>
+        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.gender || '-'}</td>
+        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
+        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.idCard || '-'}</td>
+        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.phone || patient.phone1 || '-'}</td>
+        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
+        <td className={`py-4 text-center font-bold font-data ${isVip ? 'text-amber-950 font-black' : 'text-slate-700'}`}>{txCount}</td>
+        <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
+        <td className="py-4 text-right pr-4">
+          <div className="flex justify-end gap-2 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-sky-400 hover:text-sky-500 hover:bg-sky-50'}`} title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'}`} title="แก้ไขข้อมูล"><Pencil size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const renderPatientMobileCard = (patient, virtualRow) => {
+    const phoneNum = patient.phone || patient.phone1;
+    const ageStr = patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-';
+    const lastVisitStr = patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit);
+    
+    const txCount = getPatientTreatmentCount(patient);
+    const isNewPatient = txCount === 0;
+    const isVip = isPatientVipActive(patient);
+    
+    return (
+        <div 
+          key={virtualRow.key} 
+          ref={cardVirtualizer.measureElement}
+          data-index={virtualRow.index}
           onClick={() => handleOpenEdit(patient, true)} 
-          className={
-            isVip 
-              ? "border-b border-amber-300 bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 transition-all duration-200 group cursor-pointer text-sm font-data space-row-animation shadow-xs" 
-              : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data space-row-animation"
-          }
+          className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] ${
+            isVip
+              ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
+              : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
+          }`} 
         >
-          <td className={`py-4 pl-6 font-medium kanit-text ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-sky-600'}`}>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={isVip ? "font-bold text-amber-950 tracking-wide" : ""}>{getPatientId(patient)}</span>
-            </div>
-          </td>
-          <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{getPatientFullName(patient)}</td>
-          <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-900' : 'text-slate-600'}`}>{patient.nickname || '-'}</td>
-          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.gender || '-'}</td>
-          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
-          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.idCard || '-'}</td>
-          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.phone || patient.phone1 || '-'}</td>
-          <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
-          <td className={`py-4 text-center font-bold font-data ${isVip ? 'text-amber-950 font-black' : 'text-slate-700'}`}>{txCount}</td>
-          <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
-          <td className="py-4 text-right pr-4">
-            <div className="flex justify-end gap-2 transition-opacity">
-              <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-sky-400 hover:text-sky-500 hover:bg-sky-50'}`} title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
-              <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'}`} title="แก้ไขข้อมูล"><Pencil size={18} /></button>
-              <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
-            </div>
-          </td>
-        </tr>
-      );
-    });
-  }, [sortedPatients, isProcessing, processingPdpaHn, getPatientTreatmentCount]);
-
-  const memoizedPatientMobileCards = useMemo(() => {
-    return sortedPatients.map((patient, index) => {
-        const phoneNum = patient.phone || patient.phone1;
-        const ageStr = patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-';
-        const lastVisitStr = patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit);
-        
-        const txCount = getPatientTreatmentCount(patient);
-        const isNewPatient = txCount === 0;
-        const isVip = isPatientVipActive(patient);
-        
-        return (
-            <div 
-              key={`mobile-${getPatientId(patient)}-${index}`} 
-              onClick={() => handleOpenEdit(patient, true)} 
-              className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all space-row-animation active:scale-[0.98] ${
-                isVip
-                  ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
-                  : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
-              }`} 
-              style={{ animationDelay: `${index < 10 ? index * 40 : 0}ms` }}
-            >
-                
-                {/* แถวที่ 1: รหัส HN, ป้ายสถานะ และปุ่มจัดการ */}
-                <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center flex-wrap gap-2">
-                        <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{getPatientId(patient)}</span>
-                        {isVip && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white border border-amber-300/80 shadow-xs flex items-center gap-1">
-                            <Crown size={10} className="fill-amber-200 text-white" /> VIP
-                          </span>
-                        )}
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${
-                          isNewPatient 
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                            : isVip 
-                              ? 'bg-amber-100/90 text-amber-950 border border-amber-300' 
-                              : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
-                        }`}>
-                            {isNewPatient ? 'ผู้ป่วยใหม่' : 'ผู้ป่วยเก่า'}
-                        </span>
-                    </div>
-                    <div className={`text-right whitespace-nowrap px-2 py-1 rounded-lg border shrink-0 ml-2 ${isVip ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-bold' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className={`font-medium text-[10px] sm:text-xs kanit-text ${isVip ? 'text-amber-900' : 'text-slate-500'}`}>รับการรักษา</span>
-                        <span className={`font-bold text-xs sm:text-sm font-data mx-1 ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{txCount}</span>
-                        <span className={`font-medium text-[10px] sm:text-xs kanit-text ${isVip ? 'text-amber-900' : 'text-slate-500'}`}>ครั้ง</span>
-                    </div>
-                </div>
-
-                {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
-                <div className="mb-3">
-                    <h4 className={`font-bold text-lg font-data leading-tight ${isVip ? 'text-amber-950 font-bold' : 'text-slate-800'}`}>
-                      {getPatientFullName(patient)} {patient.nickname && <span className={`text-sm font-medium font-data ml-1 ${isVip ? 'text-amber-800' : 'text-sky-600'}`}>({patient.nickname})</span>}
-                    </h4>
-                    <div className="mt-1.5">
-                        {phoneNum ? (
-                            <a 
-                              href={`tel:${phoneNum}`} 
-                              onClick={(e)=>e.stopPropagation()} 
-                              className={`inline-flex items-center gap-1.5 font-medium font-data text-[11px] sm:text-xs px-2 py-1 rounded-lg border w-fit transition-colors ${
-                                isVip 
-                                  ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border-amber-300 font-bold' 
-                                  : 'text-slate-600 hover:text-sky-600 bg-slate-50 border-slate-100'
-                              }`}
-                            >
-                                <Phone size={12} className={isVip ? 'text-amber-700' : 'text-sky-500'} /> {phoneNum}
-                            </a>
-                        ) : <span className={`text-[10px] block ${isVip ? 'text-amber-800/70' : 'text-slate-400'}`}>- ไม่มีเบอร์ติดต่อ -</span>}
-                    </div>
-                </div>
-
-                {/* แถวที่ 3: ข้อมูลส่วนตัวอื่นๆ (ไม่ใช้สีขาวทึบบังสีทอง) */}
-                <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
-                  isVip 
-                    ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' 
-                    : 'bg-slate-50 border-slate-100'
-                }`}>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                          isVip 
-                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
-                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
-                        }`}><User size={10} /></div>
-                        <div className="min-w-0 flex-1 truncate">
-                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>เพศ:</span>
-                            <span className={`font-bold ml-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{patient.gender || '-'}</span>
-                            <span className={`mx-2 ${isVip ? 'text-amber-300' : 'text-slate-300'}`}>|</span>
-                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>อายุ:</span>
-                            <span className={`font-bold ml-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{ageStr}</span>
-                        </div>
-                    </div>
-                    {patient.idCard && (
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                          isVip 
-                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
-                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
-                        }`}><CreditCard size={10} /></div>
-                        <div className="min-w-0 flex-1 truncate">
-                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>เลขบัตรฯ:</span>
-                            <span className={`font-bold ml-1.5 font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{patient.idCard}</span>
-                        </div>
-                    </div>
+            
+            {/* แถวที่ 1: รหัส HN, ป้ายสถานะ และปุ่มจัดการ */}
+            <div className="flex justify-between items-center mb-1.5">
+                <div className="flex items-center flex-wrap gap-2">
+                    <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{getPatientId(patient)}</span>
+                    {isVip && (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white border border-amber-300/80 shadow-xs flex items-center gap-1">
+                        <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                      </span>
                     )}
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                          isVip 
-                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
-                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
-                        }`}><Clock size={10} /></div>
-                        <div className="min-w-0 flex-1 truncate">
-                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>รับบริการล่าสุด:</span>
-                            <span className={`font-bold ml-1.5 font-data ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{lastVisitStr}</span>
-                        </div>
-                    </div>
-                    
-                    {/* แถวที่ 3.5: สถานะ PDPA */}
-                    <div className={`flex items-center gap-2 text-xs mt-1 pt-2 border-t ${
-                      isVip ? 'border-amber-300/70' : 'border-slate-200'
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${
+                      isNewPatient 
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                        : isVip 
+                          ? 'bg-amber-100/90 text-amber-950 border border-amber-300' 
+                          : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
                     }`}>
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                          isVip 
-                            ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
-                            : 'bg-white shadow-sm border border-slate-100 text-slate-400'
-                        }`}><ShieldCheck size={10} /></div>
-                        <div className="min-w-0 flex-1 flex items-center gap-2">
-                            <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>PDPA:</span>
-                            {renderPdpaButton(patient)}
-                        </div>
-                    </div>
+                        {isNewPatient ? 'ผู้ป่วยใหม่' : 'ผู้ป่วยเก่า'}
+                    </span>
                 </div>
-
-                {/* แถวที่ 4: ปุ่มจัดการ (ปุ่มทองสวยเข้าชุดเมื่อเป็น VIP) */}
-                <div className={`mt-3 grid grid-cols-3 gap-2 pt-3 border-t ${
-                  isVip ? 'border-amber-300/70' : 'border-slate-100'
-                }`}>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} 
-                      className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
-                        isVip 
-                          ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
-                          : 'text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50'
-                      }`}
-                    >
-                        <Printer size={16} /> พิมพ์
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} 
-                      className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
-                        isVip 
-                          ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
-                          : 'text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50'
-                      }`}
-                    >
-                        <Pencil size={16} /> แก้ไข
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} 
-                      className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
-                        isVip 
-                          ? 'bg-amber-100/80 hover:bg-rose-100 text-amber-950 hover:text-rose-600 border border-amber-300/70 font-bold shadow-2xs' 
-                          : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50'
-                      }`}
-                    >
-                        <Trash2 size={16} /> ลบ
-                    </button>
+                <div className={`text-right whitespace-nowrap px-2 py-1 rounded-lg border shrink-0 ml-2 ${isVip ? 'bg-amber-100/90 border-amber-300 text-amber-950 font-bold' : 'bg-slate-50 border-slate-100'}`}>
+                    <span className={`font-medium text-[10px] sm:text-xs kanit-text ${isVip ? 'text-amber-900' : 'text-slate-500'}`}>รับการรักษา</span>
+                    <span className={`font-bold text-xs sm:text-sm font-data mx-1 ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{txCount}</span>
+                    <span className={`font-medium text-[10px] sm:text-xs kanit-text ${isVip ? 'text-amber-900' : 'text-slate-500'}`}>ครั้ง</span>
                 </div>
             </div>
-        );
-    });
-  }, [sortedPatients, isProcessing, processingPdpaHn, getPatientTreatmentCount]);
+
+            {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
+            <div className="mb-3">
+                <h4 className={`font-bold text-lg font-data leading-tight ${isVip ? 'text-amber-950 font-bold' : 'text-slate-800'}`}>
+                  {getPatientFullName(patient)} {patient.nickname && <span className={`text-sm font-medium font-data ml-1 ${isVip ? 'text-amber-800' : 'text-sky-600'}`}>({patient.nickname})</span>}
+                </h4>
+                <div className="mt-1.5">
+                    {phoneNum ? (
+                        <a 
+                          href={`tel:${phoneNum}`} 
+                          onClick={(e)=>e.stopPropagation()} 
+                          className={`inline-flex items-center gap-1.5 font-medium font-data text-[11px] sm:text-xs px-2 py-1 rounded-lg border w-fit transition-colors ${
+                            isVip 
+                              ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border-amber-300 font-bold' 
+                              : 'text-slate-600 hover:text-sky-600 bg-slate-50 border-slate-100'
+                          }`}
+                        >
+                            <Phone size={12} className={isVip ? 'text-amber-700' : 'text-sky-500'} /> {phoneNum}
+                        </a>
+                    ) : <span className={`text-[10px] block ${isVip ? 'text-amber-800/70' : 'text-slate-400'}`}>- ไม่มีเบอร์ติดต่อ -</span>}
+                </div>
+            </div>
+
+            {/* แถวที่ 3: ข้อมูลส่วนตัวอื่นๆ */}
+            <div className={`p-3 rounded-xl border flex flex-col gap-2 ${
+              isVip 
+                ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' 
+                : 'bg-slate-50 border-slate-100'
+            }`}>
+                <div className="flex items-center gap-2 text-xs">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                      isVip 
+                        ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                        : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                    }`}><User size={10} /></div>
+                    <div className="min-w-0 flex-1 truncate">
+                        <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>เพศ:</span>
+                        <span className={`font-bold ml-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{patient.gender || '-'}</span>
+                        <span className={`mx-2 ${isVip ? 'text-amber-300' : 'text-slate-300'}`}>|</span>
+                        <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>อายุ:</span>
+                        <span className={`font-bold ml-1.5 ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{ageStr}</span>
+                    </div>
+                </div>
+                {patient.idCard && (
+                <div className="flex items-center gap-2 text-xs">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                      isVip 
+                        ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                        : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                    }`}><CreditCard size={10} /></div>
+                    <div className="min-w-0 flex-1 truncate">
+                        <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>เลขบัตรฯ:</span>
+                        <span className={`font-bold ml-1.5 font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{patient.idCard}</span>
+                    </div>
+                </div>
+                )}
+                <div className="flex items-center gap-2 text-xs">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                      isVip 
+                        ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                        : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                    }`}><Clock size={10} /></div>
+                    <div className="min-w-0 flex-1 truncate">
+                        <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>รับบริการล่าสุด:</span>
+                        <span className={`font-bold ml-1.5 font-data ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{lastVisitStr}</span>
+                    </div>
+                </div>
+                
+                {/* แถวที่ 3.5: สถานะ PDPA */}
+                <div className={`flex items-center gap-2 text-xs mt-1 pt-2 border-t ${
+                  isVip ? 'border-amber-300/70' : 'border-slate-200'
+                }`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                      isVip 
+                        ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
+                        : 'bg-white shadow-sm border border-slate-100 text-slate-400'
+                    }`}><ShieldCheck size={10} /></div>
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                        <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>PDPA:</span>
+                        {renderPdpaButton(patient)}
+                    </div>
+                </div>
+            </div>
+
+            {/* แถวที่ 4: ปุ่มจัดการ */}
+            <div className={`mt-3 grid grid-cols-3 gap-2 pt-3 border-t ${
+              isVip ? 'border-amber-300/70' : 'border-slate-100'
+            }`}>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} 
+                  className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                    isVip 
+                      ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
+                      : 'text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50'
+                  }`}
+                >
+                    <Printer size={16} /> พิมพ์
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} 
+                  className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                    isVip 
+                      ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
+                      : 'text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50'
+                  }`}
+                >
+                    <Pencil size={16} /> แก้ไข
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} 
+                  className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                    isVip 
+                      ? 'bg-amber-100/80 hover:bg-rose-100 text-amber-950 hover:text-rose-600 border border-amber-300/70 font-bold shadow-2xs' 
+                      : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50'
+                  }`}
+                >
+                    <Trash2 size={16} /> ลบ
+                </button>
+            </div>
+        </div>
+    );
+  };
 
   return (
     <>
@@ -2856,7 +2880,31 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                             <td className="py-4 pr-4"><div className="flex justify-end gap-2 transition-opacity"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                         ))
-                      ) : memoizedPatientTableRows}
+                      ) : tableVirtualItems.length > 0 ? (
+                        <>
+                          {tableVirtualItems[0].start > 0 && (
+                            <tr>
+                              <td colSpan={11} style={{ height: `${tableVirtualItems[0].start}px`, padding: 0, border: 0 }} />
+                            </tr>
+                          )}
+                          {tableVirtualItems.map((virtualRow) => {
+                            const patient = sortedPatients[virtualRow.index];
+                            if (!patient) return null;
+                            return renderPatientTableRow(patient, virtualRow);
+                          })}
+                          {tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end > 0 && (
+                            <tr>
+                              <td colSpan={11} style={{ height: `${tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end}px`, padding: 0, border: 0 }} />
+                            </tr>
+                          )}
+                        </>
+                      ) : (
+                        <tr>
+                          <td colSpan={11} className="text-center py-12 text-slate-400 kanit-text">
+                            ไม่พบข้อมูลผู้ป่วย
+                          </td>
+                        </tr>
+                      )}
                       {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
                           <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
                             <td className="py-4 pl-6"><div className="h-4 w-3/4 max-w-[80px] bg-slate-200 rounded animate-pulse"></div></td>
@@ -2928,8 +2976,21 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         ))
                     ) : (
                         <>
-                            {memoizedPatientMobileCards}
-                            {!isGlobalLoading && sortedPatients.length === 0 && (
+                            {cardVirtualItems.length > 0 ? (
+                                <>
+                                    {cardVirtualItems[0].start > 0 && (
+                                        <div style={{ height: `${cardVirtualItems[0].start}px` }} />
+                                    )}
+                                    {cardVirtualItems.map((virtualRow) => {
+                                        const patient = sortedPatients[virtualRow.index];
+                                        if (!patient) return null;
+                                        return renderPatientMobileCard(patient, virtualRow);
+                                    })}
+                                    {cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end > 0 && (
+                                        <div style={{ height: `${cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end}px` }} />
+                                    )}
+                                </>
+                            ) : (
                                 <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">ไม่พบข้อมูลผู้ป่วย</div>
                             )}
                             {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
