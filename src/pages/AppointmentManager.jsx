@@ -1098,10 +1098,10 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
               })()}
             </div>
         </td>
-        <td className="py-4 text-center">
-            <div className="flex justify-center gap-2 transition-opacity">
-            <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg"><Pencil size={18} /></button>
-            <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"><Trash2 size={18} /></button>
+        <td className="py-4 text-right pr-6 whitespace-nowrap min-w-[130px]">
+            <div className="flex items-center justify-end gap-1.5 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg shrink-0"><Pencil size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg shrink-0"><Trash2 size={18} /></button>
             </div>
         </td>
       </tr>
@@ -1353,9 +1353,18 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                     {isDesktopView ? (
                       /* --- Desktop View (Table) --- */
                       <div className="overflow-x-auto overflow-y-hidden">
-                        <table className="w-full text-left border-collapse min-w-[900px] table-fixed">
+                        <table className="w-full text-left border-collapse min-w-[1020px] table-fixed">
                             <thead>
-                              <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pb-4 font-medium pl-6 text-left w-[12%]">วันที่/เวลา</th><th className="pb-4 font-medium text-center w-[10%]">รหัส HN</th><th className="pb-4 font-medium text-left px-2 w-[18%]">ชื่อคนไข้</th><th className="pb-4 font-medium text-center w-[12%]">เบอร์โทร</th><th className="pb-4 font-medium text-left px-2 w-[15%]">แพทย์ผู้นัด</th><th className="pb-4 font-medium text-left px-2 w-[15%]">อาการ</th><th className="pb-4 font-medium text-center w-[10%]">สถานะ</th><th className="pb-4 font-medium text-right pr-6 w-[120px]">จัดการ</th></tr>
+                              <tr className="text-slate-500 border-b border-slate-100 text-sm">
+                                <th className="pb-4 font-medium pl-6 text-left w-[12%]">วันที่/เวลา</th>
+                                <th className="pb-4 font-medium text-center w-[10%]">รหัส HN</th>
+                                <th className="pb-4 font-medium text-left px-2 w-[18%]">ชื่อคนไข้</th>
+                                <th className="pb-4 font-medium text-center w-[12%]">เบอร์โทร</th>
+                                <th className="pb-4 font-medium text-left px-2 w-[14%]">แพทย์ผู้นัด</th>
+                                <th className="pb-4 font-medium text-left px-2 w-[14%]">อาการ</th>
+                                <th className="pb-4 font-medium text-center w-[10%]">สถานะ</th>
+                                <th className="pb-4 font-medium text-right pr-6 w-[130px] min-w-[130px]">จัดการ</th>
+                              </tr>
                             </thead>
                             <tbody>
                               {isGlobalLoading ? (

@@ -1759,15 +1759,15 @@ const FinancePage = ({
              <CheckCircle2 size={12} /> {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
           </span>
         </td>
-        <td className="p-4 pr-6 text-right" onClick={(e) => e.stopPropagation()}>
-           <div className="flex items-center justify-end gap-1">
-               <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors" title="พิมพ์ใบเสร็จ">
+        <td className="p-4 pr-6 text-right whitespace-nowrap min-w-[145px]" onClick={(e) => e.stopPropagation()}>
+           <div className="flex items-center justify-end gap-1.5">
+               <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors shrink-0" title="พิมพ์ใบเสร็จ">
                   <Printer size={16}/>
                </button>
-               <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors" title="แก้ไข">
+               <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors shrink-0" title="แก้ไข">
                   <Pencil size={16}/>
                </button>
-               <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบ">
+               <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0" title="ลบ">
                   <Trash2 size={16}/>
                </button>
            </div>
@@ -2543,9 +2543,18 @@ const FinancePage = ({
               {isDesktopView ? (
                 /* --- Desktop View (Table) --- */
                 <div className="overflow-x-auto overflow-y-hidden">
-                <table className="table-auto w-full text-left border-collapse min-w-[900px]">
+                <table className="table-auto w-full text-left border-collapse min-w-[1050px]">
                   <thead>
-                    <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm"><th className="w-[13%] p-4 font-medium text-left pl-6 w-[120px] kanit-text">วันที่/เวลา</th><th className="w-[11%] p-4 font-medium kanit-text w-[120px]">เลขที่บิล</th><th className="w-[21%] p-4 font-medium kanit-text">รายละเอียด</th><th className="w-[11%] p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th><th className="w-[11%] p-4 font-medium text-center kanit-text w-[120px]">ช่องทาง</th><th className="w-[13%] p-4 font-medium text-right w-[150px] kanit-text">จำนวนเงิน</th><th className="w-[11%] p-4 font-medium text-center w-[100px] kanit-text">สถานะ</th><th className="w-[9%] p-4 font-medium text-right pr-6 w-[100px] kanit-text">ดำเนินการ</th></tr>
+                    <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
+                      <th className="w-[13%] p-4 font-medium text-left pl-6 min-w-[110px] kanit-text">วันที่/เวลา</th>
+                      <th className="w-[11%] p-4 font-medium min-w-[110px] kanit-text">เลขที่บิล</th>
+                      <th className="w-[20%] p-4 font-medium kanit-text">รายละเอียด</th>
+                      <th className="w-[12%] p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th>
+                      <th className="w-[11%] p-4 font-medium text-center min-w-[110px] kanit-text">ช่องทาง</th>
+                      <th className="w-[13%] p-4 font-medium text-right min-w-[120px] kanit-text">จำนวนเงิน</th>
+                      <th className="w-[10%] p-4 font-medium text-center min-w-[100px] kanit-text">สถานะ</th>
+                      <th className="p-4 font-medium text-right pr-6 w-[150px] min-w-[145px] kanit-text">ดำเนินการ</th>
+                    </tr>
                   </thead>
                   <tbody className="">
                     {isGlobalLoading ? (

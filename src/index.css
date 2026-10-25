@@ -103,6 +103,12 @@ body.is-dragging-sidebar [class*="backdrop-blur"] {
     transform: none !important;
 }
 
+/* Eliminate pointer-event hit-testing overhead on main view during sidebar transition */
+body.is-sidebar-animating #main-scroll-container,
+body.is-dragging-sidebar #main-scroll-container {
+    pointer-events: none !important;
+}
+
 @media (max-width: 768px) {
     /* Optimize mobile backdrop-blur layer compositing to prevent flashing */
     .backdrop-blur-xl, .backdrop-blur-lg, .backdrop-blur-md, .backdrop-blur-sm, .backdrop-blur {

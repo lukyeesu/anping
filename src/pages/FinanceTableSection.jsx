@@ -29,9 +29,18 @@ const FinanceTableSection = React.memo(({
             <div className="px-2 sm:px-4 py-4">
                 {/* --- Desktop View (Table) --- */}
                 <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
-                  <table className="w-full text-left border-collapse min-w-[900px] table-auto">
+                  <table className="w-full text-left border-collapse min-w-[1050px] table-auto">
                     <thead>
-                      <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm"><th className="w-[13%] p-4 font-medium text-left pl-6 w-[120px] kanit-text">วันที่/เวลา</th><th className="w-[11%] p-4 font-medium kanit-text w-[120px]">เลขที่บิล</th><th className="w-[21%] p-4 font-medium kanit-text">รายละเอียด</th><th className="w-[11%] p-4 font-medium kanit-text">ประเภท/บทบาท</th><th className="w-[11%] p-4 font-medium text-center kanit-text w-[120px]">ช่องทาง</th><th className="w-[13%] p-4 font-medium text-right w-[150px] kanit-text">จำนวนเงิน</th><th className="w-[11%] p-4 font-medium text-center w-[100px] kanit-text">สถานะ</th><th className="w-[9%] p-4 font-medium text-right pr-6 w-[100px] kanit-text">ดำเนินการ</th></tr>
+                      <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
+                        <th className="w-[13%] p-4 font-medium text-left pl-6 min-w-[110px] kanit-text">วันที่/เวลา</th>
+                        <th className="w-[11%] p-4 font-medium min-w-[110px] kanit-text">เลขที่บิล</th>
+                        <th className="w-[20%] p-4 font-medium kanit-text">รายละเอียด</th>
+                        <th className="w-[12%] p-4 font-medium kanit-text">ประเภท/บทบาท</th>
+                        <th className="w-[11%] p-4 font-medium text-center min-w-[110px] kanit-text">ช่องทาง</th>
+                        <th className="w-[13%] p-4 font-medium text-right min-w-[120px] kanit-text">จำนวนเงิน</th>
+                        <th className="w-[10%] p-4 font-medium text-center min-w-[100px] kanit-text">สถานะ</th>
+                        <th className="p-4 font-medium text-right pr-6 w-[150px] min-w-[145px] kanit-text">ดำเนินการ</th>
+                      </tr>
                     </thead>
                     <tbody className="">
                       {isGlobalLoading ? (

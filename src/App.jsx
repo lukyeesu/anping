@@ -900,7 +900,9 @@ export default function App() {
       sidebarRef.current.style.setProperty('--sidebar-text-opacity', '1');
       sidebarRef.current.style.setProperty('--sidebar-text-x', '0px');
     }
-    setIsSidebarExpanded(true);
+    React.startTransition(() => {
+      setIsSidebarExpanded(true);
+    });
     setTimeout(() => {
       if (document.body) {
         document.body.classList.remove('is-sidebar-animating');
@@ -924,7 +926,9 @@ export default function App() {
       sidebarRef.current.style.setProperty('--sidebar-text-opacity', '0');
       sidebarRef.current.style.setProperty('--sidebar-text-x', '-8px');
     }
-    setIsSidebarExpanded(false);
+    React.startTransition(() => {
+      setIsSidebarExpanded(false);
+    });
     setTimeout(() => {
       if (document.body) {
         document.body.classList.remove('is-sidebar-animating');
@@ -1188,8 +1192,8 @@ export default function App() {
       scrollPositions.current[currentTab] = mainRef.current.scrollTop;
     }
     setCurrentTab(tabId);
-    if (isSidebarExpanded) collapseSidebarSmoothly();
-    if (isMobile) setIsSidebarExpanded(false); // พับเก็บอัตโนมัติเมื่อกดเลือกเมนู (เฉพาะ Mobile)
+    // ไม่ย่อ Sidebar อัตโนมัติเมื่อเลือกเปลี่ยนหน้าบน PC และ Tablet ตามที่ผู้ใช้ระบุ (เฉพาะ Mobile เท่านั้นที่พับเก็บ Drawer)
+    if (isMobile) setIsSidebarExpanded(false);
   };
 
   // ใช้ useLayoutEffect เพื่อเซ็ตตำแหน่ง Scroll ก่อนเบราว์เซอร์วาดหน้าจอ (ป้องกันภาพกระตุก)
@@ -3909,7 +3913,9 @@ export default function App() {
             if (e.changedTouches && e.changedTouches[0] && !isNaN(startX)) {
               const deltaX = e.changedTouches[0].clientX - startX;
               if (deltaX < -40) {
-                setIsSidebarExpanded(false);
+                React.startTransition(() => {
+      setIsSidebarExpanded(false);
+    });
               }
             }
           }}

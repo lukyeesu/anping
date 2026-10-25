@@ -2573,12 +2573,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.phone || patient.phone1 || '-'}</td>
         <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
         <td className={`py-4 text-center font-bold font-data ${isVip ? 'text-amber-950 font-black' : 'text-slate-700'}`}>{txCount}</td>
-        <td className="py-4 text-center">{renderPdpaButton(patient)}</td>
-        <td className="py-4 text-right pr-4">
-          <div className="flex justify-end gap-2 transition-opacity">
-            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-sky-400 hover:text-sky-500 hover:bg-sky-50'}`} title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
-            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className={`p-2 rounded-lg transition-colors ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'}`} title="แก้ไขข้อมูล"><Pencil size={18} /></button>
-            <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="ลบข้อมูล"><Trash2 size={18} /></button>
+        <td className="py-4 text-center whitespace-nowrap min-w-[160px] px-2">{renderPdpaButton(patient)}</td>
+        <td className="py-4 text-right pr-6 whitespace-nowrap min-w-[145px]">
+          <div className="flex items-center justify-end gap-1.5 transition-opacity">
+            <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className={`p-2 rounded-lg transition-colors shrink-0 ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-sky-400 hover:text-sky-500 hover:bg-sky-50'}`} title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className={`p-2 rounded-lg transition-colors shrink-0 ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'}`} title="แก้ไขข้อมูล"><Pencil size={18} /></button>
+            <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0" title="ลบข้อมูล"><Trash2 size={18} /></button>
           </div>
         </td>
       </tr>
@@ -2860,10 +2860,22 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 {isDesktopView ? (
                   /* --- Desktop View (Table) --- */
                   <div className="overflow-x-auto overflow-y-hidden">
-                  <table className="w-full text-left border-collapse min-w-[1100px] table-fixed">
+                  <table className="w-full text-left border-collapse min-w-[1240px] table-fixed">
                       <thead>
-                        <tr className="text-slate-500 border-b border-slate-100 text-sm"><th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[14%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อคนไข้</th><th className="w-[8%] pt-6 pb-4 font-medium text-left kanit-text">ชื่อเล่น</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">เพศ</th><th className="w-[5%] pt-6 pb-4 font-medium text-left kanit-text">อายุ</th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[13%]" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[11%]" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[10%]" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th><th className="w-[10%] pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th><th className="w-[140px] pt-6 pb-4 font-medium text-right pr-4 kanit-text">จัดการ</th></tr>
-                    </thead>
+                        <tr className="text-slate-500 border-b border-slate-100 text-sm">
+                          <th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[110px]" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="w-[170px] pt-6 pb-4 font-medium text-left kanit-text">ชื่อคนไข้</th>
+                          <th className="w-[85px] pt-6 pb-4 font-medium text-left kanit-text">ชื่อเล่น</th>
+                          <th className="w-[60px] pt-6 pb-4 font-medium text-left kanit-text">เพศ</th>
+                          <th className="w-[60px] pt-6 pb-4 font-medium text-left kanit-text">อายุ</th>
+                          <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[140px]" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[120px]" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[120px]" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="w-[95px] pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th>
+                          <th className="w-[160px] min-w-[160px] pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th>
+                          <th className="w-[145px] min-w-[145px] pt-6 pb-4 font-medium text-right pr-6 kanit-text">จัดการ</th>
+                        </tr>
+                      </thead>
                     <tbody>
                       {isGlobalLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
