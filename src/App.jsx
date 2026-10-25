@@ -2190,7 +2190,7 @@ export default function App() {
     } catch (e) {
       console.error('fetchPatientStats error:', e);
     }
-    return { total: 0, male: 0, female: 0 };
+    return { total: 0, male: 0, female: 0, totalTreatments: 0 };
   }, []);
 
   const fetchDashboardStats = useCallback(async () => {

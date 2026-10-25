@@ -1372,11 +1372,13 @@ export async function callSupabase(action, sheetName, payload = null) {
         const [
           resTotal,
           resMale,
-          resFemale
+          resFemale,
+          resTreatments
         ] = await Promise.all([
           supabase.from('patients').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false'),
           supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'ชาย').or('is_deleted.is.null,is_deleted.eq.false'),
-          supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'หญิง').or('is_deleted.is.null,is_deleted.eq.false')
+          supabase.from('patients').select('*', { count: 'exact', head: true }).eq('gender', 'หญิง').or('is_deleted.is.null,is_deleted.eq.false'),
+          supabase.from('treatments').select('*', { count: 'exact', head: true }).or('is_deleted.is.null,is_deleted.eq.false')
         ]);
 
         return {
@@ -1384,12 +1386,13 @@ export async function callSupabase(action, sheetName, payload = null) {
           data: {
             total: resTotal.count || 0,
             male: resMale.count || 0,
-            female: resFemale.count || 0
+            female: resFemale.count || 0,
+            totalTreatments: resTreatments.count || 0
           }
         };
       } catch (e) {
         console.error('GET_PATIENT_STATS error:', e);
-        return { status: 'error', data: { total: 0, male: 0, female: 0 } };
+        return { status: 'error', data: { total: 0, male: 0, female: 0, totalTreatments: 0 } };
       }
     }
 

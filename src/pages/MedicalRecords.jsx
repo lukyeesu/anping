@@ -277,21 +277,24 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       return {
         total: totalServerPatients !== null ? totalServerPatients : (serverStats.total || 0),
         male: serverStats.male || 0,
-        female: serverStats.female || 0
+        female: serverStats.female || 0,
+        totalTreatments: serverStats.totalTreatments || 0
       };
     }
 
     let total = totalServerPatients !== null ? totalServerPatients : patientsData.length;
     let male = 0;
     let female = 0;
+    let totalTreatments = 0;
 
     patientsData.forEach(p => {
       if (p.gender === 'ชาย') male++;
       else if (p.gender === 'หญิง') female++;
+      totalTreatments += getPatientTreatmentCount(p);
     });
 
-    return { total, male, female };
-  }, [patientsData, totalServerPatients, serverStats]);
+    return { total, male, female, totalTreatments };
+  }, [patientsData, totalServerPatients, serverStats, getPatientTreatmentCount]);
 
   const isLoadingRef = useRef(false);
   const isInitialMountRef = useRef(true);
@@ -2560,21 +2563,37 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors group cursor-pointer text-sm last:border-0 font-data"
         }
       >
-        <td className={`py-4 pl-6 font-medium kanit-text ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-sky-600'}`}>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={isVip ? "font-bold text-amber-950 tracking-wide" : ""}>{getPatientId(patient)}</span>
-          </div>
+        <td className={`py-4 pl-6 pr-3 whitespace-nowrap font-medium ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-sky-600'}`}>
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold font-data tracking-wide ${
+            isVip 
+              ? 'bg-amber-100 text-amber-950 border border-amber-300 shadow-2xs' 
+              : 'bg-sky-50 text-sky-700 border border-sky-100 shadow-2xs'
+          }`}>
+            {getPatientId(patient)}
+          </span>
         </td>
-        <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-950 font-bold' : 'text-slate-700'}`}>{getPatientFullName(patient)}</td>
-        <td className={`py-4 font-medium font-data ${isVip ? 'text-amber-900' : 'text-slate-600'}`}>{patient.nickname || '-'}</td>
-        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.gender || '-'}</td>
-        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
-        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.idCard || '-'}</td>
-        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.phone || patient.phone1 || '-'}</td>
-        <td className={`py-4 ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
-        <td className={`py-4 text-center font-bold font-data ${isVip ? 'text-amber-950 font-black' : 'text-slate-700'}`}>{txCount}</td>
-        <td className="py-4 text-center whitespace-nowrap min-w-[160px] px-2">{renderPdpaButton(patient)}</td>
-        <td className="py-4 text-right pr-6 whitespace-nowrap min-w-[145px]">
+        <td className={`py-4 px-3 font-medium font-data whitespace-nowrap truncate max-w-[190px] ${isVip ? 'text-amber-950 font-bold' : 'text-slate-800'}`} title={getPatientFullName(patient)}>
+          {getPatientFullName(patient)}
+        </td>
+        <td className={`py-4 px-3 font-medium font-data whitespace-nowrap ${isVip ? 'text-amber-900' : 'text-slate-600'}`}>
+          {patient.nickname ? (
+            <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs">
+              {patient.nickname}
+            </span>
+          ) : '-'}
+        </td>
+        <td className={`py-4 px-3 whitespace-nowrap text-xs ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.gender || '-'}</td>
+        <td className={`py-4 px-3 whitespace-nowrap text-xs ${isVip ? 'text-amber-900/80 font-medium' : 'text-slate-500'}`}>{patient.dob ? getAgeString(patient.dob).split(' ')[0] + ' ปี' : '-'}</td>
+        <td className={`py-4 px-3 font-data text-xs whitespace-nowrap ${isVip ? 'text-amber-900/90 font-medium' : 'text-slate-600'}`}>{formatCitizenId(patient.idCard)}</td>
+        <td className={`py-4 px-3 font-data text-xs whitespace-nowrap ${isVip ? 'text-amber-900/90 font-medium' : 'text-slate-600'}`}>{patient.phone || patient.phone1 || '-'}</td>
+        <td className={`py-4 px-3 font-data text-xs whitespace-nowrap ${isVip ? 'text-amber-900/90 font-medium' : 'text-slate-500'}`}>{patient.opdRecords && patient.opdRecords.length > 0 ? patient.opdRecords[0].datetime.split(' ')[0] : formatDate(patient.lastVisit)}</td>
+        <td className={`py-4 px-3 text-center font-bold font-data whitespace-nowrap ${isVip ? 'text-amber-950 font-black' : 'text-slate-700'}`}>
+          <span className="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full bg-slate-100/80 text-xs font-semibold">
+            {txCount}
+          </span>
+        </td>
+        <td className="py-4 px-3 text-center whitespace-nowrap min-w-[160px]">{renderPdpaButton(patient)}</td>
+        <td className="py-4 pl-3 pr-6 text-right whitespace-nowrap min-w-[145px]">
           <div className="flex items-center justify-end gap-1.5 transition-opacity">
             <button onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} className={`p-2 rounded-lg transition-colors shrink-0 ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-sky-400 hover:text-sky-500 hover:bg-sky-50'}`} title="พิมพ์ใบเวชระเบียน"><Printer size={18} /></button>
             <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} className={`p-2 rounded-lg transition-colors shrink-0 ${isVip ? 'text-amber-700 hover:text-amber-900 hover:bg-amber-200/60' : 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'}`} title="แก้ไขข้อมูล"><Pencil size={18} /></button>
@@ -2774,25 +2793,40 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
           </div>
         </div>
 
-        {/* --- 2. Stats Section (ปรับ Layout ใหม่ให้แสดงผลสวยงามบนมือถือ ไม่บีบอัด) --- */}
+        {/* --- 2. Stats Section (4 การ์ด สรุปคนไข้และยอดการรักษาทั้งหมด) --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
-              {/* คนไข้ทั้งหมด - แสดงผลเป็นแถวยาวเต็มความกว้างบนมือถือ และกลับมาเป็นแนวตั้งบนจอใหญ่ */}
-              <div className="col-span-2 md:col-span-1 bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-row sm:flex-col justify-between items-center sm:items-start relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all min-h-[72px] sm:min-h-[140px] w-full">
-                <div className="flex items-center gap-2.5 sm:gap-3 relative z-10">
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+              {/* คนไข้ทั้งหมด */}
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
+                <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
                   <div className="w-9 h-9 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><Users size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="คนไข้ทั้งหมด">คนไข้ทั้งหมด</p>
                   </div>
                 </div>
-                <div className="relative z-10 sm:mt-auto text-right sm:text-left">
-                  <p className={`font-black text-slate-800 font-data whitespace-nowrap overflow-hidden ${getDynamicTextSize(formatStatNumber(stats.total))}`}>{formatStatNumber(stats.total)}</p>
+                <div className="relative z-10 mt-auto w-full">
+                  <p className={`font-black text-slate-800 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.total))}`}>{formatStatNumber(stats.total)}</p>
                 </div>
-                <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-slate-50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
+                <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-sky-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
 
-              {/* คนไข้ชาย - อยู่คู่กันฝั่งซ้ายบนมือถือ */}
-              <div className="col-span-1 bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-blue-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
+              {/* การรักษาทั้งหมด */}
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-emerald-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
+                <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><HeartPulse size={18} className="sm:w-6 sm:h-6" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="การรักษาทั้งหมด">การรักษาทั้งหมด</p>
+                  </div>
+                </div>
+                <div className="relative z-10 mt-auto w-full flex items-baseline gap-1.5">
+                  <p className={`font-black text-emerald-600 font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(stats.totalTreatments))}`}>{formatStatNumber(stats.totalTreatments)}</p>
+                  <span className="text-xs font-semibold text-emerald-600/70 kanit-text">เคส</span>
+                </div>
+                <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
+              </div>
+
+              {/* คนไข้ชาย */}
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-blue-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
                 <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
                   <div className="w-9 h-9 sm:w-12 sm:h-12 bg-blue-50 text-blue-500 border border-blue-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><User size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
@@ -2805,8 +2839,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-blue-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
 
-              {/* คนไข้หญิง - อยู่คู่กันฝั่งขวาบนมือถือ */}
-              <div className="col-span-1 bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-pink-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
+              {/* คนไข้หญิง */}
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-pink-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
                 <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
                   <div className="w-9 h-9 sm:w-12 sm:h-12 bg-pink-50 text-pink-500 border border-pink-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><User size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
@@ -2859,48 +2893,45 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 {/* Render active view only: prevents duplicate DOM tree and double-virtualization */}
                 {isDesktopView ? (
                   /* --- Desktop View (Table) --- */
-                  <div className="overflow-x-auto overflow-y-hidden">
-                  <table className="w-full text-left border-collapse min-w-[1240px] table-fixed">
+                  <div className="overflow-x-auto overflow-y-hidden modern-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <table className="w-full text-left border-collapse min-w-[1375px] table-fixed">
                       <thead>
                         <tr className="text-slate-500 border-b border-slate-100 text-sm">
-                          <th className="pt-6 pb-4 font-medium pl-6 cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[110px]" onClick={() => requestSort('id')}><div className="flex items-center gap-1">รหัส HN <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                          <th className="w-[170px] pt-6 pb-4 font-medium text-left kanit-text">ชื่อคนไข้</th>
-                          <th className="w-[85px] pt-6 pb-4 font-medium text-left kanit-text">ชื่อเล่น</th>
-                          <th className="w-[60px] pt-6 pb-4 font-medium text-left kanit-text">เพศ</th>
-                          <th className="w-[60px] pt-6 pb-4 font-medium text-left kanit-text">อายุ</th>
-                          <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[140px]" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1">เลขบัตรประชาชน <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                          <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[120px]" onClick={() => requestSort('phone')}><div className="flex items-center gap-1">เบอร์ติดต่อ <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                          <th className="pt-6 pb-4 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text w-[120px]" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1">รับบริการล่าสุด <ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
-                          <th className="w-[95px] pt-6 pb-4 font-medium text-center kanit-text">การรักษา(ครั้ง)</th>
-                          <th className="w-[160px] min-w-[160px] pt-6 pb-4 font-medium text-center kanit-text">สถานะการยินยอม</th>
-                          <th className="w-[145px] min-w-[145px] pt-6 pb-4 font-medium text-right pr-6 kanit-text">จัดการ</th>
+                          <th className="w-[130px] min-w-[130px] pt-6 pb-4 pl-6 pr-3 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text whitespace-nowrap" onClick={() => requestSort('id')}><div className="flex items-center gap-1.5"><span>รหัส HN</span><ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'id' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="w-[190px] min-w-[190px] pt-6 pb-4 px-3 font-medium text-left kanit-text whitespace-nowrap">ชื่อคนไข้</th>
+                          <th className="w-[90px] min-w-[90px] pt-6 pb-4 px-3 font-medium text-left kanit-text whitespace-nowrap">ชื่อเล่น</th>
+                          <th className="w-[70px] min-w-[70px] pt-6 pb-4 px-3 font-medium text-left kanit-text whitespace-nowrap">เพศ</th>
+                          <th className="w-[75px] min-w-[75px] pt-6 pb-4 px-3 font-medium text-left kanit-text whitespace-nowrap">อายุ</th>
+                          <th className="w-[155px] min-w-[155px] pt-6 pb-4 px-3 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text whitespace-nowrap" onClick={() => requestSort('idCard')}><div className="flex items-center gap-1.5"><span>เลขบัตรประชาชน</span><ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'idCard' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="w-[130px] min-w-[130px] pt-6 pb-4 px-3 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text whitespace-nowrap" onClick={() => requestSort('phone')}><div className="flex items-center gap-1.5"><span>เบอร์ติดต่อ</span><ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'phone' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="w-[125px] min-w-[125px] pt-6 pb-4 px-3 font-medium cursor-pointer hover:text-sky-600 transition-colors group select-none kanit-text whitespace-nowrap" onClick={() => requestSort('lastVisit')}><div className="flex items-center gap-1.5"><span>รับบริการล่าสุด</span><ArrowUpDown size={14} className={`transition-opacity ${sortConfig.key === 'lastVisit' ? 'opacity-100 text-sky-500' : 'opacity-30 group-hover:opacity-70'}`} /></div></th>
+                          <th className="w-[105px] min-w-[105px] pt-6 pb-4 px-3 font-medium text-center kanit-text whitespace-nowrap">การรักษา(ครั้ง)</th>
+                          <th className="w-[160px] min-w-[160px] pt-6 pb-4 px-3 font-medium text-center kanit-text whitespace-nowrap">สถานะการยินยอม</th>
+                          <th className="w-[145px] min-w-[145px] pt-6 pb-4 pl-3 pr-6 font-medium text-right kanit-text whitespace-nowrap">จัดการ</th>
                         </tr>
                       </thead>
                     <tbody>
                       {isGlobalLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                           <tr key={`skel-med-${i}`} className="border-b border-slate-50">
-                            <td className="py-4 pl-6"><div className="h-4 w-3/4 max-w-[80px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[200px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[32px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[48px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[150px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[120px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[100px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4 text-center"><div className="h-4 w-full max-w-[40px] bg-slate-200 rounded animate-pulse mx-auto"></div></td>
-                            <td className="py-4 text-center">
+                            <td className="py-4 pl-6 pr-3"><div className="h-5 w-20 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[150px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-12 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-8 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[130px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[100px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[90px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3 text-center"><div className="h-4 w-8 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                            <td className="py-4 px-3 text-center">
                               <div className="flex flex-col items-center gap-1">
                                 <div className="flex gap-1">
-                                  <div className="h-3.5 w-full max-w-[40px] bg-slate-200 rounded animate-pulse"></div>
-                                  <div className="h-3.5 w-full max-w-[48px] bg-slate-200 rounded animate-pulse"></div>
-                                </div>
-                                <div className="flex gap-1">
-                                  <div className="h-3.5 w-full max-w-[32px] bg-slate-200 rounded animate-pulse"></div>
-                                  <div className="h-3.5 w-full max-w-[32px] bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-12 bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-14 bg-slate-200 rounded animate-pulse"></div>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 pr-4"><div className="flex justify-end gap-2 transition-opacity"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                            <td className="py-4 pl-3 pr-6"><div className="flex justify-end gap-2 transition-opacity"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                         ))
                       ) : tableVirtualItems.length > 0 ? (
@@ -2930,27 +2961,24 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                       )}
                       {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
                           <tr key={`skel-med-more-${i}`} className="border-b border-slate-50">
-                            <td className="py-4 pl-6"><div className="h-4 w-3/4 max-w-[80px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[200px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[32px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[48px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[150px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[120px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4"><div className="h-4 w-full max-w-[100px] bg-slate-200 rounded animate-pulse"></div></td>
-                            <td className="py-4 text-center"><div className="h-4 w-full max-w-[40px] bg-slate-200 rounded animate-pulse mx-auto"></div></td>
-                            <td className="py-4 text-center">
+                            <td className="py-4 pl-6 pr-3"><div className="h-5 w-20 bg-slate-200 rounded-lg animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[150px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-12 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-8 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-10 bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[130px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[100px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3"><div className="h-4 w-full max-w-[90px] bg-slate-200 rounded animate-pulse"></div></td>
+                            <td className="py-4 px-3 text-center"><div className="h-4 w-8 bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                            <td className="py-4 px-3 text-center">
                               <div className="flex flex-col items-center gap-1">
                                 <div className="flex gap-1">
-                                  <div className="h-3.5 w-full max-w-[40px] bg-slate-200 rounded animate-pulse"></div>
-                                  <div className="h-3.5 w-full max-w-[48px] bg-slate-200 rounded animate-pulse"></div>
-                                </div>
-                                <div className="flex gap-1">
-                                  <div className="h-3.5 w-full max-w-[32px] bg-slate-200 rounded animate-pulse"></div>
-                                  <div className="h-3.5 w-full max-w-[32px] bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-12 bg-slate-200 rounded animate-pulse"></div>
+                                  <div className="h-3.5 w-14 bg-slate-200 rounded animate-pulse"></div>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 pr-4"><div className="flex justify-end gap-2 transition-opacity"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                            <td className="py-4 pl-3 pr-6"><div className="flex justify-end gap-2 transition-opacity"><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-8 bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                           </tr>
                       ))}
                     </tbody>

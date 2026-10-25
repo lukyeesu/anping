@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import CustomSelect from './CustomSelect';
 import CalendarView from './CalendarView';
 import CalendarDay from './CalendarDay';
-import { useVirtualRows } from '../hooks/useVirtualRows';
 import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
@@ -1010,30 +1009,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- Virtualization for Desktop Table & Mobile Cards ---
-  const tableVirtualizer = useVirtualRows({
-    count: isDesktopView ? filteredData.length : 0,
-    estimateSize: 72,
-    overscan: 5,
-    enabled: isDesktopView,
-    getItemKey: useCallback((index) => filteredData[index]?.id || index, [filteredData])
-  });
-
-  const cardVirtualizer = useVirtualRows({
-    count: !isDesktopView ? filteredData.length : 0,
-    estimateSize: 145,
-    overscan: 5,
-    gap: 16,
-    enabled: !isDesktopView,
-    getItemKey: useCallback((index) => filteredData[index]?.id || index, [filteredData])
-  });
-
-  const tableVirtualItems = tableVirtualizer.getVirtualItems();
-  const cardVirtualItems = cardVirtualizer.getVirtualItems();
-  const tableTotalSize = tableVirtualizer.getTotalSize();
-  const cardTotalSize = cardVirtualizer.getTotalSize();
-
-  const renderApptTableRow = useCallback((appt, virtualRow) => {
+  const renderApptTableRow = useCallback((appt, index) => {
     const effectiveDt = getEffectiveApptDatetimeStr(appt);
     const dtParts = effectiveDt.split(' ');
     const datePart = dtParts[0] || '-';
@@ -1047,9 +1023,8 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
     return (
       <tr 
-        key={virtualRow.key}
-        data-index={virtualRow.index}
-        ref={tableVirtualizer.measureElement}
+        key={appt.id || index}
+        data-index={index}
         onClick={() => handleOpenApptEdit(appt, true)} 
         className={
           isVip
@@ -1108,7 +1083,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
     );
   }, [patientsData]);
 
-  const renderApptMobileCard = useCallback((appt, virtualRow) => {
+  const renderApptMobileCard = useCallback((appt, index) => {
     const effectiveDt = getEffectiveApptDatetimeStr(appt);
     const dtParts = effectiveDt.split(' ');
     const datePart = dtParts[0] || '-';
@@ -1121,9 +1096,8 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
     return (
         <div 
-          key={virtualRow.key}
-          data-index={virtualRow.index}
-          ref={cardVirtualizer.measureElement}
+          key={appt.id || index}
+          data-index={index}
           onClick={() => handleOpenApptEdit(appt, true)} 
           className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] ${
             isVip
@@ -1380,23 +1354,12 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                     <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
                                   </tr>
                                 ))
-                              ) : tableVirtualItems.length > 0 ? (
+                              ) : filteredData.length > 0 ? (
                                 <>
-                                  {tableVirtualItems[0].start > 0 && (
-                                    <tr>
-                                      <td colSpan={8} style={{ height: `${tableVirtualItems[0].start}px`, padding: 0, border: 0 }} />
-                                    </tr>
-                                  )}
-                                  {tableVirtualItems.map((virtualRow) => {
-                                    const appt = filteredData[virtualRow.index];
+                                  {filteredData.slice(0, visibleCount).map((appt, index) => {
                                     if (!appt) return null;
-                                    return renderApptTableRow(appt, virtualRow);
+                                    return renderApptTableRow(appt, index);
                                   })}
-                                  {tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end > 0 && (
-                                    <tr>
-                                      <td colSpan={8} style={{ height: `${tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end}px`, padding: 0, border: 0 }} />
-                                    </tr>
-                                  )}
                                 </>
                               ) : (
                                 <tr>
@@ -1404,6 +1367,20 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                     ไม่พบข้อมูลการนัดหมาย
                                   </td>
                                 </tr>
+                              )}
+                              {isLoadingMore && (
+                                Array.from({ length: 2 }).map((_, i) => (
+                                  <tr key={`skel-more-${i}`} className="border-b border-slate-50">
+                                    <td className="py-4 pl-6"><div className="flex flex-col items-start gap-2"><div className="h-4 w-full max-w-[64px] bg-slate-200 rounded animate-pulse"></div><div className="h-3 w-full max-w-[48px] bg-slate-100 rounded animate-pulse"></div></div></td>
+                                    <td className="py-4"><div className="h-4 w-full max-w-[64px] bg-slate-200 rounded animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-full max-w-[128px] bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4"><div className="h-8 w-full max-w-[96px] bg-slate-200 rounded-lg animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-full max-w-[96px] bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4 px-2"><div className="h-4 w-full max-w-[128px] bg-slate-200 rounded animate-pulse"></div></td>
+                                    <td className="py-4"><div className="h-6 w-full max-w-[64px] bg-slate-200 rounded-full animate-pulse mx-auto"></div></td>
+                                    <td className="py-4 pr-6"><div className="flex justify-end gap-2"><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div><div className="h-8 w-full max-w-[32px] bg-slate-200 rounded-lg animate-pulse"></div></div></td>
+                                  </tr>
+                                ))
                               )}
                             </tbody>
                         </table>
@@ -1438,24 +1415,27 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                                     </div>
                                 </div>
                             ))
-                        ) : cardVirtualItems.length > 0 ? (
+                        ) : filteredData.length > 0 ? (
                             <>
-                              {cardVirtualItems[0].start > 0 && (
-                                <div style={{ height: `${cardVirtualItems[0].start}px` }} />
-                              )}
-                              {cardVirtualItems.map((virtualRow) => {
-                                const appt = filteredData[virtualRow.index];
+                              {filteredData.slice(0, visibleCount).map((appt, index) => {
                                 if (!appt) return null;
-                                return renderApptMobileCard(appt, virtualRow);
+                                return renderApptMobileCard(appt, index);
                               })}
-                              {cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end > 0 && (
-                                <div style={{ height: `${cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end}px` }} />
-                              )}
                             </>
                         ) : (
                             <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                               ไม่พบข้อมูลการนัดหมาย
                             </div>
+                        )}
+                        {isLoadingMore && (
+                          Array.from({ length: 2 }).map((_, i) => (
+                            <div key={`skel-mob-more-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                              <div className="flex justify-between items-center mb-1.5">
+                                <div className="h-5 w-full max-w-[64px] bg-slate-200 rounded animate-pulse"></div>
+                                <div className="h-5 w-full max-w-[64px] bg-slate-200 rounded-md animate-pulse"></div>
+                              </div>
+                            </div>
+                          ))
                         )}
                       </div>
                     )}

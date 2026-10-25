@@ -41,6 +41,13 @@ class CardReaderService : Service() {
     private var ccidDriver: UsbCcidDriver? = null
     private var currentDevice: UsbDevice? = null
 
+    @Volatile var isDeviceConnectedCached: Boolean = false
+        private set
+    @Volatile var isCardPresentCached: Boolean = false
+        private set
+    @Volatile var cachedReaderName: String = "ไม่มีอุปกรณ์"
+        private set
+
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var monitorJob: Job? = null
 
@@ -82,8 +89,8 @@ class CardReaderService : Service() {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    if (granted && device != null) {
-                        initDriver(device)
+                    if (granted && device != null && isSmartCardReader(device)) {
+                        attachDevice(device)
                     }
                 }
             }
@@ -143,18 +150,10 @@ class CardReaderService : Service() {
             port = 8181,
             onReadCardRequested = { includePhoto -> readCard(includePhoto) },
             onStatusRequested = {
-                if (ccidDriver == null) {
-                    checkConnectedDevices()
-                }
-                val isConnected = ccidDriver != null
-                val name = currentDevice?.productName ?: (if (isConnected) "USB Smart Card Reader" else "ไม่มีอุปกรณ์")
-                val hasCard = if (isConnected) {
-                    try { ccidDriver?.isCardPresent() ?: false } catch (_: Exception) { false }
-                } else false
                 StatusInfo(
-                    deviceConnected = isConnected,
-                    readerName = name,
-                    hasCard = hasCard
+                    deviceConnected = isDeviceConnectedCached,
+                    readerName = cachedReaderName,
+                    hasCard = isCardPresentCached
                 )
             }
         )
@@ -187,120 +186,160 @@ class CardReaderService : Service() {
             var lastConnected = false
             var lastHasCard = false
             var lastReaderName = ""
+            var idleLoopCount = 0
 
             while (isActive) {
                 try {
                     val manager = usbManager
-                    if (manager != null) {
-                        // ถ้าเครื่องอ่านเดิมถูกถอดสายออก ให้รีเซ็ตไดรเวอร์ทันที ป้องกันแอปค้างหรือสถานะบัตรตกค้าง
-                        if (currentDevice != null) {
-                            val isStillConnected = manager.deviceList.values.any { it.deviceId == currentDevice?.deviceId }
-                            if (!isStillConnected) {
-                                currentDevice?.let { detachDevice(it) }
-                            }
-                        }
-                        if (ccidDriver == null) {
-                            checkConnectedDevices()
-                        }
-                    }
+                    val driver = ccidDriver
+                    val dev = currentDevice
 
-                    val isConnected = ccidDriver != null
-                    val readerName = if (isConnected) {
-                        currentDevice?.productName ?: "USB Smart Card Reader"
-                    } else {
-                        "ไม่มีอุปกรณ์"
-                    }
+                    if (driver != null && dev != null && manager != null) {
+                        // เมื่อมีเครื่องอ่านเชื่อมต่ออยู่
+                        idleLoopCount = 0
 
-                    val hasCard = if (isConnected) {
-                        try {
-                            ccidDriver?.isCardPresent() ?: false
-                        } catch (_: Exception) {
+                        // ถ้าเครื่องอ่านเดิมถูกถอดสายออก ให้รีเซ็ตไดรเวอร์ทันที
+                        val isStillConnected = manager.deviceList.values.any { it.deviceId == dev.deviceId }
+                        if (!isStillConnected) {
+                            detachDevice(dev)
+                            delay(1000)
+                            continue
+                        }
+
+                        val hasCard = try {
+                            driver.isCardPresent()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "isCardPresent exception: ${e.message}")
                             false
                         }
-                    } else false
 
-                    val justInserted = hasCard && !lastHasCard
-                    val justRemoved = !hasCard && lastHasCard
+                        val readerName = dev.productName ?: "USB Smart Card Reader"
+                        isDeviceConnectedCached = true
+                        cachedReaderName = readerName
+                        isCardPresentCached = hasCard
 
-                    if (justRemoved) {
-                        latestCardData = null
-                        lastReadTime = 0L
-                        withContext(Dispatchers.Main) {
-                            onCardRemoved?.invoke()
+                        val justInserted = hasCard && !lastHasCard
+                        val justRemoved = !hasCard && lastHasCard
+
+                        if (justRemoved) {
+                            latestCardData = null
+                            lastReadTime = 0L
+                            withContext(Dispatchers.Main) {
+                                onCardRemoved?.invoke()
+                            }
                         }
-                    }
-                    if (!hasCard) {
-                        latestCardData = null
-                        lastReadTime = 0L
-                    }
+                        if (!hasCard) {
+                            latestCardData = null
+                            lastReadTime = 0L
+                        }
 
-                    if (isConnected != lastConnected || hasCard != lastHasCard || readerName != lastReaderName) {
-                        lastConnected = isConnected
-                        lastHasCard = hasCard
-                        lastReaderName = readerName
+                        if (!lastConnected || hasCard != lastHasCard || readerName != lastReaderName) {
+                            lastConnected = true
+                            lastHasCard = hasCard
+                            lastReaderName = readerName
 
-                        val notifText = if (isConnected) {
                             val cardStatusText = if (hasCard) "พบบัตรประชาชน" else "ยังไม่เสียบบัตร"
-                            "เชื่อมต่อแล้ว: $readerName ($cardStatusText)"
-                        } else {
-                            "ระบบพร้อมทำงานในพื้นหลัง (รอการเชื่อมต่อเครื่องอ่าน)"
-                        }
-                        updateNotification(notifText)
-                        onStatusChanged?.invoke(isConnected, readerName, hasCard)
+                            updateNotification("เชื่อมต่อแล้ว: $readerName ($cardStatusText)")
+                            withContext(Dispatchers.Main) {
+                                onStatusChanged?.invoke(true, readerName, hasCard)
+                            }
 
-                        // เสียบบัตรปุ๊บ ดึงข้อมูลและรูปภาพอัตโนมัติทันที
-                        if (justInserted) {
-                            serviceScope.launch(Dispatchers.IO) {
-                                try {
-                                    delay(350)
-                                    val card = readCard(includePhoto = true)
-                                    if (card != null) {
-                                        latestCardData = card
-                                        withContext(Dispatchers.Main) {
-                                            onCardAutoRead?.invoke(card)
+                            // เสียบบัตรปุ๊บ ดึงข้อมูลและรูปภาพอัตโนมัติทันที
+                            if (justInserted) {
+                                serviceScope.launch(Dispatchers.IO) {
+                                    try {
+                                        delay(350)
+                                        val card = readCard(includePhoto = true)
+                                        if (card != null) {
+                                            latestCardData = card
+                                            withContext(Dispatchers.Main) {
+                                                onCardAutoRead?.invoke(card)
+                                            }
                                         }
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Auto read on insert error: ${e.message}")
                                     }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Auto read on insert error: ${e.message}")
                                 }
                             }
                         }
+                        delay(1000)
+                    } else {
+                        // ไม่มีอุปกรณ์เชื่อมต่อ (Idle State): ประหยัดพลังงานและตัดปัญหา ANR
+                        isDeviceConnectedCached = false
+                        cachedReaderName = "ไม่มีอุปกรณ์"
+                        isCardPresentCached = false
+
+                        if (lastConnected) {
+                            lastConnected = false
+                            lastHasCard = false
+                            lastReaderName = "ไม่มีอุปกรณ์"
+                            updateNotification("ระบบพร้อมทำงานในพื้นหลัง (รอการเชื่อมต่อเครื่องอ่าน)")
+                            withContext(Dispatchers.Main) {
+                                onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
+                            }
+                        }
+
+                        // เช็คแบบ fallback ทุก 15 วินาทีเท่านั้น เพื่อป้องกันการรบกวนระบบ USB ของแท็บเล็ต
+                        idleLoopCount++
+                        if (idleLoopCount >= 10) {
+                            idleLoopCount = 0
+                            checkConnectedDevices()
+                        }
+
+                        delay(1500)
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Monitor loop error: ${e.message}")
+                    delay(2000)
                 }
-                delay(1000)
             }
         }
     }
 
     fun checkConnectedDevices() {
         val manager = usbManager ?: return
-        val deviceList = manager.deviceList
-        for ((_, device) in deviceList) {
-            if (isSmartCardReader(device)) {
-                attachDevice(device)
-                break
+        if (ccidDriver != null) return // มีไดรเวอร์ทำงานอยู่แล้ว ไม่ต้องสแกนซ้ำ
+        try {
+            val deviceList = manager.deviceList
+            for ((_, device) in deviceList) {
+                if (isSmartCardReader(device)) {
+                    attachDevice(device)
+                    break
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "checkConnectedDevices error: ${e.message}")
         }
     }
 
     fun isSmartCardReader(device: UsbDevice): Boolean {
-        // 1. Class 11 = CCID Smart Card Reader
+        // ตัด USB Hub ออกทันที (Class 9)
+        if (device.deviceClass == android.hardware.usb.UsbConstants.USB_CLASS_HUB) return false
+
+        // 1. Class 11 = CCID Smart Card Reader (มาตรฐานสากล)
         for (i in 0 until device.interfaceCount) {
             if (device.getInterface(i).interfaceClass == 11) return true
         }
         if (device.deviceClass == 11) return true
 
-        // 2. ตรวจสอบจากชื่ออุปกรณ์ (เช่น "EMV Smartcard Reader", "Smart Card", ฯลฯ)
+        // 2. ตรวจสอบจากชื่ออุปกรณ์ ต้องมีคีย์เวิร์ดเครื่องอ่านบัตร และไม่ใช่อุปกรณ์ประเภท Storage หรือ Hub
         val prod = (device.productName ?: "").lowercase()
-        if (prod.contains("smart") || prod.contains("card") || prod.contains("reader") || prod.contains("ccid") || prod.contains("emv")) {
-            return true
-        }
+        val isSmartCardName = prod.contains("smart card") ||
+                prod.contains("smartcard") ||
+                prod.contains("ccid") ||
+                prod.contains("acr39") ||
+                prod.contains("acr38") ||
+                prod.contains("scr3310") ||
+                prod.contains("feitian")
 
-        // 3. ตรวจสอบจากรหัสผู้ผลิตที่พบบ่อย
-        val knownVendors = listOf(1423, 3034, 1839, 2652, 2278, 2414, 1254, 1060, 11491, 6720)
-        if (knownVendors.contains(device.vendorId)) return true
+        if (isSmartCardName) {
+            val isStorageOrHub = (0 until device.interfaceCount).any {
+                val cls = device.getInterface(it).interfaceClass
+                cls == android.hardware.usb.UsbConstants.USB_CLASS_MASS_STORAGE ||
+                cls == android.hardware.usb.UsbConstants.USB_CLASS_HUB
+            }
+            if (!isStorageOrHub) return true
+        }
 
         return false
     }
@@ -308,10 +347,11 @@ class CardReaderService : Service() {
     fun attachDevice(device: UsbDevice) {
         val manager = usbManager ?: return
         if (!isSmartCardReader(device)) return
-        this.currentDevice = device
 
         if (manager.hasPermission(device)) {
-            initDriver(device)
+            serviceScope.launch(Dispatchers.IO) {
+                initDriver(device)
+            }
         } else {
             Log.d(TAG, "Waiting for USB permission for: ${device.productName ?: device.deviceName}")
         }
@@ -320,43 +360,65 @@ class CardReaderService : Service() {
     fun getCurrentDevice(): UsbDevice? = currentDevice
     fun getLatestCard(): CardModel? = latestCardData
 
-    fun isCardPresent(): Boolean {
-        return try {
-            ccidDriver?.isCardPresent() ?: false
-        } catch (_: Exception) {
-            false
-        }
-    }
+    fun isCardPresent(): Boolean = isCardPresentCached
 
     fun initDriver(device: UsbDevice) {
         val manager = usbManager ?: return
-        ccidDriver?.close()
+        if (!isSmartCardReader(device)) return
 
-        val driver = UsbCcidDriver(manager, device)
-        if (driver.open()) {
-            this.ccidDriver = driver
-            val readerName = device.productName ?: "USB Smart Card Reader"
-            val hasCard = driver.isCardPresent()
-            updateNotification("เชื่อมต่อเครื่องอ่านแล้ว: $readerName")
-            onStatusChanged?.invoke(true, readerName, hasCard)
-            Log.i(TAG, "CCID Driver initialized for $readerName")
-        } else {
-            this.ccidDriver = null
-            onStatusChanged?.invoke(false, "ไม่สามารถเปิดไดรเวอร์ได้", false)
+        synchronized(readLock) {
+            try {
+                ccidDriver?.close()
+            } catch (_: Exception) {}
+
+            val driver = UsbCcidDriver(manager, device)
+            if (driver.open()) {
+                this.ccidDriver = driver
+                this.currentDevice = device
+                val readerName = device.productName ?: "USB Smart Card Reader"
+                val hasCard = try { driver.isCardPresent() } catch (_: Exception) { false }
+
+                isDeviceConnectedCached = true
+                cachedReaderName = readerName
+                isCardPresentCached = hasCard
+
+                updateNotification("เชื่อมต่อเครื่องอ่านแล้ว: $readerName")
+                serviceScope.launch(Dispatchers.Main) {
+                    onStatusChanged?.invoke(true, readerName, hasCard)
+                }
+                Log.i(TAG, "CCID Driver initialized successfully for $readerName")
+            } else {
+                this.ccidDriver = null
+                this.currentDevice = null
+                isDeviceConnectedCached = false
+                cachedReaderName = "ไม่มีอุปกรณ์"
+                isCardPresentCached = false
+
+                serviceScope.launch(Dispatchers.Main) {
+                    onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
+                }
+            }
         }
     }
 
     fun detachDevice(device: UsbDevice) {
         try {
             if (currentDevice == null || currentDevice?.deviceId == device.deviceId) {
-                ccidDriver?.close()
-                ccidDriver = null
-                currentDevice = null
-                latestCardData = null
-                lastReadTime = 0L
-                updateNotification("เครื่องอ่านถูกดึงออกแล้ว (รอการเชื่อมต่อใหม่)")
-                onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
-                onCardRemoved?.invoke()
+                synchronized(readLock) {
+                    try { ccidDriver?.close() } catch (_: Exception) {}
+                    ccidDriver = null
+                    currentDevice = null
+                    isDeviceConnectedCached = false
+                    cachedReaderName = "ไม่มีอุปกรณ์"
+                    isCardPresentCached = false
+                    latestCardData = null
+                    lastReadTime = 0L
+                }
+                updateNotification("ระบบพร้อมทำงานในพื้นหลัง (รอการเชื่อมต่อเครื่องอ่าน)")
+                serviceScope.launch(Dispatchers.Main) {
+                    onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
+                    onCardRemoved?.invoke()
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "detachDevice error: ${e.message}")

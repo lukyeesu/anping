@@ -37,8 +37,9 @@ class UsbCcidDriver(
         var targetInterface: UsbInterface? = null
         for (i in 0 until device.interfaceCount) {
             val iface = device.getInterface(i)
-            // Class 11 = Smart Card Reader (CCID)
-            if (iface.interfaceClass == 11 || iface.endpointCount >= 2) {
+            // Class 11 = Smart Card Reader (CCID) Standard
+            // Must strictly be Class 11 (or deviceClass 11) to avoid claiming non-smartcard hardware
+            if (iface.interfaceClass == 11 || (device.deviceClass == 11 && iface.endpointCount >= 2)) {
                 targetInterface = iface
                 break
             }

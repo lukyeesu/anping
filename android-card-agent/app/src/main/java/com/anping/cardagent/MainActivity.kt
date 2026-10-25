@@ -31,6 +31,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.anping.cardagent.databinding.ActivityMainBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.CoroutineScope
@@ -129,7 +131,11 @@ class MainActivity : AppCompatActivity() {
                             intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                         }
                         if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                            device?.let { cardService?.initDriver(it) }
+                            device?.let {
+                                if (cardService?.isSmartCardReader(it) == true) {
+                                    cardService?.attachDevice(it)
+                                }
+                            }
                         }
                     }
                 }
@@ -141,10 +147,12 @@ class MainActivity : AppCompatActivity() {
                         intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
                     device?.let {
-                        if (usbManager?.hasPermission(it) == true) {
-                            cardService?.initDriver(it)
-                        } else {
-                            requestUsbPermission(it)
+                        if (cardService?.isSmartCardReader(it) == true) {
+                            if (usbManager?.hasPermission(it) == true) {
+                                cardService?.attachDevice(it)
+                            } else {
+                                requestUsbPermission(it)
+                            }
                         }
                     }
                 }
@@ -178,6 +186,13 @@ class MainActivity : AppCompatActivity() {
                 Log.i(TAG, "Cleaned up old update.apk on launch")
             }
         } catch (_: Exception) {}
+
+                // Set status bar to clean white with dark icons (Chrome-style)
+        window.statusBarColor = ContextCompat.getColor(this, android.R.color.white)
+        WindowCompat.getInsetsController(window, window.decorView)?.let { controller ->
+            controller.isAppearanceLightStatusBars = true
+            controller.isAppearanceLightNavigationBars = true
+        }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -295,7 +310,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.5"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.7"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -317,8 +332,9 @@ class MainActivity : AppCompatActivity() {
 
             @JavascriptInterface
             fun getReaderStatus(): String {
-                val hasCard = cardService?.isCardPresent() ?: false
-                val connected = cardService?.getCurrentDevice() != null
+                val service = cardService
+                val hasCard = service?.isCardPresentCached ?: false
+                val connected = service?.isDeviceConnectedCached ?: false
                 val obj = JSONObject()
                 obj.put("connected", connected)
                 obj.put("hasCard", hasCard)
@@ -751,10 +767,12 @@ class MainActivity : AppCompatActivity() {
                 intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
             }
             device?.let {
-                if (usbManager?.hasPermission(it) == true) {
-                    cardService?.initDriver(it)
-                } else {
-                    requestUsbPermission(it)
+                if (cardService?.isSmartCardReader(it) == true) {
+                    if (usbManager?.hasPermission(it) == true) {
+                        cardService?.attachDevice(it)
+                    } else {
+                        requestUsbPermission(it)
+                    }
                 }
             }
         }
@@ -777,7 +795,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 manager.requestPermission(device, permissionIntent)
             } else {
-                cardService?.initDriver(device)
+                cardService?.attachDevice(device)
             }
         }
     }
