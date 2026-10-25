@@ -892,6 +892,10 @@ export default function App() {
     if (document.body) {
       document.body.classList.add('is-sidebar-animating');
     }
+    // ปิด SwipeRefreshLayout บน Android ชั่วคราวเพื่อไม่ให้ Native Gesture แย่ง Touch กับแอนิเมชัน
+    if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+      window.AndroidCardBridge.setSwipeRefreshEnabled(false);
+    }
     const cubic = 'cubic-bezier(0.32, 0.72, 0, 1)';
     if (sidebarRef.current) {
       sidebarRef.current.classList.remove('is-dragging-sidebar');
@@ -910,6 +914,9 @@ export default function App() {
       if (sidebarRef.current) {
         sidebarRef.current.style.transition = '';
       }
+      if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
+      }
       isDraggingSidebarRef.current = false;
     }, 270);
   }, []);
@@ -917,6 +924,10 @@ export default function App() {
   const collapseSidebarSmoothly = useCallback(() => {
     if (document.body) {
       document.body.classList.add('is-sidebar-animating');
+    }
+    // ปิด SwipeRefreshLayout บน Android ชั่วคราว
+    if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+      window.AndroidCardBridge.setSwipeRefreshEnabled(false);
     }
     const cubic = 'cubic-bezier(0.32, 0.72, 0, 1)';
     if (sidebarRef.current) {
@@ -936,6 +947,9 @@ export default function App() {
       if (sidebarRef.current) {
         sidebarRef.current.style.transition = '';
       }
+      if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
+      }
       isDraggingSidebarRef.current = false;
     }, 270);
   }, []);
@@ -947,6 +961,11 @@ export default function App() {
 
     const isTouch = !!e.touches;
     if (isTouch && e.touches.length !== 1) return;
+
+    // ปิด SwipeRefreshLayout บน Android ชั่วคราวเมื่อเริ่มแตะขอบลาก Sidebar เพื่อไม่ให้แย่ง Touch Gesture
+    if (isTouch && typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+      window.AndroidCardBridge.setSwipeRefreshEnabled(false);
+    }
 
     const startX = isTouch ? e.touches[0].clientX : e.clientX;
     const startY = isTouch ? e.touches[0].clientY : e.clientY;
@@ -1019,6 +1038,9 @@ export default function App() {
       window.removeEventListener('touchend', onEnd);
       window.removeEventListener('touchcancel', onEnd);
       if (sidebarRafIdRef.current) cancelAnimationFrame(sidebarRafIdRef.current);
+      if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
+      }
     };
 
     const onEnd = (endEv) => {
@@ -1191,7 +1213,10 @@ export default function App() {
     if (mainRef.current) {
       scrollPositions.current[currentTab] = mainRef.current.scrollTop;
     }
-    setCurrentTab(tabId);
+    // ใช้ startTransition เพื่อให้การเปลี่ยนหน้าไม่บล็อก UI และไม่ค้างเมื่อกดเปลี่ยนหน้าเร็วๆ
+    React.startTransition(() => {
+      setCurrentTab(tabId);
+    });
     // ไม่ย่อ Sidebar อัตโนมัติเมื่อเลือกเปลี่ยนหน้าบน PC และ Tablet ตามที่ผู้ใช้ระบุ (เฉพาะ Mobile เท่านั้นที่พับเก็บ Drawer)
     if (isMobile) setIsSidebarExpanded(false);
   };

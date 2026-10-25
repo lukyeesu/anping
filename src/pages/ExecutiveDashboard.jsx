@@ -2889,20 +2889,22 @@ const ExecutiveDashboard = ({
       {/* Header Panel */}
       <div ref={headerRef} className="sticky z-40 w-full pointer-events-none page-sticky-header transition-all duration-300 ease-in-out" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto exec-sticky-header">
-          <div className="w-full mx-auto px-3.5 sm:px-6 md:px-8 2xl:px-12 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-2.5 sm:gap-3 py-2 sm:py-2.5 xl:py-3 exec-header-inner">
+          <div className="w-full mx-auto px-3.5 sm:px-6 md:px-8 2xl:px-12 flex flex-col gap-2.5 sm:gap-3 py-2 sm:py-2.5 xl:py-3 exec-header-inner">
             
-            {/* Title & Branch Dropdown Row on Mobile and Tablet */}
-            <div className="flex items-center justify-between w-full xl:w-auto gap-3 shrink-0">
-              <div className="min-w-0 shrink-0">
+            {/* แถวที่ 1: หัวข้อแดชบอร์ดผู้บริหาร + ตัวเลือกสาขา (เด่นชัด สวยงาม จัดชิดซ้าย-ขวาอย่างลงตัว) */}
+            <div className="flex items-center justify-between w-full gap-3 shrink-0">
+              <div className="min-w-0">
                 <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2 text-base sm:text-lg md:text-xl whitespace-nowrap">
-                  <TrendingUp className="text-emerald-500 animate-pulse shrink-0 w-4 h-4 sm:w-5 sm:h-5" /> 
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                    <TrendingUp className="text-emerald-500 animate-pulse shrink-0 w-4 h-4 sm:w-4.5 sm:h-4.5" /> 
+                  </div>
                   <span className="whitespace-nowrap">แดชบอร์ดผู้บริหาร</span>
                 </h1>
-                <p className="text-slate-500 kanit-text sticky-header-desc text-xs hidden sm:block truncate">ข้อมูลสรุปรายได้ กำไร และประสิทธิภาพของคลินิกเชิงลึก</p>
+                <p className="text-slate-500 kanit-text sticky-header-desc text-xs hidden sm:block truncate mt-0.5">ข้อมูลสรุปรายได้ กำไร และประสิทธิภาพของคลินิกเชิงลึก</p>
               </div>
 
-              {/* Branch Filter dropdown - Visible on mobile and tablet (< xl) */}
-              <div className="w-36 sm:w-44 xl:hidden shrink-0 relative">
+              {/* ตัวเลือกสาขา - แสดงตำแหน่งมุมขวาบนเสมอ เข้าใจง่ายสำหรับผู้บริหาร */}
+              <div className="w-36 sm:w-48 shrink-0 relative">
                 <CustomSelect 
                   value={selectedBranch} 
                   onChange={(val) => setSelectedBranch(val)} 
@@ -2910,54 +2912,44 @@ const ExecutiveDashboard = ({
                     { value: 'all', label: 'ทุกสาขา' },
                     ...branchesData.map(b => ({ value: b.id, label: b.name }))
                   ]}
-                  compact fullWidth className="w-full"
+                  compact fullWidth className="w-full shadow-sm"
                 />
               </div>
             </div>
             
-            {/* Filters Row */}
-            <div className="flex flex-row items-center gap-2 sm:gap-2.5 w-full xl:w-auto shrink-0 select-none overflow-x-auto scrollbar-none flex-nowrap py-1 px-0.5 max-w-full">
-              {/* Branch Filter dropdown - Visible ONLY on Large Desktop (xl:) */}
-              <div className="hidden xl:block w-40 shrink-0 relative">
-                <CustomSelect 
-                  value={selectedBranch} 
-                  onChange={(val) => setSelectedBranch(val)} 
-                  options={[
-                    { value: 'all', label: 'ทุกสาขา' },
-                    ...branchesData.map(b => ({ value: b.id, label: b.name }))
-                  ]}
-                  compact fullWidth className="w-full"
-                />
+            {/* แถวที่ 2: แถบตัวกรองช่วงเวลา (จัดเป็นหมวดหมู่เป็นระเบียบ ไม่ล้นจอ และตัดลงบรรทัดล่างอัตโนมัติบน Tablet) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 w-full select-none pt-0.5">
+              
+              {/* ชุดปุ่มเลือกช่วงเวลาหลัก (Segmented Control แบบคลีน) */}
+              <div className="flex bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/70 shadow-inner flex-wrap sm:flex-nowrap shrink-0">
+                {[
+                  { id: 'today', label: 'วันนี้' },
+                  { id: 'week', label: 'สัปดาห์' },
+                  { id: 'month', label: 'เดือน' },
+                  { id: 'quarter', label: 'ไตรมาส' },
+                  { id: 'year', label: 'ปี' },
+                  { id: 'custom', label: 'ช่วงเวลา' },
+                  { id: 'all', label: 'ทั้งหมด' }
+                ].map(r => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setTimeRange(r.id);
+                      if (r.id === 'week') setSelectedWeekDate(new Date());
+                      else if (r.id === 'month' && timeRange === 'month') handleOpenMonthPicker();
+                      else if (r.id === 'year' && timeRange === 'year') handleOpenYearPicker();
+                      else if (r.id === 'custom') handleOpenExecRange();
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold kanit-text transition-all shrink-0 ${timeRange === r.id ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200/60 font-black' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80'}`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Time Range Selector & Pickers */}
-              <div className="flex items-center gap-2 flex-nowrap shrink-0">
-                <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/60 shadow-sm flex-nowrap shrink-0">
-                  {[
-                    { id: 'today', label: 'วันนี้' },
-                    { id: 'week', label: 'สัปดาห์' },
-                    { id: 'month', label: 'เดือน' },
-                    { id: 'quarter', label: 'ไตรมาส' },
-                    { id: 'year', label: 'ปี' },
-                    { id: 'custom', label: 'ช่วงเวลา' },
-                    { id: 'all', label: 'ทั้งหมด' }
-                  ].map(r => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => {
-                        setTimeRange(r.id);
-                        if (r.id === 'week') setSelectedWeekDate(new Date());
-                        else if (r.id === 'month' && timeRange === 'month') handleOpenMonthPicker();
-                        else if (r.id === 'year' && timeRange === 'year') handleOpenYearPicker();
-                        else if (r.id === 'custom') handleOpenExecRange();
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold kanit-text transition-all shrink-0 ${timeRange === r.id ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200/50 font-black' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
+              {/* ชุดตัวเลือกย่อย: ปุ่มเลื่อนเปลี่ยนวัน/เดือน/ปี + ปุ่มเปรียบเทียบ (ตัดลงแถวล่างเรียบร้อยเมื่อจอแคบ) */}
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
 
                 {/* Month Picker Quick Switch Pill */}
                 {timeRange === 'month' && (
