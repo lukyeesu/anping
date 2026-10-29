@@ -96,7 +96,15 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
         window.addEventListener('scroll', handleScroll, true);
         window.addEventListener('resize', handleResize);
 
+        const motionObserver = new MutationObserver(() => {
+            if (document.body.matches('.is-dragging-sidebar, .is-sidebar-animating')) {
+                setIsOpen(false);
+            }
+        });
+        motionObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
         return () => {
+            motionObserver.disconnect();
             document.removeEventListener('mousedown', handleOutsideClick);
             document.removeEventListener('touchstart', handleOutsideClick);
             window.removeEventListener('scroll', handleScroll, true);

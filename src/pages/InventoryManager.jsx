@@ -78,6 +78,7 @@ const InventoryManager = ({
     if (!mainElement) return;
 
     const handleScroll = rAFThrottle((e) => {
+      if (mainElement?.dataset?.compositorSticky) return;
       // ป้องกันไม่ให้คำนวณและอัปเดต ถ้า Component ถูกซ่อนอยู่
       if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
 

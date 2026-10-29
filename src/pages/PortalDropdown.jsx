@@ -33,9 +33,16 @@ const PortalDropdown = ({ isVisible, children, className }) => {
         if (isVisible) {
             window.addEventListener('scroll', updateRect, true);
             window.addEventListener('resize', updateRect);
+            const parent = wrapperRef.current?.parentElement;
+            let resizeObs;
+            if (parent && typeof ResizeObserver !== 'undefined') {
+                resizeObs = new ResizeObserver(updateRect);
+                resizeObs.observe(parent);
+            }
             return () => {
                 window.removeEventListener('scroll', updateRect, true);
                 window.removeEventListener('resize', updateRect);
+                resizeObs?.disconnect();
             };
         }
     }, [isVisible]);

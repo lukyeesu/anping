@@ -3004,7 +3004,7 @@ const SettingsManager = ({
       </div>
 
       {/* Modal แจ้งเตือนเมื่อมีข้อมูลการเชื่อมต่อที่ยังไม่บันทึกก่อนสลับแท็บย่อย */}
-      {subTabUnsavedModal.isOpen && (
+      {subTabUnsavedModal.isOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-4 border border-amber-200/60 shadow-xs">
@@ -3038,7 +3038,8 @@ const SettingsManager = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal เพิ่ม / แก้ไขบัญชีรับเงิน POS */}

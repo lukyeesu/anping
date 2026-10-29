@@ -1171,9 +1171,10 @@ export async function callSupabase(action, sheetName, payload = null) {
               q = q.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,name.ilike.%${search}%,nickname.ilike.%${search}%,id.ilike.%${search}%,phone.ilike.%${search}%,id_card.ilike.%${search}%`);
             }
 
-            return q
-              .order(colSort, { ascending: sortDir === 'asc' })
-              .range(offset, offset + limit - 1);
+            q = q.order(colSort, { ascending: sortDir === 'asc' });
+            // Equal dates/names need a stable order across page boundaries.
+            if (colSort !== 'id') q = q.order('id', { ascending: sortDir === 'asc' });
+            return q.range(offset, offset + limit - 1);
           };
 
           let { data, count, error } = await buildQuery(selectCols);
@@ -1210,8 +1211,9 @@ export async function callSupabase(action, sheetName, payload = null) {
             return {
               status: 'success',
               data: formatted,
+              source: 'server',
               totalCount: count !== null ? count : formatted.length,
-              hasMore: (offset + limit) < (count || 0)
+              hasMore: count != null ? offset + formatted.length < count : formatted.length === limit
             };
           } else if (error) {
             console.warn('Paginated patient query error from Supabase:', error);
@@ -1253,6 +1255,7 @@ export async function callSupabase(action, sheetName, payload = null) {
       return { 
         status: 'success', 
         data: pagedData, 
+        source: 'cache',
         totalCount: filtered.length, 
         hasMore: (offset + limit) < filtered.length 
       };

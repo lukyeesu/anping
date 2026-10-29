@@ -104,6 +104,10 @@ const NumberTicker = ({
     const easeOutExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
 
     const step = (timestamp) => {
+      if (document.body.classList.contains('is-dragging-sidebar') || document.body.classList.contains('is-sidebar-animating')) {
+        animFrameRef.current = requestAnimationFrame(step);
+        return;
+      }
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const elapsed = timestamp - startTimeRef.current;
       const progress = Math.min(elapsed / duration, 1);
@@ -259,6 +263,10 @@ const PaymentChannelsDonut = ({
     const startTime = performance.now();
 
     const step = (now) => {
+      if (document.body.classList.contains('is-dragging-sidebar') || document.body.classList.contains('is-sidebar-animating')) {
+        animRef.current = requestAnimationFrame(step);
+        return;
+      }
       const elapsed = now - startTime;
       const progress = Math.min(1, elapsed / duration);
       // Ease-out cubic curve: responsive start, graceful deceleration

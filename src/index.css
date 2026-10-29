@@ -99,13 +99,161 @@ body.is-sidebar-animating [class*="backdrop-blur"],
 body.is-dragging-sidebar [class*="backdrop-blur"] {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
-    -webkit-transform: none !important;
-    transform: none !important;
+}
+
+/* The APK keeps panel geometry intact and uses the same lightweight surfaces as the native trial. */
+html.anping-webview [class*="backdrop-blur"],
+html.anping-webview .sticky-header-bg,
+html.anping-webview .sticky-filter-inner,
+html.anping-webview .exec-sticky-header {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+html.anping-webview [class*="backdrop-blur"][class*="bg-white"] {
+    background-color: rgba(255, 255, 255, 0.97);
+}
+
+/* Reserve the expanded flow box; scrolling only moves the header and filter layers. */
+.scroll-sticky-header {
+    --sticky-header-duration: 120ms;
+    height: var(--sticky-header-height, auto);
+    flex-shrink: 0;
+    overflow: clip;
+    clip-path: inset(0);
+}
+.scroll-sticky-header:has(> .sticky-header-bg) {
+    transition: clip-path var(--sticky-header-duration) linear !important;
+}
+.scroll-sticky-header.is-header-collapsed {
+    clip-path: inset(0 0 var(--sticky-header-clip-bottom) 0);
+}
+.scroll-sticky-header .sticky-header-bg {
+    pointer-events: none;
+    position: relative;
+    height: var(--sticky-header-height, auto);
+    backdrop-filter: none !important;
+    background: transparent !important;
+    /* A transparent border leaves a hole around the opaque pseudo-element. */
+    border-width: 0 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    will-change: auto;
+}
+.scroll-sticky-header .sticky-header-bg::before {
+    content: '';
+    pointer-events: auto;
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: rgb(255, 255, 255);
+    border-bottom: 1px solid rgb(226, 232, 240);
+    transform-origin: top;
+    transform: scaleY(1);
+    opacity: 0;
+    transition: transform var(--sticky-header-duration) linear;
+    will-change: transform;
+}
+.scroll-sticky-header .sticky-header-inner {
+    position: relative;
+    will-change: auto;
+}
+.scroll-sticky-header .sticky-header-title {
+    transform-origin: top left;
+    transform: translateY(0px) scale(1);
+    transition: transform var(--sticky-header-duration) linear;
+    will-change: transform;
+}
+.scroll-sticky-header .sticky-header-desc {
+    opacity: 1;
+    transform: translateY(0px);
+    transition: transform var(--sticky-header-duration) linear, opacity var(--sticky-header-duration) linear;
+    will-change: transform, opacity;
+}
+.scroll-sticky-header :is(.sticky-header-btn, .dash-date-badge) {
+    transform-origin: top right;
+    transform: translateY(0px) scale(1);
+    transition: transform var(--sticky-header-duration) linear;
+    will-change: transform;
+}
+.scroll-sticky-header :is(button, input, select, a, [role="button"], .cursor-pointer) {
+    pointer-events: auto;
+}
+.scroll-sticky-header.is-header-collapsed .sticky-header-bg::before {
+    transform: scaleY(var(--header-surface-scale));
+}
+.scroll-sticky-header.has-header-background .sticky-header-bg::before {
+    opacity: 1;
+}
+.scroll-sticky-header.is-header-collapsed .sticky-header-title {
+    transform: var(--header-title-transform);
+}
+.scroll-sticky-header.is-header-collapsed .sticky-header-desc {
+    transform: translateY(-6px);
+    opacity: 0;
+}
+.scroll-sticky-header.is-header-collapsed :is(.sticky-header-btn, .dash-date-badge) {
+    transform: var(--header-action-transform);
+}
+/* On contact the header is already compact; it must never cover or carry the filter. */
+.scroll-sticky-header.has-docked-filter,
+.scroll-sticky-header.has-docked-filter .sticky-header-bg::before,
+.scroll-sticky-header.has-docked-filter :is(.sticky-header-title, .sticky-header-desc, .sticky-header-btn, .dash-date-badge) {
+    transition-duration: 0s !important;
+}
+.scroll-sticky-filter .sticky-filter-inner {
+    backdrop-filter: none !important;
+    background-color: rgba(255, 255, 255, 0.97);
+    position: absolute;
+    top: 0;
+    width: 100%;
+    translate: none;
+    transform-origin: top center;
+    transform: var(--filter-rest-transform);
+    border-radius: 32px;
+    transition: transform 200ms linear, border-radius 200ms linear;
+    will-change: transform;
+}
+.scroll-sticky-filter::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    right: -1px;
+    height: var(--filter-docked-height);
+    background: white;
+    border-radius: 0 0 24px 24px;
+    opacity: 0;
+    pointer-events: none;
+}
+.scroll-sticky-filter.is-filter-docked::before {
+    opacity: 1;
+}
+.scroll-sticky-filter.is-filter-docked .sticky-filter-inner {
+    transform: var(--filter-docked-transform);
+    border-radius: 0 0 24px 24px;
+    background: transparent !important;
+    border-color: transparent;
+    box-shadow: none;
+}
+html.anping-webview body:not(.has-sidebar-blocks).is-sidebar-animating #main-scroll-container *,
+html.anping-webview body:not(.has-sidebar-blocks).is-dragging-sidebar #main-scroll-container * {
+    box-shadow: none !important;
+    transition-duration: 0s !important;
+}
+html.anping-webview body.is-sidebar-animating .animate-pulse,
+html.anping-webview body.is-dragging-sidebar .animate-pulse,
+html.anping-webview body.is-sidebar-animating .animate-ping,
+html.anping-webview body.is-dragging-sidebar .animate-ping {
+    animation-play-state: paused !important;
+}
+html.anping-webview body.is-sidebar-animating svg [filter],
+html.anping-webview body.is-dragging-sidebar svg [filter] {
+    filter: none !important;
 }
 
 /* Eliminate pointer-event hit-testing overhead on main view during sidebar transition */
-body.is-sidebar-animating #main-scroll-container,
-body.is-dragging-sidebar #main-scroll-container {
+body:not(.has-sidebar-blocks).is-sidebar-animating #main-scroll-container,
+body:not(.has-sidebar-blocks).is-dragging-sidebar #main-scroll-container {
     pointer-events: none !important;
 }
 
@@ -191,10 +339,30 @@ body.is-dragging-sidebar #main-scroll-container {
 }
 
 /* Prevent pointer events during sidebar expansion or drag to maintain solid 60-120fps */
-.is-dragging-sidebar #main-scroll-container,
-.is-sidebar-animating #main-scroll-container {
+body:not(.has-sidebar-blocks).is-dragging-sidebar #main-scroll-container,
+body:not(.has-sidebar-blocks).is-sidebar-animating #main-scroll-container {
   pointer-events: none !important;
 }
 
+/* Block accidental content taps without invalidating inherited styles on every table cell. */
+html.anping-webview body.has-sidebar-blocks aside:has(.sidebar-drag-handle) .sidebar-text-label {
+  flex: none;
+  width: 176px;
+}
+html.anping-webview body.has-sidebar-blocks aside:has(.sidebar-drag-handle) .sidebar-text-label.w-full {
+  width: 256px;
+}
+body.has-sidebar-blocks:is(.is-dragging-sidebar, .is-sidebar-animating)::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+  pointer-events: auto;
+}
 
-
+@media print {
+  #main-scroll-container {
+    zoom: 1 !important;
+    transform: none !important;
+  }
+}

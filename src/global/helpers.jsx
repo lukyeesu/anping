@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useId } from 'react';
 import { CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
 export const parseBool = (val) => {
@@ -288,11 +288,20 @@ export const getPatientId = (p) => p ? (p.hn || p.id || '-') : '-';
 export const useModal = (onClosedCallback) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
-    const id = useRef('modal_' + Date.now() + '_' + Math.floor(Math.random() * 1000)).current;
+    const id = useId();
+    const historyToken = useRef('');
+    const opening = useRef(0);
+    const openRef = useRef(false);
+    const closingRef = useRef(false);
+    const closeTimer = useRef(null);
 
     const internalClose = () => {
+        if (closingRef.current) return;
+        closingRef.current = true;
         setIsClosing(true);
-        setTimeout(() => {
+        closeTimer.current = setTimeout(() => {
+            openRef.current = false;
+            closingRef.current = false;
             setIsOpen(false);
             setIsClosing(false);
             if (onClosedCallback) onClosedCallback();
@@ -300,24 +309,34 @@ export const useModal = (onClosedCallback) => {
     };
 
     const open = () => {
+        if (openRef.current && !closingRef.current) return;
+        clearTimeout(closeTimer.current);
+        openRef.current = true;
+        closingRef.current = false;
+        historyToken.current = id + '_' + (++opening.current);
         setIsOpen(true);
         setIsClosing(false);
-        window.history.pushState({ modal: id }, '');
+        window.history.pushState({ ...window.history.state, modal: historyToken.current }, '');
     };
 
     const close = () => {
-        if (!isOpen) return;
-        if (window.history.state && window.history.state.modal === id) {
+        if (!openRef.current || closingRef.current) return;
+        // Close the visible layer immediately; history traversal is asynchronous.
+        internalClose();
+        if (window.history.state && window.history.state.modal === historyToken.current) {
             window.history.back();
-        } else {
-            internalClose();
         }
     };
 
     useEffect(() => {
         const handlePopState = () => {
-            if (isOpen) {
-                if (!window.history.state || window.history.state.modal !== id) {
+            if (closingRef.current) {
+                // A closing parent can be uncovered by a confirmation dialog's Back event.
+                if (window.history.state?.modal === historyToken.current) window.history.back();
+                return;
+            }
+            if (openRef.current) {
+                if (!window.history.state || window.history.state.modal !== historyToken.current) {
                     internalClose();
                 }
             }
@@ -325,6 +344,7 @@ export const useModal = (onClosedCallback) => {
 
         const handleKeyDown = (e) => {
             if (e.key === 'Escape' && isOpen) {
+                if (window.history.state?.modal && window.history.state.modal !== historyToken.current) return;
                 // หากผู้ใช้กำลังพิมพ์ในช่องค้นหา/กรอกข้อมูลและมีข้อความอยู่ ให้ปล่อยให้ช่องค้นหาเคลียร์ข้อความก่อน
                 const el = document.activeElement;
                 if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value && el.value.trim().length > 0) {
@@ -345,6 +365,8 @@ export const useModal = (onClosedCallback) => {
             };
         }
     }, [isOpen]);
+
+    useEffect(() => () => clearTimeout(closeTimer.current), []);
 
     const setIsOpenWrapper = (val) => {
         if (val) {

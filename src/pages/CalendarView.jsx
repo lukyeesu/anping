@@ -17,9 +17,9 @@ import {
 } from 'lucide-react';
 import { theme } from '../global/theme';
 
-const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading, roleLabels = {}, staffCategories = [], onViewChange }) => {
-  const [viewDate, setViewDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState('month'); 
+const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [], transportStatuses = [], staffData = [], onEventDrop, onMonthChange, isLoading, roleLabels = {}, staffCategories = [], onViewChange, initialView }) => {
+  const [viewDate, setViewDate] = useState(() => initialView?.viewDate || new Date());
+  const [viewMode, setViewMode] = useState(initialView?.viewMode || 'month');
 
   useEffect(() => {
     if (onViewChange) {

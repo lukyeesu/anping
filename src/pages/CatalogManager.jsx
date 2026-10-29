@@ -43,6 +43,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
     if (!mainElement) return;
 
     const handleScroll = rAFThrottle((e) => {
+      if (mainElement?.dataset?.compositorSticky) return;
       if (!headerRef.current) return;
       const target = e.target || mainElement;
       const { scrollTop } = target;

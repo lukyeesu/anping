@@ -4306,6 +4306,7 @@ const CouponManager = ({
     const mainElement = document.getElementById('main-scroll-container') || window;
     
     const handleScroll = rAFThrottle((e) => {
+      if (mainElement?.dataset?.compositorSticky) return;
       if (!headerRef.current) return;
       const target = e?.target || (mainElement === window ? document.documentElement : mainElement);
       const scrollTop = target.scrollTop ?? window.scrollY ?? 0;

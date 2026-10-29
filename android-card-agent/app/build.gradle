@@ -11,14 +11,15 @@ android {
         applicationId "com.anping.clinic"
         minSdk 24
         targetSdk 34
-        versionCode 30
-        versionName "1.6.7"
+        versionCode 48
+        versionName "1.6.25"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -34,6 +35,15 @@ android {
         viewBinding true
     }
 }
+
+// Keep generated APKs and bundled web files out of the tracked legacy build directories.
+layout.buildDirectory = file('../.work/app-build')
+android.sourceSets.main.assets.srcDir(file('../.work/bundled-assets'))
+tasks.register('prepareBundledWeb', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'node', 'scripts/build-webview.mjs'
+}
+tasks.named('preBuild').configure { dependsOn 'prepareBundledWeb' }
 
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'

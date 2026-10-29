@@ -220,6 +220,7 @@ export default function DisplayAdsManager({
     const mainElement = document.getElementById('main-scroll-container');
 
     const handleScroll = rAFThrottle((e) => {
+      if (mainElement?.dataset?.compositorSticky) return;
       if (!headerRef.current) return;
       const target = e?.target || mainElement;
       const scrollTop = target?.scrollTop ?? window?.scrollY ?? document.documentElement.scrollTop ?? 0;
@@ -239,6 +240,7 @@ export default function DisplayAdsManager({
 
     // Initial check
     setTimeout(() => {
+      if (mainElement?.dataset?.compositorSticky) return;
       if (headerRef.current) {
         const scrollTop = mainElement?.scrollTop ?? window?.scrollY ?? document.documentElement.scrollTop ?? 0;
         if (scrollTop > 40) headerRef.current.classList.add('is-scrolled');

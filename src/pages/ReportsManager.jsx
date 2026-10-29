@@ -590,19 +590,22 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
         scrollHeight = mainElement.scrollHeight;
       }
 
-      if (headerRef.current) {
-        const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
-        if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) headerRef.current.classList.add('is-scrolled');
-        else headerRef.current.classList.remove('is-scrolled');
-      }
+      if (!mainElement?.dataset?.compositorSticky) {
+        if (headerRef.current) {
+          const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+          if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) headerRef.current.classList.add('is-scrolled');
+          else headerRef.current.classList.remove('is-scrolled');
+        }
 
-      if (filterRef.current && headerRef.current) {
-        const headerRect = headerRef.current.getBoundingClientRect();
-        const filterRect = filterRef.current.getBoundingClientRect();
-        const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
-        const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
-        if (filterRect.top <= threshold) filterRef.current.classList.add('is-scrolled');
-        else filterRef.current.classList.remove('is-scrolled');
+        if (filterRef.current && headerRef.current) {
+          const headerRect = headerRef.current.getBoundingClientRect();
+          const filterRect = filterRef.current.getBoundingClientRect();
+          const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
+          const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
+          if (filterRect.top <= threshold) filterRef.current.classList.add('is-scrolled');
+          else filterRef.current.classList.remove('is-scrolled');
+        }
+
       }
 
       if (scrollTop + clientHeight >= scrollHeight - 300) {

@@ -22,7 +22,7 @@ import { theme } from '../global/theme';
 import { supabase, rowToJS } from '../lib/supabase';
 import { getLocalStore, upsertLocalStore, subscribeStoreUpdates } from '../lib/offlineStore';
 import ClinicStatementModal from '../components/ClinicStatementModal';
-import useVirtualRows from '../hooks/useVirtualRows';
+import FinanceVirtualList from '../components/FinanceVirtualList';
 
 const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', suffix = '', formatter, className = '', title }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -255,6 +255,10 @@ const FinancePage = ({
 
   const headerRef = useRef(null);
   const filterRef = useRef(null);
+  const loadMoreRef = useRef(null);
+  const loadingNextPageRef = useRef(false);
+  const loadMoreVisibleRef = useRef(false);
+  const loadMoreCountRef = useRef(0);
 
   // POS Edit States
   const [isPosEditModalOpen, setIsPosEditModalOpen] = useState(false);
@@ -1211,6 +1215,7 @@ const FinancePage = ({
   useEffect(() => {
       setPage(0);
       setHasMore(true);
+      loadMoreVisibleRef.current = false;
       fetchStatsAndData(0, true);
   }, [search, filterType, filterCategory, filterBranch, timeFilterMode, filterMonth, filterYear, dateRange]);
 
@@ -1674,40 +1679,12 @@ const FinancePage = ({
   }, []);
 
   // --- TanStack Virtual Virtualizers for 60+ FPS Scroll & Responsive Sidebar ---
-  const tableVirtualizer = useVirtualRows({
-    count: isDesktopView ? visibleTransactions.length : 0,
-    estimateSize: 64,
-    overscan: 5,
-    enabled: isDesktopView,
-    getItemKey: (idx) => {
-      const tx = visibleTransactions[idx];
-      return tx ? (tx.id || idx) : idx;
-    }
-  });
-
-  const cardVirtualizer = useVirtualRows({
-    count: !isDesktopView ? visibleTransactions.length : 0,
-    estimateSize: 180,
-    overscan: 4,
-    gap: 12,
-    enabled: !isDesktopView,
-    getItemKey: (idx) => {
-      const tx = visibleTransactions[idx];
-      return tx ? (tx.id || idx) : idx;
-    }
-  });
-
-  const tableVirtualItems = tableVirtualizer.getVirtualItems();
-  const tableTotalSize = tableVirtualizer.getTotalSize();
-
-  const cardVirtualItems = cardVirtualizer.getVirtualItems();
-  const cardTotalSize = cardVirtualizer.getTotalSize();
-
-  const renderTxTableRow = (tx, virtualRow) => {
+  // The active list owns its virtualizer so scrolling does not render this whole page.
+  const renderTxTableRow = (tx, virtualRow, measureElement) => {
     return (
       <tr 
         key={virtualRow.key} 
-        ref={tableVirtualizer.measureElement}
+        ref={measureElement}
         data-index={virtualRow.index}
         onClick={() => openDetailModal(tx)} 
         className="border-b border-slate-50 last:border-0 hover:bg-sky-50/50 transition-colors group cursor-pointer"
@@ -1776,11 +1753,11 @@ const FinancePage = ({
     );
   };
 
-  const renderTxMobileCard = (tx, virtualRow) => {
+  const renderTxMobileCard = (tx, virtualRow, measureElement) => {
     return (
       <div 
         key={virtualRow.key} 
-        ref={cardVirtualizer.measureElement}
+        ref={measureElement}
         data-index={virtualRow.index}
         onClick={() => openDetailModal(tx)} 
         className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98]"
@@ -2225,7 +2202,19 @@ const FinancePage = ({
     const mainElement = document.getElementById('main-scroll-container') || document.querySelector('main') || window;
     if (!mainElement) return;
 
+    if (loadMoreCountRef.current !== financeTransactions.length) {
+      loadMoreCountRef.current = financeTransactions.length;
+      loadMoreVisibleRef.current = false;
+    }
+    const loadMore = () => {
+      if (!hasMore || isFetchingData || loadingNextPageRef.current) return;
+      loadingNextPageRef.current = true;
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchStatsAndData(nextPage, false).finally(() => { loadingNextPageRef.current = false; });
+    };
     const handleScroll = rAFThrottle((e) => {
+      if (mainElement?.dataset?.compositorSticky) return;
       if (!headerRef.current || headerRef.current.offsetHeight === 0) return;
 
       const target = e.target || (mainElement !== window ? mainElement : document.documentElement);
@@ -2233,40 +2222,38 @@ const FinancePage = ({
       const scrollHeight = target.scrollHeight || document.documentElement.scrollHeight;
       const clientHeight = target.clientHeight || window.innerHeight;
 
-      // 1. Sticky Header
-      const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
-      if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
-        headerRef.current.classList.add('is-scrolled');
-      } else {
-        headerRef.current.classList.remove('is-scrolled');
-      }
-
-      // 2. Sticky Filter
-      if (filterRef.current && headerRef.current) {
-        const headerRect = headerRef.current.getBoundingClientRect();
-        const filterRect = filterRef.current.getBoundingClientRect();
-        const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
-        const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
-        if (filterRect.top <= threshold) {
-          filterRef.current.classList.add('is-scrolled');
+      if (!mainElement?.dataset?.compositorSticky) {
+        // 1. Sticky Header
+        const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+        if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
+          headerRef.current.classList.add('is-scrolled');
         } else {
-          filterRef.current.classList.remove('is-scrolled');
+          headerRef.current.classList.remove('is-scrolled');
         }
+
+        // 2. Sticky Filter
+        if (filterRef.current && headerRef.current) {
+          const headerRect = headerRef.current.getBoundingClientRect();
+          const filterRect = filterRef.current.getBoundingClientRect();
+          const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
+          const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
+          if (filterRect.top <= threshold) {
+            filterRef.current.classList.add('is-scrolled');
+          } else {
+            filterRef.current.classList.remove('is-scrolled');
+          }
+        }
+
       }
 
       // 3. Infinite Load
       if (scrollTop + clientHeight >= scrollHeight - 100) {
-        if (hasMore && !isFetchingData) {
-            setPage(p => {
-                const np = p + 1;
-                fetchStatsAndData(np, false);
-                return np;
-            });
-        }
+        loadMore();
       }
     });
 
-    setTimeout(() => {
+    const resetTimer = setTimeout(() => {
+      if (mainElement?.dataset?.compositorSticky) return;
       if (headerRef.current) headerRef.current.classList.remove('is-scrolled');
       if (filterRef.current) {
           filterRef.current.classList.remove('is-scrolled');
@@ -2277,8 +2264,20 @@ const FinancePage = ({
 
     const scrollTarget = mainElement !== window ? mainElement : window;
     scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
-    return () => scrollTarget.removeEventListener('scroll', handleScroll);
-  }, [hasMore, isFetchingData, filterBranch, filterType, filterCategory, search, timeFilterMode, filterMonth, filterYear, dateRange]);
+    let observer;
+    if (mainElement instanceof Element && loadMoreRef.current) {
+      observer = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          const entering = entry.isIntersecting && !loadMoreVisibleRef.current;
+          loadMoreVisibleRef.current = entry.isIntersecting;
+          // One request per entry also prevents retries looping while an offline sentinel stays visible.
+          if (entering && mainElement.dataset.compositorSticky) loadMore();
+        }
+      }, { root: mainElement, rootMargin: '100px 0px' });
+      observer.observe(loadMoreRef.current);
+    }
+    return () => { clearTimeout(resetTimer); observer?.disconnect(); scrollTarget.removeEventListener('scroll', handleScroll); };
+  }, [page, hasMore, isFetchingData, financeTransactions.length, filterBranch, filterType, filterCategory, search, timeFilterMode, filterMonth, filterYear, dateRange]);
   // -----------------------------
 
   return (
@@ -2570,32 +2569,14 @@ const FinancePage = ({
                           <td className="p-4 pr-6"><div className="flex gap-2 justify-end"><div className="w-full max-w-[24px] h-[24px] bg-slate-200 animate-pulse rounded-lg"></div><div className="w-full max-w-[24px] h-[24px] bg-slate-200 animate-pulse rounded-lg"></div></div></td>
                         </tr>
                       ))
-                    ) : tableVirtualItems.length > 0 ? (
-                      <>
-                        {tableVirtualItems[0].start > 0 && (
-                          <tr>
-                            <td colSpan={8} style={{ height: `${tableVirtualItems[0].start}px`, padding: 0, border: 0 }} />
-                          </tr>
-                        )}
-                        {tableVirtualItems.map((virtualRow) => {
-                          const tx = visibleTransactions[virtualRow.index];
-                          if (!tx) return null;
-                          return renderTxTableRow(tx, virtualRow);
-                        })}
-                        {tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end > 0 && (
-                          <tr>
-                            <td colSpan={8} style={{ height: `${tableTotalSize - tableVirtualItems[tableVirtualItems.length - 1].end}px`, padding: 0, border: 0 }} />
-                          </tr>
-                        )}
-                      </>
-                    ) : (
+                    ) : <FinanceVirtualList transactions={visibleTransactions} renderRow={renderTxTableRow} mode="table" emptyState={(
                       <tr>
                         <td colSpan="8" className="p-10 text-center text-slate-400">
                           <Receipt size={48} className="mx-auto mb-4 opacity-20" />
                           <p className="kanit-text font-medium text-lg">ไม่มีรายการในระบบ</p>
                         </td>
                       </tr>
-                    )}
+                    )} />}
                     
                     {/* Infinity Loading Skeleton (Desktop) */}
                     {isLoadingMore && Array.from({ length: 3 }).map((_, i) => (
@@ -2626,26 +2607,12 @@ const FinancePage = ({
                         </div>
                     </div>
                   ))
-                ) : cardVirtualItems.length > 0 ? (
-                  <>
-                    {cardVirtualItems[0].start > 0 && (
-                      <div style={{ height: `${cardVirtualItems[0].start}px` }} />
-                    )}
-                    {cardVirtualItems.map((virtualRow) => {
-                      const tx = visibleTransactions[virtualRow.index];
-                      if (!tx) return null;
-                      return renderTxMobileCard(tx, virtualRow);
-                    })}
-                    {cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end > 0 && (
-                      <div style={{ height: `${cardTotalSize - cardVirtualItems[cardVirtualItems.length - 1].end}px` }} />
-                    )}
-                  </>
-                ) : (
+                ) : <FinanceVirtualList transactions={visibleTransactions} renderRow={renderTxMobileCard} mode="card" emptyState={(
                   <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                     <Receipt size={40} className="mx-auto mb-3 opacity-30" />
                     <p className="kanit-text font-bold text-sm">ไม่มีรายการในระบบ</p>
                   </div>
-                )}
+                )} />}
 
                 {/* --- [NEW] Infinite Scroll Sentinel --- */}
                 {/* --- [FIXED] Infinite Scroll Sentinel (Matches MedicalRecords) --- */}
@@ -2665,6 +2632,8 @@ const FinancePage = ({
           </div>
         </div>
       </div>
+
+      <div ref={loadMoreRef} aria-hidden="true" className="w-full h-px shrink-0" />
 
       {/* Detail Modal */}
       {isDetailModalOpen && selectedTxn && createPortal(

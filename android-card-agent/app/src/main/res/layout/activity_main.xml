@@ -8,7 +8,7 @@
     android:background="#FFFFFF">
 
     <!-- SwipeRefreshLayout สำหรับลากนิ้วลงเพื่อรีเฟรชหน้าเว็บ (Pull-to-Refresh) -->
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+    <com.anping.cardagent.ClinicSwipeRefreshLayout
         android:id="@+id/swipeRefreshLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+    </com.anping.cardagent.ClinicSwipeRefreshLayout>
 
     <!-- แถบดาวน์โหลดโหลดหน้าเว็บแบบบางและทันสมัย (Top Loading Progress Bar) -->
     <ProgressBar

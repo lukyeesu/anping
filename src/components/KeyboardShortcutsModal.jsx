@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, Download, Smartphone, Laptop, CreditCard, Users, 
   Stethoscope, Receipt, Package, Calendar, Keyboard, X, Sparkles, 
-  CheckCircle2, ShieldCheck, HelpCircle, ArrowRight, Eye, RefreshCw
+  CheckCircle2, ShieldCheck, HelpCircle, ArrowRight, Eye, RefreshCw,
+  Zap, Globe, Radio, Activity, Check, ExternalLink, Info
 } from 'lucide-react';
 
 const SHORTCUT_GROUPS = [
@@ -80,14 +81,14 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[92dvh] flex flex-col border border-slate-100 animate-in zoom-in-95 duration-200 overflow-hidden"
+        className="bg-white rounded-3xl shadow-2xl max-w-5xl lg:max-w-6xl w-full max-h-[92dvh] flex flex-col border border-slate-100 animate-in zoom-in-95 duration-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-indigo-50/40 to-white shrink-0">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-indigo-50/40 to-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
-              <BookOpen size={20} />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
+              <BookOpen size={22} />
             </div>
             <div>
               <h3 className="font-bold text-base sm:text-lg text-slate-800 kanit-text flex items-center gap-2">
@@ -119,7 +120,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
             }`}
           >
             <Download size={15} />
-            <span>ดาวน์โหลดแอป</span>
+            <span>ดาวน์โหลดแอป (4 ตัวเลือก)</span>
           </button>
 
           <button
@@ -164,114 +165,325 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
           
           {/* TAB 1: DOWNLOADS */}
           {activeTab === 'downloads' && (
-            <div className="space-y-5">
-              <div className="bg-sky-50/70 border border-sky-100 rounded-2xl p-4 flex items-start gap-3">
-                <ShieldCheck className="text-sky-600 shrink-0 mt-0.5" size={20} />
-                <div className="text-xs sm:text-sm text-slate-700 leading-relaxed kanit-text">
-                  <span className="font-bold text-sky-900 block mb-0.5">ติดตั้งง่าย ปลอดภัย และอัปเดตอัตโนมัติ</span>
-                  เลือกติดตั้งแอปพลิเคชันให้เหมาะกับการใช้งานของคุณ ทั้งแบบแอปเต็มหน้าจอ และแบบตัวกลางสำหรับเว็บเบราว์เซอร์
+            <div className="space-y-6">
+              {/* Hero Banner */}
+              <div className="bg-gradient-to-r from-sky-50 via-indigo-50/50 to-emerald-50/50 border border-sky-100 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0 mt-0.5">
+                    <Download size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm sm:text-base text-slate-900 kanit-text flex items-center gap-2 flex-wrap">
+                      <span>ศูนย์ดาวน์โหลดแอปพลิเคชันและโปรแกรมอ่านบัตร</span>
+                      <span className="text-[11px] font-bold text-sky-700 bg-sky-100/90 px-2.5 py-0.5 rounded-full">
+                        พร้อมใช้งาน 4 รายการ
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-600 kanit-text mt-0.5 leading-relaxed">
+                      เลือกดาวน์โหลดตามอุปกรณ์ที่ใช้งาน: แท็บเล็ตประจำห้องตรวจ (Android APK) หรือคอมพิวเตอร์เคาน์เตอร์ (Windows PC)
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Card A: AnpingClinic.apk */}
-                <div className="rounded-2xl border-2 border-sky-500/30 bg-gradient-to-b from-sky-50/40 to-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden">
-                  <div className="absolute top-0 right-0 bg-sky-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-bl-xl uppercase tracking-wider">
-                    แนะนำ
+              {/* Group 1: Tablet / Android Apps */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+                  <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold text-xs shrink-0">
+                    1
                   </div>
-                  <div>
-                    <div className="w-11 h-11 rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20 mb-3.5">
-                      <Smartphone size={22} />
-                    </div>
-                    <h4 className="font-bold text-base text-slate-900 kanit-text flex items-center gap-1.5">
-                      AnpingClinic
-                      <span className="text-[11px] font-normal text-sky-600 bg-sky-100 px-2 py-0.5 rounded-full font-mono">v1.5.1</span>
-                    </h4>
-                    <p className="text-xs text-slate-500 font-medium kanit-text mt-1">
-                      แอปพลิเคชันเต็มรูปแบบ (All-in-One)
-                    </p>
-                    <ul className="text-xs text-slate-600 kanit-text space-y-1.5 mt-3.5">
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                        <span>รันเต็มจอ ไร้แถบเบราว์เซอร์ ลื่นไหล 60FPS</span>
-                      </li>
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                        <span>มีระบบอ่านบัตรประชาชนในตัว เสียบสายอ่านได้ทันที</span>
-                      </li>
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                        <span>กล้องสแกนความเร็วสูง (Native Camera)</span>
-                      </li>
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                        <span>รองรับการอัปเดตเวอร์ชันใหม่อัตโนมัติในตัว</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="pt-5 mt-4 border-t border-slate-100">
-                    <a
-                      href="/AnpingClinic.apk"
-                      download="AnpingClinic.apk"
-                      className="w-full py-3 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/20 hover:-translate-y-0.5"
-                    >
-                      <Download size={16} />
-                      <span>ดาวน์โหลด AnpingClinic.apk</span>
-                    </a>
-                    <span className="block text-center text-[11px] text-slate-400 mt-1.5 font-medium">
-                      ขนาดประมาณ 6.34 MB • สำหรับแท็บเล็ต/มือถือ Android
-                    </span>
-                  </div>
+                  <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text flex items-center gap-2">
+                    <Smartphone size={18} className="text-sky-500" />
+                    <span>แอปพลิเคชันสำหรับแท็บเล็ตและมือถือ Android</span>
+                  </h4>
+                  <span className="text-xs text-slate-400 kanit-text hidden md:inline">
+                    (ติดตั้งเพียงตัวใดตัวหนึ่งตามความต้องการ)
+                  </span>
                 </div>
 
-                {/* Card B: anping-card-agent.apk */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-                  <div>
-                    <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 mb-3.5">
-                      <CreditCard size={22} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+                  {/* Card 1: DemoAnping.apk (Recommended) */}
+                  <div className="rounded-2xl border-2 border-sky-500/40 bg-gradient-to-b from-sky-50/50 via-white to-white p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-sky-500 transition-all flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider flex items-center gap-1 shadow-xs">
+                      <Sparkles size={11} />
+                      <span>แนะนำที่สุด</span>
                     </div>
-                    <h4 className="font-bold text-base text-slate-900 kanit-text flex items-center gap-1.5">
-                      Anping Card Agent
-                      <span className="text-[11px] font-normal text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full font-mono">v1.4.7</span>
-                    </h4>
-                    <p className="text-xs text-slate-500 font-medium kanit-text mt-1">
-                      โปรแกรมตัวกลางอ่านบัตร (Agent Only)
-                    </p>
-                    <ul className="text-xs text-slate-600 kanit-text space-y-1.5 mt-3.5">
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
-                        <span>สำหรับผู้ที่ต้องการใช้งานผ่าน Google Chrome / Edge</span>
-                      </li>
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
-                        <span>ทำงานเป็น Background Service ส่งข้อมูลให้หน้าเว็บ</span>
-                      </li>
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
-                        <span>มีหน้าจอตรวจสอบข้อมูลและทดสอบอ่านบัตร</span>
-                      </li>
-                      <li className="flex items-start gap-1.5">
-                        <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
-                        <span>ปลอดภัย ออฟไลน์ 100% ไม่ส่งข้อมูลออกภายนอก</span>
-                      </li>
-                    </ul>
+
+                    <div>
+                      <div className="flex items-center gap-3 mb-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                          <Smartphone size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
+                              DemoAnping.apk
+                            </h5>
+                            <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-mono">
+                              v1.6.7 ใหม่ล่าสุด
+                            </span>
+                          </div>
+                          <p className="text-xs text-sky-700 font-medium kanit-text">
+                            React Native แท้ 100% (ติดตั้งแยก ไม่ทับตัวเดิม ชื่อ demoanping)
+                          </p>
+                        </div>
+                      </div>
+
+                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3 rounded-xl border border-sky-100/60">
+                        <li className="flex items-start gap-2">
+                          <Zap size={14} className="text-sky-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">React Native Native แท้:</strong> UI เรนเดอร์บน Native Thread 60-120fps สลับหน้าทันที ไม่ใช้ WebView</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">In-Flow Sidebar:</strong> เมนูย่อ/ขยายผลักเนื้อหาอย่างนุ่มนวลด้วย Reanimated ไม่กระตุก</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <ShieldCheck size={14} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">ติดตั้งทดสอบคู่กันได้:</strong> ใช้ Package ID แยก (`com.anpingclinic.demo`) เปิดเทียบกับแอปเดิมได้ทันที</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-sky-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">พิมพ์เอกสารผ่านเว็บเบราว์เซอร์:</strong> เปิดหน้าพิมพ์ภายนอกไปยัง Chrome อัตโนมัติ</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-slate-100">
+                      <a
+                        href="/DemoAnping.apk"
+                        download="DemoAnping.apk"
+                        className="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/25 hover:-translate-y-0.5"
+                      >
+                        <Download size={16} />
+                        <span>ดาวน์โหลด DemoAnping.apk (React Native)</span>
+                      </a>
+                      <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
+                        ขนาดประมาณ 33.5 MB • React Native (New Arch + Hermes) สำหรับ Android
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="pt-5 mt-4 border-t border-slate-100">
-                    <a
-                      href="/anping-card-agent.apk"
-                      download="anping-card-agent.apk"
-                      className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-slate-900/10 hover:-translate-y-0.5"
-                    >
-                      <Download size={16} />
-                      <span>ดาวน์โหลด Card Agent.apk</span>
-                    </a>
-                    <span className="block text-center text-[11px] text-slate-400 mt-1.5 font-medium">
-                      ขนาดประมาณ 6.17 MB • สำหรับรันเบื้องหลังควบคู่กับบราวเซอร์
-                    </span>
+                  {/* Card 2: AnpingClinic.apk (Legacy / Original) */}
+                  <div className="rounded-2xl border-2 border-slate-200/90 bg-gradient-to-b from-slate-50/50 via-white to-white p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-slate-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider shadow-xs">
+                      เวอร์ชันเดิม
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-3 mb-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-600 to-slate-700 text-white flex items-center justify-center shadow-md shadow-slate-600/20 shrink-0 group-hover:scale-105 transition-transform">
+                          <Smartphone size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
+                              AnpingClinic.apk
+                            </h5>
+                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
+                              v1.6.6 ดั้งเดิม
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium kanit-text">
+                            แอปคลินิกเวอร์ชันมาตรฐานเดิม สำหรับผู้คุ้นเคย
+                          </p>
+                        </div>
+                      </div>
+
+                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3 rounded-xl border border-slate-100">
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">เวอร์ชันเดิม:</strong> ทำงานได้ตามปกติ สำหรับเครื่องที่ใช้งานอยู่ประจำ</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">อ่านบัตรในตัว:</strong> รองรับเครื่องอ่านบัตรประชาชน USB OTG มาตรฐาน</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">ฟังก์ชันครบ:</strong> ระบบเวชระเบียน ตรวจรักษา การเงิน และนัดหมาย</span>
+                        </li>
+                        <li className="flex items-start gap-2 text-slate-500">
+                          <Info size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-700">ข้อสังเกต:</strong> แถบเมนูข้างอาจมีการตอบสนองช้ากว่าตัว Demo บนแท็บเล็ตบางรุ่น</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-slate-100">
+                      <a
+                        href="/AnpingClinic.apk"
+                        download="AnpingClinic.apk"
+                        className="w-full py-2.5 px-4 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-sm hover:-translate-y-0.5"
+                      >
+                        <Download size={16} />
+                        <span>ดาวน์โหลด AnpingClinic.apk (v1.6.6)</span>
+                      </a>
+                      <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
+                        ขนาดประมาณ 6.36 MB • เวอร์ชันดั้งเดิมที่เสถียร
+                      </span>
+                    </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Group 2: PC & Browser Companion */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    2
+                  </div>
+                  <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text flex items-center gap-2">
+                    <Laptop size={18} className="text-emerald-600" />
+                    <span>โปรแกรมสำหรับคอมพิวเตอร์ PC และการใช้งานผ่านเว็บเบราว์เซอร์</span>
+                  </h4>
+                  <span className="text-xs text-slate-400 kanit-text hidden md:inline">
+                    (สำหรับอ่านบัตรประชาชนเมื่อเปิดเว็บผ่าน Google Chrome / Edge)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+                  {/* Card 3: Thai Card Agent for Windows (System Tray) */}
+                  <div className="rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-b from-emerald-50/50 via-white to-white p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-emerald-500 transition-all flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider shadow-xs flex items-center gap-1">
+                      <Laptop size={11} />
+                      <span>สำหรับ Windows PC</span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-3 mb-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                          <Laptop size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
+                              Thai Card Agent
+                            </h5>
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-mono">
+                              Windows System Tray
+                            </span>
+                          </div>
+                          <p className="text-xs text-emerald-700 font-medium kanit-text">
+                            โปรแกรมอ่านบัตรสำหรับคอมพิวเตอร์ PC เคาน์เตอร์คลินิก
+                          </p>
+                        </div>
+                      </div>
+
+                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3 rounded-xl border border-emerald-100/60">
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">ซ่อนในถาดไอคอน (Hide Icons):</strong> ซ่อนตัวมุมขวาล่างแบบ Discord ไม่เกะกะแถบงาน</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">มีไฟบอกสถานะ:</strong> ไอคอนแสดงไฟชัดเจน (🟢 กำลังทำงาน / 🔴 ปิดพัก)</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">เปิด-ปิดง่ายด้วยคลิกขวา:</strong> คลิกขวาที่ไอคอนเพื่อ สลับเปิด/ปิด หรือรีสตาร์ท</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">เชื่อมต่อเว็บทันที:</strong> เสียบบัตรประชาชนแล้วดึงข้อมูลเข้าสู่ Chrome/Edge ได้ทันที</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-slate-100">
+                      <a
+                        href="/thai-card-agent-windows.zip"
+                        download="thai-card-agent-windows.zip"
+                        className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/25 hover:-translate-y-0.5"
+                      >
+                        <Download size={16} />
+                        <span>ดาวน์โหลด Agent Windows (.zip)</span>
+                      </a>
+                      <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
+                        ขนาดประมาณ 4.8 MB • แตกไฟล์แล้วเปิด .vbs ใช้งานได้ทันที
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 4: anping-card-agent.apk (Background Service for Chrome) */}
+                  <div className="rounded-2xl border-2 border-indigo-500/30 bg-gradient-to-b from-indigo-50/40 via-white to-white p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-indigo-500/60 transition-all flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider shadow-xs flex items-center gap-1">
+                      <CreditCard size={11} />
+                      <span>สำหรับ Chrome บน Android</span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-3 mb-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                          <CreditCard size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
+                              Anping Card Agent
+                            </h5>
+                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md font-mono">
+                              v1.4.7 Service
+                            </span>
+                          </div>
+                          <p className="text-xs text-indigo-700 font-medium kanit-text">
+                            ตัวกลางเชื่อมต่อเครื่องอ่านบัตรสำหรับเบราว์เซอร์
+                          </p>
+                        </div>
+                      </div>
+
+                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3 rounded-xl border border-indigo-100/60">
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">สำหรับเปิดผ่าน Chrome:</strong> เหมาะสำหรับผู้ที่ชอบเปิดเว็บคลินิกผ่านเบราว์เซอร์แท็บเล็ต</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">Background Service:</strong> ทำงานในเบื้องหลังเงียบๆ ไม่เกะกะสายตา</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">ดึงข้อมูล 1 คลิก:</strong> เสียบบัตรแล้วกดปุ่ม "อ่านข้อมูลจากบัตร" บนหน้าเว็บ</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 size={14} className="text-indigo-500 shrink-0 mt-0.5" />
+                          <span><strong className="text-slate-800">ปลอดภัย ออฟไลน์:</strong> สื่อสารเฉพาะภายในเครื่อง ไม่ส่งข้อมูลออกภายนอก</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-slate-100">
+                      <a
+                        href="/anping-card-agent.apk"
+                        download="anping-card-agent.apk"
+                        className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/25 hover:-translate-y-0.5"
+                      >
+                        <Download size={16} />
+                        <span>ดาวน์โหลด Card Agent.apk (v1.4.7)</span>
+                      </a>
+                      <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
+                        ขนาดประมาณ 6.17 MB • ติดตั้งแล้วเปิดแอป 1 ครั้งเพื่อเริ่ม Service
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Decision Tip */}
+              <div className="p-3.5 sm:p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-600 kanit-text">
+                <div className="flex items-center gap-2.5">
+                  <HelpCircle size={18} className="text-sky-500 shrink-0" />
+                  <span>
+                    <strong>วิธีเลือกอย่างง่าย:</strong> หากใช้แท็บเล็ต แนะนำดาวน์โหลด <strong>DemoAnping.apk</strong> | หากใช้คอมเคาน์เตอร์ PC แนะนำดาวน์โหลด <strong>Thai Card Agent (Windows)</strong>
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTab('smartcard')}
+                  className="text-sky-600 hover:text-sky-700 font-bold hover:underline flex items-center gap-1 cursor-pointer shrink-0 self-end sm:self-center"
+                >
+                  <span>วิธีต่อสายอ่านบัตร</span>
+                  <ArrowRight size={13} />
+                </button>
               </div>
             </div>
           )}
@@ -285,7 +497,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                   วิธีใช้งานเครื่องอ่านบัตรประชาชน Smart Card
                 </h4>
                 <p className="text-xs text-slate-600 leading-relaxed kanit-text">
-                  ระบบรองรับเครื่องอ่านบัตรประชาชนมาตรฐาน USB CCID / OTG ทุกรุ่น สามารถเลือกใช้งานได้ 2 รูปแบบตามความสะดวก:
+                  ระบบรองรับเครื่องอ่านบัตรประชาชนมาตรฐาน USB CCID / OTG ทุกรุ่น สามารถเลือกใช้งานได้ 3 รูปแบบตามความสะดวก:
                 </p>
               </div>
 
@@ -293,17 +505,27 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
                   <div className="font-bold text-xs sm:text-sm text-sky-700 kanit-text flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-xs font-mono">1</span>
-                    แบบใช้งานผ่านแอป AnpingClinic (แนะนำที่สุด)
+                    แบบใช้งานผ่านแอปแท็บเล็ต DemoAnping หรือ AnpingClinic (แนะนำที่สุดสำหรับแท็บเล็ต)
                   </div>
                   <p className="text-xs text-slate-600 kanit-text leading-relaxed pl-7">
-                    ติดตั้งแอป <strong>AnpingClinic.apk</strong> บนแท็บเล็ต เสียบสายเครื่องอ่านบัตรผ่านพอร์ต USB-C/OTG เมื่อเสียบบัตรประชาชน ระบบจะดึงข้อมูลส่วนตัวและรูปถ่ายเข้าสู่ฟอร์มเวชระเบียนให้อัตโนมัติในทันที พร้อมเสียงแจ้งเตือน 1 ครั้ง
+                    ติดตั้งแอป <strong>DemoAnping.apk</strong> (หรือ <strong>AnpingClinic.apk</strong>) บนแท็บเล็ต เสียบสายเครื่องอ่านบัตรผ่านพอร์ต USB-C/OTG เมื่อเสียบบัตรประชาชน ระบบจะดึงข้อมูลส่วนตัวและรูปถ่ายเข้าสู่ฟอร์มเวชระเบียนให้อัตโนมัติในทันที พร้อมเสียงแจ้งเตือน 1 ครั้ง
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                  <div className="font-bold text-xs sm:text-sm text-emerald-700 kanit-text flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-mono">2</span>
+                    แบบใช้งานบนคอมพิวเตอร์ Windows PC (System Tray / Hide Icons)
+                  </div>
+                  <p className="text-xs text-slate-600 kanit-text leading-relaxed pl-7">
+                    ดาวน์โหลดและแตกไฟล์ <strong>thai-card-agent-windows.zip</strong> แล้วดับเบิ้ลคลิกที่ไฟล์ <strong>"เปิดใช้งานเครื่องอ่านบัตร (System Tray).vbs"</strong> ตัวโปรแกรมจะซ่อนตัวเข้าไปอยู่ในถาดไอคอนมุมขวาล่างของ Windows (ลูกศร ^ ซ่อนไอคอนเหมือน Discord) แสดงไฟเขียว 🟢 พร้อมอ่านบัตรประชาชนเข้าสู่เว็บคลินิกบน Chrome/Edge ได้ทันที หากต้องการปิดหรือรีสตาร์ท เพียงคลิกขวาที่ไอคอน
                   </p>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
                   <div className="font-bold text-xs sm:text-sm text-indigo-700 kanit-text flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-mono">2</span>
-                    แบบใช้งานผ่านเว็บเบราว์เซอร์ (Google Chrome / Edge)
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-mono">3</span>
+                    แบบใช้งานผ่านเว็บเบราว์เซอร์บน Android (Google Chrome)
                   </div>
                   <p className="text-xs text-slate-600 kanit-text leading-relaxed pl-7">
                     ติดตั้งแอป <strong>anping-card-agent.apk</strong> เปิดโปรแกรมทิ้งไว้ในเบื้องหลัง จากนั้นเปิดเว็บคลินิกบนเบราว์เซอร์ เสียบบัตรประชาชนแล้วกดปุ่ม <strong>"อ่านข้อมูลจากบัตร"</strong> เพื่อดึงข้อมูลเข้าสู่ฟอร์ม

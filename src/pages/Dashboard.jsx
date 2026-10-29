@@ -151,6 +151,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
     if (!mainElement) return;
 
     const handleScroll = rAFThrottle((e) => {
+      if (mainElement?.dataset?.compositorSticky) return;
       const target = e.target || mainElement;
       if (headerRef.current) {
           const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
@@ -161,6 +162,7 @@ const Dashboard = ({ queueData = [], patientsData = [], isGlobalLoading, speak, 
 
     // ตรวจสอบสถานะเริ่มต้นทันที
     setTimeout(() => {
+      if (mainElement?.dataset?.compositorSticky) return;
         if (mainElement && headerRef.current) {
             const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
             if (isHeaderScrolled ? (mainElement.scrollTop > 35) : (mainElement.scrollTop > 50)) headerRef.current.classList.add('is-scrolled');

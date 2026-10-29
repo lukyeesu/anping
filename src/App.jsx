@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'; 
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, matchPath } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { GOOGLE_SCRIPT_URL } from './global/constants';
@@ -58,6 +58,9 @@ import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import DisplayAdsManager from './pages/DisplayAdsManager';
 import CustomerDisplay from './pages/CustomerDisplay';
 import { DEFAULT_POS_QR_SETTINGS } from './lib/promptpay';
+import { useSidebarBlocks } from './hooks/useSidebarBlocks';
+import { useStickyHeader } from './hooks/useStickyHeader';
+import usePageScrollRestoration from './hooks/usePageScrollRestoration';
 const theme = {
   primary: 'bg-sky-500 text-white hover:bg-sky-600',
   primaryText: 'text-sky-500',
@@ -248,6 +251,11 @@ const mockPatients = [
   { id: 'HN002', name: 'สมหญิง รักสวย', phone: '089-876-5432', lastVisit: '2023-10-26', branchId: 'b2' },
   { id: 'HN003', name: 'มีชัย ทำดี', phone: '082-333-4444', lastVisit: '2023-10-27', branchId: 'b1' },
 ];
+
+// Keep unchanged stylesheets from being reparsed on each App render.
+const StaticStyles = React.memo(function StaticStyles({ css }) {
+  return <style dangerouslySetInnerHTML={{ __html: css }} />;
+});
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'แดชบอร์ด', icon: LayoutDashboard },
@@ -814,6 +822,11 @@ export default function App() {
 
   const location = useLocation();
   const navigate = useNavigate();
+  const isCustomerDisplayRoute = location.pathname === '/customer-display' || location.pathname === '/display' || Boolean(getUrlParam('customer_display'));
+
+  // รองรับ Route เวชระเบียนเฉพาะบุคคล/ครั้งรักษา: /records/:recordKey (เช่น /records/hn69-0001-26102600)
+  const recordMatch = matchPath({ path: '/records/:recordKey', end: true }, location.pathname);
+  const targetRecordKey = recordMatch?.params?.recordKey || null;
 
   const pathToTab = {
     '/': 'dashboard',
@@ -834,7 +847,7 @@ export default function App() {
     '/display_ads': 'display_ads'
   };
 
-  const currentTab = pathToTab[location.pathname] || 'dashboard';
+  const currentTab = pathToTab[location.pathname] || (location.pathname.startsWith('/records') ? 'records' : 'dashboard');
 
   const setCurrentTab = (tabId) => {
     const path = '/' + (tabId === 'dashboard' ? '' : tabId);
@@ -883,12 +896,46 @@ export default function App() {
   const sidebarHasDraggedRef = React.useRef(false);
   const sidebarStartWidthRef = React.useRef(80);
   const sidebarCurrentWidthRef = React.useRef(80);
-  const sidebarStartTimeRef = React.useRef(0);
   const sidebarDragStartXRef = React.useRef(0);
   const sidebarDragStartYRef = React.useRef(0);
   const sidebarRafIdRef = React.useRef(null);
+  const sidebarAnimationTimerRef = React.useRef(null);
+  const sidebarAnimationFinishRef = React.useRef(null);
+  const sidebarGestureActiveRef = React.useRef(false);
 
-  const expandSidebarSmoothly = useCallback(() => {
+  const setSidebarTextProgress = useCallback((progress) => {
+    if (!sidebarRef.current) return;
+    // Update only the labels: inherited custom properties invalidate the whole sidebar subtree.
+    sidebarRef.current.querySelectorAll('.sidebar-text-label').forEach(label => {
+      label.style.opacity = String(progress);
+      if (label.style.transform) label.style.transform = `translate3d(${(1 - progress) * -8}px, 0, 0)`;
+    });
+    sidebarRef.current.querySelectorAll('.sidebar-compact-icon').forEach(icon => {
+      icon.style.opacity = String(1 - progress);
+    });
+  }, []);
+
+  const animateSidebarSmoothly = useCallback((expanded) => {
+    clearTimeout(sidebarAnimationTimerRef.current);
+    const finish = () => {
+      if (sidebarAnimationFinishRef.current !== finish) return;
+      const widthAnimations = sidebarRef.current?.getAnimations().filter(animation => animation.transitionProperty === 'width') || [];
+      const contentAnimations = document.getElementById('main-scroll-container')?.getAnimations().filter(animation => animation.id === 'sidebar-content-motion') || [];
+      const pending = [...widthAnimations, ...contentAnimations].filter(animation => animation.pending || animation.playState === 'running');
+      if (pending.length) {
+        Promise.allSettled(pending.map(animation => animation.finished)).then(finish);
+        return;
+      }
+      sidebarAnimationFinishRef.current = null;
+      React.startTransition(() => setIsSidebarExpanded(expanded));
+      document.body?.classList.remove('is-sidebar-animating');
+      if (sidebarRef.current) sidebarRef.current.style.transition = '';
+      if (!sidebarGestureActiveRef.current && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
+      }
+      isDraggingSidebarRef.current = false;
+    };
+    sidebarAnimationFinishRef.current = finish;
     if (document.body) {
       document.body.classList.add('is-sidebar-animating');
     }
@@ -896,63 +943,18 @@ export default function App() {
     if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
       window.AndroidCardBridge.setSwipeRefreshEnabled(false);
     }
-    const cubic = 'cubic-bezier(0.32, 0.72, 0, 1)';
     if (sidebarRef.current) {
       sidebarRef.current.classList.remove('is-dragging-sidebar');
-      sidebarRef.current.style.transition = `width 260ms ${cubic}`;
-      sidebarRef.current.style.width = '256px';
-      sidebarRef.current.style.setProperty('--sidebar-text-opacity', '1');
-      sidebarRef.current.style.setProperty('--sidebar-text-x', '0px');
+      sidebarRef.current.style.transition = 'width 260ms linear';
+      sidebarRef.current.style.width = expanded ? '256px' : '80px';
+      setSidebarTextProgress(expanded ? 1 : 0);
     }
-    React.startTransition(() => {
-      setIsSidebarExpanded(true);
-    });
-    setTimeout(() => {
-      if (document.body) {
-        document.body.classList.remove('is-sidebar-animating');
-      }
-      if (sidebarRef.current) {
-        sidebarRef.current.style.transition = '';
-      }
-      if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
-        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
-      }
-      isDraggingSidebarRef.current = false;
-    }, 270);
-  }, []);
+    // The timer checks completion; a delayed first frame must not cut the actual animation short.
+    sidebarAnimationTimerRef.current = setTimeout(finish, 270);
+  }, [setSidebarTextProgress]);
 
-  const collapseSidebarSmoothly = useCallback(() => {
-    if (document.body) {
-      document.body.classList.add('is-sidebar-animating');
-    }
-    // ปิด SwipeRefreshLayout บน Android ชั่วคราว
-    if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
-      window.AndroidCardBridge.setSwipeRefreshEnabled(false);
-    }
-    const cubic = 'cubic-bezier(0.32, 0.72, 0, 1)';
-    if (sidebarRef.current) {
-      sidebarRef.current.classList.remove('is-dragging-sidebar');
-      sidebarRef.current.style.transition = `width 260ms ${cubic}`;
-      sidebarRef.current.style.width = '80px';
-      sidebarRef.current.style.setProperty('--sidebar-text-opacity', '0');
-      sidebarRef.current.style.setProperty('--sidebar-text-x', '-8px');
-    }
-    React.startTransition(() => {
-      setIsSidebarExpanded(false);
-    });
-    setTimeout(() => {
-      if (document.body) {
-        document.body.classList.remove('is-sidebar-animating');
-      }
-      if (sidebarRef.current) {
-        sidebarRef.current.style.transition = '';
-      }
-      if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
-        window.AndroidCardBridge.setSwipeRefreshEnabled(true);
-      }
-      isDraggingSidebarRef.current = false;
-    }, 270);
-  }, []);
+  const expandSidebarSmoothly = useCallback(() => animateSidebarSmoothly(true), [animateSidebarSmoothly]);
+  const collapseSidebarSmoothly = useCallback(() => animateSidebarSmoothly(false), [animateSidebarSmoothly]);
 
   // --- ระบบ Gesture / Dragging สำหรับ PC & Tablet (รองรับทั้ง Mouse และ Touch เลื่อนตามกันแบบ In-flow ธรรมชาติ 60-120 FPS) ---
   const handleSidebarDragStart = useCallback((e) => {
@@ -961,6 +963,10 @@ export default function App() {
 
     const isTouch = !!e.touches;
     if (isTouch && e.touches.length !== 1) return;
+    const passiveTouchDrag = isTouch && document.documentElement.classList.contains('anping-webview');
+    // The drag strip is inside the sidebar; start only one set of gesture listeners.
+    e.stopPropagation();
+    sidebarGestureActiveRef.current = true;
 
     // ปิด SwipeRefreshLayout บน Android ชั่วคราวเมื่อเริ่มแตะขอบลาก Sidebar เพื่อไม่ให้แย่ง Touch Gesture
     if (isTouch && typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
@@ -972,7 +978,6 @@ export default function App() {
 
     sidebarDragStartXRef.current = startX;
     sidebarDragStartYRef.current = startY;
-    sidebarStartTimeRef.current = Date.now();
     const currentW = sidebarRef.current ? sidebarRef.current.getBoundingClientRect().width : (isSidebarExpanded ? 256 : 80);
     sidebarStartWidthRef.current = currentW;
     sidebarCurrentWidthRef.current = currentW;
@@ -980,6 +985,27 @@ export default function App() {
     isDraggingSidebarRef.current = false;
 
     let isDetermined = false;
+    const eventTime = event => {
+      const timestamp = event.nativeEvent?.timeStamp ?? event.timeStamp;
+      return Number.isFinite(timestamp) ? timestamp : performance.now();
+    };
+    const gestureStartedAt = eventTime(e);
+    let automaticTarget = null;
+    let motionSamples = [{ x: startX, time: gestureStartedAt }];
+    const recordMotion = (x, time) => {
+      const previous = motionSamples[motionSamples.length - 1];
+      if (x === previous.x) return;
+      // A hold is not part of the flick; a reversal starts a new direction sample.
+      if (time - previous.time > 100) motionSamples = [{ x: previous.x, time: time - 16 }];
+      else if (motionSamples.length > 1 &&
+        Math.sign(x - previous.x) !== Math.sign(previous.x - motionSamples[motionSamples.length - 2].x)) {
+        // Accumulate a real reversal instead of treating tiny release jitter as a new direction.
+        if (Math.abs(x - previous.x) < 8) return;
+        motionSamples = [previous];
+      }
+      motionSamples.push({ x, time });
+      while (motionSamples.length > 2 && motionSamples[1].time < time - 100) motionSamples.shift();
+    };
 
     const onMove = (moveEv) => {
       const curTouch = moveEv.touches ? moveEv.touches[0] : null;
@@ -987,7 +1013,13 @@ export default function App() {
       const curY = curTouch ? curTouch.clientY : moveEv.clientY;
       const deltaX = curX - startX;
       const deltaY = curY - startY;
+      const now = eventTime(moveEv);
+      recordMotion(curX, now);
 
+      if (automaticTarget !== null) {
+        if ((!moveEv.touches || !passiveTouchDrag) && moveEv.cancelable) moveEv.preventDefault();
+        return;
+      }
       if (!isDraggingSidebarRef.current) {
         if (!isDetermined) {
           // หากเลื่อนแนวตั้งมากกว่าแนวนอน -> ปล่อยให้ Scroll ในรายการเมนูทำงานตามธรรมชาติ
@@ -998,8 +1030,19 @@ export default function App() {
           // หากเลื่อนแนวนอนเกิน 8px -> เข้าสู่โหมดลากย่อ/ขยายแท็บ
           if (Math.abs(deltaX) > 8) {
             isDetermined = true;
-            isDraggingSidebarRef.current = true;
             sidebarHasDraggedRef.current = true;
+            const elapsed = Math.max(1, now - gestureStartedAt);
+            // Quick swipes issue one command; sparse move events must not scrub the animation.
+            if (elapsed <= 160 && Math.abs(deltaX) / elapsed > 0.22) {
+              automaticTarget = deltaX > 0;
+              if (automaticTarget) expandSidebarSmoothly();
+              else collapseSidebarSmoothly();
+              if ((!moveEv.touches || !passiveTouchDrag) && moveEv.cancelable) moveEv.preventDefault();
+              return;
+            }
+            clearTimeout(sidebarAnimationTimerRef.current);
+            sidebarAnimationFinishRef.current = null;
+            isDraggingSidebarRef.current = true;
             if (document.body) {
               document.body.classList.add('is-dragging-sidebar');
             }
@@ -1012,39 +1055,52 @@ export default function App() {
       }
 
       if (isDraggingSidebarRef.current) {
-        if (moveEv.cancelable) moveEv.preventDefault();
+        // touch-action: pan-y (the strip uses none) already excludes horizontal browser panning.
+        if ((!moveEv.touches || !passiveTouchDrag) && moveEv.cancelable) moveEv.preventDefault();
 
         let targetWidth = sidebarStartWidthRef.current + deltaX;
         targetWidth = Math.max(80, Math.min(256, targetWidth));
         sidebarCurrentWidthRef.current = targetWidth;
 
-        const progress = Math.max(0, Math.min(1, (targetWidth - 80) / (256 - 80)));
-
-        if (sidebarRafIdRef.current) cancelAnimationFrame(sidebarRafIdRef.current);
-        sidebarRafIdRef.current = requestAnimationFrame(() => {
+        if (!sidebarRafIdRef.current) sidebarRafIdRef.current = requestAnimationFrame(() => {
+          sidebarRafIdRef.current = null;
           if (sidebarRef.current) {
-            sidebarRef.current.style.width = `${targetWidth}px`;
-            sidebarRef.current.style.setProperty('--sidebar-text-opacity', progress.toFixed(3));
-            sidebarRef.current.style.setProperty('--sidebar-text-x', `${(1 - progress) * -8}px`);
+            const width = sidebarCurrentWidthRef.current;
+            const latestProgress = Math.max(0, Math.min(1, (width - 80) / (256 - 80)));
+            sidebarRef.current.style.width = `${width}px`;
+            setSidebarTextProgress(latestProgress);
           }
         });
       }
     };
 
     const cleanup = () => {
+      sidebarGestureActiveRef.current = false;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onEnd);
       window.removeEventListener('touchmove', onMove);
       window.removeEventListener('touchend', onEnd);
       window.removeEventListener('touchcancel', onEnd);
       if (sidebarRafIdRef.current) cancelAnimationFrame(sidebarRafIdRef.current);
-      if (typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
+      sidebarRafIdRef.current = null;
+      if (!document.body.classList.contains('is-sidebar-animating') && typeof window !== 'undefined' && typeof window.AndroidCardBridge?.setSwipeRefreshEnabled === 'function') {
         window.AndroidCardBridge.setSwipeRefreshEnabled(true);
       }
     };
 
     const onEnd = (endEv) => {
       cleanup();
+      const endTouch = endEv.changedTouches ? endEv.changedTouches[0] : null;
+      const lastPoint = motionSamples[motionSamples.length - 1];
+      const endX = endTouch ? endTouch.clientX : (Number.isFinite(endEv.clientX) ? endEv.clientX : lastPoint.x);
+      const endY = endTouch ? endTouch.clientY : (Number.isFinite(endEv.clientY) ? endEv.clientY : startY);
+      const totalDeltaX = endX - startX;
+      const totalDeltaY = endY - startY;
+      // Very short flicks can deliver the final displacement without a move event.
+      if (!sidebarHasDraggedRef.current && Math.abs(totalDeltaX) > 8 && Math.abs(totalDeltaX) >= Math.abs(totalDeltaY)) {
+        sidebarHasDraggedRef.current = true;
+        isDraggingSidebarRef.current = true;
+      }
 
       if (document.body) {
         document.body.classList.remove('is-dragging-sidebar');
@@ -1052,38 +1108,48 @@ export default function App() {
       if (sidebarRef.current) {
         sidebarRef.current.classList.remove('is-dragging-sidebar');
       }
+      // The pointer has been released; settling animation must not disable navigation.
+      isDraggingSidebarRef.current = false;
 
       if (!sidebarHasDraggedRef.current) {
-        isDraggingSidebarRef.current = false;
         return;
       }
 
       // ดักระงับคลิกสังเคราะห์ที่เกิดหลังการลากปล่อย เพื่อไม่ให้เปลี่ยนแท็บโดยไม่ได้ตั้งใจ
+      const clearClickBlock = () => {
+        window.removeEventListener('click', blockClick, true);
+        window.removeEventListener('pointerdown', clearClickBlock, true);
+        clearTimeout(clickBlockTimer);
+        if (!sidebarGestureActiveRef.current) sidebarHasDraggedRef.current = false;
+      };
       const blockClick = (clickEv) => {
+        // A keyboard activation is a new action, not a click generated by the drag.
+        if (clickEv.detail === 0) { clearClickBlock(); return; }
         clickEv.preventDefault();
         clickEv.stopPropagation();
         clickEv.stopImmediatePropagation();
+        clearClickBlock();
       };
       window.addEventListener('click', blockClick, { capture: true, once: true });
-      setTimeout(() => {
-        window.removeEventListener('click', blockClick, { capture: true });
-        sidebarHasDraggedRef.current = false;
-      }, 100);
+      // A fresh press/tap is intentional and must work immediately, even mid-animation.
+      window.addEventListener('pointerdown', clearClickBlock, { capture: true, once: true });
+      const clickBlockTimer = setTimeout(clearClickBlock, 100);
 
-      const endTouch = endEv.changedTouches ? endEv.changedTouches[0] : null;
-      const endX = endTouch ? endTouch.clientX : (endEv.clientX !== undefined ? endEv.clientX : startX);
-      const totalDeltaX = endX - startX;
-      const elapsed = Math.max(1, Date.now() - sidebarStartTimeRef.current);
-      const velocityX = totalDeltaX / elapsed;
-      const curW = sidebarCurrentWidthRef.current;
+      const now = eventTime(endEv);
+      // Android may correct an overshooting move at touchend; that correction is not a new flick direction.
+      if (!isTouch || motionSamples.length === 1) recordMotion(endX, now);
+      const first = motionSamples[0], last = motionSamples[motionSamples.length - 1];
+      const recentDelta = last.x - first.x;
+      const velocityX = recentDelta / Math.max(1, last.time - first.time);
+      const isFlick = now - last.time < 100 && Math.abs(recentDelta) >= 8 && Math.abs(velocityX) > 0.22;
+      // Mouseup can contain movement that never reached mousemove or its pending animation frame.
+      const curW = Math.max(80, Math.min(256, sidebarStartWidthRef.current + totalDeltaX));
+      const shouldExpand = automaticTarget !== null ? (Math.abs(recentDelta) >= 8 ? recentDelta > 0 : automaticTarget)
+        : isFlick ? velocityX > 0
+        : (sidebarStartWidthRef.current >= 168 ? curW >= 195 : curW > 140);
 
-      let shouldExpand;
-      if (isSidebarExpanded) {
-        shouldExpand = !(curW < 195 || (totalDeltaX < -20 && velocityX < -0.22));
-      } else {
-        shouldExpand = (curW > 140 || (totalDeltaX > 20 && velocityX > 0.22));
-      }
-
+      // The swipe already started its transition; lifting the pointer must not restart it.
+      if (automaticTarget !== null && shouldExpand === automaticTarget) return;
       if (shouldExpand) {
         expandSidebarSmoothly();
       } else {
@@ -1093,10 +1159,10 @@ export default function App() {
 
     window.addEventListener('mousemove', onMove, { passive: false });
     window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: passiveTouchDrag });
     window.addEventListener('touchend', onEnd);
     window.addEventListener('touchcancel', onEnd);
-  }, [isSidebarExpanded, expandSidebarSmoothly, collapseSidebarSmoothly]);
+  }, [isSidebarExpanded, expandSidebarSmoothly, collapseSidebarSmoothly, setSidebarTextProgress]);
 
   // --- เพิ่ม State สำหรับซ่อน/แสดงแถบเครื่องมือบนมือถือตอนเลื่อนจอ ---
   const [showMobileBars, setShowMobileBars] = useState(true);
@@ -1110,7 +1176,19 @@ export default function App() {
 
   // --- เพิ่มระบบจำตำแหน่ง Scroll ของแต่ละหน้า ---
   const mainRef = React.useRef(null);
-  const scrollPositions = React.useRef({});
+  const isShellEligible = isLoggedIn && !isGlobalLoading && !isMobile && !isCustomerDisplayRoute && !(pdpaToken && pdpaHn) && !resetToken && !isPrintUrl;
+  useSidebarBlocks(mainRef, sidebarRef, isShellEligible, currentTab);
+  const recordsViewStateRef = useRef(null);
+  const appointmentViewStateRef = useRef(null);
+  const { capture: capturePageScroll, reset: resetPageScroll } = usePageScrollRestoration(
+    mainRef, currentTab, `${isLoggedIn}:${currentUser?.id}:${currentBranch}`, isLoggedIn && !isGlobalLoading);
+  useStickyHeader(mainRef, currentTab, isLoggedIn && !isGlobalLoading);
+  useEffect(() => {
+    if (!isLoggedIn) {
+      recordsViewStateRef.current = null;
+      appointmentViewStateRef.current = null;
+    }
+  }, [isLoggedIn]);
 
   // --- ป้องกัน Mobile Window Scrolling / Extra Overscroll บนมือถืออย่างเด็ดขาด ---
   useEffect(() => {
@@ -1135,13 +1213,18 @@ export default function App() {
 
       // ตรวจจับเฉพาะ scroll container หลักของหน้า หรือ product grid ของหน้า POS
       if (!isMain && !isPosGrid) return;
+      if (!isMobile && (target.dataset.compositorSticky || !isMain)) return;
 
       const currentScrollY = target.scrollTop;
 
       // คำนวณความคืบหน้าการย่อขยาย Header แบบลื่นไหล 60/120fps ตามระยะนิ้วสัมผัส (0.000 ถึง 1.000)
-      if (isMain) {
+      if (isMain && !target.dataset.compositorSticky) {
         const headerP = Math.min(1, Math.max(0, currentScrollY / 50));
-        target.style.setProperty('--header-p', headerP.toFixed(3));
+        const header = target.querySelector('.sticky-header-bg')?.parentElement;
+        const progress = headerP.toFixed(3);
+        if (header && header.style.getPropertyValue('--header-p') !== progress) {
+          header.style.setProperty('--header-p', progress);
+        }
       }
 
       if (!isMobile) return;
@@ -1210,9 +1293,7 @@ export default function App() {
     }
     
     // บันทึกตำแหน่ง Scroll ปัจจุบันก่อนเปลี่ยนหน้า
-    if (mainRef.current) {
-      scrollPositions.current[currentTab] = mainRef.current.scrollTop;
-    }
+    capturePageScroll();
     // ใช้ startTransition เพื่อให้การเปลี่ยนหน้าไม่บล็อก UI และไม่ค้างเมื่อกดเปลี่ยนหน้าเร็วๆ
     React.startTransition(() => {
       setCurrentTab(tabId);
@@ -1221,11 +1302,22 @@ export default function App() {
     if (isMobile) setIsSidebarExpanded(false);
   };
 
+  const handleSidebarNavTouchEnd = (event, tabId) => {
+    const touch = event.changedTouches?.[0];
+    if (!sidebarGestureActiveRef.current || !touch || event.touches.length ||
+        sidebarHasDraggedRef.current ||
+        Math.abs(touch.clientX - sidebarDragStartXRef.current) > 8 ||
+        Math.abs(touch.clientY - sidebarDragStartYRef.current) > 8) return;
+    // WebView can omit the synthetic click while the sidebar is moving.
+    // A clean touch release selects immediately; a drag keeps its existing behavior.
+    event.preventDefault();
+    handleTabClick(tabId);
+  };
+
   // ใช้ useLayoutEffect เพื่อเซ็ตตำแหน่ง Scroll ก่อนเบราว์เซอร์วาดหน้าจอ (ป้องกันภาพกระตุก)
   React.useLayoutEffect(() => {
     if (mainRef.current) {
-      const targetScroll = scrollPositions.current[currentTab] || 0;
-      mainRef.current.scrollTop = targetScroll;
+      const targetScroll = mainRef.current.scrollTop;
       lastScrollY.current = targetScroll;
       const headerP = Math.min(1, Math.max(0, targetScroll / 50));
       mainRef.current.style.setProperty('--header-p', headerP.toFixed(3));
@@ -1695,35 +1787,6 @@ export default function App() {
 
 
 
-  const fetchQueueForMonth = async (year, month) => {
-    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
-    if (loadedMonths.has(monthKey) || fetchingMonthsRef.current.has(monthKey)) return;
-
-    fetchingMonthsRef.current.add(monthKey);
-
-    setIsQueueFetching(true); // เริ่มโหลด
-    try {
-        // ขอข้อมูลจาก Backend โดยระบุเดือนและปี
-        const res = await callAppScript('GET_DATA_BY_MONTH', 'Queue', { year, month: month + 1 });
-        if (res?.status === 'success' && Array.isArray(res.data)) {
-            setQueueData(prev => {
-                // ป้องกันข้อมูลซ้ำโดยใช้ ID
-                const existingIds = new Set(prev.map(item => item.id));
-                const newData = res.data.filter(item => !existingIds.has(item.id));
-                return [...prev, ...newData];
-            });
-            setLoadedMonths(prev => {
-                const newSet = new Set(prev);
-                newSet.add(monthKey);
-                return newSet;
-            });
-        }
-    } catch (error) {
-        console.error("Fetch Month Error:", error);
-    } finally {
-        setIsQueueFetching(false); // โหลดเสร็จสิ้น
-    }
-  };
 
 
   // --- ระบบ Global Alert ส่วนกลาง (ทดแทน sweetAlert/medAlert ของแต่ละหน้า) ---
@@ -1738,7 +1801,7 @@ export default function App() {
   const GlobalAlertUI = () => {
       if (!globalAlert.isOpen) return null;
       return createPortal(
-          <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${globalAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${globalAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
             <div className={`bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${globalAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
               <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${globalAlertConfig.type === 'info' ? 'bg-sky-100 text-sky-500' : 'bg-rose-100 text-rose-500'}`}>
                 {globalAlertConfig.type === 'info' ? <FileText size={40} /> : <AlertTriangle size={40} />}
@@ -2009,9 +2072,9 @@ export default function App() {
   }, [isShortcutsModalOpen, navUnsavedModal, pdpaQrModal, globalAlert, isProfileDropdownOpen, isMobileProfileDropdownOpen]);
 
   // แจ้งเตือนแบบ Multi-toast Stack ปลอดภัยสูง แสดงบนสุด เรียงซ้อนกัน 4 อัน (แยก Component เพื่อความปลอดภัยไม่ให้ App re-render)
-  const showToast = (message, type = 'success') => {
+  const showToast = useCallback((message, type = 'success') => {
     triggerGlobalToast(message, type);
-  };
+  }, []);
 
   // --- 🧪 Sandbox Simulation Handlers (รันข้อมูลจากไฟล์ Excel บน Memory เท่านั้น) ---
   const handleStartSimulation = (simData) => {
@@ -2171,7 +2234,8 @@ export default function App() {
         return {
           status: 'success',
           patients: patientsWithOpd,
-          totalCount: resPatients.totalCount || patientsWithOpd.length,
+          totalCount: resPatients.totalCount ?? patientsWithOpd.length,
+          source: resPatients.source,
           hasMore: resPatients.hasMore
         };
       }
@@ -2254,66 +2318,6 @@ export default function App() {
     return { totalStaff: 0, activeStaff: 0 };
   }, []);
 
-  // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
-  // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
-  const fetchPatientTreatments = async (patientId, candidateIds = []) => {
-    if (!patientId) return [];
-    try {
-      const pIdStr = String(patientId).trim();
-      const allIds = Array.from(new Set([pIdStr, ...(Array.isArray(candidateIds) ? candidateIds : [])].filter(Boolean)));
-      const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', { 
-        patientId: pIdStr,
-        patientIds: allIds,
-        id: allIds[0] || pIdStr
-      });
-      if (res?.status === 'success' && Array.isArray(res.data)) {
-        const formattedTreatments = res.data.map(formatTreatmentRecord);
-        formattedTreatments.sort((a, b) => {
-          const tA = parseAnyDate(a.created_at || a.datetime || a.date)?.getTime() || 0;
-          const tB = parseAnyDate(b.created_at || b.datetime || b.date)?.getTime() || 0;
-          return tB - tA;
-        });
-        
-        const idSet = new Set(allIds.map(x => x.toLowerCase()));
-        setPatientsData(prev => {
-          const exists = prev.some(p => p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase())));
-          if (!exists) {
-            getLocalStore('patients').then(allLocal => {
-              const matched = (allLocal || []).find(p => p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase())));
-              if (matched) {
-                const newP = { ...matched, opdRecords: formattedTreatments };
-                setPatientsData(curr => [newP, ...curr.filter(p => !idSet.has(String(p.id || '').trim().toLowerCase()) && !idSet.has(String(p.hn || '').trim().toLowerCase()))]);
-              }
-            }).catch(() => {});
-            return prev;
-          }
-          return prev.map(p => {
-            if (p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase()))) {
-              return { ...p, opdRecords: formattedTreatments };
-            }
-            return p;
-          });
-        });
-
-        try {
-          if (typeof window !== 'undefined' && window.localStorage) {
-            const rawPid = String(patientId).trim();
-            const lowerPid = rawPid.toLowerCase();
-            const savedStr = localStorage.getItem('clinic_treatment_counts');
-            const currentMap = savedStr ? JSON.parse(savedStr) : {};
-            currentMap[rawPid] = formattedTreatments.length;
-            currentMap[lowerPid] = formattedTreatments.length;
-            localStorage.setItem('clinic_treatment_counts', JSON.stringify(currentMap));
-          }
-        } catch (err) {}
-
-        return formattedTreatments;
-      }
-    } catch (e) {
-      console.error("fetchPatientTreatments error:", e);
-    }
-    return [];
-  };
 
   // --- ระบบ Realtime Sync ช่วยอัปเดต State หน้าเว็บทันทีเมื่อเพิ่ม/แก้ไข/ลบข้อมูล ---
   const syncLocalStateOnSave = useCallback((sheetName, payload) => {
@@ -2834,6 +2838,96 @@ export default function App() {
     }
   }, [isSimulationMode, showToast, currentUser, syncLocalStateOnSave, syncLocalStateOnDelete]);
 
+  const fetchQueueForMonth = useCallback(async (year, month) => {
+    const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+    if (loadedMonths.has(monthKey) || fetchingMonthsRef.current.has(monthKey)) return;
+
+    fetchingMonthsRef.current.add(monthKey);
+
+    setIsQueueFetching(true); // เริ่มโหลด
+    try {
+        // ขอข้อมูลจาก Backend โดยระบุเดือนและปี
+        const res = await callAppScript('GET_DATA_BY_MONTH', 'Queue', { year, month: month + 1 });
+        if (res?.status === 'success' && Array.isArray(res.data)) {
+            setQueueData(prev => {
+                // ป้องกันข้อมูลซ้ำโดยใช้ ID
+                const existingIds = new Set(prev.map(item => item.id));
+                const newData = res.data.filter(item => !existingIds.has(item.id));
+                return [...prev, ...newData];
+            });
+            setLoadedMonths(prev => {
+                const newSet = new Set(prev);
+                newSet.add(monthKey);
+                return newSet;
+            });
+        }
+    } catch (error) {
+        console.error("Fetch Month Error:", error);
+    } finally {
+        setIsQueueFetching(false); // โหลดเสร็จสิ้น
+    }
+  }, [callAppScript, loadedMonths]);
+
+  // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
+  // --- [NEW] ดึงข้อมูล Treatments เฉพาะคนไข้คนเดียวบน Demand เมื่อเปิด Modal เท่านั้น (Lazy Load ประหยัด Egress 100%) ---
+  const fetchPatientTreatments = useCallback(async (patientId, candidateIds = []) => {
+    if (!patientId) return [];
+    try {
+      const pIdStr = String(patientId).trim();
+      const allIds = Array.from(new Set([pIdStr, ...(Array.isArray(candidateIds) ? candidateIds : [])].filter(Boolean)));
+      const res = await callAppScript('GET_TREATMENTS_BY_PATIENT', 'Treatments', {
+        patientId: pIdStr,
+        patientIds: allIds,
+        id: allIds[0] || pIdStr
+      });
+      if (res?.status === 'success' && Array.isArray(res.data)) {
+        const formattedTreatments = res.data.map(formatTreatmentRecord);
+        formattedTreatments.sort((a, b) => {
+          const tA = parseAnyDate(a.created_at || a.datetime || a.date)?.getTime() || 0;
+          const tB = parseAnyDate(b.created_at || b.datetime || b.date)?.getTime() || 0;
+          return tB - tA;
+        });
+        const idSet = new Set(allIds.map(x => x.toLowerCase()));
+        setPatientsData(prev => {
+          const exists = prev.some(p => p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase())));
+          if (!exists) {
+            getLocalStore('patients').then(allLocal => {
+              const matched = (allLocal || []).find(p => p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase())));
+              if (matched) {
+                const newP = { ...matched, opdRecords: formattedTreatments };
+                setPatientsData(curr => [newP, ...curr.filter(p => !idSet.has(String(p.id || '').trim().toLowerCase()) && !idSet.has(String(p.hn || '').trim().toLowerCase()))]);
+              }
+            }).catch(() => {});
+            return prev;
+          }
+          return prev.map(p => {
+            if (p && (idSet.has(String(p.id || '').trim().toLowerCase()) || idSet.has(String(p.hn || '').trim().toLowerCase()))) {
+              return { ...p, opdRecords: formattedTreatments };
+            }
+            return p;
+          });
+        });
+
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            const rawPid = String(patientId).trim();
+            const lowerPid = rawPid.toLowerCase();
+            const savedStr = localStorage.getItem('clinic_treatment_counts');
+            const currentMap = savedStr ? JSON.parse(savedStr) : {};
+            currentMap[rawPid] = formattedTreatments.length;
+            currentMap[lowerPid] = formattedTreatments.length;
+            localStorage.setItem('clinic_treatment_counts', JSON.stringify(currentMap));
+          }
+        } catch (err) {}
+
+        return formattedTreatments;
+      }
+    } catch (e) {
+      console.error("fetchPatientTreatments error:", e);
+    }
+    return [];
+  }, [callAppScript]);
+
   const parseSettings = (resSettings) => {
     if (resSettings?.status === 'success' && Array.isArray(resSettings.data)) {
       const prefixes = resSettings.data.find(s => s.id === 'staff_prefixes');
@@ -3083,6 +3177,7 @@ export default function App() {
   // แจ้งเตือนสถานะการเลื่อนหน้าจอไปยัง Android WebView เพื่อป้องกัน SwipeRefreshLayout ขัดขวางการเลื่อนดูข้อมูลด้านบน (Scroll Up)
   useEffect(() => {
     let lastCanScrollUp = null;
+    window.__anpingScrollSyncActive = true;
 
     const checkCanScrollUp = (target) => {
       try {
@@ -3096,7 +3191,7 @@ export default function App() {
         }
 
         if (target && target instanceof Element) {
-          if (target.closest('aside, header, nav, .sidebar-drag-handle, [role="dialog"], .no-pull-refresh, [data-bottom-sheet], [data-drag-handle], .nav-backdrop')) {
+          if (target.closest('aside, header, nav, .sidebar-drag-handle, [role="dialog"], .fixed.inset-0, .no-pull-refresh, [data-bottom-sheet], [data-drag-handle], .nav-backdrop')) {
             return true;
           }
           let el = target;
@@ -3108,16 +3203,12 @@ export default function App() {
         const main = mainRef.current || document.getElementById('main-scroll-container');
         if (main && main.scrollTop > 1) return true;
         if (window.scrollY > 1 || document.documentElement.scrollTop > 1 || document.body.scrollTop > 1) return true;
-        const scrollables = document.querySelectorAll('.overflow-y-auto, .overflow-auto');
-        for (let i = 0; i < scrollables.length; i++) {
-          if (scrollables[i].scrollTop > 1) return true;
-        }
       } catch (_) {}
       return false;
     };
 
-    const notifyNative = (canScroll) => {
-      if (lastCanScrollUp === canScroll) return;
+    const notifyNative = (canScroll, force = false) => {
+      if (!force && lastCanScrollUp === canScroll) return;
       lastCanScrollUp = canScroll;
       if (window.AndroidCardBridge && typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
         try {
@@ -3128,7 +3219,7 @@ export default function App() {
 
     const handleTouchStart = (e) => {
       const target = (e.touches && e.touches[0]) ? e.touches[0].target : e.target;
-      notifyNative(checkCanScrollUp(target));
+      notifyNative(checkCanScrollUp(target), true);
     };
 
     const handleScroll = (e) => {
@@ -3153,6 +3244,7 @@ export default function App() {
     notifyNative(checkCanScrollUp(null));
 
     return () => {
+      window.__anpingScrollSyncActive = false;
       document.removeEventListener('touchstart', handleTouchStart, { capture: true });
       document.removeEventListener('scroll', handleScroll, { capture: true });
       document.removeEventListener('touchend', handleTouchEnd);
@@ -3805,7 +3897,6 @@ export default function App() {
 
 
 
-  const isCustomerDisplayRoute = location.pathname === '/customer-display' || location.pathname === '/display' || Boolean(getUrlParam('customer_display'));
   if (isCustomerDisplayRoute) {
       return (
         <CustomerDisplay 
@@ -3829,7 +3920,7 @@ export default function App() {
   if (!isLoggedIn || (isGlobalLoading && !isPrintUrl)) {
       return (
         <>
-          <style dangerouslySetInnerHTML={{__html: `
+          <StaticStyles css={`
             @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
             
             body { font-family: 'Kanit', sans-serif !important; }
@@ -3889,7 +3980,7 @@ export default function App() {
             .animate-shake {
               animation: shake 0.6s ease-in-out;
             }
-          `}} />
+          `} />
           <LoginScreen onLogin={handleLogin} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} isPrintUrl={isPrintUrl} />
         </>
       );
@@ -4003,8 +4094,6 @@ export default function App() {
           onTouchStart={handleSidebarDragStart}
           style={{ 
             width: isSidebarExpanded ? '256px' : '80px',
-            '--sidebar-text-opacity': isSidebarExpanded ? 1 : 0,
-            '--sidebar-text-x': isSidebarExpanded ? '0px' : '-8px',
             willChange: 'width',
             touchAction: 'pan-y'
           }}
@@ -4039,9 +4128,9 @@ export default function App() {
             <div 
               className="sidebar-text-label flex-1 flex flex-col justify-center pr-4 whitespace-nowrap min-w-0 pointer-events-none will-change-transform"
               style={{
-                opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
-                transform: 'translate3d(var(--sidebar-text-x, ' + (isSidebarExpanded ? '0px' : '-8px') + '), 0, 0)',
-                transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1), transform 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                opacity: isSidebarExpanded ? 1 : 0,
+                transform: `translate3d(${isSidebarExpanded ? 0 : -8}px, 0, 0)`,
+                transition: 'opacity 260ms linear, transform 260ms linear'
               }}
             >
               <h2 className="font-bold text-slate-800 leading-tight kanit-text truncate">Clinic<span className="text-sky-500">Hub</span></h2>
@@ -4054,9 +4143,9 @@ export default function App() {
               <div 
                 className="sidebar-text-label w-full absolute left-0 px-4 will-change-transform"
                 style={{
-                  opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
+                  opacity: isSidebarExpanded ? 1 : 0,
                   pointerEvents: isSidebarExpanded ? 'auto' : 'none',
-                  transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                  transition: 'opacity 260ms linear'
                 }}
               >
                 <CustomSelect
@@ -4073,9 +4162,9 @@ export default function App() {
                 }}
                 className="sidebar-compact-icon w-[80px] absolute left-0 flex items-center justify-center will-change-transform"
                 style={{
-                  opacity: 'calc(1 - var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + '))',
+                  opacity: isSidebarExpanded ? 0 : 1,
                   pointerEvents: !isSidebarExpanded ? 'auto' : 'none',
-                  transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                  transition: 'opacity 260ms linear'
                 }}
               >
                 <div title="เลือกสาขา (คลิกเพื่อขยาย)" className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500 border border-slate-100 hover:bg-sky-50 hover:text-sky-600 transition-colors cursor-pointer">
@@ -4091,6 +4180,7 @@ export default function App() {
                   <button 
                     key={item.id} 
                     type="button"
+                    onTouchEnd={event => handleSidebarNavTouchEnd(event, item.id)}
                     onClick={() => {
                       if (isDraggingSidebarRef.current) return;
                       handleTabClick(item.id);
@@ -4108,9 +4198,9 @@ export default function App() {
                     <span 
                       className="sidebar-text-label whitespace-nowrap overflow-hidden text-left font-normal text-sm pl-1 pointer-events-none will-change-transform"
                       style={{
-                        opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
-                        transform: 'translate3d(var(--sidebar-text-x, ' + (isSidebarExpanded ? '0px' : '-8px') + '), 0, 0)',
-                        transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1), transform 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                        opacity: isSidebarExpanded ? 1 : 0,
+                        transform: `translate3d(${isSidebarExpanded ? 0 : -8}px, 0, 0)`,
+                        transition: 'opacity 260ms linear, transform 260ms linear'
                       }}
                     >
                       {item.label}
@@ -4247,9 +4337,9 @@ export default function App() {
                 <div 
                   className="sidebar-text-label text-left flex-1 min-w-0 pr-2 pl-1 pointer-events-none will-change-transform"
                   style={{
-                    opacity: 'var(--sidebar-text-opacity, ' + (isSidebarExpanded ? 1 : 0) + ')',
-                    transform: 'translate3d(var(--sidebar-text-x, ' + (isSidebarExpanded ? '0px' : '-8px') + '), 0, 0)',
-                    transition: 'opacity 260ms cubic-bezier(0.32, 0.72, 0, 1), transform 260ms cubic-bezier(0.32, 0.72, 0, 1)'
+                    opacity: isSidebarExpanded ? 1 : 0,
+                    transform: `translate3d(${isSidebarExpanded ? 0 : -8}px, 0, 0)`,
+                    transition: 'opacity 260ms linear, transform 260ms linear'
                   }}
                 >
                   <div className="font-normal text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
@@ -4451,13 +4541,13 @@ export default function App() {
 
             {currentTab === 'records' && (
                 <div className="w-full">
-                    <MedicalRecords patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} couponsData={couponsData} setCouponsData={setCouponsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} integrationTokens={integrationTokens} />
+                    <MedicalRecords viewStateRef={recordsViewStateRef} onQueryChange={resetPageScroll} patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} couponsData={couponsData} setCouponsData={setCouponsData} currentBranch={currentBranch} branchesData={branchesData} staffData={staffData} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} posProducts={posProducts} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} setPdpaQrModal={setPdpaQrModal} currentUser={currentUser} fetchPatientTreatments={fetchPatientTreatments} fetchPatientsPaginated={fetchPatientsPaginated} fetchPatientStats={fetchPatientStats} integrationTokens={integrationTokens} targetRecordKey={targetRecordKey} />
                 </div>
             )}
 
             {currentTab === 'queue' && (
                 <div className="w-full">
-                    <AppointmentManager currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} staffData={staffData} posProducts={posProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} integrationTokens={integrationTokens} />
+                    <AppointmentManager viewStateRef={appointmentViewStateRef} onQueryChange={resetPageScroll} currentBranch={currentBranch} branchesData={branchesData} queueData={queueData} setQueueData={setQueueData} patientsData={patientsData} setPatientsData={setPatientsData} patientCoursesData={patientCoursesData} setPatientCoursesData={setPatientCoursesData} staffData={staffData} posProducts={posProducts} callAppScript={callAppScript} showToast={showToast} isGlobalLoading={isGlobalLoading} fetchQueueForMonth={fetchQueueForMonth} isQueueFetching={isQueueFetching} showGlobalAlert={showGlobalAlert} globalAlert={globalAlert} roleLabels={roleLabels} dealStatuses={dealStatuses} staffCategories={staffCategories} currentUser={currentUser} fetchAppointmentStats={fetchAppointmentStats} integrationTokens={integrationTokens} />
                 </div>
             )}
 
@@ -4845,7 +4935,7 @@ export default function App() {
 
       <ToastContainer />
 
-      <style dangerouslySetInnerHTML={{__html: `
+      <StaticStyles css={`
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
         
         /* 1. โครงสร้างเว็บและ UI ทั่วไปใช้ Kanit เป็นค่าเริ่มต้น */
@@ -5288,7 +5378,7 @@ export default function App() {
           transform: none !important; 
           --tw-translate-y: 0 !important; 
           width: 100% !important; 
-          border-radius: 0 0 1.5rem 1.5rem !important; 
+          border-radius: 0 0 1.5rem 1.5rem !important;
           border-top-color: transparent !important; 
           border-left-color: transparent !important; 
           border-right-color: transparent !important; 
@@ -5403,7 +5493,7 @@ export default function App() {
             padding-bottom: 0.5rem !important;
           }
         }
-      `}} />
+      `} />
 
       {/* PDPA QR Code Modal */}
       {pdpaQrModal.isOpen && (
@@ -5473,9 +5563,7 @@ export default function App() {
                   setHasUnsavedSettings(false);
                   setNavUnsavedModal({ isOpen: false, targetTab: null });
                   if (target) {
-                    if (mainRef.current) {
-                      scrollPositions.current[currentTab] = mainRef.current.scrollTop;
-                    }
+                    capturePageScroll();
                     setCurrentTab(target);
                     if (isMobile) setIsSidebarExpanded(false);
                   }

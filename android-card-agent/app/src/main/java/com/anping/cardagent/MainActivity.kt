@@ -61,8 +61,9 @@ class MainActivity : AppCompatActivity() {
     private var usbManager: UsbManager? = null
     private var cardService: CardReaderService? = null
     private var isBound = false
+    private val bundledWebContent by lazy { BundledWebContent(this, Uri.parse(CLINIC_URL).host!!) }
     private var lastBackPressTime: Long = 0
-    @Volatile private var canWebScrollUp: Boolean = false
+    @Volatile private var canWebScrollUp: Boolean = true
 
     // File Chooser สำหรับกล้องและรูปภาพ
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
@@ -292,7 +293,8 @@ class MainActivity : AppCompatActivity() {
         webView.setLayerType(View.LAYER_TYPE_NONE, null)
         webView.isVerticalScrollBarEnabled = false
         webView.isHorizontalScrollBarEnabled = false
-        webView.isNestedScrollingEnabled = true
+        webView.isNestedScrollingEnabled = false
+        webView.setBackgroundColor(0xFFFFFFFF.toInt())
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -310,7 +312,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.7"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.25"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -326,7 +328,7 @@ class MainActivity : AppCompatActivity() {
             @JavascriptInterface
             fun setSwipeRefreshEnabled(enabled: Boolean) {
                 runOnUiThread {
-                    binding.swipeRefreshLayout.isEnabled = enabled
+                    if (binding.swipeRefreshLayout.isEnabled != enabled) binding.swipeRefreshLayout.isEnabled = enabled
                 }
             }
 
@@ -442,6 +444,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                return request?.let { bundledWebContent.intercept(it) }
+            }
             override fun onRenderProcessGone(
                 view: WebView?,
                 detail: RenderProcessGoneDetail?
@@ -453,7 +458,9 @@ class MainActivity : AppCompatActivity() {
                     try {
                         binding.layoutError.visibility = View.VISIBLE
                         binding.tvErrorMessage.text = "หน่วยความจำระบบได้รับการรีเซ็ต กำลังเปิดหน้าคลินิกใหม่อัตโนมัติ..."
-                        binding.webView.loadUrl(CLINIC_URL)
+                        (view?.parent as? android.view.ViewGroup)?.removeView(view)
+                        view?.destroy()
+                        recreate()
                     } catch (_: Exception) {}
                 }
                 return true
@@ -461,7 +468,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 binding.layoutError.visibility = View.GONE
-                canWebScrollUp = false
+                // Wait for the page's first scroll report before allowing pull-to-refresh.
+                canWebScrollUp = true
                 binding.swipeRefreshLayout.isEnabled = true
             }
 
@@ -528,7 +536,7 @@ class MainActivity : AppCompatActivity() {
                         if (expandedSheet) return true;
 
                         if (target && target instanceof Element) {
-                            if (target.closest('aside, header, nav, .no-pull-refresh, [role="dialog"], .is-dragging-sidebar, [data-bottom-sheet], [data-drag-handle], .nav-backdrop')) return true;
+                            if (target.closest('aside, header, nav, .no-pull-refresh, [role="dialog"], .fixed.inset-0, .is-dragging-sidebar, [data-bottom-sheet], [data-drag-handle], .nav-backdrop')) return true;
 
                             var el = target;
                             while (el && el !== document.body && el !== document.documentElement) {
@@ -545,6 +553,8 @@ class MainActivity : AppCompatActivity() {
 
                 var lastState = null;
                 function notifyState(canScroll) {
+                    // React owns scroll synchronization once mounted; keep this as the loading fallback.
+                    if (window.__anpingScrollSyncActive) return;
                     if (lastState === canScroll) return;
                     lastState = canScroll;
                     if (window.AndroidCardBridge && typeof window.AndroidCardBridge.setCanScrollUp === 'function') {
@@ -559,18 +569,17 @@ class MainActivity : AppCompatActivity() {
                     notifyState(checkCanScrollUp(target));
                 }, { capture: true, passive: true });
 
-                document.addEventListener('touchmove', function(e) {
-                    var target = (e.touches && e.touches[0]) ? e.touches[0].target : e.target;
-                    notifyState(checkCanScrollUp(target));
-                }, { capture: true, passive: true });
-
+                // Touch start establishes the gesture owner; scroll events update it once per frame.
+                var scrollFrame = 0;
+                var scrollTarget = null;
                 document.addEventListener('scroll', function(e) {
-                    var target = e.target;
-                    if (target && target.scrollTop !== undefined && target.scrollTop > 1) {
-                        notifyState(true);
-                    } else {
-                        notifyState(checkCanScrollUp(target));
-                    }
+                    scrollTarget = e.target;
+                    if (scrollFrame) return;
+                    scrollFrame = requestAnimationFrame(function() {
+                        scrollFrame = 0;
+                        var target = scrollTarget;
+                        notifyState(target && target.scrollTop > 1 ? true : checkCanScrollUp(target));
+                    });
                 }, { capture: true, passive: true });
 
                 document.addEventListener('touchend', function() {
@@ -737,15 +746,27 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.webView.canGoBack()) {
-                    binding.webView.goBack()
-                } else {
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastBackPressTime < 2000) {
-                        finish()
+                // Same-document modal history is not always reflected by WebView.canGoBack().
+                binding.webView.evaluateJavascript("""
+                    (function() {
+                        if (window.history.state && window.history.state.modal) {
+                            window.history.back();
+                            return true;
+                        }
+                        return false;
+                    })()
+                """.trimIndent()) { handled ->
+                    if (handled == "true") return@evaluateJavascript
+                    if (binding.webView.canGoBack()) {
+                        binding.webView.goBack()
                     } else {
-                        lastBackPressTime = currentTime
-                        Toast.makeText(this@MainActivity, "กดปุ่มย้อนกลับอีกครั้งเพื่อออกจากระบบคลินิก", Toast.LENGTH_SHORT).show()
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastBackPressTime < 2000) {
+                            finish()
+                        } else {
+                            lastBackPressTime = currentTime
+                            Toast.makeText(this@MainActivity, "กดปุ่มย้อนกลับอีกครั้งเพื่อออกจากระบบคลินิก", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }

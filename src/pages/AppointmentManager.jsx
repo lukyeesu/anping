@@ -75,9 +75,10 @@ const AnimatedNumber = ({ value = 0, duration = 750, decimals = 0, prefix = '', 
   );
 };
 
-const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats, integrationTokens = {} }) => {
-  const [viewMode, setViewMode] = useState('table'); 
-  const [search, setSearch] = useState('');
+const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQueueData, patientsData, setPatientsData, patientCoursesData = [], setPatientCoursesData, staffData = [], posProducts = [], callAppScript, showToast, isGlobalLoading, fetchQueueForMonth, isQueueFetching, showGlobalAlert, globalAlert, roleLabels = {}, dealStatuses = [], staffCategories = [], currentUser, fetchAppointmentStats, integrationTokens = {}, viewStateRef, onQueryChange }) => {
+  const [savedView] = useState(() => viewStateRef?.current || {});
+  const [viewMode, setViewMode] = useState(savedView.viewMode || 'table');
+  const [search, setSearch] = useState(savedView.search || '');
   const [editingId, setEditingId] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
@@ -99,7 +100,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
     const apptCalendar = useModal();
   const apptSwipeProps = useSwipeDown(apptCalendar.close);
 
-    const [visibleCount, setVisibleCount] = useState(20);
+    const [visibleCount, setVisibleCount] = useState(savedView.visibleCount || 20);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const headerRef = React.useRef(null);
@@ -645,7 +646,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
     });
   }, [queueData, patientsData, patientCache]);
 
-  const [calendarViewInfo, setCalendarViewInfo] = useState({ viewMode: 'month', viewDate: new Date() });
+  const [calendarViewInfo, setCalendarViewInfo] = useState(() => savedView.calendarViewInfo || { viewMode: 'month', viewDate: new Date() });
 
   const getApptDateObj = useCallback((appt) => {
     if (!appt) return null;
@@ -872,10 +873,18 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
     return { total, todayCount, pending, confirmed, cancelled };
   }, [branchFilteredQueue, calendarFilteredQueue, dealStatuses]);
 
-  useEffect(() => {
+  const criteriaKey = JSON.stringify([search, viewMode, currentBranch, calendarViewInfo.viewMode, calendarViewInfo.viewDate]);
+  const previousCriteria = useRef(criteriaKey);
+  React.useLayoutEffect(() => {
+    if (previousCriteria.current === criteriaKey) return;
+    previousCriteria.current = criteriaKey;
     setVisibleCount(20);
     setIsLoadingMore(false);
-  }, [search, viewMode]);
+    onQueryChange?.();
+  }, [criteriaKey, onQueryChange]);
+  React.useLayoutEffect(() => {
+    if (viewStateRef) viewStateRef.current = { search, viewMode, visibleCount, calendarViewInfo };
+  }, [viewStateRef, search, viewMode, visibleCount, calendarViewInfo]);
 
   useEffect(() => {
     const mainElement = document.getElementById('main-scroll-container');
@@ -898,26 +907,29 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
       const target = e.target || mainElement;
       const { scrollTop, scrollHeight, clientHeight } = target;
       
-      // 1. อัปเดต Header ทันทีเมื่อเลื่อน พร้อม Hysteresis ป้องกันการกระตุก
-      const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
-      if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
-          headerRef.current.classList.add('is-scrolled');
-      } else {
-          headerRef.current.classList.remove('is-scrolled');
-      }
+      if (!mainElement?.dataset?.compositorSticky) {
+        // 1. อัปเดต Header ทันทีเมื่อเลื่อน พร้อม Hysteresis ป้องกันการกระตุก
+        const isHeaderScrolled = headerRef.current.classList.contains('is-scrolled');
+        if (isHeaderScrolled ? (scrollTop > 35) : (scrollTop > 50)) {
+            headerRef.current.classList.add('is-scrolled');
+        } else {
+            headerRef.current.classList.remove('is-scrolled');
+        }
 
-      // 2. อัปเดต Filter ขยายขนาด "เฉพาะตอนที่เลื่อนมาชน Header พอดีเป๊ะ" พร้อม Hysteresis
-      if (filterRef.current && headerRef.current) {
-          const headerRect = headerRef.current.getBoundingClientRect();
-          const filterRect = filterRef.current.getBoundingClientRect();
-          const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
-          const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
+        // 2. อัปเดต Filter ขยายขนาด "เฉพาะตอนที่เลื่อนมาชน Header พอดีเป๊ะ" พร้อม Hysteresis
+        if (filterRef.current && headerRef.current) {
+            const headerRect = headerRef.current.getBoundingClientRect();
+            const filterRect = filterRef.current.getBoundingClientRect();
+            const isFilterScrolled = filterRef.current.classList.contains('is-scrolled');
+            const threshold = isFilterScrolled ? (headerRect.bottom + 8) : (headerRect.bottom + 2);
           
-          if (filterRect.top <= threshold) {
-              filterRef.current.classList.add('is-scrolled');
-          } else {
-              filterRef.current.classList.remove('is-scrolled');
-          }
+            if (filterRect.top <= threshold) {
+                filterRef.current.classList.add('is-scrolled');
+            } else {
+                filterRef.current.classList.remove('is-scrolled');
+            }
+        }
+
       }
 
       if (scrollTop + clientHeight >= scrollHeight - 100) {
@@ -1025,6 +1037,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
       <tr 
         key={appt.id || index}
         data-index={index}
+        data-scroll-key={String(appt.id || index)}
         onClick={() => handleOpenApptEdit(appt, true)} 
         className={
           isVip
@@ -1098,6 +1111,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         <div 
           key={appt.id || index}
           data-index={index}
+        data-scroll-key={String(appt.id || index)}
           onClick={() => handleOpenApptEdit(appt, true)} 
           className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] ${
             isVip
@@ -1177,7 +1191,8 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
   // --- 4. เพิ่ม React.memo (useMemo) ให้ปฏิทิน ป้องกันการเรนเดอร์ใหม่มหาศาลตอนเลื่อนจอ ---
   const memoizedCalendarView = useMemo(() => {
       return (
-         <CalendarView 
+         <CalendarView
+            initialView={savedView.calendarViewInfo}
             activities={branchFilteredQueue} 
             onEventClick={(ev) => handleOpenApptEdit(ev.originalData || ev, true)} 
             onDayClick={(date) => console.log('Day clicked:', date)} 
@@ -1444,6 +1459,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         </div>
       </div>
 
+      {createPortal(<>
       {apptModal.isOpen && (
         <div className={`fixed inset-0 z-[170] flex justify-center items-center p-3 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${apptModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-2xl max-h-[80dvh] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${apptModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
@@ -2040,6 +2056,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
           </div>
         </div>
       )}
+      </>, document.body)}
     </>
   );
 };

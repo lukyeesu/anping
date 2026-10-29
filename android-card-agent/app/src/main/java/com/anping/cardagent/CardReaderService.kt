@@ -402,26 +402,34 @@ class CardReaderService : Service() {
     }
 
     fun detachDevice(device: UsbDevice) {
-        try {
-            if (currentDevice == null || currentDevice?.deviceId == device.deviceId) {
-                synchronized(readLock) {
-                    try { ccidDriver?.close() } catch (_: Exception) {}
-                    ccidDriver = null
-                    currentDevice = null
-                    isDeviceConnectedCached = false
-                    cachedReaderName = "ไม่มีอุปกรณ์"
-                    isCardPresentCached = false
-                    latestCardData = null
-                    lastReadTime = 0L
+        // A USB read can hold readLock; broadcasts and Activity callers must never wait on it.
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val detached = synchronized(readLock) {
+                    if (currentDevice == null || currentDevice?.deviceId == device.deviceId) {
+                        try { ccidDriver?.close() } catch (_: Exception) {}
+                        ccidDriver = null
+                        currentDevice = null
+                        isDeviceConnectedCached = false
+                        cachedReaderName = "ไม่มีอุปกรณ์"
+                        isCardPresentCached = false
+                        latestCardData = null
+                        lastReadTime = 0L
+                        true
+                    } else {
+                        false
+                    }
                 }
-                updateNotification("ระบบพร้อมทำงานในพื้นหลัง (รอการเชื่อมต่อเครื่องอ่าน)")
-                serviceScope.launch(Dispatchers.Main) {
-                    onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
-                    onCardRemoved?.invoke()
+                if (detached) {
+                    updateNotification("ระบบพร้อมทำงานในพื้นหลัง (รอการเชื่อมต่อเครื่องอ่าน)")
+                    serviceScope.launch(Dispatchers.Main) {
+                        onStatusChanged?.invoke(false, "ไม่มีอุปกรณ์", false)
+                        onCardRemoved?.invoke()
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "detachDevice error: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "detachDevice error: ${e.message}")
         }
     }
 
