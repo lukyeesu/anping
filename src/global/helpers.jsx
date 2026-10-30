@@ -129,10 +129,10 @@ export const formatTreatmentRecord = (t) => {
 export const getDynamicTextSize = (valStr) => {
   const len = String(valStr).length;
   // ยิ่งเลขยาว ฟอนต์ยิ่งเล็กลง และบีบระยะห่าง (tracking-tighter) เพื่อให้พอดีการ์ด
-  if (len >= 12) return 'text-base sm:text-lg lg:text-xl tracking-tighter';
-  if (len >= 9) return 'text-lg sm:text-xl lg:text-2xl tracking-tight';
-  if (len >= 6) return 'text-xl sm:text-2xl lg:text-3xl tracking-tight';
-  return 'text-2xl sm:text-3xl lg:text-4xl tracking-tight'; // Default ขนาดใหญ่สุด
+  if (len >= 12) return 'text-base sm:text-lg lg:text-lg xl:text-xl tracking-tighter';
+  if (len >= 9) return 'text-base sm:text-xl lg:text-xl xl:text-2xl tracking-tight';
+  if (len >= 6) return 'text-lg sm:text-2xl lg:text-2xl xl:text-3xl tracking-tight';
+  return 'text-xl sm:text-3xl lg:text-3xl xl:text-4xl tracking-tight'; // Default ขนาดใหญ่สุด
 };
 
 export const parsePatientName = (fullName) => {
@@ -1051,6 +1051,7 @@ export const globalGenerateOpdHtml = (patient, record, visitNumber, branchesData
                .no-print { display: none !important; }
             }
             .no-print-bar { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 99999; }
+            @media screen and (max-width: 640px) { .no-print-bar { position: sticky; top: 0; right: auto; justify-content: flex-end; background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); padding: 8px 12px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; } }
             .no-print-btn { background: #0284c7; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: background 0.2s; }
             .no-print-btn:hover { background: #0369a1; }
             .no-print-btn.close { background: #64748b; }
@@ -1487,6 +1488,7 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                 .signature-box { text-align: center; width: 250px; }
                 @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } }
                 .no-print-bar { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 99999; }
+                @media screen and (max-width: 640px) { .no-print-bar { position: sticky; top: 0; right: auto; justify-content: flex-end; background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); padding: 8px 12px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; } }
                 .no-print-btn { background: #0ea5e9; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: background 0.2s; }
                 .no-print-btn:hover { background: #0284c7; }
                 .no-print-btn.close { background: #64748b; }
@@ -1644,6 +1646,7 @@ export const globalGenerateReceiptHtml = (txn, format, branchesData, patientsDat
                 .total { font-size: 18px; font-weight: bold; margin-top: 8px; border-top: 1px dashed #666; padding-top: 8px; }
                 @media print { .no-print { display: none !important; } }
                 .no-print-bar { position: fixed; top: 12px; right: 16px; display: flex; gap: 8px; z-index: 99999; }
+                @media screen and (max-width: 640px) { .no-print-bar { position: sticky; top: 0; right: auto; justify-content: flex-end; background: rgba(255,255,255,0.92); backdrop-filter: blur(8px); padding: 8px 12px; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; } }
                 .no-print-btn { background: #0ea5e9; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-family: 'Sarabun', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
                 .no-print-btn.close { background: #64748b; }
             </style>
@@ -1863,11 +1866,12 @@ export const formatFinCurrency = (amount) => {
 };
 
 export const getFinDynamicTextClass = (amountStr) => {
-    if (!amountStr) return 'text-2xl sm:text-3xl lg:text-2xl xl:text-3xl tracking-tight';
+    if (!amountStr) return 'text-xl sm:text-2xl md:text-3xl lg:text-3xl xl:text-3xl tracking-tight';
     const len = String(amountStr).length;
-    if (len >= 18) return 'text-lg sm:text-xl lg:text-lg xl:text-xl tracking-tighter';
-    if (len >= 14) return 'text-xl sm:text-2xl lg:text-xl xl:text-2xl tracking-tighter';
-    return 'text-2xl sm:text-3xl lg:text-2xl xl:text-3xl tracking-tight';
+    if (len >= 18) return 'text-base sm:text-lg lg:text-lg xl:text-xl tracking-tighter';
+    if (len >= 14) return 'text-lg sm:text-xl lg:text-xl xl:text-2xl tracking-tighter';
+    if (len >= 10) return 'text-lg sm:text-2xl lg:text-2xl xl:text-3xl tracking-tight';
+    return 'text-xl sm:text-2xl md:text-3xl lg:text-3xl xl:text-4xl tracking-tight';
 };
 
 
@@ -1928,7 +1932,7 @@ export const ToastContainer = () => {
   // ใช้ createPortal เพื่อให้ Toast ลอยอยู่เหนือสุดของ DOM (z-index สูงสุด)
   return createPortal(
     <div 
-      className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[90vw] sm:max-w-md flex flex-col pointer-events-none"
+      className="fixed left-1/2 -translate-x-1/2 z-[100000] w-max max-w-[calc(100vw-1.5rem)] sm:max-w-md max-h-[45dvh] overflow-hidden flex flex-col pointer-events-none"
       style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
     >
         {toasts.map((t) => (
@@ -1939,7 +1943,7 @@ export const ToastContainer = () => {
           >
             <div 
               key={`inner_${t.id}`}
-              className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full sm:rounded-2xl shadow-xl border text-white ${
+              className={`flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-2xl shadow-xl border text-white ${
                 t.type === 'success' ? 'bg-emerald-600 border-emerald-500 shadow-emerald-500/10' : 
                 t.type === 'warning' ? 'bg-amber-600 border-amber-500 shadow-amber-500/10' : 
                 'bg-rose-600 border-rose-500 shadow-rose-500/10'
@@ -1948,7 +1952,7 @@ export const ToastContainer = () => {
               {t.type === 'success' ? <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
                t.type === 'warning' ? <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> : 
                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />}
-              <span className="font-medium kanit-text text-xs sm:text-sm leading-tight break-words">{t.message}</span>
+              <span className="min-w-0 font-medium kanit-text text-xs sm:text-sm leading-tight [overflow-wrap:anywhere]">{t.message}</span>
             </div>
           </div>
         ))}

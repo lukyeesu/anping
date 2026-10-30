@@ -1013,12 +1013,41 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
 
 
-  // --- Responsive View Detection for Virtualization ---
-  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  const patientSuggestContainerRef = useRef(null);
+  const isInteractingPatientSuggestRef = useRef(false);
   useEffect(() => {
-    const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
+    if (!showPatientSuggest) return;
+    const handleOutsidePointerDown = (e) => {
+      if (patientSuggestContainerRef.current && !patientSuggestContainerRef.current.contains(e.target)) {
+        isInteractingPatientSuggestRef.current = false;
+        setShowPatientSuggest(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [showPatientSuggest]);
+
+  // --- Responsive View Detection for Virtualization ---
+  const [isDesktopView, setIsDesktopView] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const mainEl = document.getElementById('main-scroll-container');
+    const cw = mainEl?.clientWidth ?? 0;
+    return cw > 0 ? cw >= 1000 : window.innerWidth >= 1280;
+  });
+  useEffect(() => {
+    const mainEl = document.getElementById('main-scroll-container');
+    const handleResize = () => {
+      const cw = mainEl?.clientWidth ?? 0;
+      setIsDesktopView(cw > 0 ? cw >= 1000 : window.innerWidth >= 1280);
+    };
+    handleResize();
+    const ro = typeof ResizeObserver !== 'undefined' && mainEl ? new ResizeObserver(handleResize) : null;
+    if (ro && mainEl) ro.observe(mainEl);
     window.addEventListener('resize', handleResize, { passive: true });
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const renderApptTableRow = useCallback((appt, index) => {
@@ -1045,48 +1074,48 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
             : "border-b border-slate-50 hover:bg-slate-50/80 transition-colors text-sm align-middle cursor-pointer group font-data"
         }
       >
-        <td className={`py-4 pl-6 font-medium text-left ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-slate-700'}`}>
+        <td className={`py-4 pl-6 font-medium text-left whitespace-nowrap ${isVip ? 'text-amber-900 border-l-4 border-l-amber-500' : 'text-slate-700'}`}>
             <div className="flex flex-col items-start gap-1">
             <span>{datePart}</span>
             {timePart && <span className={`text-sm font-medium ${isVip ? 'text-amber-800/80' : 'text-slate-500'}`}>{timePart}</span>}
             </div>
         </td>
-        <td className={`py-4 font-medium text-center kanit-text ${isVip ? 'text-amber-950 font-bold' : 'text-sky-600'}`}>{appt.hn}</td>
-        <td className="py-4 text-left px-2">
-            <div className="flex items-center flex-wrap gap-2">
-                <span className={`font-bold ${isVip ? 'text-amber-950' : 'text-slate-700'}`}>{appt.patientName}</span>
+        <td className={`py-4 font-medium text-center kanit-text truncate px-1 ${isVip ? 'text-amber-950 font-bold' : 'text-sky-600'}`}>{appt.hn}</td>
+        <td className="py-4 text-left px-2 min-w-0">
+            <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                <span className={`font-bold break-words ${isVip ? 'text-amber-950' : 'text-slate-700'}`}>{appt.patientName}</span>
                 {isVip && (
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap shrink-0">
                     <Crown size={10} className="fill-amber-200 text-white" /> VIP
                   </span>
                 )}
-                {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}
+                {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text whitespace-nowrap shrink-0"><Clock size={12} /> เคยเลื่อนนัด</span>}
             </div>
         </td>
-        <td className="py-4 text-center">
+        <td className="py-4 text-center px-1">
             <div className="flex justify-center">
             {formatPhoneDisplay(appt.phone) ? (
-                <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors">
-                <Phone size={14} /> {formatPhoneDisplay(appt.phone)}
+                <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit max-w-full truncate transition-colors whitespace-nowrap">
+                <Phone size={14} className="shrink-0" /> <span className="truncate">{formatPhoneDisplay(appt.phone)}</span>
                 </a>
             ) : <span className="text-slate-400">-</span>}
             </div>
         </td>
-        <td className="py-4 text-slate-600 text-left px-2">{appt.doctor}</td>
-        <td className="py-4 text-slate-500 text-left px-2 max-w-[200px] truncate">{appt.reason}</td>
-        <td className="py-4 text-center kanit-text">
+        <td className="py-4 text-slate-600 text-left px-2 truncate" title={appt.doctor || ''}>{appt.doctor || '-'}</td>
+        <td className="py-4 text-slate-500 text-left px-2 truncate" title={appt.reason || ''}>{appt.reason || '-'}</td>
+        <td className="py-4 text-center kanit-text px-1">
             <div className="flex justify-center">
               {(() => {
                 const info = getStatusInfo(getEffectiveApptStatus(appt));
                 return (
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${info.colorClass}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${info.colorClass}`}>
                     {info.label}
                   </span>
                 );
               })()}
             </div>
         </td>
-        <td className="py-4 text-right pr-6 whitespace-nowrap min-w-[130px]">
+        <td className="py-4 text-right pr-6 whitespace-nowrap">
             <div className="flex items-center justify-end gap-1.5 transition-opacity">
             <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg shrink-0"><Pencil size={18} /></button>
             <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg shrink-0"><Trash2 size={18} /></button>
@@ -1111,77 +1140,82 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         <div 
           key={appt.id || index}
           data-index={index}
-        data-scroll-key={String(appt.id || index)}
+          data-scroll-key={String(appt.id || index)}
           onClick={() => handleOpenApptEdit(appt, true)} 
-          className={`p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] ${
+          className={`p-3.5 sm:p-5 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer transition-all active:scale-[0.99] min-w-0 h-full ${
             isVip
               ? 'bg-gradient-to-br from-amber-200 via-yellow-100 to-amber-200/90 border-2 border-amber-400 shadow-md shadow-amber-500/15 hover:border-amber-500'
               : 'bg-white border border-slate-100 hover:border-sky-300 hover:shadow-md'
           }`} 
         >
-            {/* แถวที่ 1: รหัส HN, สถานะ และปุ่มจัดการ */}
-            <div className="flex justify-between items-center mb-1.5">
-                <div className="flex items-center gap-3">
-                    <span className={`font-black text-base kanit-text tracking-wide ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{appt.hn}</span>
-                    {isVip && (
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap">
-                        <Crown size={10} className="fill-amber-200 text-white" /> VIP
-                      </span>
-                    )}
-                    {(() => {
-                      const info = getStatusInfo(getEffectiveApptStatus(appt));
-                      return (
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${info.colorClass}`}>
-                          {info.label}
-                        </span>
-                      );
-                    })()}
-                </div>
-            </div>
-
-            {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
-            <div className="mb-3">
-                <h4 className="font-bold text-slate-800 text-lg font-data leading-tight flex items-center flex-wrap gap-2">{appt.patientName} {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={12} /> เคยเลื่อนนัด</span>}</h4>
-                <div className="mt-1.5">
-                    {formatPhoneDisplay(appt.phone) ? (
-                        <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit transition-colors">
-                            <Phone size={12} className="text-sky-500" /> {formatPhoneDisplay(appt.phone)}
-                        </a>
-                    ) : <span className="text-[10px] text-slate-400 block">- ไม่มีเบอร์ติดต่อ -</span>}
-                </div>
-            </div>
-
-            {/* แถวที่ 3: ข้อมูลนัดหมาย (จัดกลุ่มในกล่องสีเทาให้อ่านง่าย) */}
-            <div className={`p-3 rounded-xl border flex flex-col gap-2 ${isVip ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' : 'bg-slate-50 border-slate-100'}`}>
-                <div className="flex items-center gap-2 text-xs">
-                    <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
-                    <div className="min-w-0 flex-1 truncate">
-                        <span className="font-medium text-slate-600 font-data">{datePart}</span>
-                        {timePart && <span className="text-sky-600 font-bold ml-1.5">{timePart}</span>}
+            <div className="min-w-0">
+                {/* แถวที่ 1: รหัส HN, สถานะ และปุ่มจัดการ */}
+                <div className="flex justify-between items-center gap-2 mb-1.5 min-w-0">
+                    <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 min-w-0">
+                        <span className={`font-black text-sm sm:text-base kanit-text tracking-wide truncate ${isVip ? 'text-amber-950 font-black' : 'text-sky-600'}`}>{appt.hn}</span>
+                        {isVip && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 whitespace-nowrap shrink-0">
+                            <Crown size={10} className="fill-amber-200 text-white" /> VIP
+                          </span>
+                        )}
+                        {(() => {
+                          const info = getStatusInfo(getEffectiveApptStatus(appt));
+                          return (
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap shrink-0 ${info.colorClass}`}>
+                              {info.label}
+                            </span>
+                          );
+                        })()}
                     </div>
                 </div>
-                <div className="flex items-start gap-2 text-xs">
-                   <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 mt-0.5"><Stethoscope size={10} /></div>
-                   <div className="flex-1 min-w-0 pt-0.5">
-                       <div className="flex items-center gap-1.5 mb-1">
-                           <span className="font-medium text-slate-500">แพทย์:</span>
-                           <span className="font-bold text-slate-700 truncate">{appt.doctor || '-'}</span>
-                       </div>
-                       <div className="flex items-start gap-1.5">
-                           <span className="font-medium text-slate-500 shrink-0">อาการ:</span>
-                           <span className="text-slate-600 font-data line-clamp-2 leading-snug">{appt.reason || '-'}</span>
+
+                {/* แถวที่ 2: ชื่อคนไข้ และ เบอร์โทรศัพท์ */}
+                <div className="mb-3 min-w-0">
+                    <h4 className="font-bold text-slate-800 text-base sm:text-lg font-data leading-tight flex items-center flex-wrap gap-1.5 break-words min-w-0">
+                        <span className="break-words min-w-0">{appt.patientName}</span>
+                        {(Number(appt.postponeCount) > 0 || appt.postpone1_date || appt.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-md align-middle font-bold kanit-text whitespace-nowrap shrink-0"><Clock size={12} /> เคยเลื่อนนัด</span>}
+                    </h4>
+                    <div className="mt-1.5 min-w-0">
+                        {formatPhoneDisplay(appt.phone) ? (
+                            <a href={`tel:${formatPhoneDisplay(appt.phone)}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1.5 text-slate-600 hover:text-sky-600 font-medium font-data text-[11px] sm:text-xs bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 w-fit max-w-full truncate transition-colors">
+                                <Phone size={12} className="text-sky-500 shrink-0" /> <span className="truncate">{formatPhoneDisplay(appt.phone)}</span>
+                            </a>
+                        ) : <span className="text-[10px] text-slate-400 block">- ไม่มีเบอร์ติดต่อ -</span>}
+                    </div>
+                </div>
+
+                {/* แถวที่ 3: ข้อมูลนัดหมาย (จัดกลุ่มในกล่องสีเทาให้อ่านง่าย) */}
+                <div className={`p-3 rounded-xl border flex flex-col gap-2 min-w-0 ${isVip ? 'bg-amber-100/60 border-amber-300/80 backdrop-blur-xs' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center gap-2 text-xs min-w-0">
+                        <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0"><Clock size={10} /></div>
+                        <div className="min-w-0 flex-1 truncate">
+                            <span className="font-medium text-slate-600 font-data">{datePart}</span>
+                            {timePart && <span className="text-sky-600 font-bold ml-1.5">{timePart}</span>}
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-xs min-w-0">
+                       <div className="w-5 h-5 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 mt-0.5"><Stethoscope size={10} /></div>
+                       <div className="flex-1 min-w-0 pt-0.5">
+                           <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                               <span className="font-medium text-slate-500 shrink-0">แพทย์:</span>
+                               <span className="font-bold text-slate-700 truncate">{appt.doctor || '-'}</span>
+                           </div>
+                           <div className="flex items-start gap-1.5 min-w-0">
+                               <span className="font-medium text-slate-500 shrink-0">อาการ:</span>
+                               <span className="text-slate-600 font-data line-clamp-2 break-words leading-snug min-w-0">{appt.reason || '-'}</span>
+                           </div>
                        </div>
                    </div>
-               </div>
+                </div>
             </div>
 
             {/* แถวที่ 4: ปุ่มจัดการ (ย้ายมาไว้ด้านล่าง สัดส่วน 1:1) */}
             <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
-                <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-sm kanit-text">
-                    <Trash2 size={16} /> ลบ
+                <button onClick={(e) => { e.stopPropagation(); handleDeleteAppt(appt.id); }} className="min-h-[40px] px-2 flex items-center justify-center gap-1.5 sm:gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs sm:text-sm kanit-text min-w-0">
+                    <Trash2 size={15} className="shrink-0" /> <span className="truncate">ลบ</span>
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-sm kanit-text">
-                    <Pencil size={16} /> แก้ไข
+                <button onClick={(e) => { e.stopPropagation(); handleOpenApptEdit(appt, false); }} className="min-h-[40px] px-2 flex items-center justify-center gap-1.5 sm:gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs sm:text-sm kanit-text min-w-0">
+                    <Pencil size={15} className="shrink-0" /> <span className="truncate">แก้ไข</span>
                 </button>
             </div>
         </div>
@@ -1215,12 +1249,14 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
           <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
             <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
-              <div>
-                <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title">ระบบนัดหมาย</h1>
-                <p className="text-slate-500 sticky-header-desc">จัดการคิวนัดหมายของคนไข้และแพทย์</p>
+              <div className="min-w-0 flex-1">
+                <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title truncate">ระบบนัดหมาย</h1>
+                <p className="text-slate-500 sticky-header-desc line-clamp-1">จัดการคิวนัดหมายของคนไข้และแพทย์</p>
               </div>
-              <button onClick={handleOpenApptAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn`}>
-                <Plus /> <span className="hidden sm:inline">เพิ่มนัดหมายใหม่</span>
+              <button onClick={handleOpenApptAdd} aria-label="เพิ่มนัดหมายใหม่" className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} sticky-header-btn`}>
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                <span className="sm:hidden text-xs">เพิ่ม</span>
+                <span className="hidden sm:inline">เพิ่มนัดหมายใหม่</span>
               </button>
             </div>
           </div>
@@ -1228,67 +1264,67 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
         {/* --- 2. Stats Section (ปรับเลย์เอาต์เหลือ 4 การ์ด + Dynamic ตามปฏิทิน) --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-indigo-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><CalendarClock size={20} className="sm:w-6 sm:h-6" /></div>
+           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-indigo-200 hover:shadow-md transition-all h-full min-h-[104px] sm:min-h-[136px] min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 relative z-10 min-w-0">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><CalendarClock size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title="นัดหมายวันนี้">นัดหมายวันนี้</p>
                   </div>
                 </div>
-                <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-indigo-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.todayCount))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                <div className="relative z-10 mt-auto w-full min-w-0">
+                  <p className={`font-black text-indigo-600 font-data whitespace-nowrap truncate mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.todayCount))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
                     <AnimatedNumber value={stats.todayCount} duration={750} formatter={formatStatNumber} />
                   </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-indigo-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-emerald-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><CheckCircle2 size={20} className="sm:w-6 sm:h-6" /></div>
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-emerald-200 hover:shadow-md transition-all h-full min-h-[104px] sm:min-h-[136px] min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 relative z-10 min-w-0">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><CheckCircle2 size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight flex flex-col gap-0.5" title="ยืนยันแล้ว">
-                      <span>ยืนยันแล้ว</span>
-                      {calendarPeriodText && <span className="text-[9px] font-bold text-emerald-500 font-data font-normal">({calendarPeriodText})</span>}
+                      <span className="truncate">ยืนยันแล้ว</span>
+                      {calendarPeriodText && <span className="text-[9px] font-bold text-emerald-500 font-data font-normal truncate">({calendarPeriodText})</span>}
                     </p>
                   </div>
                 </div>
-                <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-emerald-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.confirmed))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                <div className="relative z-10 mt-auto w-full min-w-0">
+                  <p className={`font-black text-emerald-600 font-data whitespace-nowrap truncate mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.confirmed))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
                     <AnimatedNumber value={stats.confirmed} duration={750} formatter={formatStatNumber} />
                   </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-amber-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><Clock size={20} className="sm:w-6 sm:h-6" /></div>
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-amber-200 hover:shadow-md transition-all h-full min-h-[104px] sm:min-h-[136px] min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 relative z-10 min-w-0">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><Clock size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight flex flex-col gap-0.5" title="รอยืนยัน">
-                      <span>รอยืนยัน</span>
-                      {calendarPeriodText && <span className="text-[9px] font-bold text-amber-500 font-data font-normal">({calendarPeriodText})</span>}
+                      <span className="truncate">รอยืนยัน</span>
+                      {calendarPeriodText && <span className="text-[9px] font-bold text-amber-500 font-data font-normal truncate">({calendarPeriodText})</span>}
                     </p>
                   </div>
                 </div>
-                <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-amber-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.pending))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                <div className="relative z-10 mt-auto w-full min-w-0">
+                  <p className={`font-black text-amber-600 font-data whitespace-nowrap truncate mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.pending))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
                     <AnimatedNumber value={stats.pending} duration={750} formatter={formatStatNumber} />
                   </p>
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 bg-amber-50/50 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150"></div>
               </div>
-              <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-rose-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
-                <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><XCircle size={20} className="sm:w-6 sm:h-6" /></div>
+              <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-rose-200 hover:shadow-md transition-all h-full min-h-[104px] sm:min-h-[136px] min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 relative z-10 min-w-0">
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm"><XCircle size={18} className="sm:w-6 sm:h-6" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight flex flex-col gap-0.5" title="ยกเลิก">
-                      <span>ยกเลิก</span>
-                      {calendarPeriodText && <span className="text-[9px] font-bold text-rose-500 font-data font-normal">({calendarPeriodText})</span>}
+                      <span className="truncate">ยกเลิก</span>
+                      {calendarPeriodText && <span className="text-[9px] font-bold text-rose-500 font-data font-normal truncate">({calendarPeriodText})</span>}
                     </p>
                   </div>
                 </div>
-                <div className="relative z-10 mt-auto w-full">
-                  <p className={`font-black text-rose-600 font-data whitespace-nowrap overflow-hidden mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.cancelled))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
+                <div className="relative z-10 mt-auto w-full min-w-0">
+                  <p className={`font-black text-rose-600 font-data whitespace-nowrap truncate mt-0.5 transition-opacity duration-300 ${getDynamicTextSize(formatStatNumber(stats.cancelled))} ${isStatsFetching ? 'opacity-50' : 'opacity-100'}`}>
                     <AnimatedNumber value={stats.cancelled} duration={750} formatter={formatStatNumber} />
                   </p>
                 </div>
@@ -1306,19 +1342,19 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
         {/* --- 4. Filter Component (กึ่งกลาง Distribute Vertically) --- */}
         <div 
            ref={filterRef}
-           className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-5 sm:my-6 sticky-filter-appt" 
+           className="w-full pointer-events-none sticky z-20 transition-all duration-300 ease-in-out my-4 sm:my-6 [@media(max-height:480px)]:my-2 sticky-filter-appt" 
         >
-            <div className="w-full mx-auto pointer-events-none relative h-[60px] sm:h-[76px] z-50">
-              <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center px-4 md:px-8 2xl:px-12 py-3 sm:py-4 transition-all">
-                <div className="relative w-full">
+            <div className="w-full mx-auto pointer-events-none relative min-h-[56px] sm:min-h-[72px] [@media(max-height:480px)]:min-h-[48px] flex items-center z-50">
+              <div className="w-full mx-auto bg-white/95 backdrop-blur-xl border-slate-200 pointer-events-auto origin-top sticky-filter-inner shadow-sm flex flex-row items-center px-4 md:px-8 2xl:px-12 py-2.5 sm:py-3.5 [@media(max-height:480px)]:py-2 transition-all">
+                <div className="relative w-full min-w-0">
                   <input 
                     type="text" 
                     placeholder="ค้นหาชื่อ, รหัส HN, แพทย์ผู้นัด..." 
                     value={search} 
                     onChange={(e) => setSearch(e.target.value)} 
-                    className="w-full pl-11 pr-10 py-2 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" 
+                    className="w-full min-w-0 pl-10 sm:pl-11 pr-10 py-2 sm:py-3 [@media(max-height:480px)]:py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors shadow-inner font-data truncate" 
                   />
-                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   {search && (
                     <button
                       type="button"
@@ -1336,23 +1372,23 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
 
         {/* --- 5. ตาราง --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 pointer-events-auto">
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0 sm:p-0">
-                <div className="px-2 sm:px-4 py-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden p-0">
+                <div className="px-2.5 sm:px-4 py-3.5 sm:py-4">
                     {/* Render active view only: prevents duplicate DOM tree and double-virtualization */}
                     {isDesktopView ? (
                       /* --- Desktop View (Table) --- */
-                      <div className="overflow-x-auto overflow-y-hidden">
-                        <table className="w-full text-left border-collapse min-w-[1020px] table-fixed">
+                      <div className="overflow-x-auto overflow-y-hidden custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[960px] table-fixed">
                             <thead>
                               <tr className="text-slate-500 border-b border-slate-100 text-sm">
                                 <th className="pb-4 font-medium pl-6 text-left w-[12%]">วันที่/เวลา</th>
                                 <th className="pb-4 font-medium text-center w-[10%]">รหัส HN</th>
-                                <th className="pb-4 font-medium text-left px-2 w-[18%]">ชื่อคนไข้</th>
-                                <th className="pb-4 font-medium text-center w-[12%]">เบอร์โทร</th>
-                                <th className="pb-4 font-medium text-left px-2 w-[14%]">แพทย์ผู้นัด</th>
-                                <th className="pb-4 font-medium text-left px-2 w-[14%]">อาการ</th>
+                                <th className="pb-4 font-medium text-left px-2 w-[19%]">ชื่อคนไข้</th>
+                                <th className="pb-4 font-medium text-center w-[13%]">เบอร์โทร</th>
+                                <th className="pb-4 font-medium text-left px-2 w-[13%]">แพทย์ผู้นัด</th>
+                                <th className="pb-4 font-medium text-left px-2 w-[13%]">อาการ</th>
                                 <th className="pb-4 font-medium text-center w-[10%]">สถานะ</th>
-                                <th className="pb-4 font-medium text-right pr-6 w-[130px] min-w-[130px]">จัดการ</th>
+                                <th className="pb-4 font-medium text-right pr-6 w-[10%]">จัดการ</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1401,10 +1437,10 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                         </table>
                       </div>
                     ) : (
-                      /* --- Mobile View (Cards) --- */
-                      <div className="space-y-4 mt-2">
+                      /* --- Mobile & Tablet View (Cards: 1-col mobile, 2-col tablet) --- */
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 mt-1 sm:mt-2">
                         {isGlobalLoading ? (
-                            Array.from({ length: 3 }).map((_, i) => (
+                            Array.from({ length: 4 }).map((_, i) => (
                                 <div key={`skel-mob-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
                                     <div className="flex justify-between items-center mb-1.5">
                                         <div className="h-5 w-full max-w-[64px] bg-slate-200 rounded animate-pulse"></div>
@@ -1438,7 +1474,7 @@ const AppointmentManager = ({ currentBranch, branchesData = [], queueData, setQu
                               })}
                             </>
                         ) : (
-                            <div className="text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
+                            <div className="md:col-span-2 text-center py-10 text-slate-400 kanit-text bg-slate-50 rounded-2xl border border-slate-100 border-dashed">
                               ไม่พบข้อมูลการนัดหมาย
                             </div>
                         )}

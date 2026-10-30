@@ -138,19 +138,19 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
 
   return (
     <div className="flex flex-col h-full fade-in pb-20 md:pb-0">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="min-w-0">
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-sky-500" /> จัดการสาขา
+            <Building2 className="w-6 h-6 text-sky-500 shrink-0" /> <span className="truncate">จัดการสาขา</span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 kanit-text mt-1">ตั้งค่าและจัดการข้อมูลสาขาทั้งหมดของคลินิก</p>
         </div>
-        <button onClick={handleOpenAdd} className="w-full md:w-auto px-5 py-2.5 bg-sky-500 text-white rounded-xl font-bold kanit-text hover:bg-sky-600 transition-all shadow-md shadow-sky-500/20 flex items-center justify-center gap-2">
-          <Plus size={18} /> เพิ่มสาขาใหม่
+        <button onClick={handleOpenAdd} className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-sky-500 text-white rounded-xl font-bold kanit-text hover:bg-sky-600 transition-all shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 shrink-0">
+          <Plus size={18} className="shrink-0" /> เพิ่มสาขาใหม่
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {isGlobalLoading ? (
           <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
              <Loader2 className="w-10 h-10 animate-spin opacity-20" />
@@ -158,11 +158,11 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
           </div>
         ) : branchesData.length > 0 ? (
           branchesData.map((branch, idx) => (
-            <div key={branch.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+            <div key={branch.id} className="bg-white p-4 sm:p-6 rounded-[1.75rem] sm:rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden min-w-0">
                <div className="absolute top-0 right-0 w-24 h-24 bg-sky-50/50 rounded-bl-full -mr-8 -mt-8 group-hover:bg-sky-100/50 transition-colors"></div>
                
-               <div className="relative z-10">
-                 <div className="flex justify-between items-start mb-4">
+               <div className="relative z-10 min-w-0">
+                 <div className="flex justify-between items-start gap-2 mb-4">
                    <div className="w-12 h-12 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shadow-inner overflow-hidden shrink-0 bg-white border border-sky-100">
                      {branch.logo ? (
                        <img src={branch.logo} alt="logo" className="w-full h-full object-contain" />
@@ -170,14 +170,14 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                        <Building2 size={24} />
                      )}
                    </div>
-                   <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${branch.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400'}`}>
+                   <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${branch.status === 'active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400'}`}>
                      {branch.status === 'active' ? 'เปิดบริการ' : 'ปิดชั่วคราว'}
                    </span>
                  </div>
                  
-                 <h3 className="text-lg font-bold text-slate-800 kanit-text mb-1">{branch.name}</h3>
-                 {branch.clinicRegName && <p className="text-xs font-bold text-sky-600 kanit-text mb-1 truncate">{branch.clinicRegName}</p>}
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex flex-wrap gap-1 items-center">
+                 <h3 className="text-lg font-bold text-slate-800 kanit-text mb-1 min-w-0 break-words">{branch.name}</h3>
+                 {branch.clinicRegName && <p className="text-xs font-bold text-sky-600 kanit-text mb-1 min-w-0 break-words">{branch.clinicRegName}</p>}
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex flex-wrap gap-1 items-center min-w-0 break-words">
                     <span>ID: {branch.id}</span>
                     {branch.clinicLicense && <span className="text-slate-300">|</span>}
                     {branch.clinicLicense && <span>ใบอนุญาต: {branch.clinicLicense}</span>}
@@ -185,33 +185,33 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                     {branch.clinicTax && <span>TAX: {branch.clinicTax}</span>}
                  </p>
                  
-                 <div className="space-y-2.5 mb-6">
-                    <div className="flex items-center gap-2.5 text-slate-500">
-                       <MapPin size={14} className="shrink-0" />
-                       <p className="text-xs kanit-text line-clamp-1">{branch.address || 'ไม่ระบุที่อยู่'}</p>
+                 <div className="space-y-2.5 mb-6 min-w-0">
+                    <div className="flex items-start gap-2.5 text-slate-500 min-w-0">
+                       <MapPin size={14} className="shrink-0 mt-0.5" />
+                       <p className="text-xs kanit-text min-w-0 break-words line-clamp-2">{branch.address || 'ไม่ระบุที่อยู่'}</p>
                     </div>
-                    <div className="flex items-center gap-2.5 text-slate-500">
-                       <Phone size={14} className="shrink-0" />
-                       <p className="text-xs font-data">{branch.phone || 'ไม่ระบุเบอร์โทร'}</p>
+                    <div className="flex items-start gap-2.5 text-slate-500 min-w-0">
+                       <Phone size={14} className="shrink-0 mt-0.5" />
+                       <p className="text-xs font-data min-w-0 break-words">{branch.phone || 'ไม่ระบุเบอร์โทร'}</p>
                     </div>
-                    <div className="flex items-center gap-2.5 text-slate-500">
-                       <Mail size={14} className="shrink-0" />
-                       <p className="text-xs font-data truncate">{branch.email || 'ไม่ระบุอีเมล'}</p>
+                    <div className="flex items-start gap-2.5 text-slate-500 min-w-0">
+                       <Mail size={14} className="shrink-0 mt-0.5" />
+                       <p className="text-xs font-data min-w-0 break-words truncate">{branch.email || 'ไม่ระบุอีเมล'}</p>
                     </div>
-                    <div className="flex items-center gap-2.5 text-slate-500">
-                       <User size={14} className="shrink-0" />
-                       <p className="text-xs kanit-text">ผู้จัดการ: {branch.manager || 'ไม่ระบุ'}</p>
+                    <div className="flex items-start gap-2.5 text-slate-500 min-w-0">
+                       <User size={14} className="shrink-0 mt-0.5" />
+                       <p className="text-xs kanit-text min-w-0 break-words">ผู้จัดการ: {branch.manager || 'ไม่ระบุ'}</p>
                     </div>
                  </div>
 
                  {branch.rooms && branch.rooms.length > 0 && (
-                    <div className="mb-6 pt-4 border-t border-slate-50">
+                    <div className="mb-6 pt-4 border-t border-slate-50 min-w-0">
                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                          <Briefcase size={12} className="text-sky-500" /> ห้องตรวจ / พื้นที่ ({branch.rooms.length})
+                          <Briefcase size={12} className="text-sky-500 shrink-0" /> ห้องตรวจ / พื้นที่ ({branch.rooms.length})
                        </p>
                        <div className="flex flex-wrap gap-1.5">
                           {branch.rooms.map((r, i) => (
-                             <span key={i} className="px-2.5 py-1 bg-sky-50/50 text-sky-700 rounded-lg text-[10px] font-bold kanit-text border border-sky-100/50 shadow-sm">
+                             <span key={i} className="px-2.5 py-1 bg-sky-50/50 text-sky-700 rounded-lg text-[10px] font-bold kanit-text border border-sky-100/50 shadow-sm break-words max-w-full">
                                 {r}
                              </span>
                           ))}
@@ -220,10 +220,10 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                  )}
                  
                  <div className="flex gap-2">
-                    <button onClick={() => handleOpenEdit(branch)} className="flex-1 py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold kanit-text hover:bg-sky-50 hover:text-sky-600 transition-colors border border-slate-100">
+                    <button onClick={() => handleOpenEdit(branch)} className="flex-1 min-h-[42px] py-2 px-3 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold kanit-text hover:bg-sky-50 hover:text-sky-600 transition-colors border border-slate-100 flex items-center justify-center">
                        แก้ไขข้อมูล
                     </button>
-                    <button onClick={() => handleDeleteBranch(branch)} className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors border border-slate-100">
+                    <button onClick={() => handleDeleteBranch(branch)} className="min-w-[42px] min-h-[42px] p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors border border-slate-100 flex items-center justify-center shrink-0">
                        <Trash2 size={16} />
                     </button>
                  </div>
@@ -243,38 +243,43 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
       
 
       {isModalOpen && createPortal(
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeModal}></div>
-          <div className={`bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden max-h-[90dvh] ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-             <div className="p-4 sm:p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30 shrink-0 z-10">
-                <div className="flex items-center gap-3 sm:gap-4">
-                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-500 text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20">
+          <div className={`bg-white rounded-[1.75rem] sm:rounded-[2.5rem] w-full max-w-2xl shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden max-h-[calc(100dvh-1.5rem)] ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+             <div className="p-4 sm:p-6 md:p-8 [@media(max-height:480px)]:py-2.5 [@media(max-height:480px)]:px-4 border-b border-slate-50 flex items-center justify-between gap-3 bg-slate-50/30 shrink-0 z-10">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                   <div className="w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-9 [@media(max-height:480px)]:h-9 bg-sky-500 text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20 shrink-0">
                       <Building2 size={20} />
                    </div>
-                   <div>
-                      <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text">{editingBranch ? 'แก้ไขข้อมูลสาขา' : 'เพิ่มสาขาใหม่'}</h3>
-                      <p className="text-[10px] text-slate-400 kanit-text uppercase tracking-widest mt-0.5">Branch Configuration</p>
+                   <div className="min-w-0">
+                      <h3 className="text-base sm:text-xl font-bold text-slate-800 kanit-text truncate">{editingBranch ? 'แก้ไขข้อมูลสาขา' : 'เพิ่มสาขาใหม่'}</h3>
+                      <p className="text-[10px] text-slate-400 kanit-text uppercase tracking-widest mt-0.5 truncate [@media(max-height:480px)]:hidden">Branch Configuration</p>
                    </div>
                 </div>
-                <button onClick={closeModal} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-white text-slate-400 hover:text-slate-600 rounded-full shadow-sm border border-slate-100 transition-colors"><X size={18} /></button>
+                <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:text-slate-600 rounded-full shadow-sm border border-slate-100 transition-colors shrink-0"><X size={18} /></button>
              </div>
              
              <form onSubmit={handleSave} className="p-0 space-y-0 flex flex-col flex-1 overflow-hidden min-h-0">
-                <div className="p-4 sm:p-8 space-y-4 sm:space-y-5 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+                <div className="p-4 sm:p-6 md:p-8 [@media(max-height:480px)]:p-3.5 space-y-4 sm:space-y-5 min-h-0 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
                     <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-2 items-center sm:items-start bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm">
                         <div className="flex flex-col items-center gap-2 shrink-0">
-                            <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden group">
-                                {formData.logo ? (
-                                    <img src={formData.logo} alt="Logo" className="w-full h-full object-contain bg-white p-2" />
-                                ) : (
-                                    <Building2 size={32} className="text-slate-300" />
-                                )}
-                                <label className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                    <Upload size={20} className="mb-1" />
-                                    <span className="text-[10px] font-bold kanit-text">อัปโหลดโลโก้</span>
-                                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                                </label>
-                            </div>
+                            <label className="relative w-24 h-24 sm:w-28 sm:h-28 block cursor-pointer group">
+                                <div className="w-full h-full bg-slate-50 border-2 border-dashed border-slate-200 group-hover:border-sky-300 rounded-2xl flex items-center justify-center overflow-hidden transition-colors relative">
+                                    {formData.logo ? (
+                                        <img src={formData.logo} alt="Logo" className="w-full h-full object-contain bg-white p-2" />
+                                    ) : (
+                                        <Building2 size={32} className="text-slate-300" />
+                                    )}
+                                    <div className="absolute inset-0 bg-black/50 text-white flex flex-col items-center justify-center opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <Upload size={20} className="mb-1" />
+                                        <span className="text-[10px] font-bold kanit-text">อัปโหลดโลโก้</span>
+                                    </div>
+                                </div>
+                                <span className="absolute -bottom-1.5 -right-1.5 w-8 h-8 rounded-full bg-sky-500 text-white shadow-md border-2 border-white flex items-center justify-center pointer-events-none z-10">
+                                    <Camera size={14} />
+                                </span>
+                                <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                            </label>
                             <span className="text-[10px] text-slate-400 kanit-text">ขนาดไม่เกิน 5MB</span>
                         </div>
 
@@ -368,9 +373,9 @@ const BranchManager = ({ branchesData = [], setBranchesData, showToast, callAppS
                     </div>
                 </div>
 
-                <div className="p-4 sm:p-6 border-t border-slate-100 bg-white shrink-0 z-10">
-                   <button type="submit" disabled={isProcessing} className="w-full py-3.5 sm:py-4 bg-sky-500 text-white rounded-2xl font-bold shadow-xl shadow-sky-500/20 hover:bg-sky-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 kanit-text text-base sm:text-lg">
-                      {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 size={24} />} 
+                <div className="p-4 sm:p-6 [@media(max-height:480px)]:py-2.5 [@media(max-height:480px)]:px-4 border-t border-slate-100 bg-white shrink-0 z-10">
+                   <button type="submit" disabled={isProcessing} className="w-full py-3.5 sm:py-4 [@media(max-height:480px)]:py-2.5 bg-sky-500 text-white rounded-2xl font-bold shadow-xl shadow-sky-500/20 hover:bg-sky-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 kanit-text text-base sm:text-lg [@media(max-height:480px)]:text-sm">
+                      {isProcessing ? <Loader2 className="w-6 h-6 animate-spin shrink-0" /> : <CheckCircle2 size={24} className="shrink-0 [@media(max-height:480px)]:w-5 [@media(max-height:480px)]:h-5" />} 
                       {editingBranch ? 'ยืนยันการแก้ไข' : 'บันทึกข้อมูลสาขา'}
                    </button>
                 </div>

@@ -6918,14 +6918,14 @@ const CouponManager = ({
               <button 
                 type="button"
                 onClick={() => setShowMobileFilters(!showMobileFilters)} 
-                className={`lg:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || statusFilter !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                className={`xl:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || statusFilter !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                 title="ตัวกรองและมุมมองเพิ่มเติม"
               >
                 {showMobileFilters ? <ChevronUp size={18} /> : <Filter size={18} />}
               </button>
 
-              {/* Desktop Filters & View Switcher (Visible on lg+) */}
-              <div className="hidden lg:flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
+              {/* Desktop Filters & View Switcher (Visible on xl+) */}
+              <div className="hidden xl:flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
                 {/* Template Library Button */}
                 <button
                   type="button"
@@ -6998,7 +6998,7 @@ const CouponManager = ({
             </div>
 
             {/* Mobile Expandable Filter Panel (Accordion สไตล์เดียวกับหน้าการเงิน) */}
-            <div className={`lg:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-300' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-200'}`}>
+            <div className={`xl:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-300' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-200'}`}>
               <div className={showMobileFilters ? 'overflow-visible' : 'overflow-hidden'}>
                 <div className={`flex flex-col gap-2 pt-2.5 mt-1 border-t border-slate-100 transition-transform ${showMobileFilters ? 'translate-y-0 ease-out duration-300' : '-translate-y-2 ease-in duration-200'}`}>
                   {/* Action Buttons: Template & Export */}
@@ -7090,7 +7090,7 @@ const CouponManager = ({
                 <p className="text-xs text-slate-400 mt-1">กดปุ่ม "สร้างคูปองใหม่" เพื่อเพิ่มคูปองเข้าสู่ระบบ</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 sm:gap-6">
                 {filteredBatches.map(batch => {
                   const theme = THEME_STYLES[batch.themeColor] || THEME_STYLES.emerald;
                   const discountText = batch.discountType === 'percent' ? `ลด ${batch.discountValue}%` : `ลด ฿${Number(batch.discountValue).toLocaleString()}`;
@@ -7249,7 +7249,7 @@ const CouponManager = ({
                 <h4 className="text-base font-bold text-slate-700 kanit-text">ไม่พบคูปองเดี่ยว</h4>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3.5 sm:gap-4">
                 {displayedIndividualCoupons.map(cp => {
                   const isUsed = cp.status === 'used';
                   const isLifetime = Boolean(cp.isLifetime ?? cp.is_lifetime);
@@ -7412,9 +7412,9 @@ const CouponManager = ({
       {/* ========================================================================= */}
       {isCreateModalOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-0 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-none sm:rounded-3xl w-full max-w-3xl shadow-2xl border-0 sm:border border-slate-100 overflow-hidden flex flex-col h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-none sm:rounded-3xl w-full max-w-3xl shadow-2xl border-0 sm:border border-slate-100 overflow-hidden flex flex-col h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] [@media(max-height:480px)]:max-h-[96dvh] animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-white to-indigo-50/50 shrink-0">
+            <div className="p-3 sm:p-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-white to-indigo-50/50 shrink-0">
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0">
                   <Ticket size={20} className="sm:w-5 sm:h-5" />
@@ -8620,10 +8620,10 @@ const CouponManager = ({
       {/* MODAL 2: SUPABASE TEMPLATE LIBRARY MODAL (Limit 10 + Load More)           */}
       {/* ========================================================================= */}
       {isTemplateModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[220] flex items-center justify-center p-3.5 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-2.5 sm:p-6 [@media(max-height:480px)]:p-1.5 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[88vh] [@media(max-height:480px)]:max-h-[96dvh] animate-in zoom-in-95 duration-150">
             {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50/40">
+            <div className="p-3.5 sm:p-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50/40">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20">
                   <Bookmark size={20} />
@@ -8840,10 +8840,10 @@ const CouponManager = ({
       {/* MODAL 3: DRILL-DOWN BATCH DETAIL MODAL (Portal z-[200])                   */}
       {/* ========================================================================= */}
       {currentDrillDownBatch && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3.5 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-6 [@media(max-height:480px)]:p-1.5 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] [@media(max-height:480px)]:max-h-[96dvh] animate-in zoom-in-95 duration-150">
             {/* Header */}
-            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50/40 shrink-0">
+            <div className="p-3.5 sm:p-6 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50/40 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
                   <Layers size={20} />
@@ -9131,10 +9131,10 @@ const CouponManager = ({
       {/* MODAL 7: EXCEL EXPORT FILTER MODAL (Portal z-[210])                       */}
       {/* ========================================================================= */}
       {isExportExcelModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[210] flex items-center justify-center p-3.5 sm:p-5 bg-slate-900/65 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-[2rem] w-full max-w-xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-2.5 sm:p-5 [@media(max-height:480px)]:p-1.5 bg-slate-900/65 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-[2rem] w-full max-w-xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] [@media(max-height:480px)]:max-h-[96dvh] animate-in zoom-in-95 duration-150">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50/50">
+            <div className="p-3.5 sm:p-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
                   <FileSpreadsheet size={20} />

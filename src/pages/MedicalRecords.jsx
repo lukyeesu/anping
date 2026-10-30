@@ -2462,9 +2462,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       };
 
   // --- Responsive View Detection for Virtualization ---
-  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1280 : true));
   useEffect(() => {
-    const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
+    const handleResize = () => setIsDesktopView(window.innerWidth >= 1280);
     window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -2651,7 +2651,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                         ? 'bg-amber-200/90 border-amber-300 text-amber-800' 
                         : 'bg-white shadow-sm border border-slate-100 text-slate-400'
                     }`}><ShieldCheck size={10} /></div>
-                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <div className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span className={`font-medium ${isVip ? 'text-amber-900/80' : 'text-slate-500'}`}>PDPA:</span>
                         {renderPdpaButton(patient)}
                     </div>
@@ -2659,38 +2659,38 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             </div>
 
             {/* แถวที่ 4: ปุ่มจัดการ */}
-            <div className={`mt-3 grid grid-cols-3 gap-2 pt-3 border-t ${
+            <div className={`mt-3 grid grid-cols-3 gap-1.5 sm:gap-2 pt-3 border-t ${
               isVip ? 'border-amber-300/70' : 'border-slate-100'
             }`}>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handlePrintRecord(patient); }} 
-                  className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                  className={`flex items-center justify-center gap-1 sm:gap-2 py-2 px-1 rounded-xl transition-colors font-medium text-xs sm:text-sm kanit-text truncate ${
                     isVip 
                       ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
                       : 'text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50'
                   }`}
                 >
-                    <Printer size={16} /> พิมพ์
+                    <Printer size={15} className="shrink-0" /> <span className="truncate">พิมพ์</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleOpenEdit(patient, false); }} 
-                  className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                  className={`flex items-center justify-center gap-1 sm:gap-2 py-2 px-1 rounded-xl transition-colors font-medium text-xs sm:text-sm kanit-text truncate ${
                     isVip 
                       ? 'bg-amber-100/80 hover:bg-amber-200 text-amber-950 border border-amber-300/70 font-bold shadow-2xs' 
                       : 'text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50'
                   }`}
                 >
-                    <Pencil size={16} /> แก้ไข
+                    <Pencil size={15} className="shrink-0" /> <span className="truncate">แก้ไข</span>
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleDeleteClick(patient); }} 
-                  className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-sm kanit-text ${
+                  className={`flex items-center justify-center gap-1 sm:gap-2 py-2 px-1 rounded-xl transition-colors font-medium text-xs sm:text-sm kanit-text truncate ${
                     isVip 
                       ? 'bg-amber-100/80 hover:bg-rose-100 text-amber-950 hover:text-rose-600 border border-amber-300/70 font-bold shadow-2xs' 
                       : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50'
                   }`}
                 >
-                    <Trash2 size={16} /> ลบ
+                    <Trash2 size={15} className="shrink-0" /> <span className="truncate">ลบ</span>
                 </button>
             </div>
         </div>
@@ -2707,10 +2707,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
               <div>
                 <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title">ระบบเวชระเบียน</h1>
-                <p className="text-slate-500 kanit-text sticky-header-desc">จัดการข้อมูลคนไข้ ศูนย์รวมข้อมูลทุกสาขา</p>
+                <p className="text-slate-500 kanit-text sticky-header-desc line-clamp-1">จัดการข้อมูลคนไข้ ศูนย์รวมข้อมูลทุกสาขา</p>
               </div>
-              <button onClick={handleOpenAdd} className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3`}>
-                <Plus size={18} /> <span className="hidden sm:inline">เพิ่มประวัติใหม่</span>
+              <button onClick={handleOpenAdd} className={`flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 ${theme.primary} kanit-text sticky-header-btn px-3 sm:px-6 py-2 sm:py-3`}>
+                <Plus size={18} /> <span className="hidden sm:inline">เพิ่มประวัติใหม่</span><span className="sm:hidden font-bold text-xs">เพิ่ม</span>
               </button>
             </div>
           </div>
@@ -2718,7 +2718,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
         {/* --- 2. Stats Section (4 การ์ด สรุปคนไข้และยอดการรักษาทั้งหมด) --- */}
         <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
               {/* คนไข้ทั้งหมด */}
               <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all min-h-[96px] sm:min-h-[140px]">
                 <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-4 relative z-10">
@@ -2998,10 +2998,10 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       </div>
 
       {medModal.isOpen && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[9999] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${medModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+        <div className={`fixed inset-0 z-[9999] flex justify-center items-center p-2.5 sm:p-6 [@media(max-height:480px)]:p-1.5 bg-slate-900/40 backdrop-blur-sm ${medModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1rem)] sm:max-h-[92dvh] [@media(max-height:480px)]:max-h-[96dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${medModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             {/* ส่วนหัว Modal เวชระเบียน - ดีไซน์พรีเมียม สวยงามทั้ง Mobile และ Desktop */}
-            <div className="p-3.5 sm:p-5 border-b border-slate-100 bg-white shrink-0 z-10">
+            <div className="p-3 sm:p-4 [@media(max-height:480px)]:py-2 [@media(max-height:480px)]:px-3 border-b border-slate-100 bg-white shrink-0 z-10">
               {/* แถบหลัก Top Row */}
               <div className="flex items-center justify-between gap-3">
                 {/* ฝั่งซ้าย: รูปไอคอน + ชื่อคนไข้/HN + อายุ */}
@@ -3033,7 +3033,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                 </div>
 
                 {/* ฝั่งขวา Desktop (sm:flex): เวลาลงทะเบียน + เลือกสาขา + ปุ่มปิด Modal */}
-                <div className="hidden md:flex items-center gap-2.5 shrink-0">
+                <div className="hidden lg:flex items-center gap-2.5 shrink-0">
                   <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/70 kanit-text font-medium whitespace-nowrap shadow-2xs">
                     <Clock size={14} className="text-slate-400 shrink-0" />
                     <span className="whitespace-nowrap">ลงทะเบียน: {formatDateTime(formData.createdAt)}</span>
@@ -4374,12 +4374,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
       )}
 
       {showCalendar && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeMedCalendar}></div>
           <div 
             ref={medCalSwipeProps.ref} 
             style={medCalSwipeProps.style}
-            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar bg-white sm:rounded-[1.5rem] border border-slate-100 p-4 sm:p-5 mobile-bottom-sheet shadow-2xl ${isCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
             <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
@@ -4414,12 +4414,12 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
       {/* --- ปฏิทินประวัติการรักษา (OPD Calendar) --- */}
       {showOpdCalendar && typeof document !== 'undefined' && createPortal(
-        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[10020] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${isOpdCalendarClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeMedOpdCalendar}></div>
           <div 
             ref={medOpdCalSwipeProps.ref} 
             style={medOpdCalSwipeProps.style}
-            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] bg-white/95 backdrop-blur-xl sm:rounded-[1.5rem] border border-slate-100 p-5 sm:p-5 mobile-bottom-sheet shadow-2xl ${isOpdCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+            className={`relative z-[165] w-full max-w-[340px] sm:max-w-[320px] max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar bg-white/95 backdrop-blur-xl sm:rounded-[1.5rem] border border-slate-100 p-4 sm:p-5 mobile-bottom-sheet shadow-2xl ${isOpdCalendarClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
             <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
@@ -4435,7 +4435,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                   {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-[10px] font-bold uppercase tracking-wider kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-400'}`}>{d}</div>))}
                 </div>
                 <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
-                  {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 h-8"></div>)}
+                  {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 sm:h-8"></div>)}
                   {Array.from({ length: new Date(opdCalDate.getFullYear(), opdCalDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
                     const isSelected = opdCalDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === opdCalDate.getMonth() && new Date().getFullYear() === opdCalDate.getFullYear();
@@ -4450,7 +4450,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
               <div className="space-y-3">
                 <div className="flex justify-between items-center mb-4">
                   <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() - 1, opdCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronLeft size={20} /></button>
-                  <button type="button" onClick={() => setOpdCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl text-base sm:text-sm font-data">{opdCalDate.getFullYear() + 543}</button>
+                  <button type="button" onClick={() => setOpdCalView('years')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl text-base sm:text-sm font-data">{opdCalDate.getFullYear() + 543}</button>
                   <button type="button" onClick={() => setOpdCalDate(new Date(opdCalDate.getFullYear() + 1, opdCalDate.getMonth(), 1))} className="p-2 sm:p-1.5 text-slate-400 hover:bg-sky-50 rounded-full"><ChevronRight size={20} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -4599,8 +4599,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
       {/* --- Modal เพิ่ม / แก้ไขคอร์สของคนไข้ (Manual Course Management) --- */}
       {isCourseModalOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10020] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh] animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
@@ -4678,7 +4678,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
               </div>
 
               {/* จำนวนครั้งทั้งหมด, ใช้ไป, คงเหลือ */}
-              <div className="grid grid-cols-3 gap-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
+              <div className="grid grid-cols-1 min-[360px]:grid-cols-3 gap-2.5 sm:gap-3 bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-100">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 mb-1.5 kanit-text text-center">จำนวนครั้งทั้งหมด</label>
                   <div className="flex items-center">
@@ -5032,8 +5032,8 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
       {/* Modal ดูข้อมูลบัตรประชาชนฉบับเต็ม พร้อมรูปถ่ายและรายละเอียดทั้งหมด (Auto-update & Auto-reset) */}
       {showCardInspectModal && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget) setShowCardInspectModal(false); }}>
-          <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in max-h-[calc(100vh-2rem)] border border-slate-100">
+        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 fade-in" onClick={(e) => { if (e.target === e.currentTarget) setShowCardInspectModal(false); }}>
+          <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col modal-animate-in max-h-[calc(100dvh-1.5rem)] border border-slate-100">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-xs">
@@ -5123,7 +5123,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                   )}
                 </div>
 
-                <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2.5">
+                <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col-reverse min-[380px]:flex-row justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setShowCardInspectModal(false)}

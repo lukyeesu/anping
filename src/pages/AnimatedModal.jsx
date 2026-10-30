@@ -20,25 +20,25 @@ const AnimatedModal = ({ isOpen, isClosing, onClose, title, children, maxWidth =
     if (!isOpen) return null;
 
     const modalContent = (
-        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-            <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full ${maxWidth} h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-                <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
+        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-2.5 sm:p-6 [@media(max-height:480px)]:p-2 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+            <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full ${maxWidth} max-h-[calc(100dvh-1.25rem)] sm:max-h-[90dvh] [@media(max-height:480px)]:max-h-[96dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+                <div className="p-3.5 sm:p-6 [@media(max-height:480px)]:py-2.5 [@media(max-height:480px)]:px-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0 z-10 gap-3">
                     <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                         {Icon && (
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner shrink-0">
-                                <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+                            <div className="w-9 h-9 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner shrink-0">
+                                <Icon className="w-4 h-4 sm:w-6 sm:h-6 [@media(max-height:480px)]:w-4 [@media(max-height:480px)]:h-4" />
                             </div>
                         )}
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-sm sm:text-xl font-bold text-slate-800 kanit-text truncate leading-tight">{title}</h3>
+                            <h3 className="text-base sm:text-xl [@media(max-height:480px)]:text-base font-bold text-slate-800 kanit-text truncate leading-tight">{title}</h3>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1.5 sm:p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors">
+                    <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600 bg-white rounded-full p-2 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors">
                         <X size={18} className="sm:w-5 sm:h-5" />
                     </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-slate-50/30">
                     {children}
                 </div>
             </div>

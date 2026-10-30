@@ -620,7 +620,7 @@ const POSSystem = ({
   // แก้ไข: เพิ่ม Effect สำหรับรีเซ็ตสถานะตะกร้ามือถือเมื่อขยายหน้าจอ (Resize Bug Fix)
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 768 && isMobileCartOpen) {
+      if (window.innerWidth >= 1024 && isMobileCartOpen) {
         setIsMobileCartOpen(false);
       }
     };
@@ -3079,11 +3079,11 @@ const POSSystem = ({
           </div>
         </div>
 
-        {/* Main Content: 2 Columns แบบพอดีหน้าจอ (ปรับเป็น md เพื่อให้แท็บเล็ตแนวตั้งแสดงผลแบบ 2 ฝั่งได้) */}
-        <div className="flex-1 flex flex-col md:flex-row gap-3 md:gap-4 lg:gap-6 min-h-0 relative">
+        {/* Main Content: 2 Columns แบบพอดีหน้าจอ (ปรับเป็น lg เพื่อให้แท็บเล็ตแนวนอนและเดสก์ท็อปแสดงผลแบบ 2 ฝั่งได้สมส่วน ไม่เบียดกันบนแท็บเล็ตแนวตั้ง) */}
+        <div className="flex-1 flex flex-col lg:flex-row gap-3 lg:gap-6 min-h-0 relative">
           
-          {/* Left Column: Product Catalog (ซ่อนบนมือถือถ้าตะกร้าเปิดอยู่) */}
-          <div className={`flex-[6] md:flex-1 flex flex-col bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden md:flex' : 'flex'}`}>
+          {/* Left Column: Product Catalog (ซ่อนบนมือถือ/แท็บเล็ตแนวตั้งถ้าตะกร้าเปิดอยู่) */}
+          <div className={`flex-[6] lg:flex-1 flex flex-col bg-white rounded-[1.5rem] sm:rounded-[2rem] lg:rounded-[2.5rem] shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
             <div className="pos-search-bar p-4 sm:p-5 border-b border-slate-100 bg-slate-50 shrink-0">
@@ -3263,11 +3263,11 @@ const POSSystem = ({
             </div>
           </div>
 
-          {/* Right Column: Cart Area (บน Desktop และ Tablet แสดงด้านขวา, บนมือถือแสดงเต็มจอเมื่อกดปุ่ม) */}
-          <div className={`flex-[4] md:flex-none md:min-h-0 w-full md:w-[280px] lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 md:bg-white md:rounded-3xl md:shadow-sm md:border md:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden md:flex'}`}>
+          {/* Right Column: Cart Area (บน Desktop และ Tablet แนวนอนแสดงด้านขวา, บนมือถือ/แท็บเล็ตแนวตั้งแสดงเต็มจอเมื่อกดปุ่ม) */}
+          <div className={`flex-[4] lg:flex-none lg:min-h-0 w-full lg:w-[350px] xl:w-[400px] flex-col bg-slate-50 lg:bg-white lg:rounded-3xl lg:shadow-sm lg:border lg:border-slate-100/50 overflow-hidden shrink-0 ${isMobileCartOpen ? 'fixed inset-0 z-[70] flex bg-white animate-in slide-in-from-bottom-4 duration-300' : 'hidden lg:flex'}`}>
           
-            {/* Mobile Cart Header (แสดงเฉพาะบนมือถือเมื่อเปิดตะกร้า) */}
-            <div className="md:hidden p-4 sm:p-5 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
+            {/* Mobile Cart Header (แสดงเฉพาะบนมือถือ/แท็บเล็ตแนวตั้งเมื่อเปิดตะกร้า) */}
+            <div className="lg:hidden p-4 sm:p-5 bg-white border-b border-slate-100 flex justify-between items-center shrink-0 shadow-sm z-10">
                <h2 className="font-bold text-slate-800 kanit-text flex items-center gap-2 text-lg">
                  <ShoppingCart className="text-sky-500 w-5 h-5" /> ตะกร้าสินค้า
                </h2>
@@ -3285,8 +3285,8 @@ const POSSystem = ({
             </div>
 
             {/* Cart Header & Patient Select */}
-            <div className="p-4 sm:p-5 border-b border-slate-100 bg-white md:bg-slate-50/50 shrink-0">
-              <div className="hidden md:flex items-center justify-between mb-3 sm:mb-4">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-white lg:bg-slate-50/50 shrink-0">
+              <div className="hidden lg:flex items-center justify-between mb-3 sm:mb-4">
                 <h2 className="font-bold text-slate-800 kanit-text items-center gap-2 text-base sm:text-lg flex">
                   <ShoppingCart className="w-5 h-5 text-sky-500" /> รายการบิล
                 </h2>
@@ -3365,7 +3365,7 @@ const POSSystem = ({
                 >
                   <div 
                     onScroll={handleDropdownScroll}
-                    className="max-h-[calc(100dvh-270px)] md:max-h-[calc(100vh-390px)] overflow-y-auto pos-dropdown-scroll"
+                    className="max-h-[max(160px,calc(100dvh-220px))] md:max-h-[calc(100vh-390px)] overflow-y-auto pos-dropdown-scroll"
                   >
                     <div 
                       onMouseDown={(e) => { e.preventDefault(); handleSelectPatient('', ''); }}
@@ -4035,10 +4035,10 @@ const POSSystem = ({
           
           </div> {/* End of Right Column */}
 
-          {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือตอนอยู่หน้าเลือกสินค้า) --- */}
+          {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือ/แท็บเล็ตแนวตั้งตอนอยู่หน้าเลือกสินค้า) --- */}
           {!isMobileCartOpen && (
             <div 
-              className="md:hidden fixed left-4 right-4 z-40"
+              className="lg:hidden fixed left-4 right-4 z-40"
               style={{
                 bottom: showMobileBars ? '76px' : '24px',
                 transition: 'bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1)'
@@ -4074,9 +4074,9 @@ const POSSystem = ({
 
       {/* Checkout Modal */}
       {checkoutModal.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${checkoutModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden ${checkoutModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/40 backdrop-blur-sm ${checkoutModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-md rounded-[1.5rem] shadow-2xl flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] [@media(max-height:480px)]:max-h-[96dvh] overflow-hidden ${checkoutModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-3.5 sm:p-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
                 <Banknote size={18} className="text-sky-500"/> ชำระเงิน
               </h3>
@@ -4396,9 +4396,9 @@ const POSSystem = ({
 
       {/* History Modal */}
       {historyModal.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${historyModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${historyModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0 z-10">
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/40 backdrop-blur-sm ${historyModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-4xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[85vh] [@media(max-height:480px)]:max-h-[96dvh] ${historyModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-3.5 sm:p-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0 z-10">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">
                 <History size={20} className="text-sky-500"/> ประวัติการทำรายการ (POS)
               </h3>
@@ -4451,7 +4451,7 @@ const POSSystem = ({
                                     </div>
                                 ) : (
                                     <div className="flex items-center gap-2">
-                                        <button onClick={() => setIsEditingHistory(false)} disabled={isSavingHistory} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors text-[11px] sm:text-sm font-bold kanit-text disabled:opacity-50">
+                                        <button onClick={() => setIsEditingHistory(false)} disabled={isSavingHistory} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors text-[11px] sm:text-sm font-bold kanit-text disabled:opacity-50">
                                             ยกเลิก
                                         </button>
                                         <button onClick={handleSaveTxnEdit} disabled={isSavingHistory} className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-sky-500 text-white hover:bg-sky-600 rounded-xl transition-all active:scale-95 shadow-md shadow-sky-500/20 text-[11px] sm:text-sm font-bold kanit-text disabled:opacity-50">
@@ -4764,11 +4764,11 @@ const POSSystem = ({
 
       {/* --- Modal สรุปยอดขายประจำวัน (Daily Sales Summary Modal) --- */}
       {dailySummaryModal.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm ${dailySummaryModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white w-full max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${dailySummaryModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/50 backdrop-blur-sm ${dailySummaryModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-2xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] [@media(max-height:480px)]:max-h-[96dvh] ${dailySummaryModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             
             {/* Header */}
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex items-center justify-between shrink-0 shadow-sm">
+            <div className="p-3.5 sm:p-5 [@media(max-height:480px)]:py-2 bg-gradient-to-r from-blue-700 to-indigo-700 text-white flex items-center justify-between shrink-0 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center backdrop-blur-sm">
                   <BarChart3 className="w-5 h-5 text-white" />
@@ -4935,8 +4935,8 @@ const POSSystem = ({
 
       {/* --- Modal เลือกคอร์สแชร์ข้ามคนไข้ (Cross-Patient Course Sharing) --- */}
       {isShareCourseModalOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg h-[580px] max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg h-full sm:h-[580px] max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] [@media(max-height:480px)]:max-h-[96dvh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
@@ -5230,10 +5230,10 @@ const POSSystem = ({
 
       {/* Customer Display Station & Pairing Modal */}
       {isStationModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] [@media(max-height:480px)]:max-h-[96dvh]">
             {/* Header */}
-            <div className="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+            <div className="px-4 sm:px-6 py-3 sm:py-4.5 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                   <Monitor className="w-5 h-5" />
@@ -5423,10 +5423,10 @@ const POSSystem = ({
 
       {/* Modal เลือกคูปองของคนไข้ที่กำลังคิดเงิน */}
       {typeof document !== 'undefined' && isCouponSelectorModalOpen && createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[85vh] [@media(max-height:480px)]:max-h-[96dvh] animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
                   <Ticket className="w-5 h-5" />

@@ -274,27 +274,27 @@ export default function ClinicStatementModal({
 
   const modalContent = (
     <div 
-      className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-2.5 sm:p-5 bg-slate-900/70 backdrop-blur-sm animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-5xl max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden animate-scale-up">
         
         {/* Modal Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50/60 via-teal-50/40 to-white">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
-              <FileSpreadsheet size={24} />
+        <div className="px-4 py-3.5 sm:p-6 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0 bg-gradient-to-r from-emerald-50/60 via-teal-50/40 to-white">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-9 [@media(max-height:480px)]:h-9 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+              <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-800 kanit-text tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-lg font-bold text-slate-800 kanit-text tracking-tight leading-snug">
                   รายการเดินบัญชีการเงินคลินิก (Clinic Statement)
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 kanit-text">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 kanit-text shrink-0">
                   Bank Layout Style
                 </span>
               </div>
-              <p className="text-xs text-slate-500 kanit-text mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 kanit-text mt-0.5 truncate [@media(max-height:480px)]:hidden">
                 {clinicDisplayTitle} • ออก Statement ยอดรับ-จ่ายพร้อมยอดยกมาตามมาตรฐานธนาคาร
               </p>
             </div>
@@ -303,26 +303,26 @@ export default function ClinicStatementModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-all"
+            className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-all shrink-0"
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Modal Body (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-6 [@media(max-height:480px)]:p-3.5 space-y-4 sm:space-y-5 custom-scrollbar">
           
           {/* Section 1: เมนูเลือกช่วงเวลาและสาขาแบบ Dropdown (สะอาด ใช้งานง่าย ไม่รก) */}
-          <div className="bg-slate-50/90 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-4">
+          <div className="bg-slate-50/90 rounded-2xl p-3.5 sm:p-5 border border-slate-200/80 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/60">
-              <div className="flex items-center gap-2">
-                <Calendar size={17} className="text-emerald-600" />
+              <div className="flex items-center gap-2 min-w-0">
+                <Calendar size={17} className="text-emerald-600 shrink-0" />
                 <span className="text-xs font-bold text-slate-800 kanit-text">
                   ตั้งค่าช่วงเวลาและเงื่อนไข Statement:
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-emerald-800 kanit-text bg-emerald-100/70 border border-emerald-200/80 px-3 py-1 rounded-xl">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] sm:text-xs font-bold text-emerald-800 kanit-text bg-emerald-100/70 border border-emerald-200/80 px-2.5 sm:px-3 py-1 rounded-xl min-w-0 break-words">
                   📅 รอบวันที่: {rangeBounds.label}
                 </span>
                 <button
@@ -330,7 +330,7 @@ export default function ClinicStatementModal({
                   onClick={loadStatement}
                   disabled={isLoading}
                   title="รีเฟรชข้อมูล"
-                  className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all active:scale-95 disabled:opacity-50"
+                  className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 transition-all active:scale-95 disabled:opacity-50 shrink-0"
                 >
                   <RefreshCw size={14} className={isLoading ? 'animate-spin text-emerald-600' : ''} />
                 </button>
@@ -340,7 +340,7 @@ export default function ClinicStatementModal({
             {/* Dropdown Filters Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Dropdown 1: รูปแบบช่วงเวลา */}
-              <div>
+              <div className="min-w-0">
                 <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
                   รูปแบบช่วงเวลา:
                 </label>
@@ -477,7 +477,7 @@ export default function ClinicStatementModal({
 
               {periodType === 'custom' && (
                 <>
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
                       ตั้งแต่วันที่:
                     </label>
@@ -485,10 +485,10 @@ export default function ClinicStatementModal({
                       type="date"
                       value={customStartDate}
                       onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                      className="w-full min-w-0 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
                       ถึงวันที่:
                     </label>
@@ -496,14 +496,14 @@ export default function ClinicStatementModal({
                       type="date"
                       value={customEndDate}
                       onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                      className="w-full min-w-0 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
                     />
                   </div>
                 </>
               )}
 
               {periodType === '7d' && (
-                <div className="flex items-center">
+                <div className="flex items-center min-w-0">
                   <div className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold kanit-text w-full text-center">
                     ย้อนหลัง 7 วันล่าสุดจากวันนี้
                   </div>
@@ -511,14 +511,14 @@ export default function ClinicStatementModal({
               )}
 
               {/* สาขาคลินิก */}
-              <div>
+              <div className="min-w-0">
                 <label className="text-[11px] font-bold text-slate-600 kanit-text block mb-1">
                   เลือกสาขาคลินิก:
                 </label>
                 <select
                   value={selectedBranch}
                   onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                  className="w-full min-w-0 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
                 >
                   <option value="all">ทุกสาขา (ภาพรวมทั้งคลินิก)</option>
                   {effectiveBranches.map(b => (
@@ -530,8 +530,8 @@ export default function ClinicStatementModal({
               </div>
 
               {/* ยอดยกมาเริ่มต้น (Manual override) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-1 flex-wrap mb-1">
                   <label className="text-[11px] font-bold text-slate-600 kanit-text">
                     ยอดยกมาเริ่มต้น:
                   </label>
@@ -545,43 +545,43 @@ export default function ClinicStatementModal({
                   placeholder={`อัตโนมัติ (${formatCurrency(statementData?.openingBalance || 0)})`}
                   value={manualOpeningBalance}
                   onChange={(e) => setManualOpeningBalance(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
+                  className="w-full min-w-0 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-emerald-500 shadow-2xs"
                 />
               </div>
             </div>
           </div>
 
           {/* Section 2: แดชบอร์ดสรุปสถิติสไตล์ Bank Statement */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-            <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-              <span className="text-[11px] font-bold text-slate-400 kanit-text uppercase">ยอดยกมาเริ่มต้น</span>
-              <div className="text-base sm:text-lg font-black text-slate-800 kanit-text mt-1">
+          <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
+            <div className="min-w-0 p-3 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-400 kanit-text uppercase block truncate">ยอดยกมาเริ่มต้น</span>
+              <div className="text-base sm:text-lg font-black text-slate-800 kanit-text mt-1 truncate" title={formatCurrency(statementData?.openingBalance || 0)}>
                 {formatCurrency(statementData?.openingBalance || 0)}
               </div>
               <span className="text-[10px] text-slate-400 kanit-text">บาท</span>
             </div>
 
-            <div className="p-3 rounded-2xl bg-rose-50/60 border border-rose-100 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-rose-500 kanit-text uppercase">รวมรายจ่าย (ถอน)</span>
-                <span className="text-[10px] font-bold text-rose-600 bg-rose-100/60 px-1.5 py-0.5 rounded-md">
+            <div className="min-w-0 p-3 rounded-2xl bg-rose-50/60 border border-rose-100 shadow-xs">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] font-bold text-rose-500 kanit-text uppercase truncate">รวมรายจ่าย (ถอน)</span>
+                <span className="text-[10px] font-bold text-rose-600 bg-rose-100/60 px-1.5 py-0.5 rounded-md shrink-0">
                   {statementData?.debitCount || 0}
                 </span>
               </div>
-              <div className="text-base sm:text-lg font-black text-rose-700 kanit-text mt-1">
+              <div className="text-base sm:text-lg font-black text-rose-700 kanit-text mt-1 truncate" title={formatCurrency(statementData?.totalDebit || 0)}>
                 {formatCurrency(statementData?.totalDebit || 0)}
               </div>
               <span className="text-[10px] text-rose-500/80 kanit-text">บาท</span>
             </div>
 
-            <div className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-emerald-600 kanit-text uppercase">รวมรายรับ (ฝาก)</span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/60 px-1.5 py-0.5 rounded-md">
+            <div className="min-w-0 p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100 shadow-xs">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] font-bold text-emerald-600 kanit-text uppercase truncate">รวมรายรับ (ฝาก)</span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/60 px-1.5 py-0.5 rounded-md shrink-0">
                   {statementData?.creditCount || 0}
                 </span>
               </div>
-              <div className="text-base sm:text-lg font-black text-emerald-800 kanit-text mt-1">
+              <div className="text-base sm:text-lg font-black text-emerald-800 kanit-text mt-1 truncate" title={formatCurrency(statementData?.totalCredit || 0)}>
                 {formatCurrency(statementData?.totalCredit || 0)}
               </div>
               <span className="text-[10px] text-emerald-600/80 kanit-text">บาท</span>
@@ -592,11 +592,11 @@ export default function ClinicStatementModal({
               const netProfit = (statementData?.totalCredit || 0) - (statementData?.totalDebit || 0);
               const isProfit = netProfit >= 0;
               return (
-                <div className={`p-3 rounded-2xl border shadow-xs ${isProfit ? 'bg-teal-50/70 border-teal-200/80' : 'bg-amber-50/70 border-amber-200/80'}`}>
-                  <span className={`text-[11px] font-bold kanit-text uppercase ${isProfit ? 'text-teal-700' : 'text-amber-700'}`}>
+                <div className={`min-w-0 p-3 rounded-2xl border shadow-xs ${isProfit ? 'bg-teal-50/70 border-teal-200/80' : 'bg-amber-50/70 border-amber-200/80'}`}>
+                  <span className={`text-[11px] font-bold kanit-text uppercase block truncate ${isProfit ? 'text-teal-700' : 'text-amber-700'}`}>
                     กำไร / ขาดทุน
                   </span>
-                  <div className={`text-base sm:text-lg font-black kanit-text mt-1 ${isProfit ? 'text-teal-800' : 'text-amber-800'}`}>
+                  <div className={`text-base sm:text-lg font-black kanit-text mt-1 truncate ${isProfit ? 'text-teal-800' : 'text-amber-800'}`} title={`${netProfit > 0 ? '+' : ''}${formatCurrency(netProfit)}`}>
                     {netProfit > 0 ? '+' : ''}{formatCurrency(netProfit)}
                   </div>
                   <span className={`text-[10px] kanit-text ${isProfit ? 'text-teal-600/80' : 'text-amber-600/80'}`}>
@@ -606,9 +606,9 @@ export default function ClinicStatementModal({
               );
             })()}
 
-            <div className="col-span-2 sm:col-span-1 p-3 rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
-              <span className="text-[11px] font-bold text-emerald-100 kanit-text uppercase">ยอดยกไปสุทธิ</span>
-              <div className="text-base sm:text-lg font-black text-white kanit-text mt-1">
+            <div className="min-w-0 min-[380px]:col-span-2 md:col-span-1 p-3 rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
+              <span className="text-[11px] font-bold text-emerald-100 kanit-text uppercase block truncate">ยอดยกไปสุทธิ</span>
+              <div className="text-base sm:text-lg font-black text-white kanit-text mt-1 truncate" title={formatCurrency(statementData?.closingBalance || 0)}>
                 {formatCurrency(statementData?.closingBalance || 0)}
               </div>
               <span className="text-[10px] text-emerald-100 kanit-text">บาท (คงเหลือสุทธิ)</span>
@@ -618,7 +618,7 @@ export default function ClinicStatementModal({
           {/* Section 3: Preview Table */}
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
                 <h4 className="text-xs font-bold text-slate-700 kanit-text">
                   ตัวอย่างรายการเดินบัญชี ({filteredTransactions.length} รายการ):
                 </h4>
@@ -629,7 +629,7 @@ export default function ClinicStatementModal({
                 )}
               </div>
 
-              <div className="relative w-full sm:w-64">
+              <div className="relative w-full sm:w-64 shrink-0">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -641,45 +641,45 @@ export default function ClinicStatementModal({
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-xs">
-              <table className="w-full text-left border-collapse text-xs kanit-text">
+            <div className="border border-slate-200 rounded-2xl overflow-x-auto custom-scrollbar shadow-xs">
+              <table className="w-full min-w-[680px] text-left border-collapse text-xs kanit-text">
                 <thead className="bg-slate-100/80 text-slate-700 font-bold sticky top-0 border-b border-slate-200 z-10">
                   <tr>
-                    <th className="py-2.5 px-3 text-center w-24">วันที่</th>
-                    <th className="py-2.5 px-2 text-center w-16">เวลา</th>
+                    <th className="py-2.5 px-3 text-center w-24 whitespace-nowrap">วันที่</th>
+                    <th className="py-2.5 px-2 text-center w-16 whitespace-nowrap">เวลา</th>
                     <th className="py-2.5 px-3">รายการ</th>
-                    <th className="py-2.5 px-3 text-right">ถอน (จ่าย)</th>
-                    <th className="py-2.5 px-3 text-right">ฝาก (รับ)</th>
-                    <th className="py-2.5 px-3 text-right font-bold">คงเหลือ</th>
-                    <th className="py-2.5 px-3 text-center">ช่องทาง</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">ถอน (จ่าย)</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">ฝาก (รับ)</th>
+                    <th className="py-2.5 px-3 text-right font-bold whitespace-nowrap">คงเหลือ</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">ช่องทาง</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {/* แถวยอดยกมาเริ่มต้น */}
                   <tr className="bg-slate-50 font-bold text-slate-900">
-                    <td className="py-2 px-3 text-center text-black font-medium">
+                    <td className="py-2 px-3 text-center text-black font-medium whitespace-nowrap">
                       {rangeBounds.dateOnlyStart}
                     </td>
-                    <td className="py-2 px-2 text-center text-black font-medium">--:--</td>
+                    <td className="py-2 px-2 text-center text-black font-medium whitespace-nowrap">--:--</td>
                     <td className="py-2 px-3">
                       <span className="px-2 py-0.5 rounded-md bg-slate-200 text-black text-[10px]">
                         ยอดยกมา
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-right text-black font-medium">-</td>
-                    <td className="py-2 px-3 text-right text-black font-medium">-</td>
-                    <td className="py-2 px-3 text-right text-black font-bold">
+                    <td className="py-2 px-3 text-right text-black font-medium whitespace-nowrap">-</td>
+                    <td className="py-2 px-3 text-right text-black font-medium whitespace-nowrap">-</td>
+                    <td className="py-2 px-3 text-right text-black font-bold whitespace-nowrap">
                       {formatCurrency(statementData?.openingBalance || 0)}
                     </td>
-                    <td className="py-2 px-3 text-center text-black text-[10px]">SYSTEM</td>
+                    <td className="py-2 px-3 text-center text-black text-[10px] whitespace-nowrap">SYSTEM</td>
                   </tr>
 
                   {filteredTransactions.map((t, idx) => (
                     <tr key={t.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-2 px-3 text-center text-black font-medium">
+                      <td className="py-2 px-3 text-center text-black font-medium whitespace-nowrap">
                         {t.dateFormatted}
                       </td>
-                      <td className="py-2 px-2 text-center text-black font-medium text-[11px]">
+                      <td className="py-2 px-2 text-center text-black font-medium text-[11px] whitespace-nowrap">
                         {t.timeFormatted}
                       </td>
                       <td className="py-2 px-3">
@@ -688,16 +688,16 @@ export default function ClinicStatementModal({
                           {t.description}
                         </div>
                       </td>
-                      <td className="py-2 px-3 text-right font-bold text-rose-600">
+                      <td className="py-2 px-3 text-right font-bold text-rose-600 whitespace-nowrap">
                         {t.debit > 0 ? formatCurrency(t.debit) : '-'}
                       </td>
-                      <td className="py-2 px-3 text-right font-bold text-emerald-600">
+                      <td className="py-2 px-3 text-right font-bold text-emerald-600 whitespace-nowrap">
                         {t.credit > 0 ? formatCurrency(t.credit) : '-'}
                       </td>
-                      <td className="py-2 px-3 text-right font-bold text-black">
+                      <td className="py-2 px-3 text-right font-bold text-black whitespace-nowrap">
                         {formatCurrency(t.balance)}
                       </td>
-                      <td className="py-2 px-3 text-center">
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-black">
                           {t.channel}
                         </span>
@@ -720,37 +720,37 @@ export default function ClinicStatementModal({
         </div>
 
         {/* Modal Footer (Action Buttons) */}
-        <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="px-4 py-3 sm:p-5 [@media(max-height:480px)]:py-2.5 border-t border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0">
           {/* ปุ่มปิดหน้าต่าง ชิดซ้าย */}
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2.5 bg-slate-200/90 hover:bg-slate-300 text-slate-700 rounded-xl font-bold kanit-text text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5"
+            className="w-full sm:w-auto px-5 py-2.5 [@media(max-height:480px)]:py-2 bg-slate-200/90 hover:bg-slate-300 text-slate-700 rounded-xl font-bold kanit-text text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0"
           >
-            <X size={16} />
+            <X size={16} className="shrink-0" />
             <span>ปิดหน้าต่าง</span>
           </button>
 
           {/* ปุ่มส่งออก Excel และพิมพ์ PDF ชิดขวา */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               onClick={handleExportExcel}
               disabled={isLoading || !statementData}
-              className="flex-1 sm:flex-none px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold kanit-text text-xs shadow-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              className="px-4 py-2.5 [@media(max-height:480px)]:py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold kanit-text text-xs shadow-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
             >
-              <Download size={15} className="text-emerald-600" />
-              <span>ส่งออก Excel (.xlsx)</span>
+              <Download size={15} className="text-emerald-600 shrink-0" />
+              <span className="truncate">ส่งออก Excel (.xlsx)</span>
             </button>
 
             <button
               type="button"
               onClick={handlePrintPdf}
               disabled={isLoading || !statementData}
-              className="flex-1 sm:flex-none px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold kanit-text text-xs shadow-md shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+              className="px-5 py-2.5 [@media(max-height:480px)]:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold kanit-text text-xs shadow-md shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
             >
-              <Printer size={15} />
-              <span>พิมพ์ / บันทึก PDF</span>
+              <Printer size={15} className="shrink-0" />
+              <span className="truncate">พิมพ์ / บันทึก PDF</span>
             </button>
           </div>
         </div>

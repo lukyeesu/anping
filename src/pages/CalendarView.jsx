@@ -134,7 +134,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
   // --- ระบบ Custom Drag & Drop Engine (ทำงานแบบ 60FPS ล้วนโดยไม่แตะ React State) ---
   const dragState = useRef({
     isDragging: false, element: null, clone: null, eventData: null,
-    startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null
+    startX: 0, startY: 0, lastClientX: 0, lastClientY: 0,
+    offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null, autoScrollRaf: null
   });
 
   // ใช้ useCallback หุ้มเพื่อให้ Pointer Down นิ่งสนิทตลอดการใช้งาน 
@@ -145,6 +146,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
     const target = e.currentTarget;
     const rect = target.getBoundingClientRect();
     if (dragState.current.holdTimer) clearTimeout(dragState.current.holdTimer);
+    if (dragState.current.autoScrollRaf) cancelAnimationFrame(dragState.current.autoScrollRaf);
 
     if (dragState.current.clone && dragState.current.clone.parentNode) {
         dragState.current.clone.parentNode.removeChild(dragState.current.clone);
@@ -152,17 +154,70 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
 
     const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
     const shiftY = isTouch ? 45 : 15;
+    const moveThreshold = isTouch ? 8 : 5;
 
     dragState.current = {
       isDragging: false, element: target, clone: null, eventData: ev,
       startX: e.clientX, startY: e.clientY,
+      lastClientX: e.clientX, lastClientY: e.clientY,
       offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
       shiftY: shiftY,
-      currentDropzone: null, holdTimer: null
+      currentDropzone: null, holdTimer: null, autoScrollRaf: null
+    };
+
+    const updateDropzoneAt = (cx, cy) => {
+      const state = dragState.current;
+      const elementsUnder = document.elementsFromPoint(cx, cy);
+      const dropzoneEl = elementsUnder.find(el => el.classList && el.classList.contains('calendar-dropzone'));
+      if (state.currentDropzone !== dropzoneEl) {
+        if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
+        if (dropzoneEl) dropzoneEl.classList.add('dropzone-active');
+        state.currentDropzone = dropzoneEl;
+      }
+    };
+
+    const runAutoScroll = () => {
+      const state = dragState.current;
+      if (!state.isDragging) {
+        state.autoScrollRaf = null;
+        return;
+      }
+      const mainEl = document.getElementById('main-scroll-container');
+      const weekScrollEl = state.element?.closest?.('.week-scroll-container');
+      const EDGE = 64;
+      let didScroll = false;
+
+      if (mainEl) {
+        const mRect = mainEl.getBoundingClientRect();
+        if (state.lastClientY < mRect.top + EDGE) {
+          const speed = Math.ceil(((mRect.top + EDGE - state.lastClientY) / EDGE) * 10);
+          mainEl.scrollTop -= speed;
+          didScroll = true;
+        } else if (state.lastClientY > mRect.bottom - EDGE) {
+          const speed = Math.ceil(((state.lastClientY - (mRect.bottom - EDGE)) / EDGE) * 10);
+          mainEl.scrollTop += speed;
+          didScroll = true;
+        }
+      }
+
+      if (weekScrollEl) {
+        const wRect = weekScrollEl.getBoundingClientRect();
+        if (state.lastClientX < wRect.left + 48) {
+          weekScrollEl.scrollLeft -= 8;
+          didScroll = true;
+        } else if (state.lastClientX > wRect.right - 48) {
+          weekScrollEl.scrollLeft += 8;
+          didScroll = true;
+        }
+      }
+
+      if (didScroll) updateDropzoneAt(state.lastClientX, state.lastClientY);
+      state.autoScrollRaf = requestAnimationFrame(runAutoScroll);
     };
 
     const startDragging = () => {
       const state = dragState.current;
+      if (!state.element) return;
       state.isDragging = true;
       document.body.classList.add('is-custom-dragging');
 
@@ -180,7 +235,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       clone.style.left = '0px';
       clone.style.top = '0px';
       
-      clone.style.transform = `translate3d(${state.startX - state.offsetX}px, ${state.startY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
+      clone.style.transform = `translate3d(${state.lastClientX - state.offsetX}px, ${state.lastClientY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
       clone.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)';
       
       setTimeout(() => {
@@ -194,20 +249,24 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       target.style.opacity = '0.15'; 
       
       if (navigator.vibrate && isTouch) navigator.vibrate(50);
+      if (!state.autoScrollRaf) state.autoScrollRaf = requestAnimationFrame(runAutoScroll);
     };
 
     if (isTouch) {
-      dragState.current.holdTimer = setTimeout(startDragging, 200);
+      dragState.current.holdTimer = setTimeout(startDragging, 400);
     }
 
     const handlePointerMove = (moveEvent) => {
       const state = dragState.current;
       if (!state.element) return;
 
+      state.lastClientX = moveEvent.clientX;
+      state.lastClientY = moveEvent.clientY;
+
       const dx = Math.abs(moveEvent.clientX - state.startX);
       const dy = Math.abs(moveEvent.clientY - state.startY);
 
-      if (!state.isDragging && (dx > 5 || dy > 5)) {
+      if (!state.isDragging && (dx > moveThreshold || dy > moveThreshold)) {
         if (state.holdTimer) clearTimeout(state.holdTimer);
         if (e.pointerType === 'mouse') startDragging();
         else { dragState.current.element = null; return; }
@@ -220,20 +279,14 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           state.clone.style.transform = `translate3d(${moveEvent.clientX - state.offsetX}px, ${moveEvent.clientY - state.offsetY - state.shiftY}px, 0) scale(1.15)`;
         }
 
-        const elementsUnder = document.elementsFromPoint(moveEvent.clientX, moveEvent.clientY);
-        const dropzoneEl = elementsUnder.find(el => el.classList && el.classList.contains('calendar-dropzone'));
-
-        if (state.currentDropzone !== dropzoneEl) {
-          if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
-          if (dropzoneEl) dropzoneEl.classList.add('dropzone-active');
-          state.currentDropzone = dropzoneEl;
-        }
+        updateDropzoneAt(moveEvent.clientX, moveEvent.clientY);
       }
     };
 
     const handlePointerUp = (upEvent) => {
       const state = dragState.current;
       if (state.holdTimer) clearTimeout(state.holdTimer);
+      if (state.autoScrollRaf) cancelAnimationFrame(state.autoScrollRaf);
 
       let wasDragging = state.isDragging; 
 
@@ -250,7 +303,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       } else {
         const dx = Math.abs(upEvent.clientX - state.startX);
         const dy = Math.abs(upEvent.clientY - state.startY);
-        if (dx < 5 && dy < 5 && state.eventData) {
+        if (dx < moveThreshold && dy < moveThreshold && state.eventData) {
           if (onEventClickRef.current) onEventClickRef.current(state.eventData);
         }
       }
@@ -263,7 +316,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       if (state.element) state.element.style.opacity = '1';
       if (state.currentDropzone) state.currentDropzone.classList.remove('dropzone-active');
       document.body.classList.remove('is-custom-dragging');
-      dragState.current = { isDragging: false, element: null, clone: null, eventData: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null };
+      dragState.current = { isDragging: false, element: null, clone: null, eventData: null, startX: 0, startY: 0, lastClientX: 0, lastClientY: 0, offsetX: 0, offsetY: 0, shiftY: 0, currentDropzone: null, holdTimer: null, autoScrollRaf: null };
 
       if (wasDragging) {
           const preventClick = (eClick) => {
@@ -401,21 +454,21 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       const events = getEventsForDate(date);
 
       const modalContent = (
-        <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 z-[160] fade-in">
+        <div className="fixed inset-0 flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-2 z-[160] fade-in">
             <div 
                 className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm ${isDayModalClosing ? 'backdrop-animate-out' : 'animate-in fade-in duration-300'}`} 
                 onClick={closeDayDetailsModal} 
             />
-            <div className={`bg-white w-full max-w-5xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[80dvh] sm:max-h-[90dvh] ${isDayModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-                <div className="px-4 py-3 sm:px-6 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-3 shrink-0">
-                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div className="w-10 h-10 sm:w-14 sm:h-14 bg-sky-100 text-sky-600 rounded-xl sm:rounded-2xl flex flex-col items-center justify-center shadow-inner shrink-0 mt-1 sm:mt-0">
+            <div className={`bg-white w-full max-w-5xl rounded-[1.5rem] sm:rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[calc(100dvh-1.25rem)] sm:max-h-[90dvh] ${isDayModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+                <div className="px-3.5 py-2.5 sm:px-6 sm:py-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 gap-2.5 sm:gap-3 shrink-0">
+                    <div className="flex items-center gap-2.5 sm:gap-4 flex-1 min-w-0">
+                        <div className="w-10 h-10 sm:w-14 sm:h-14 [@media(max-height:480px)]:w-9 [@media(max-height:480px)]:h-9 bg-sky-100 text-sky-600 rounded-xl sm:rounded-2xl flex flex-col items-center justify-center shadow-inner shrink-0 mt-0.5 sm:mt-0">
                             <span className="text-[8px] sm:text-[10px] font-bold uppercase leading-none">{daysShortTH[date.getDay()]}</span>
-                            <span className="text-lg sm:text-2xl font-black leading-none mt-0.5">{date.getDate()}</span>
+                            <span className="text-lg sm:text-2xl [@media(max-height:480px)]:text-base font-black leading-none mt-0.5">{date.getDate()}</span>
                         </div>
-                        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 pr-2">
+                        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 pr-1 sm:pr-2">
                             <div className="min-w-0">
-                                <h3 className="text-sm sm:text-xl font-bold text-slate-800 truncate leading-tight">รายการประจำวัน</h3>
+                                <h3 className="text-sm sm:text-xl [@media(max-height:480px)]:text-sm font-bold text-slate-800 truncate leading-tight">รายการประจำวัน</h3>
                                 <p className="text-slate-500 text-[10px] sm:text-sm font-medium truncate mt-0.5">{daysTH[date.getDay()]}ที่ {date.getDate()} {monthsTH[date.getMonth()]} {date.getFullYear()+543}</p>
                             </div>
                             <button 
@@ -433,14 +486,14 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                     </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-slate-50/30">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6 custom-scrollbar bg-slate-50/30 min-h-0">
                    {events.length > 0 ? (
                        <>
-                        <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                            <div className="overflow-x-auto overflow-y-hidden">
-                                <table className="table-auto w-full text-left border-collapse">
+                        <div className="hidden lg:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                            <div className="overflow-x-auto overflow-y-hidden custom-scrollbar">
+                                <table className="table-auto w-full min-w-[760px] text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text"><th className="p-4 font-bold w-[10%] text-center">HN/เวลา</th><th className="p-4 font-bold w-[25%]">คนไข้/อาการ</th><th className="p-4 font-bold w-[15%] text-center">เบอร์โทร</th><th className="p-4 font-bold w-[20%]">แพทย์</th><th className="p-4 font-bold w-[15%]">สถานะ</th><th className="p-4 font-bold w-[15%] text-right">จัดการ</th></tr>
+                                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wide kanit-text"><th className="p-4 font-bold w-[12%] text-center whitespace-nowrap">HN/เวลา</th><th className="p-4 font-bold w-[26%]">คนไข้/อาการ</th><th className="p-4 font-bold w-[16%] text-center whitespace-nowrap">เบอร์โทร</th><th className="p-4 font-bold w-[20%]">แพทย์</th><th className="p-4 font-bold w-[16%] whitespace-nowrap">สถานะ</th><th className="p-4 font-bold w-[10%] text-right whitespace-nowrap">จัดการ</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {events.map((ev, idx) => {
@@ -455,14 +508,14 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                         </div>
                                                     </td>
                                                     <td className="p-4 align-top">
-                                                        <div className="font-bold text-slate-800 flex items-center flex-wrap gap-1">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={10} /> เคยเลื่อนนัด</span>}</div>
-                                                        <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5 truncate max-w-[200px]">{ev.reason || ev.category || '-'}</div>
+                                                        <div className="font-bold text-slate-800 flex items-center flex-wrap gap-1 break-words">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text whitespace-nowrap"><Clock size={10} /> เคยเลื่อนนัด</span>}</div>
+                                                        <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md w-fit mt-1.5 truncate max-w-[220px]">{ev.reason || ev.category || '-'}</div>
                                                     </td>
                                                     <td className="p-4 align-top text-center">
                                                         <div className="flex justify-center">
                                                             {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
-                                                                <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors font-data">
-                                                                    <Phone size={14} /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                                                <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center justify-center gap-1.5 text-sky-600 hover:text-sky-700 font-medium bg-sky-50 hover:bg-sky-100 px-2.5 py-1.5 rounded-lg w-fit transition-colors font-data whitespace-nowrap">
+                                                                    <Phone size={14} className="shrink-0" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
                                                                 </a>
                                                             ) : <span className="text-slate-400">-</span>}
                                                         </div>
@@ -473,8 +526,8 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                     </td>
                                                     <td className="p-4 align-top">
                                                         <div className="flex flex-col gap-1.5 items-start">
-                                                            <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1.5 ${statusInfo.color}`}>
-                                                                <div className={`w-1.5 h-1.5 rounded-full ${statusInfo.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-400').replace('-50', '-500')}`}></div>
+                                                            <span className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border inline-flex items-center gap-1.5 whitespace-nowrap ${statusInfo.color}`}>
+                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusInfo.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-400').replace('-50', '-500')}`}></div>
                                                                 {statusInfo.label}
                                                             </span>
                                                         </div>
@@ -492,32 +545,32 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                             </div>
                         </div>
 
-                        <div className="md:hidden space-y-3">
+                        <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3">
                             {events.map((ev, idx) => {
                                 const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                                 const timeStr = getTimeDisplayStr(ev);
                                 return (
-                                    <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 active:scale-95 transition-transform cursor-pointer">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex flex-col gap-1">
+                                    <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 active:scale-[0.99] transition-transform cursor-pointer min-w-0">
+                                        <div className="flex justify-between items-start gap-2 min-w-0">
+                                            <div className="flex flex-col gap-1 min-w-0">
                                                 <span className="font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md text-[10px] w-fit whitespace-nowrap">{ev.hn || '-'}</span>
                                                 <div className="flex items-center gap-1 mt-0.5">
-                                                    <Clock size={14} className="text-slate-400" />
-                                                    <span className="text-xs font-bold text-slate-600 font-data">{timeStr} น.</span>
+                                                    <Clock size={14} className="text-slate-400 shrink-0" />
+                                                    <span className="text-xs font-bold text-slate-600 font-data whitespace-nowrap">{timeStr} น.</span>
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col gap-1 items-end shrink-0 ml-2">
-                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${statusInfo.color}`}>
-                                                    <div className={`w-1 h-1 rounded-full ${statusInfo.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-400').replace('-50', '-500')}`}></div>
+                                            <div className="flex flex-col gap-1 items-end shrink-0">
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 whitespace-nowrap ${statusInfo.color}`}>
+                                                    <div className={`w-1 h-1 rounded-full shrink-0 ${statusInfo.color.split(' ')[0].replace('bg-', 'bg-').replace('-100', '-400').replace('-50', '-500')}`}></div>
                                                     {statusInfo.label}
                                                 </span>
                                             </div>
                                         </div>
-                                        <div className="mt-1">
-                                            <h4 className="font-bold text-slate-800 text-sm line-clamp-2 flex items-center flex-wrap gap-1">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text"><Clock size={10} /> เคยเลื่อนนัด</span>}</h4>
+                                        <div className="mt-1 min-w-0">
+                                            <h4 className="font-bold text-slate-800 text-sm line-clamp-2 flex items-center flex-wrap gap-1 break-words">{ev.name} {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="นัดหมายนี้เคยถูกเลื่อนมาแล้ว" className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md align-middle font-bold kanit-text whitespace-nowrap"><Clock size={10} /> เคยเลื่อนนัด</span>}</h4>
                                             <div className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-fit mt-1 truncate max-w-full">{ev.reason || ev.category || '-'}</div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-1">
+                                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 mt-auto">
                                             <div className="min-w-0">
                                                 <p className="text-[9px] font-semibold text-slate-400 mb-0.5">แพทย์</p>
                                                 <p className="font-bold text-sky-600 truncate">{getDoctorDisplayStr(ev)}</p>
@@ -527,10 +580,10 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                 <p className="font-semibold text-slate-700 truncate">{ev.customer || '-'}</p>
                                             </div>
                                             {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) && (
-                                                <div className="col-span-2 mt-0.5">
+                                                <div className="col-span-2 mt-0.5 min-w-0">
                                                     <p className="text-[9px] font-semibold text-slate-400 mb-0.5">เบอร์โทร</p>
-                                                    <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
-                                                        <Phone size={10} className="sm:w-3 sm:h-3" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                                    <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 font-bold font-data text-[11px] sm:text-xs mt-0.5 w-fit max-w-full truncate bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
+                                                        <Phone size={10} className="sm:w-3 sm:h-3 shrink-0" /> <span className="truncate">{Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}</span>
                                                     </a>
                                                 </div>
                                             )}
@@ -603,29 +656,30 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       }
 
       const modalContent = (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/40 backdrop-blur-sm fade-in">
               <div className="absolute inset-0" onClick={closeStaffModal}></div>
-              <div ref={staffSwipeHandlers.ref} style={staffSwipeHandlers.style} className="bg-white rounded-[1.5rem] sm:rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden modal-animate-in relative z-10 mobile-bottom-sheet">
-                  <div className="py-4 -mt-4 mb-2 sm:hidden flex justify-center w-full touch-none cursor-grab active:cursor-grabbing shrink-0">
-                      <div className="w-12 h-1.5 bg-slate-200 rounded-full pointer-events-none"></div>
+              <div ref={staffSwipeHandlers.ref} style={staffSwipeHandlers.style} className="bg-white rounded-[1.5rem] sm:rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[calc(100dvh-1.25rem)] sm:max-h-[85dvh] overflow-hidden modal-animate-in relative z-10 mobile-bottom-sheet">
+                  {/* ขีดนำทางสำหรับเลื่อนปิดบนมือถือ (Mobile Swipe Down Handle) เว้นระยะด้านบนโปร่งสบาย สมดุลกับมุมโค้ง */}
+                  <div className="pt-3.5 pb-1 sm:hidden [@media(max-height:480px)]:hidden flex justify-center items-center w-full touch-none cursor-grab active:cursor-grabbing shrink-0 bg-slate-50/70">
+                      <div className="w-12 h-1.5 bg-slate-300 rounded-full pointer-events-none transition-transform active:scale-95"></div>
                   </div>
                   
-                  <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-                      <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner">
+                  <div className="px-4 pt-1.5 pb-4 sm:p-6 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex justify-between items-center gap-2 bg-slate-50/70 shrink-0">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-9 [@media(max-height:480px)]:h-9 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner shrink-0">
                               <Users size={20} className="sm:w-6 sm:h-6" />
                           </div>
-                          <div>
-                              <h3 className="font-bold text-slate-800 kanit-text text-base sm:text-lg">บุคลากรที่เข้างาน</h3>
-                              <p className="text-[10px] sm:text-xs text-slate-500 font-medium kanit-text">{daysTH[dayOfWeek]}ที่ {staffModalDate.getDate()} {thaiMonths[staffModalDate.getMonth()]} {staffModalDate.getFullYear()+543}</p>
+                          <div className="min-w-0">
+                              <h3 className="font-bold text-slate-800 kanit-text text-base sm:text-lg [@media(max-height:480px)]:text-sm truncate">บุคลากรที่เข้างาน</h3>
+                              <p className="text-[10px] sm:text-xs text-slate-500 font-medium kanit-text truncate">{daysTH[dayOfWeek]}ที่ {staffModalDate.getDate()} {thaiMonths[staffModalDate.getMonth()]} {staffModalDate.getFullYear()+543}</p>
                           </div>
                       </div>
-                      <button onClick={closeStaffModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+                      <button onClick={closeStaffModal} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0"><X size={20}/></button>
                   </div>
 
-                  <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+                  <div className="p-3.5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 bg-slate-50/30">
                       {workingStaff.length > 0 ? (
-                          <div className="space-y-6">
+                          <div className="space-y-5 sm:space-y-6">
                               {Object.keys(groupedStaff).map(roleKey => {
                                   const staffs = groupedStaff[roleKey];
                                   if (!staffs || staffs.length === 0) return null;
@@ -646,21 +700,21 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                                                       timeStr = `${specificData.start} - ${specificData.end} น.`;
                                                   }
                                                   return (
-                                                      <div key={s.id} className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-sky-200 transition-colors">
-                                                          <div className="flex items-center gap-3 min-w-0">
+                                                      <div key={s.id} className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex flex-col xs:flex-row xs:items-center items-start justify-between gap-2 xs:gap-3 hover:border-sky-200 transition-colors min-w-0">
+                                                          <div className="flex items-center gap-3 min-w-0 w-full xs:w-auto xs:flex-1">
                                                               {s.photo ? (
                                                                   <img src={s.photo} alt={s.name} className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0 shadow-sm" />
                                                               ) : (
                                                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm text-lg ${roleKey==='doctor'?'bg-indigo-400':roleKey==='nurse'?'bg-emerald-400':roleKey==='sale'?'bg-amber-400':'bg-slate-400'}`}>{s.name.charAt(0)}</div>
                                                               )}
-                                                              <div className="min-w-0">
+                                                              <div className="min-w-0 flex-1">
                                                                   <p className="font-bold text-slate-800 kanit-text text-sm truncate leading-tight">{s.name}</p>
                                                                   <div className="text-[10px] text-slate-500 font-data truncate mt-0.5 flex items-center gap-1">
-                                                                      <Phone size={10} className="text-slate-400 shrink-0" /> {s.phone || 'ไม่มีเบอร์ติดต่อ'}
+                                                                      <Phone size={10} className="text-slate-400 shrink-0" /> <span className="truncate">{s.phone || 'ไม่มีเบอร์ติดต่อ'}</span>
                                                                   </div>
                                                               </div>
                                                           </div>
-                                                          <div className="shrink-0 text-right">
+                                                          <div className="shrink-0 self-start xs:self-auto xs:text-right pl-[52px] xs:pl-0">
                                                               <div className={`text-[10px] font-bold px-2 py-1 rounded-md border flex items-center justify-center gap-1 whitespace-nowrap ${roleColors[roleKey]}`}>
                                                                   <Clock size={10} className="shrink-0" /> {timeStr}
                                                               </div>
@@ -712,15 +766,15 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           onPointerDown={(e) => handlePointerDown(e, ev)}
           onClick={(e) => e.stopPropagation()}
           style={{ touchAction: 'pan-y', userSelect: 'none' }} 
-          className={`text-left rounded-[4px] sm:rounded-md border transition-colors w-full mb-0.5 sm:mb-1 xl:mb-1.5 flex items-center shrink-0 cursor-grab active:cursor-grabbing hover:opacity-80 ${itemColor} leading-none select-none
-             ${compact ? 'p-0.5 sm:p-1 xl:p-1.5 min-h-[18px] sm:h-auto gap-0.5 sm:gap-1 xl:gap-1.5 justify-start overflow-hidden' : 'px-1.5 py-1 sm:px-2 sm:py-1 xl:px-3 xl:py-1.5 h-auto min-h-[16px] sm:min-h-[26px] xl:min-h-[32px] gap-1 xl:gap-2 truncate'}
+          className={`text-left rounded-[4px] sm:rounded-md border transition-colors w-full mb-0.5 sm:mb-1 xl:mb-1.5 flex items-center shrink-0 cursor-grab active:cursor-grabbing hover:opacity-80 ${itemColor} leading-none select-none min-w-0
+             ${compact ? 'p-0.5 sm:p-1 xl:p-1.5 min-h-[18px] sm:h-auto gap-0.5 sm:gap-1 xl:gap-1.5 justify-start overflow-hidden' : 'px-1.5 py-1 sm:px-2 sm:py-1 xl:px-3 xl:py-1.5 h-auto min-h-[16px] sm:min-h-[26px] xl:min-h-[32px] gap-1 xl:gap-2 overflow-hidden'}
           `}
           title={`${timeStr} ${ev.name} (${ev.doctor || ev.artist || '-'})`}
        >
           <div className={`rounded-full shrink-0 ${dotColor} ${compact ? 'w-1.5 h-1.5 sm:w-1.5 sm:h-1.5 xl:w-2 xl:h-2' : 'w-1.5 h-1.5 sm:w-2 sm:h-2 xl:w-2.5 xl:h-2.5'}`}></div>
-          <span className={`truncate flex items-center font-medium tracking-tighter font-data ${compact ? 'text-[8px] sm:text-[10px] xl:text-xs 2xl:text-[13px]' : 'text-[9px] sm:text-xs xl:text-sm 2xl:text-base'}`}>
-             {displayText}
-             {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="เคยเลื่อนนัด" className="inline-flex shrink-0 items-center bg-amber-100 text-amber-700 ml-1.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] leading-none border border-amber-200/50"><Clock size={8} className="mr-0.5" /> เลื่อน</span>}
+          <span className={`min-w-0 flex-1 flex items-center font-medium tracking-tighter font-data ${compact ? 'text-[8px] sm:text-[10px] xl:text-xs 2xl:text-[13px]' : 'text-[9px] sm:text-xs xl:text-sm 2xl:text-base'}`}>
+             <span className="truncate">{displayText}</span>
+             {(Number(ev.postponeCount) > 0 || ev.postpone1_date || ev.postponedDate) && <span title="เคยเลื่อนนัด" className="hidden sm:inline-flex shrink-0 items-center bg-amber-100 text-amber-700 ml-1 px-1 py-0.5 rounded text-[8px] sm:text-[9px] leading-none border border-amber-200/50"><Clock size={8} className="mr-0.5" /> เลื่อน</span>}
           </span>
        </div>
      );
@@ -738,7 +792,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
         <div className="w-full bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col relative overflow-hidden">
             <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 shrink-0">
                 {daysShortTH.map((d, i) => (
-                    <div key={d} className={`py-2 sm:py-4 text-center text-[9px] sm:text-sm font-bold ${i===0 || i===6 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>
+                    <div key={d} className={`py-2 sm:py-3.5 xl:py-4 text-center text-[10px] sm:text-xs xl:text-sm font-bold ${i===0 || i===6 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>
                 ))}
             </div>
             
@@ -757,7 +811,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
                         if (index === totalCells - 1) cornerClass = 'rounded-br-2xl sm:rounded-br-3xl';
 
                         if (cell.type === 'empty') {
-                            return <div key={cell.key} className={`border-b border-r border-slate-100 bg-slate-50/40 aspect-[1/2] sm:aspect-square ${cornerClass}`}></div>;
+                            return <div key={cell.key} className={`border-b border-r border-slate-100 bg-slate-50/40 min-h-[88px] sm:min-h-[112px] xl:aspect-square ${cornerClass}`}></div>;
                         }
 
                         const day = cell.day;
@@ -788,7 +842,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
             </div>
         </div>
       );
-  }, [viewDate, eventsMap, staffData, onDayClick, renderEventItem, isLoading]);
+  }, [viewDate, eventsMap, doctorsOnDutyMap, handleDayClick, handleShowStaff, renderEventItem, isLoading]);
 
   const weekViewContent = useMemo(() => {
       const startOfWeek = new Date(viewDate);
@@ -800,40 +854,42 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       });
 
       return (
-        <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[350px] relative">
-             <div className="flex flex-col flex-1 h-full w-full">
-                 <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 shrink-0">
-                    {days.map((d, i) => {
-                        const isCurrent = isToday(d);
-                        return (
-                            <div key={i} className={`py-2 sm:py-4 text-center border-r border-slate-100 last:border-0 ${i===0||i===6?'text-rose-500':'text-slate-600'}`}>
-                                <div className="text-[9px] sm:text-xs font-bold opacity-70">{daysShortTH[i]}</div>
-                                <div className={`text-sm sm:text-lg font-black ${isCurrent ? 'text-sky-500' : ''}`}>{d.getDate()}</div>
-                            </div>
-                        );
-                    })}
-                 </div>
-                 
-                 <div className="grid grid-cols-7 flex-1 overflow-y-auto bg-white divide-x divide-slate-100 custom-scrollbar">
-                     {days.map((d, i) => {
-                         const events = getEventsForDate(d);
-                         const isCurrent = isToday(d);
-                         const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
-                         const cornerClass = i === 0 ? 'rounded-bl-2xl sm:rounded-bl-3xl' : (i === 6 ? 'rounded-br-2xl sm:rounded-br-3xl' : '');
+        <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-[320px] sm:min-h-[380px] relative">
+             <div className="week-scroll-container flex-1 overflow-x-auto custom-scrollbar flex flex-col">
+                 <div className="flex flex-col flex-1 h-full min-w-[680px] xl:min-w-0 w-full">
+                     <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/80 shrink-0">
+                        {days.map((d, i) => {
+                            const isCurrent = isToday(d);
+                            return (
+                                <div key={i} className={`py-2 sm:py-3.5 xl:py-4 text-center border-r border-slate-100 last:border-0 ${i===0||i===6?'text-rose-500':'text-slate-600'}`}>
+                                    <div className="text-[10px] sm:text-xs font-bold opacity-70">{daysShortTH[i]}</div>
+                                    <div className={`text-sm sm:text-lg font-black ${isCurrent ? 'text-sky-500' : ''}`}>{d.getDate()}</div>
+                                </div>
+                            );
+                        })}
+                     </div>
+                     
+                     <div className="grid grid-cols-7 flex-1 overflow-y-auto bg-white divide-x divide-slate-100 custom-scrollbar">
+                         {days.map((d, i) => {
+                             const events = getEventsForDate(d);
+                             const isCurrent = isToday(d);
+                             const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()+543}`;
+                             const cornerClass = i === 0 ? 'rounded-bl-2xl sm:rounded-bl-3xl' : (i === 6 ? 'rounded-br-2xl sm:rounded-br-3xl' : '');
 
-                         return (
-                             <div 
-                                key={i} 
-                                data-date={dateStr}
-                                onClick={() => setSelectedDayDetails({ date: d, events })}
-                                className={`calendar-dropzone p-0.5 sm:p-2 flex flex-col gap-0.5 sm:gap-1 min-h-[120px] sm:min-h-[300px] hover:bg-slate-50 cursor-pointer overflow-y-auto custom-scrollbar transition-colors relative ${isCurrent ? 'bg-sky-50/30' : ''} ${cornerClass}`}
-                             >
-                                 <div className="flex flex-col gap-1 w-full h-full">
-                                     {events.map((ev, idx) => renderEventItem(ev, idx, true))}
+                             return (
+                                 <div 
+                                    key={i} 
+                                    data-date={dateStr}
+                                    onClick={() => setSelectedDayDetails({ date: d, events })}
+                                    className={`calendar-dropzone p-1.5 sm:p-2 flex flex-col gap-1 min-h-[180px] sm:min-h-[300px] hover:bg-slate-50 cursor-pointer overflow-y-auto custom-scrollbar transition-colors relative ${isCurrent ? 'bg-sky-50/30' : ''} ${cornerClass}`}
+                                 >
+                                     <div className="flex flex-col gap-1 w-full h-full min-w-0">
+                                         {events.map((ev, idx) => renderEventItem(ev, idx, true))}
+                                     </div>
                                  </div>
-                             </div>
-                         );
-                     })}
+                             );
+                         })}
+                     </div>
                  </div>
              </div>
         </div>
@@ -847,65 +903,65 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       const hasDoctor = docsOnDuty.length > 0;
       
       return (
-          <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col p-3 sm:p-6 min-h-[400px]">
-              <div className="flex items-center gap-3 mb-4 sm:mb-6 shrink-0 border-b border-slate-100 pb-4 justify-between">
-                  <div className="flex items-center gap-3">
+          <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col p-3 sm:p-6 min-h-[360px] sm:min-h-[400px]">
+              <div className="flex items-center gap-3 mb-4 sm:mb-6 shrink-0 border-b border-slate-100 pb-4 justify-between min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex flex-col items-center justify-center shadow-sm shrink-0 ${isCurrentDay ? 'bg-sky-500 text-white border-none' : 'bg-sky-50 text-sky-600 border border-sky-100'}`}>
                           <span className="text-[9px] sm:text-[10px] font-bold uppercase">{daysShortTH[viewDate.getDay()]}</span>
                           <span className="text-xl sm:text-2xl font-black leading-none">{viewDate.getDate()}</span>
                       </div>
-                      <div className="min-w-0">
-                          <h3 className="text-lg sm:text-xl font-bold text-slate-800 truncate">{daysTH[viewDate.getDay()]}ที่ {viewDate.getDate()} {thaiMonths[viewDate.getMonth()]} {viewDate.getFullYear()+543}</h3>
+                      <div className="min-w-0 flex-1">
+                          <h3 className="text-base sm:text-xl font-bold text-slate-800 truncate">{daysTH[viewDate.getDay()]}ที่ {viewDate.getDate()} {thaiMonths[viewDate.getMonth()]} {viewDate.getFullYear()+543}</h3>
                           <p className="text-slate-500 text-xs sm:text-sm font-medium">{events.length} รายการนัดหมาย</p>
                       </div>
                   </div>
                   <button 
                       onClick={() => { setStaffModalDate(viewDate); setShowStaffModal(true); }}
-                      className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all hover:shadow-sm active:scale-95 cursor-pointer ${hasDoctor ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'}`}
+                      className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all hover:shadow-sm active:scale-95 cursor-pointer shrink-0 ${hasDoctor ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'}`}
                       title="คลิกเพื่อดูรายชื่อพนักงานที่เข้างานวันนี้"
                   >
-                      {hasDoctor ? <BadgeCheck size={18} /> : <CalendarX2 size={18} />}
-                      <span className="text-xs font-bold kanit-text">{hasDoctor ? `มีแพทย์ประจำกะ (${docsOnDuty.length} ท่าน)` : 'ไม่มีแพทย์ลงตารางวันนี้'}</span>
+                      {hasDoctor ? <BadgeCheck size={18} className="shrink-0" /> : <CalendarX2 size={18} className="shrink-0" />}
+                      <span className="text-xs font-bold kanit-text whitespace-nowrap">{hasDoctor ? `มีแพทย์ประจำกะ (${docsOnDuty.length} ท่าน)` : 'ไม่มีแพทย์ลงตารางวันนี้'}</span>
                   </button>
               </div>
               <button 
                   onClick={() => { setStaffModalDate(viewDate); setShowStaffModal(true); }}
-                  className={`sm:hidden flex w-full items-center justify-center gap-2 px-3 py-2 mb-3 rounded-lg border transition-colors active:bg-opacity-70 ${hasDoctor ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}
+                  className={`sm:hidden flex w-full items-center justify-center gap-2 px-3 py-2 mb-3 rounded-lg border transition-colors active:bg-opacity-70 shrink-0 ${hasDoctor ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}
               >
-                  {hasDoctor ? <BadgeCheck size={16} /> : <CalendarX2 size={16} />}
-                  <span className="text-[11px] font-bold kanit-text">{hasDoctor ? `มีแพทย์ประจำกะ (${docsOnDuty.length} ท่าน)` : 'ไม่มีแพทย์ลงตารางวันนี้'}</span>
+                  {hasDoctor ? <BadgeCheck size={16} className="shrink-0" /> : <CalendarX2 size={16} className="shrink-0" />}
+                  <span className="text-[11px] font-bold kanit-text truncate">{hasDoctor ? `มีแพทย์ประจำกะ (${docsOnDuty.length} ท่าน)` : 'ไม่มีแพทย์ลงตารางวันนี้'}</span>
               </button>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 space-y-2 sm:space-y-3">
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 space-y-2 sm:space-y-3 min-h-0">
                   {events.length > 0 ? events.map((ev, idx) => {
                       const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                       return (
-                          <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer">
+                          <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer min-w-0">
                               {/* Responsive Card Layout */}
-                              <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 sm:gap-4">
+                              <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 sm:gap-4 min-w-0">
                               {/* Top Bar on Mobile / Left Column on Desktop */}
                               <div className="flex sm:flex-col items-center sm:justify-center justify-between gap-2 border-b sm:border-b-0 sm:border-r border-slate-100 pb-2 sm:pb-0 sm:pr-4 sm:w-32 shrink-0">
                                   <span className="font-black text-sky-700 bg-sky-50 border border-sky-200/80 px-2.5 py-1 rounded-lg text-xs sm:text-sm font-data whitespace-nowrap shadow-xs">{ev.hn || '-'}</span>
-                                  <span className="font-data text-xs text-slate-500 font-semibold flex items-center gap-1">
-                                      <Clock size={12} className="text-slate-400 sm:hidden" />
+                                  <span className="font-data text-xs text-slate-500 font-semibold flex items-center gap-1 whitespace-nowrap">
+                                      <Clock size={12} className="text-slate-400 sm:hidden shrink-0" />
                                       {getTimeDisplayStr(ev)} น.
                                   </span>
                               </div>
 
                               {/* Body Section */}
                               <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
-                                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2">
-                                      <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate">{ev.name}</h4>
-                                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 min-w-0">
+                                      <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate max-w-full">{ev.name}</h4>
+                                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${statusInfo.color}`}>{statusInfo.label}</span>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 min-w-0">
                                       {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
-                                          <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-xs bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
-                                              <Phone size={11} /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                          <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-xs bg-sky-50 px-2 py-0.5 rounded-md transition-colors whitespace-nowrap shrink-0">
+                                              <Phone size={11} className="shrink-0" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
                                           </a>
                                       ) : null}
-                                      <span className="font-medium text-sky-600 truncate">แพทย์: {getDoctorDisplayStr(ev)}</span>
-                                      {ev.reason && <span className="text-slate-500 truncate">• {ev.reason}</span>}
+                                      <span className="font-medium text-sky-600 truncate max-w-full">แพทย์: {getDoctorDisplayStr(ev)}</span>
+                                      {ev.reason && <span className="text-slate-500 truncate max-w-full">• {ev.reason}</span>}
                                   </div>
                               </div>
                           </div>
@@ -931,49 +987,49 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
       });
 
       return (
-          <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col p-3 sm:p-6 overflow-y-auto custom-scrollbar min-h-[400px]">
-              <h3 className="font-bold text-slate-800 mb-3 sm:mb-5 px-1 sm:px-2 flex items-center gap-2 text-sm sm:text-base"><List className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500" /> รายการประจำสัปดาห์</h3>
+          <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col p-3 sm:p-6 overflow-y-auto custom-scrollbar min-h-[360px] sm:min-h-[400px]">
+              <h3 className="font-bold text-slate-800 mb-3 sm:mb-5 px-1 sm:px-2 flex items-center gap-2 text-sm sm:text-base shrink-0"><List className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500 shrink-0" /> รายการประจำสัปดาห์</h3>
               <div className="space-y-4 sm:space-y-6">
                   {days.map((d, dayIdx) => {
                       const events = getEventsForDate(d);
                       const isCurrent = isToday(d);
                       return (
                           <div key={dayIdx} className="space-y-2 sm:space-y-3">
-                              <div className={`sticky top-0 z-10 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center gap-2 border-l-4 shadow-sm ${isCurrent ? 'bg-sky-50 border-sky-500 text-sky-700' : 'bg-slate-50 border-slate-300 text-slate-600'}`}>
-                                  <span className="font-black w-5 sm:w-6 text-right text-base sm:text-lg">{d.getDate()}</span>
+                              <div className={`sticky top-0 z-10 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center gap-2 border shadow-xs backdrop-blur-xs ${isCurrent ? 'bg-sky-50/95 border-sky-200 text-sky-700' : 'bg-slate-50/95 border-slate-200 text-slate-600'}`}>
+                                  <span className={`font-black w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-xs sm:text-sm shrink-0 ${isCurrent ? 'bg-sky-500 text-white' : 'bg-white text-slate-700 border border-slate-200/80'}`}>{d.getDate()}</span>
                                   <span className="font-bold text-xs sm:text-sm uppercase">{daysTH[d.getDay()]}</span>
                                   <div className="h-px bg-current opacity-10 flex-1 ml-1 sm:ml-2"></div>
                               </div>
-                              <div className="pl-2 sm:pl-4 space-y-2 sm:space-y-3">
+                              <div className="pl-1 sm:pl-4 space-y-2 sm:space-y-3">
                                   {events.length > 0 ? events.map((ev, idx) => {
                                       const statusInfo = resolveStatus(getEffectiveApptStatus(ev), dealStatuses);
                                       return (
-                                      <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer">
+                                      <div key={ev.id || idx} onClick={() => onEventClickRef.current && onEventClickRef.current(ev)} className="bg-white border border-slate-100 p-3 sm:p-4 rounded-xl sm:rounded-2xl hover:shadow-md hover:border-sky-200 transition-all cursor-pointer min-w-0">
                                           {/* Responsive Card Layout */}
-                                          <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 sm:gap-4">
+                                          <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 sm:gap-4 min-w-0">
                                               {/* Top Bar on Mobile / Left Column on Desktop */}
                                               <div className="flex sm:flex-col items-center sm:justify-center justify-between gap-2 border-b sm:border-b-0 sm:border-r border-slate-100 pb-2 sm:pb-0 sm:pr-4 sm:w-32 shrink-0">
                                                   <span className="font-black text-sky-700 bg-sky-50 border border-sky-200/80 px-2.5 py-1 rounded-lg text-xs sm:text-sm font-data whitespace-nowrap shadow-xs">{ev.hn || '-'}</span>
-                                                  <span className="font-data text-xs text-slate-500 font-semibold flex items-center gap-1">
-                                                      <Clock size={12} className="text-slate-400 sm:hidden" />
+                                                  <span className="font-data text-xs text-slate-500 font-semibold flex items-center gap-1 whitespace-nowrap">
+                                                      <Clock size={12} className="text-slate-400 sm:hidden shrink-0" />
                                                       {getTimeDisplayStr(ev)} น.
                                                   </span>
                                               </div>
 
                                               {/* Body Section */}
                                               <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
-                                                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2">
-                                                      <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate">{ev.name}</h4>
-                                                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                                                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 min-w-0">
+                                                      <h4 className="font-bold text-slate-800 text-sm sm:text-base truncate max-w-full">{ev.name}</h4>
+                                                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${statusInfo.color}`}>{statusInfo.label}</span>
                                                   </div>
-                                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 min-w-0">
                                                       {(ev.phone && (Array.isArray(ev.phone) ? ev.phone[0] : ev.phone)) ? (
-                                                          <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-xs bg-sky-50 px-2 py-0.5 rounded-md transition-colors">
-                                                              <Phone size={11} /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
+                                                          <a href={`tel:${Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}`} onClick={(e)=>e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-600 hover:text-sky-700 font-bold font-data text-xs bg-sky-50 px-2 py-0.5 rounded-md transition-colors whitespace-nowrap shrink-0">
+                                                              <Phone size={11} className="shrink-0" /> {Array.isArray(ev.phone) ? ev.phone[0] : ev.phone}
                                                           </a>
                                                       ) : null}
-                                                      <span className="font-medium text-sky-600 truncate">แพทย์: {getDoctorDisplayStr(ev)}</span>
-                                                      {ev.reason && <span className="text-slate-500 truncate">• {ev.reason}</span>}
+                                                      <span className="font-medium text-sky-600 truncate max-w-full">แพทย์: {getDoctorDisplayStr(ev)}</span>
+                                                      {ev.reason && <span className="text-slate-500 truncate max-w-full">• {ev.reason}</span>}
                                                   </div>
                                               </div>
                                           </div>
@@ -1005,7 +1061,7 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
   };
 
   return (
-    <div className="space-y-4 duration-500 flex flex-col h-full w-full relative z-10 fade-in">
+    <div className="space-y-3 sm:space-y-4 duration-500 flex flex-col h-full w-full relative z-10 fade-in">
        {renderDayDetailsModal()}
        {renderStaffScheduleModal()}
        
@@ -1028,34 +1084,34 @@ const CalendarView = ({ activities, onEventClick, onDayClick, dealStatuses = [],
           }
        `}</style>
 
-       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white/50 p-4 rounded-[1.5rem] border border-slate-100/80 shadow-sm">
-          <div className="flex items-center justify-between w-full lg:w-auto gap-3">
-             <div className="flex items-center gap-3">
-                 <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center shadow-inner border border-sky-100/50"><CalendarIcon className="w-6 h-6" /></div>
-                 <div>
-                     <h2 className="text-xl font-bold text-slate-800 kanit-text leading-tight">ปฏิทินงาน</h2>
+       <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-3 sm:gap-4 bg-white/50 p-3 sm:p-4 rounded-2xl sm:rounded-[1.5rem] border border-slate-100/80 shadow-sm min-w-0">
+          <div className="flex flex-wrap items-center justify-between w-full xl:w-auto gap-2.5 sm:gap-3 min-w-0">
+             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-inner border border-sky-100/50 shrink-0"><CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6" /></div>
+                 <div className="min-w-0">
+                     <h2 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text leading-tight truncate">ปฏิทินงาน</h2>
                  </div>
              </div>
-             <div className="flex items-center gap-1.5 bg-sky-50/50 px-3 py-1.5 rounded-xl border border-sky-100/50 lg:bg-transparent lg:border-none lg:p-0">
-                <div className="w-full max-w-[6px] h-1.5 rounded-full bg-sky-400 animate-pulse"></div>
-                <p className="text-xs sm:text-sm font-bold text-sky-600 font-data tracking-tight uppercase">{getTitle()}</p>
+             <div className="flex items-center gap-1.5 bg-sky-50/60 px-2.5 sm:px-3 py-1.5 rounded-xl border border-sky-100/60 xl:bg-transparent xl:border-none xl:p-0 min-w-0 max-w-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse shrink-0"></div>
+                <p className="text-xs sm:text-sm font-bold text-sky-600 font-data tracking-tight uppercase truncate">{getTitle()}</p>
              </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 w-full xl:w-auto">
              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-sm shrink-0">
                  {[{ id: 'month', label: 'เดือน', icon: CalendarIcon }, { id: 'week', label: 'สัปดาห์', icon: TableIcon }, { id: 'day', label: 'วัน', icon: CalendarDays }, { id: 'list', label: 'รายการ', icon: LayoutList }].map(mode => (
-                     <button key={mode.id} onClick={() => setViewMode(mode.id)} className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${viewMode === mode.id ? 'bg-white text-sky-600 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                         <mode.icon size={14} className="shrink-0" /><span className="hidden sm:inline">{mode.label}</span>
+                     <button key={mode.id} type="button" aria-label={mode.label} title={mode.label} onClick={() => setViewMode(mode.id)} className={`min-h-[38px] min-w-[38px] px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${viewMode === mode.id ? 'bg-white text-sky-600 shadow-sm ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                         <mode.icon size={15} className="shrink-0" /><span className="hidden sm:inline">{mode.label}</span>
                      </button>
                  ))}
              </div>
-             <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm shrink-0 ml-auto lg:ml-0">
-                <button onClick={() => changePeriod(-1)} className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors"><ChevronLeft size={16}/></button>
-                <div className="w-px h-4 bg-slate-100 mx-1"></div>
-                <button onClick={() => setViewDate(new Date())} className="px-3 py-1.5 text-sky-600 text-xs font-bold hover:bg-sky-50 rounded-lg transition-colors whitespace-nowrap">วันนี้</button>
-                <div className="w-px h-4 bg-slate-100 mx-1"></div>
-                <button onClick={() => changePeriod(1)} className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors"><ChevronRight size={16}/></button>
+             <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm shrink-0 ml-auto xl:ml-0">
+                <button type="button" aria-label="ก่อนหน้า" title="ก่อนหน้า" onClick={() => changePeriod(-1)} className="min-h-[36px] min-w-[36px] p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors flex items-center justify-center"><ChevronLeft size={16}/></button>
+                <div className="w-px h-4 bg-slate-100 mx-0.5 sm:mx-1"></div>
+                <button type="button" onClick={() => setViewDate(new Date())} className="min-h-[36px] px-2.5 sm:px-3 py-1.5 text-sky-600 text-xs font-bold hover:bg-sky-50 rounded-lg transition-colors whitespace-nowrap flex items-center justify-center">วันนี้</button>
+                <div className="w-px h-4 bg-slate-100 mx-0.5 sm:mx-1"></div>
+                <button type="button" aria-label="ถัดไป" title="ถัดไป" onClick={() => changePeriod(1)} className="min-h-[36px] min-w-[36px] p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded-lg transition-colors flex items-center justify-center"><ChevronRight size={16}/></button>
              </div>
           </div>
        </div>

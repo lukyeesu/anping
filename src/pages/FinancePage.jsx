@@ -474,6 +474,30 @@ const FinancePage = ({
   });
 
   const [activeItemDropdown, setActiveItemDropdown] = useState(null);
+  const [activePosItemDropdown, setActivePosItemDropdown] = useState(null);
+
+  useEffect(() => {
+    if (!showPatientResults && activeItemDropdown === null && activePosItemDropdown === null) return;
+    const handlePointerOutside = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (showPatientResults && !target.closest('[data-patient-search-box]')) {
+        setShowPatientResults(false);
+      }
+      if (activeItemDropdown !== null && !target.closest('[data-item-dropdown-box]')) {
+        setActiveItemDropdown(null);
+      }
+      if (activePosItemDropdown !== null && !target.closest('[data-pos-item-dropdown-box]')) {
+        setActivePosItemDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerOutside);
+    document.addEventListener('touchstart', handlePointerOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handlePointerOutside);
+      document.removeEventListener('touchstart', handlePointerOutside);
+    };
+  }, [showPatientResults, activeItemDropdown, activePosItemDropdown]);
 
   const handleSelectProduct = (index, product) => {
     setFormData(prev => {
@@ -1671,9 +1695,9 @@ const FinancePage = ({
 
 
   // --- Responsive View Detection for Virtualization ---
-  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  const [isDesktopView, setIsDesktopView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1280 : true));
   useEffect(() => {
-    const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
+    const handleResize = () => setIsDesktopView(window.innerWidth >= 1280);
     window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -1689,17 +1713,17 @@ const FinancePage = ({
         onClick={() => openDetailModal(tx)} 
         className="border-b border-slate-50 last:border-0 hover:bg-sky-50/50 transition-colors group cursor-pointer"
       >
-        <td className="p-4 pl-6 text-left">
+        <td className="py-3.5 px-2.5 xl:px-4 pl-4 xl:pl-6 text-left">
           <div className="flex flex-col items-start">
-            <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
-            <span className="text-xs font-data text-slate-500 mt-0.5">{formatTime(tx.date)} น.</span>
+            <span className="text-sm font-data text-slate-800 kanit-text font-medium whitespace-nowrap">{formatDate(tx.date)}</span>
+            <span className="text-xs font-data text-slate-500 mt-0.5 whitespace-nowrap">{formatTime(tx.date)} น.</span>
           </div>
         </td>
-        <td className="p-4">
-          <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
+        <td className="py-3.5 px-2.5 xl:px-4">
+          <span className="text-sm font-bold text-sky-600 kanit-text whitespace-nowrap">{tx.id}</span>
         </td>
-        <td className="p-4">
-          <div className="flex flex-col gap-1">
+        <td className="py-3.5 px-2.5 xl:px-4 min-w-0">
+          <div className="flex flex-col gap-1 min-w-0">
             {tx.patientName && (
               <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
                 {tx.patientName}
@@ -1715,29 +1739,29 @@ const FinancePage = ({
             )}
           </div>
         </td>
-        <td className="p-4">
+        <td className="py-3.5 px-2.5 xl:px-4">
           <div className="flex flex-col items-start justify-center">
-            {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>}
-            {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100">ระบบ POS</span>}
+            {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text line-clamp-1">{tx.category}</span>}
+            {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100 whitespace-nowrap">ระบบ POS</span>}
           </div>
         </td>
-        <td className="p-4 text-center">
-           <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+        <td className="py-3.5 px-2.5 xl:px-4 text-center">
+           <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm whitespace-nowrap">
              {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
            </span>
         </td>
-        <td className="p-4 text-right">
+        <td className="py-3.5 px-2.5 xl:px-4 text-right whitespace-nowrap">
           <span className={`text-base font-bold font-data ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
             {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
           </span>
         </td>
-        <td className="p-4 text-center">
-          <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+        <td className="py-3.5 px-2.5 xl:px-4 text-center">
+          <span className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold kanit-text whitespace-nowrap ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
              <CheckCircle2 size={12} /> {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
           </span>
         </td>
-        <td className="p-4 pr-6 text-right whitespace-nowrap min-w-[145px]" onClick={(e) => e.stopPropagation()}>
-           <div className="flex items-center justify-end gap-1.5">
+        <td className="py-3.5 px-2.5 xl:px-4 pr-4 xl:pr-6 text-right whitespace-nowrap min-w-[125px]" onClick={(e) => e.stopPropagation()}>
+           <div className="flex items-center justify-end gap-1 xl:gap-1.5">
                <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors shrink-0" title="พิมพ์ใบเสร็จ">
                   <Printer size={16}/>
                </button>
@@ -1760,24 +1784,24 @@ const FinancePage = ({
         ref={measureElement}
         data-index={virtualRow.index}
         onClick={() => openDetailModal(tx)} 
-        className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98]"
+        className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98] min-w-0"
       >
-          <div className="flex justify-between items-start mb-2.5">
-              <div className="flex flex-col gap-1">
-                  <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
-                  <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatTime(tx.date)} น.</div>
+          <div className="flex justify-between items-start gap-2 mb-2.5 min-w-0">
+              <div className="flex flex-col gap-1 min-w-0 flex-1">
+                  <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-full">{tx.id}</span>
+                  <div className="text-[11px] font-bold text-slate-500 flex flex-wrap items-center gap-1.5 font-data mt-0.5 min-w-0"><Clock size={12} className="text-slate-400 shrink-0"/> <span className="truncate">{formatDate(tx.date)} {formatTime(tx.date)} น.</span></div>
               </div>
               <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
                   {tx.status === 'cancelled' ? 'ยกเลิก' : 'สำเร็จ'}
               </span>
           </div>
           
-          <div className="mb-1">
+          <div className="mb-1 min-w-0 flex-1">
               {tx.patientName && (
-                  <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{tx.patientName}</div>
+                  <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1 break-words">{tx.patientName}</div>
               )}
               {tx.note && tx.note !== tx.patientName && (
-                  <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
+                  <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1 break-words`}>
                       {tx.note}
                   </div>
               )}
@@ -1786,36 +1810,36 @@ const FinancePage = ({
               )}
           </div>
 
-          <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <div className="flex flex-col gap-1.5 min-w-0 pr-2">
-                  <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap justify-between items-end gap-2 mt-3 bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-100 min-w-0">
+              <div className="flex flex-col gap-1.5 min-w-0 flex-1 pr-1">
+                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                       {!tx.isAuto ? (
-                          <span className="text-[11px] font-bold text-slate-700 kanit-text truncate">{tx.category}</span>
+                          <span className="text-[11px] font-bold text-slate-700 kanit-text truncate max-w-full">{tx.category}</span>
                       ) : (
-                          <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200">ระบบ POS</span>
+                          <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200 shrink-0">ระบบ POS</span>
                       )}
                   </div>
-                  <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5">
-                      {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12}/> บัตรเครดิต</> : <><Package size={12}/> {tx.method}</>}
+                  <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5 min-w-0">
+                      {tx.method === 'cash' ? <><Banknote size={12} className="shrink-0"/> <span className="truncate">เงินสด</span></> : tx.method === 'transfer' ? <><QrCode size={12} className="shrink-0"/> <span className="truncate">โอนเงิน</span></> : tx.method === 'credit_card' || tx.method === 'credit' ? <><CreditCard size={12} className="shrink-0"/> <span className="truncate">บัตรเครดิต</span></> : <><Package size={12} className="shrink-0"/> <span className="truncate">{tx.method}</span></>}
                   </div>
               </div>
-              <div className="text-right flex flex-col gap-1 shrink-0">
-                  <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <div className="text-right flex flex-col gap-1 shrink-0 ml-auto">
+                  <div className={`font-black font-data text-base sm:text-lg leading-none tracking-tight ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
                   </div>
               </div>
           </div>
 
           {/* Actions Row */}
-          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
-              <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                  <Printer size={14} /> พิมพ์
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-3 pt-3 border-t border-slate-100">
+              <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="flex items-center justify-center gap-1.5 text-xs px-2 min-h-[38px] text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium kanit-text shadow-sm border border-slate-100 min-w-0">
+                  <Printer size={14} className="shrink-0" /> <span className="truncate">พิมพ์</span>
               </button>
-              <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                  <Pencil size={14} /> แก้ไข
+              <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-1.5 text-xs px-2 min-h-[38px] text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium kanit-text shadow-sm border border-slate-100 min-w-0">
+                  <Pencil size={14} className="shrink-0" /> <span className="truncate">แก้ไข</span>
               </button>
-              <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                  <Trash2 size={14} /> ลบ
+              <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className={`flex items-center justify-center gap-1.5 text-xs px-2 min-h-[38px] rounded-xl transition-colors font-medium kanit-text shadow-sm border min-w-0 ${tx.status === 'cancelled' ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-100'}`}>
+                  <Trash2 size={14} className="shrink-0" /> <span className="truncate">{tx.isAuto || tx.category === 'รายได้จาก POS' ? (tx.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกบิล') : 'ลบ'}</span>
               </button>
           </div>
       </div>
@@ -2286,11 +2310,11 @@ const FinancePage = ({
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
-            <div>
-              <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title kanit-text">ระบบการเงิน (Finance)</h1>
-              <p className="text-slate-500 sticky-header-desc kanit-text">ภาพรวมรายรับรายจ่าย และระบบเชื่อมโยงอัตโนมัติ</p>
+            <div className="min-w-0">
+              <h1 className="font-bold text-slate-800 tracking-tight sticky-header-title kanit-text truncate">ระบบการเงิน (Finance)</h1>
+              <p className="text-slate-500 sticky-header-desc kanit-text truncate">ภาพรวมรายรับรายจ่าย และระบบเชื่อมโยงอัตโนมัติ</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button 
                 type="button" 
                 onClick={(e) => {
@@ -2316,57 +2340,57 @@ const FinancePage = ({
 
       {/* --- 2. Stats Section --- */}
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-0">
           {/* Card 1: รายรับ */}
-          <div className="bg-emerald-50/70 p-4 sm:p-5 rounded-3xl border border-emerald-100/80 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md hover:border-emerald-200 transition-all">
-            <div className="flex items-center gap-3 z-10 mb-2">
+          <div className="bg-emerald-50/70 p-4 sm:p-5 rounded-3xl border border-emerald-100/80 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md hover:border-emerald-200 transition-all min-w-0">
+            <div className="flex items-center gap-3 z-10 mb-2 min-w-0">
               <div className="w-10 h-10 bg-emerald-100/80 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
                 <TrendingUp size={20} strokeWidth={2.5} />
               </div>
-              <h3 className="text-sm sm:text-base font-bold text-emerald-700 kanit-text tracking-wide">รายรับ</h3>
+              <h3 className="text-sm sm:text-base font-bold text-emerald-700 kanit-text tracking-wide truncate">รายรับ</h3>
             </div>
-            <div className="z-10 w-full overflow-hidden">
-              <h2 className={`font-black text-emerald-800 font-data mb-1 whitespace-nowrap transition-opacity duration-300 ${getDynamicTextClass(formatCurrency(displayStats.income))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            <div className="z-10 w-full min-w-0 overflow-hidden">
+              <h2 className={`font-black text-emerald-800 font-data mb-1 truncate transition-opacity duration-300 ${getDynamicTextClass(formatCurrency(displayStats.income))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
                 <AnimatedNumber value={displayStats.income} duration={800} formatter={formatCurrency} />
               </h2>
             </div>
-            <div className={`text-[10px] sm:text-xs text-emerald-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            <div className={`text-[10px] sm:text-xs text-emerald-600/80 font-medium kanit-text z-10 mt-1 truncate transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
               จาก <AnimatedNumber value={displayStats.incomeCount ?? displayStats.count_income ?? 0} duration={600} /> บิล/รายการ
             </div>
           </div>
           
           {/* Card 2: รายจ่าย */}
-          <div className="bg-rose-50/70 p-4 sm:p-5 rounded-3xl border border-rose-100/80 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md hover:border-rose-200 transition-all">
-            <div className="flex items-center gap-3 z-10 mb-2">
+          <div className="bg-rose-50/70 p-4 sm:p-5 rounded-3xl border border-rose-100/80 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md hover:border-rose-200 transition-all min-w-0">
+            <div className="flex items-center gap-3 z-10 mb-2 min-w-0">
               <div className="w-10 h-10 bg-rose-100/80 text-rose-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
                 <TrendingDown size={20} strokeWidth={2.5} />
               </div>
-              <h3 className="text-sm sm:text-base font-bold text-rose-700 kanit-text tracking-wide">รายจ่าย</h3>
+              <h3 className="text-sm sm:text-base font-bold text-rose-700 kanit-text tracking-wide truncate">รายจ่าย</h3>
             </div>
-            <div className="z-10 w-full overflow-hidden">
-              <h2 className={`font-black text-rose-800 font-data mb-1 whitespace-nowrap transition-opacity duration-300 ${getDynamicTextClass(formatCurrency(displayStats.expense))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            <div className="z-10 w-full min-w-0 overflow-hidden">
+              <h2 className={`font-black text-rose-800 font-data mb-1 truncate transition-opacity duration-300 ${getDynamicTextClass(formatCurrency(displayStats.expense))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
                 <AnimatedNumber value={displayStats.expense} duration={800} formatter={formatCurrency} />
               </h2>
             </div>
-            <div className={`text-[10px] sm:text-xs text-rose-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            <div className={`text-[10px] sm:text-xs text-rose-600/80 font-medium kanit-text z-10 mt-1 truncate transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
               จาก <AnimatedNumber value={displayStats.expenseCount ?? displayStats.count_expense ?? 0} duration={600} /> รายการ • Cost: <AnimatedNumber value={displayStats.costPercent || 0} duration={600} decimals={2} suffix="%" />
             </div>
           </div>
 
           {/* Card 3: กำไรสุทธิ */}
-          <div className="bg-sky-50/70 p-4 sm:p-5 rounded-3xl border border-sky-100/80 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md hover:border-sky-200 transition-all">
-            <div className="flex items-center gap-3 z-10 mb-2">
+          <div className="bg-sky-50/70 p-4 sm:p-5 rounded-3xl border border-sky-100/80 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md hover:border-sky-200 transition-all min-w-0 md:col-span-2 xl:col-span-1">
+            <div className="flex items-center gap-3 z-10 mb-2 min-w-0">
               <div className="w-10 h-10 bg-sky-100/80 text-sky-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
                 <Banknote size={20} strokeWidth={2.5} />
               </div>
-              <h3 className="text-sm sm:text-base font-bold text-sky-700 kanit-text tracking-wide">กำไรสุทธิ</h3>
+              <h3 className="text-sm sm:text-base font-bold text-sky-700 kanit-text tracking-wide truncate">กำไรสุทธิ</h3>
             </div>
-            <div className="z-10 w-full overflow-hidden">
-              <h2 className={`font-black font-data mb-1 whitespace-nowrap transition-opacity duration-300 ${displayStats.balance < 0 ? 'text-rose-600' : 'text-sky-800'} ${getDynamicTextClass(formatCurrency(displayStats.balance))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            <div className="z-10 w-full min-w-0 overflow-hidden">
+              <h2 className={`font-black font-data mb-1 truncate transition-opacity duration-300 ${displayStats.balance < 0 ? 'text-rose-600' : 'text-sky-800'} ${getDynamicTextClass(formatCurrency(displayStats.balance))} ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
                 <AnimatedNumber value={displayStats.balance} duration={800} formatter={formatCurrency} />
               </h2>
             </div>
-            <div className={`text-[10px] sm:text-xs text-sky-600/80 font-medium kanit-text z-10 mt-1 transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
+            <div className={`text-[10px] sm:text-xs text-sky-600/80 font-medium kanit-text z-10 mt-1 truncate transition-opacity duration-300 ${isStatsLoading ? 'opacity-50' : 'opacity-100'}`}>
               รวม <AnimatedNumber value={displayStats.transactionsCount || 0} duration={600} /> รายการ • Margin: <AnimatedNumber value={displayStats.marginPercent || 0} duration={600} decimals={2} suffix="%" />
             </div>
           </div>
@@ -2401,12 +2425,14 @@ const FinancePage = ({
                
                <button 
                  onClick={() => setShowMobileFilters(!showMobileFilters)} 
-                 className={`lg:hidden p-2.5 rounded-xl border transition-colors shrink-0 ${showMobileFilters || filterType !== 'all' || filterCategory !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                 className={`2xl:hidden p-2.5 rounded-xl border transition-colors shrink-0 flex items-center gap-1.5 kanit-text text-xs font-bold ${showMobileFilters || filterType !== 'all' || filterCategory !== 'all' || filterBranch !== 'all' || timeFilterMode !== 'all' ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                 aria-label="ตัวกรอง"
                >
                   {showMobileFilters ? <ChevronUp size={18} /> : <Filter size={18} />}
+                  <span className="hidden sm:inline">ตัวกรอง</span>
                </button>
 
-               <div className="hidden lg:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
+               <div className="hidden 2xl:flex flex-wrap items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 shrink-0">
                  {/* 1. ประเภท */}
                  <div className="w-[100px] relative">
                    <CustomSelect 
@@ -2448,7 +2474,7 @@ const FinancePage = ({
 
                  {/* 4. วันที่ */}
                  <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[36px] z-[45]">
-                    <div className="w-[110px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
+                    <div className="w-[110px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative shrink-0">
                         <CustomSelect 
                             value={timeFilterMode} 
                             onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
@@ -2460,9 +2486,9 @@ const FinancePage = ({
                     <div className="flex items-center min-w-[170px] relative transition-all duration-200">
                         {timeFilterMode === 'all' && <div className="w-full text-center text-[11px] font-bold text-slate-400 kanit-text px-3 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center">แสดงทั้งหมด</div>}
                         {timeFilterMode === 'month' && (
-                            <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl">
-                                <div className="flex-[3] relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
-                                <div className="flex-[2] relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
+                            <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl min-w-0">
+                                <div className="flex-1 min-w-0 relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
+                                <div className="flex-1 min-w-0 relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[36px]" /></div>
                             </div>
                         )}
                         {timeFilterMode === 'year' && (
@@ -2481,23 +2507,23 @@ const FinancePage = ({
                </div>
             </div>
 
-            <div className={`lg:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-500' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-300'}`}>
-               <div className={showMobileFilters ? 'overflow-visible' : 'overflow-hidden'}>
+            <div className={`2xl:hidden grid transition-[grid-template-rows,opacity] ${showMobileFilters ? 'grid-rows-[1fr] opacity-100 ease-out duration-500' : 'grid-rows-[0fr] opacity-0 pointer-events-none ease-in duration-300'}`}>
+               <div className={showMobileFilters ? 'max-h-[calc(100dvh-150px)] overflow-y-auto overscroll-contain custom-scrollbar pb-1' : 'overflow-hidden'}>
                  <div className={`flex flex-col gap-2 pt-2.5 mt-2.5 border-t border-slate-100 relative z-[60] transition-transform ${showMobileFilters ? 'translate-y-0 ease-out duration-500' : '-translate-y-4 ease-in duration-300'}`}>
                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                     <div className="relative">
+                     <div className="relative min-w-0">
                        <CustomSelect value={filterType} onChange={(val) => setFilterType(val)} options={[{value: 'all', label: 'ทั้งหมด'}, {value: 'income', label: 'รายรับ'}, {value: 'expense', label: 'รายจ่าย'}, {value: 'pos', label: 'POS'}, {value: 'manual', label: 'Manual'}]} compact fullWidth className="w-full" />
                      </div>
-                     <div className="relative">
+                     <div className="relative min-w-0">
                        <CustomSelect value={filterCategory} onChange={(val) => setFilterCategory(val)} options={categoryOptions} compact fullWidth className="w-full" />
                      </div>
-                     <div className="relative">
+                     <div className="relative min-w-0">
                        <CustomSelect value={filterBranch} onChange={(val) => setFilterBranch(val)} options={[{value: 'all', label: 'ทุกสาขา'}, ...(branchesData || []).map(b => ({value: b.id, label: b.name}))]} compact fullWidth className="w-full" />
                      </div>
                    </div>
                    
-                   <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[40px] sm:h-[48px] z-[45]">
-                      <div className="w-[100px] sm:w-[130px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative">
+                   <div className="flex items-stretch bg-white border border-slate-200 rounded-xl shadow-sm h-[40px] sm:h-[48px] z-[45] min-w-0">
+                      <div className="w-[96px] xs:w-[110px] sm:w-[130px] border-r border-slate-100 bg-slate-50/80 rounded-l-xl relative shrink-0">
                           <CustomSelect 
                               value={timeFilterMode} 
                               onChange={(val) => { setTimeFilterMode(val); if(val !== 'range') setDateRange({start:null,end:null}); }} 
@@ -2507,19 +2533,19 @@ const FinancePage = ({
                           />
                       </div>
                       <div className="flex items-center min-w-0 flex-1 relative transition-all duration-200">
-                          {timeFilterMode === 'all' && <div className="w-full text-center text-[10px] sm:text-xs font-bold text-slate-400 kanit-text px-2 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center">แสดงข้อมูลทั้งหมด</div>}
+                          {timeFilterMode === 'all' && <div className="w-full text-center text-[10px] sm:text-xs font-bold text-slate-400 kanit-text px-2 uppercase tracking-wider bg-white rounded-r-xl h-full flex items-center justify-center truncate">แสดงข้อมูลทั้งหมด</div>}
                           {timeFilterMode === 'month' && (
-                              <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl">
-                                  <div className="flex-[3] relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
-                                  <div className="flex-[2] relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
+                              <div className="flex w-full divide-x divide-slate-100 h-full bg-white rounded-r-xl min-w-0">
+                                  <div className="flex-1 min-w-0 relative h-full"><CustomSelect value={filterMonth} onChange={setFilterMonth} options={monthOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
+                                  <div className="flex-1 min-w-0 relative h-full"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
                               </div>
                           )}
                           {timeFilterMode === 'year' && (
-                              <div className="w-full relative h-full bg-white rounded-r-xl"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
+                              <div className="w-full min-w-0 relative h-full bg-white rounded-r-xl"><CustomSelect value={filterYear} onChange={setFilterYear} options={yearOptions.filter(o=>o.value!=='all')} compact fullWidth className="w-full h-full [&>div:first-child]:!border-0 [&>div:first-child]:!bg-transparent [&>div:first-child]:!shadow-none [&>div:first-child]:!rounded-none [&>div:first-child]:!min-h-[40px] sm:[&>div:first-child]:!min-h-[48px]" /></div>
                           )}
                           {timeFilterMode === 'range' && (
-                              <div className="flex items-center justify-between w-full h-full px-2 gap-1 bg-white rounded-r-xl relative z-[45]">
-                                  <button onClick={handleOpenFinRange} className={`text-[11px] sm:text-sm font-bold kanit-text px-2 py-1.5 rounded-lg transition-colors truncate flex-1 text-left flex items-center gap-1.5 ${dateRange.start ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:bg-slate-50'}`}>
+                              <div className="flex items-center justify-between w-full h-full px-2 gap-1 bg-white rounded-r-xl relative z-[45] min-w-0">
+                                  <button onClick={handleOpenFinRange} className={`text-[11px] sm:text-sm font-bold kanit-text px-2 py-1.5 rounded-lg transition-colors truncate flex-1 min-w-0 text-left flex items-center gap-1.5 ${dateRange.start ? 'text-sky-700 bg-sky-50' : 'text-slate-500 hover:bg-slate-50'}`}>
                                       {dateRange.start && dateRange.end ? `${formatRangeStr(dateRange.start)} - ${formatRangeStr(dateRange.end)}` : 'คลิกเลือกวันที่'}
                                   </button>
                                   {dateRange.start ? <button onClick={clearFinRange} className="text-slate-400 hover:text-rose-500 p-2 shrink-0 transition-colors bg-white"><X size={14}/></button> : <CalendarIcon size={14} className="text-slate-300 shrink-0 mr-1" />}
@@ -2542,17 +2568,17 @@ const FinancePage = ({
               {isDesktopView ? (
                 /* --- Desktop View (Table) --- */
                 <div className="overflow-x-auto overflow-y-hidden">
-                <table className="table-auto w-full text-left border-collapse min-w-[1050px]">
+                <table className="table-auto w-full text-left border-collapse min-w-[920px]">
                   <thead>
-                    <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
-                      <th className="w-[13%] p-4 font-medium text-left pl-6 min-w-[110px] kanit-text">วันที่/เวลา</th>
-                      <th className="w-[11%] p-4 font-medium min-w-[110px] kanit-text">เลขที่บิล</th>
-                      <th className="w-[20%] p-4 font-medium kanit-text">รายละเอียด</th>
-                      <th className="w-[12%] p-4 font-medium kanit-text">ประเภท/หมวดหมู่</th>
-                      <th className="w-[11%] p-4 font-medium text-center min-w-[110px] kanit-text">ช่องทาง</th>
-                      <th className="w-[13%] p-4 font-medium text-right min-w-[120px] kanit-text">จำนวนเงิน</th>
-                      <th className="w-[10%] p-4 font-medium text-center min-w-[100px] kanit-text">สถานะ</th>
-                      <th className="p-4 font-medium text-right pr-6 w-[150px] min-w-[145px] kanit-text">ดำเนินการ</th>
+                    <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-xs xl:text-sm">
+                      <th className="w-[13%] py-3.5 px-2.5 xl:px-4 font-medium text-left pl-4 xl:pl-6 min-w-[100px] kanit-text">วันที่/เวลา</th>
+                      <th className="w-[11%] py-3.5 px-2.5 xl:px-4 font-medium min-w-[95px] kanit-text">เลขที่บิล</th>
+                      <th className="w-[21%] py-3.5 px-2.5 xl:px-4 font-medium kanit-text">รายละเอียด</th>
+                      <th className="w-[12%] py-3.5 px-2.5 xl:px-4 font-medium kanit-text">ประเภท/หมวดหมู่</th>
+                      <th className="w-[11%] py-3.5 px-2.5 xl:px-4 font-medium text-center min-w-[95px] kanit-text">ช่องทาง</th>
+                      <th className="w-[13%] py-3.5 px-2.5 xl:px-4 font-medium text-right min-w-[105px] kanit-text">จำนวนเงิน</th>
+                      <th className="w-[9%] py-3.5 px-2.5 xl:px-4 font-medium text-center min-w-[85px] kanit-text">สถานะ</th>
+                      <th className="py-3.5 px-2.5 xl:px-4 font-medium text-right pr-4 xl:pr-6 w-[130px] min-w-[125px] kanit-text">ดำเนินการ</th>
                     </tr>
                   </thead>
                   <tbody className="">
@@ -2637,19 +2663,19 @@ const FinancePage = ({
 
       {/* Detail Modal */}
       {isDetailModalOpen && selectedTxn && createPortal(
-        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm ${isDetailClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-           <div className={`bg-white rounded-[1.5rem] w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden ${isDetailClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-              <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 sticky top-0 z-10 shrink-0">
-                 <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${selectedTxn.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+        <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/40 backdrop-blur-sm ${isDetailClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+           <div className={`bg-white rounded-[1.5rem] w-full max-w-4xl max-h-[calc(100dvh-1.5rem)] [@media(max-height:480px)]:max-h-[calc(100dvh-1rem)] shadow-2xl flex flex-col overflow-hidden ${isDetailClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+              <div className="px-4 py-3 sm:px-6 sm:py-4 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between gap-2 bg-slate-50/50 sticky top-0 z-10 shrink-0">
+                 <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 sm:w-10 sm:h-10 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 rounded-xl flex items-center justify-center shadow-inner shrink-0 ${selectedTxn.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
                        {selectedTxn.isAuto ? <History size={20} className="text-sky-500" /> : <Receipt size={20} />}
                     </div>
-                    <div>
-                       <h4 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight">{selectedTxn.isAuto ? 'ประวัติการทำรายการ (POS)' : 'รายละเอียดรายการ'}</h4>
-                       <p className="text-[10px] sm:text-xs text-sky-600 font-bold font-data mt-0.5">{selectedTxn.id}</p>
+                    <div className="min-w-0">
+                       <h4 className="font-bold text-slate-800 kanit-text text-sm sm:text-base leading-tight truncate">{selectedTxn.isAuto ? 'ประวัติการทำรายการ (POS)' : 'รายละเอียดรายการ'}</h4>
+                       <p className="text-[10px] sm:text-xs text-sky-600 font-bold font-data mt-0.5 truncate">{selectedTxn.id}</p>
                     </div>
                  </div>
-                 <button type="button" onClick={closeDetailModal} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                 <button type="button" onClick={closeDetailModal} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
                     <X size={20} />
                  </button>
               </div>
@@ -2860,23 +2886,25 @@ const FinancePage = ({
                       </div>
                  </div>
               )}
-              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between gap-3 shrink-0">
-                 <div className="w-full sm:w-auto">
-                     <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(selectedTxn, 'A4'); }} className="w-full sm:w-auto px-4 sm:px-5 py-2.5 rounded-xl font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors shadow-sm kanit-text flex items-center justify-center gap-2">
-                        <Printer size={18} /> <span className="hidden sm:inline">พิมพ์ใบเสร็จ</span>
-                     </button>
-                 </div>
-                 <div className="flex gap-2 w-full sm:w-auto">
+              <div className="px-4 py-3 sm:p-5 [@media(max-height:480px)]:py-2.5 border-t border-slate-100 bg-slate-50/50 flex flex-wrap justify-between items-center gap-2 sm:gap-3 shrink-0">
+                 <button type="button" onClick={(e) => { e.stopPropagation(); handlePrintReceipt(selectedTxn, 'A4'); }} className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors shadow-sm kanit-text flex items-center justify-center gap-1.5 min-h-[40px]">
+                    <Printer size={16} className="shrink-0" /> <span className="sm:hidden">พิมพ์</span><span className="hidden sm:inline">พิมพ์ใบเสร็จ</span>
+                 </button>
+                 <div className="flex flex-wrap items-center gap-2 ml-auto">
                      <button type="button" onClick={(e) => {
                          e.preventDefault();
                          e.stopPropagation();
                          const txToDelete = selectedTxn;
                          closeDetailModal();
                          setTimeout(() => handleDeleteTransaction(txToDelete), 350);
-                     }} className={`px-4 py-2.5 rounded-xl font-bold transition-colors shadow-sm kanit-text flex items-center justify-center gap-1.5 ${selectedTxn.status === 'cancelled' ? 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed' : 'text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
-                        <Trash2 size={16} /> <span className="hidden sm:inline">{(selectedTxn.isAuto || selectedTxn.category === 'รายได้จาก POS' || String(selectedTxn.id || '').startsWith('REC')) ? (selectedTxn.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกใบเสร็จ') : 'ลบรายการ'}</span>
+                     }} className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-colors shadow-sm kanit-text flex items-center justify-center gap-1.5 min-h-[40px] ${selectedTxn.status === 'cancelled' ? 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed' : 'text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-100'}`}>
+                        <Trash2 size={15} className="shrink-0" />
+                        <span className="sm:hidden">{(selectedTxn.isAuto || selectedTxn.category === 'รายได้จาก POS' || String(selectedTxn.id || '').startsWith('REC')) ? (selectedTxn.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิก') : 'ลบ'}</span>
+                        <span className="hidden sm:inline">{(selectedTxn.isAuto || selectedTxn.category === 'รายได้จาก POS' || String(selectedTxn.id || '').startsWith('REC')) ? (selectedTxn.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกใบเสร็จ') : 'ลบรายการ'}</span>
                      </button>
-                     <button type="button" onClick={closeDetailModal} className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ปิดหน้าต่าง</button>
+                     <button type="button" onClick={closeDetailModal} className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text min-h-[40px]">
+                        <span className="sm:hidden">ปิด</span><span className="hidden sm:inline">ปิดหน้าต่าง</span>
+                     </button>
                      <button type="button" onClick={(e) => { 
                          e.preventDefault();
                          e.stopPropagation();
@@ -2884,8 +2912,8 @@ const FinancePage = ({
                          closeDetailModal(); // สั่งปิดหน้าต่างนี้
                          // หน่วงเวลา 350ms ให้หน้าต่างเก่าปิดสนิท แล้วค่อยเปิดฟอร์มแก้ไข
                          setTimeout(() => handleEditTransaction(txToEdit), 350); 
-                     }} className="flex-[1.5] sm:flex-none px-4 sm:px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center justify-center gap-2">
-                        <Pencil size={18} /> <span className="hidden sm:inline">แก้ไขข้อมูล</span>
+                     }} className="px-3.5 sm:px-6 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center justify-center gap-1.5 min-h-[40px]">
+                        <Pencil size={16} className="shrink-0" /> <span className="sm:hidden">แก้ไข</span><span className="hidden sm:inline">แก้ไขข้อมูล</span>
                      </button>
                  </div>
               </div>
@@ -2896,24 +2924,24 @@ const FinancePage = ({
 
       {/* Add Manual Transaction Modal */}
       {isModalOpen && createPortal(
-         <div className={`fixed inset-0 z-[100] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-            <div className={`bg-white rounded-[2rem] w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-              <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-                 <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-sm ${formData.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
-                       {formData.type === 'income' ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
+         <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+            <div className={`bg-white rounded-2xl sm:rounded-[2rem] w-full max-w-4xl shadow-2xl flex flex-col max-h-[calc(100dvh-1.5rem)] [@media(max-height:480px)]:max-h-[calc(100dvh-1rem)] overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+              <div className="px-4 py-3.5 sm:p-6 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex items-center justify-between gap-3 bg-slate-50/50 shrink-0">
+                 <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 rounded-2xl flex items-center justify-center text-white shadow-sm shrink-0 ${formData.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                       {formData.type === 'income' ? <TrendingUp size={22} /> : <TrendingDown size={22} />}
                     </div>
-                    <div>
-                       <h3 className="text-xl font-black text-slate-800 kanit-text">{formData.id ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h3>
-                       <p className="text-xs text-slate-500 font-data uppercase tracking-wider">Manual Transaction</p>
+                    <div className="min-w-0">
+                       <h3 className="text-base sm:text-xl font-black text-slate-800 kanit-text truncate">{formData.id ? 'แก้ไขรายการ' : 'เพิ่มรายการใหม่'}</h3>
+                       <p className="text-[11px] sm:text-xs text-slate-500 font-data uppercase tracking-wider truncate">Manual Transaction</p>
                     </div>
                  </div>
-                 <button type="button" onClick={closeManualModal} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+                 <button type="button" onClick={closeManualModal} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
                     <X size={20} />
                  </button>
               </div>
 
-              <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
+              <div className="p-4 sm:p-6 [@media(max-height:480px)]:p-3 min-h-0 overflow-y-auto custom-scrollbar flex-1 bg-white">
                  <form id="finance-form" onSubmit={handleSaveTransaction} className="space-y-4">
 
                     {/* ข้อมูลพื้นฐาน */}
@@ -3057,14 +3085,14 @@ const FinancePage = ({
                           </div>
                        </div>
 
-                       <div>
+                       <div className="min-w-0">
                           <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ค้นหาลูกค้า/คนไข้ (HN, ชื่อ, เบอร์โทร)</label>
-                          <div className="relative group">
+                          <div className="relative group" data-patient-search-box="true">
                              <input
                                 type="text"
                                 value={patientSearchQuery}
                                 onChange={(e) => searchPatients(e.target.value)}
-                                onFocus={() => setShowPatientResults(true)}                                onBlur={() => setTimeout(() => setShowPatientResults(false), 200)}
+                                onFocus={() => setShowPatientResults(true)}
                                 placeholder="พิมพ์เพื่อค้นหาลูกค้า..."
                                 className="w-full px-4 py-3 pl-11 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all"
                              />
@@ -3072,7 +3100,7 @@ const FinancePage = ({
 
                              {showPatientResults && (
                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
-                                   <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                                   <div className="max-h-[220px] [@media(max-height:480px)]:max-h-[160px] overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar">
                                        {isSearchingPatient && patientSearchResults.length === 0 ? (
                                           <div className="p-4 text-center text-slate-400 kanit-text text-sm flex items-center justify-center gap-2">
                                              <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
@@ -3088,17 +3116,14 @@ const FinancePage = ({
                                               <button
                                                  key={p.id || p.hn || `p-${pidx}`}
                                                  type="button"
-                                                 onMouseDown={(e) => {
-                                                    e.preventDefault();
-                                                    selectPatient(p, false);
-                                                 }}
+                                                 onMouseDown={(e) => e.preventDefault()}
                                                  onClick={(e) => {
                                                     e.preventDefault();
                                                     selectPatient(p, false);
                                                  }}
-                                                 className={`w-full p-4 flex items-center gap-4 transition-colors border-b last:border-0 text-left cursor-pointer ${
+                                                 className={`w-full p-3.5 sm:p-4 flex items-center gap-3 sm:gap-4 transition-colors border-b last:border-0 text-left cursor-pointer ${
                                                     isVip
-                                                      ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-300 border-l-4 border-l-amber-500 shadow-xs'
+                                                      ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-300 shadow-xs'
                                                       : 'hover:bg-sky-50 border-slate-50'
                                                  }`}
                                               >
@@ -3187,8 +3212,8 @@ const FinancePage = ({
                            {(formData.items || []).map((item, idx) => {
                               const isVat = item.isVatable !== undefined ? item.isVatable : posProducts?.find(p => p.name === item.name)?.isVatable;
                               return (
-                              <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group">
-                                 <div className="flex-1 w-full relative">
+                              <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-center relative group min-w-0">
+                                 <div className="flex-1 w-full min-w-0 relative pr-8 md:pr-0" data-item-dropdown-box="true">
                                     <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1.5">
                                        รายละเอียด
                                        {isVat && <span className="text-[9px] px-1 py-0.5 bg-sky-50 text-sky-600 rounded font-bold border border-sky-200 tracking-tight leading-none">(V) คิดภาษี</span>}
@@ -3200,26 +3225,23 @@ const FinancePage = ({
                                        value={item.name}
                                        onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
                                        onFocus={() => setActiveItemDropdown(idx)}
-                                       onBlur={() => setTimeout(() => setActiveItemDropdown(null), 200)}
-                                       className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data font-bold text-slate-800"
+                                       className="w-full min-w-0 px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data font-bold text-slate-800"
                                     />
                                     {activeItemDropdown === idx && (
-                                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden max-h-[220px] overflow-y-auto custom-scrollbar modal-animate-in">
+                                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden max-h-[220px] [@media(max-height:480px)]:max-h-[150px] overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar modal-animate-in">
                                           <div className="p-1">
                                              {posProducts?.filter(p => !item.name || (p.name || '').toLowerCase().includes((item.name || '').toLowerCase())).map((prod, pidx) => (
                                                 <div
                                                    key={prod.id || pidx}
-                                                   onMouseDown={(e) => {
-                                                      e.preventDefault();
-                                                      handleSelectProduct(idx, prod);
-                                                   }}
-                                                   className="p-3 hover:bg-sky-50 rounded-xl cursor-pointer transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
+                                                   onMouseDown={(e) => e.preventDefault()}
+                                                   onClick={() => handleSelectProduct(idx, prod)}
+                                                   className="p-3 hover:bg-sky-50 rounded-xl cursor-pointer transition-colors flex items-center justify-between gap-2 border-b border-slate-50 last:border-0"
                                                 >
-                                                   <div>
-                                                      <div className="font-bold text-slate-800 text-xs font-data">{prod.name}</div>
-                                                      <div className="text-[10px] text-slate-400 font-data">{prod.category || 'ทั่วไป'}</div>
+                                                   <div className="min-w-0">
+                                                      <div className="font-bold text-slate-800 text-xs font-data truncate">{prod.name}</div>
+                                                      <div className="text-[10px] text-slate-400 font-data truncate">{prod.category || 'ทั่วไป'}</div>
                                                    </div>
-                                                   <div className="text-right">
+                                                   <div className="text-right shrink-0">
                                                       <div className="font-bold text-sky-600 text-xs font-data">{formatCurrency(prod.price)} บ.</div>
                                                    </div>
                                                 </div>
@@ -3233,8 +3255,8 @@ const FinancePage = ({
                                        </div>
                                     )}
                                  </div>
-                                <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">
-                                   <div className="w-20">
+                                <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4 w-full md:w-auto min-w-0">
+                                   <div className="w-20 shrink-0">
                                       <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
                                       <input
                                          type="number"
@@ -3245,7 +3267,7 @@ const FinancePage = ({
                                          className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-center"
                                       />
                                    </div>
-                                   <div className="w-24 text-right">
+                                   <div className="flex-1 min-w-[96px] md:w-28 md:flex-none text-right">
                                       <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">ราคา</label>
                                       <input
                                          type="number"
@@ -3254,19 +3276,19 @@ const FinancePage = ({
                                          required
                                          value={item.price}
                                          onChange={(e) => handleItemChange(idx, 'price', parseFloat(e.target.value) || 0)}
-                                         className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-right"
+                                         className="w-full min-w-0 px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-right"
                                       />
                                    </div>
-                                </div>
-                                <div className="hidden sm:block min-w-[80px] text-right">
-                                   <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
-                                   <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)} บาท</div>
+                                   <div className="min-w-[80px] text-right ml-auto md:ml-0">
+                                      <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
+                                      <div className="py-2.5 font-black text-slate-700 font-data text-base sm:text-lg whitespace-nowrap">{formatCurrency(item.total)} บาท</div>
+                                   </div>
                                 </div>
                                 {(formData.items || []).length > 1 && (
                                    <button
                                       type="button"
                                       onClick={() => handleRemoveItem(idx)}
-                                      className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 sm:static sm:mt-5"
+                                      className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 md:static md:mt-5 shrink-0"
                                    >
                                       <Trash2 size={18} />
                                    </button>
@@ -3339,8 +3361,8 @@ const FinancePage = ({
                                          <span className="kanit-text font-medium">รวมเป็นเงิน</span>
                                          <span className="font-bold">{formatCurrency(financeSubtotal)}</span>
                                       </div>
-                                      <div className="flex justify-between items-center">
-                                         <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                                      <div className="flex flex-wrap justify-between items-center gap-2">
+                                         <span className="kanit-text font-medium text-slate-700 flex flex-wrap items-center gap-1">
                                             ส่วนลด
                                             {formData.discount > 0 && (
                                                <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
@@ -3349,7 +3371,8 @@ const FinancePage = ({
                                                      : `(${Number(((Number(formData.discount) || 0) * 100 / (financeSubtotal || 1)).toFixed(2))}%)`}
                                                </span>
                                             )}
-                                         </span>                                         <div className="flex items-center gap-1">
+                                         </span>
+                                         <div className="flex items-center gap-1 ml-auto">
                                             <input
                                                type="number"
                                                min="0"
@@ -3358,7 +3381,7 @@ const FinancePage = ({
                                                className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 transition-colors"
                                                placeholder="0.00"
                                             />
-                                            <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px]">
+                                            <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px] shrink-0">
                                                <button type="button" onClick={() => setFormData({...formData, discountType: 'amount'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>บาท</button>
                                                <div className="w-px bg-slate-200"></div>
                                                <button type="button" onClick={() => setFormData({...formData, discountType: 'percent'})} className={`px-2 text-xs font-bold transition-colors ${formData.discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
@@ -3374,7 +3397,7 @@ const FinancePage = ({
 
                                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
                                          <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
-                                         <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                                         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-[10px] sm:text-xs kanit-text">
                                             <label className="flex items-center gap-1.5 cursor-pointer group">
                                                <input type="radio" name="financeTaxMode" value="include" checked={formData.taxMode === 'include'} onChange={() => setFormData({...formData, taxMode: 'include'})} className="hidden" />
                                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${formData.taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
@@ -3429,9 +3452,9 @@ const FinancePage = ({
                     </div>
                  </form>
               </div>
-              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-                 <button type="button" onClick={closeManualModal} className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ยกเลิก</button>
-                 <button type="submit" form="finance-form" disabled={isProcessing} className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2">
+              <div className="px-4 py-3 sm:p-5 [@media(max-height:480px)]:py-2.5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-2.5 sm:gap-3 shrink-0">
+                 <button type="button" onClick={closeManualModal} className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text">ยกเลิก</button>
+                 <button type="submit" form="finance-form" disabled={isProcessing} className="px-5 sm:px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-sky-500 hover:bg-sky-600 transition-colors shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2">
                     {isProcessing ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={18} />} บันทึกรายการ
                  </button>
               </div>
@@ -3442,34 +3465,34 @@ const FinancePage = ({
 
       {/* --- POS Edit Modal Portal --- */}
       {isPosEditModalOpen && posEditForm && createPortal(
-        <div className={`fixed inset-0 z-[200] flex justify-center items-center p-4 bg-slate-900/40 backdrop-blur-sm ${isPosEditClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[200] flex justify-center items-center p-3 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/40 backdrop-blur-sm ${isPosEditClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closePosEditModal}></div>
-          <div className={`relative z-[210] w-full max-w-4xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${isPosEditClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+          <div className={`relative z-[210] w-full max-w-4xl bg-white rounded-2xl sm:rounded-[2rem] border border-slate-100 shadow-2xl flex flex-col max-h-[calc(100dvh-1.5rem)] [@media(max-height:480px)]:max-h-[calc(100dvh-1rem)] overflow-hidden ${isPosEditClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             {/* Modal Header */}
-            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-sky-100 rounded-2xl flex items-center justify-center text-sky-600 shadow-sm">
-                  <Receipt size={24} />
+            <div className="px-4 py-3.5 sm:p-6 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0 bg-slate-50/50">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 bg-sky-100 rounded-2xl flex items-center justify-center text-sky-600 shadow-sm shrink-0">
+                  <Receipt size={22} />
                 </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-800 kanit-text">แก้ไขรายการขาย (POS)</h3>
-                  <p className="text-xs text-slate-500 font-data uppercase tracking-wider">{posEditForm.id}</p>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-xl font-black text-slate-800 kanit-text truncate">แก้ไขรายการขาย (POS)</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500 font-data uppercase tracking-wider truncate">{posEditForm.id}</p>
                 </div>
               </div>
-              <button onClick={closePosEditModal} className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-white hover:shadow-sm transition-all">
+              <button onClick={closePosEditModal} className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-white hover:shadow-sm transition-all shrink-0">
                 <X size={20} />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
+            <div className="p-4 sm:p-6 [@media(max-height:480px)]:p-3 min-h-0 overflow-y-auto custom-scrollbar flex-1 bg-white">
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                   <div className="sm:col-span-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                   <div className="md:col-span-4 min-w-0">
                       <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">เลขที่รายการ</label>
                       <input type="text" value={posEditForm.id} disabled className="w-full px-4 py-3 rounded-2xl bg-slate-100 border border-slate-100 text-slate-500 text-sm font-data cursor-not-allowed transition-all" />
                    </div>
-                   <div className="sm:col-span-4">
+                   <div className="md:col-span-4 min-w-0">
                       <label className="block text-[11px] font-black text-amber-500 mb-1.5 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1"><CalendarIcon size={12}/> วันที่ทำรายการ</label>
                       <div ref={posDateWrapperRef} className="relative group">
                          <input
@@ -3482,7 +3505,7 @@ const FinancePage = ({
                          <button type="button" onClick={handleOpenPosCalendar} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-amber-400 hover:text-amber-600 hover:bg-amber-50 hover:shadow-sm rounded-xl transition-all"><CalendarIcon size={18} /></button>
                       </div>
                    </div>
-                   <div className="sm:col-span-4">
+                   <div className="md:col-span-4 min-w-0">
                       <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">สถานะบิล <span className="text-rose-500">*</span></label>
                       <div className="flex bg-slate-50 p-1.5 rounded-2xl gap-2 border border-slate-100 h-[46px]">
                          <button type="button" onClick={() => setPosEditForm({...posEditForm, status: 'completed'})} className={`flex-1 py-1 rounded-xl text-xs font-bold kanit-text transition-all ${posEditForm.status === 'completed' ? 'bg-white text-emerald-600 shadow-sm border border-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}>สำเร็จ</button>
@@ -3491,15 +3514,14 @@ const FinancePage = ({
                    </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-[11px] font-black text-slate-400 mb-1.5 ml-1 kanit-text uppercase tracking-widest">ค้นหาลูกค้า/คนไข้ (HN, ชื่อ, เบอร์โทร)</label>
-                  <div className="relative group">
+                  <div className="relative group" data-patient-search-box="true">
                     <input 
                       type="text" 
                       value={patientSearchQuery} 
                       onChange={(e) => searchPatients(e.target.value)}
-                      onFocus={() => setShowPatientResults(true)}                      
-                      onBlur={() => setTimeout(() => setShowPatientResults(false), 200)}
+                      onFocus={() => setShowPatientResults(true)}
                       placeholder="พิมพ์เพื่อค้นหาลูกค้า..."
                       className="w-full px-4 py-3 pl-11 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data transition-all"
                     />
@@ -3507,7 +3529,7 @@ const FinancePage = ({
                     
                     {showPatientResults && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
-                        <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                        <div className="max-h-[220px] [@media(max-height:480px)]:max-h-[160px] overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar">
                           {isSearchingPatient && patientSearchResults.length === 0 ? (
                              <div className="p-4 text-center text-slate-400 kanit-text text-sm flex items-center justify-center gap-2">
                                 <Loader2 size={16} className="animate-spin text-sky-500" /> กำลังค้นหาข้อมูล...
@@ -3523,17 +3545,14 @@ const FinancePage = ({
                             <button 
                               key={p.id || p.hn || `p-edit-${pidx}`}
                               type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                selectPatient(p, true);
-                              }}
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={(e) => {
                                 e.preventDefault();
                                 selectPatient(p, true);
                               }}
-                              className={`w-full p-4 flex items-center gap-4 transition-colors border-b last:border-0 text-left cursor-pointer ${
+                              className={`w-full p-3.5 sm:p-4 flex items-center gap-3 sm:gap-4 transition-colors border-b last:border-0 text-left cursor-pointer ${
                                 isVip
-                                  ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-300 border-l-4 border-l-amber-500 shadow-xs'
+                                  ? 'bg-gradient-to-r from-amber-200/95 via-yellow-100/95 to-amber-200/90 hover:from-amber-300/95 hover:via-yellow-200 hover:to-amber-300/95 border-amber-300 shadow-xs'
                                   : 'hover:bg-sky-50 border-slate-50'
                               }`}
                             >
@@ -3684,8 +3703,8 @@ const FinancePage = ({
                       {posEditForm.items.map((item, idx) => {
                          const isVat = item.isVatable !== undefined ? item.isVatable : posProducts?.find(p => p.id === item.id || p.name === item.name)?.isVatable;
                          return (
-                         <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center relative group" style={{ zIndex: 50 - idx }}>
-                            <div className="flex-1 w-full relative">
+                         <div key={idx} className="p-3 sm:p-4 bg-white border border-slate-100 rounded-3xl hover:border-sky-200 transition-all shadow-sm flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-center relative group min-w-0" style={{ zIndex: 50 - idx }}>
+                            <div className="flex-1 w-full min-w-0 relative pr-8 md:pr-0" data-pos-item-dropdown-box="true">
                                <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest flex items-center gap-1.5">
                                   รายละเอียด
                                   {isVat && <span className="text-[9px] px-1 py-0.5 bg-sky-50 text-sky-600 rounded font-bold border border-sky-200 tracking-tight leading-none">(V) คิดภาษี</span>}
@@ -3694,24 +3713,30 @@ const FinancePage = ({
                                   type="text"
                                   required
                                   value={item.name}
-                                  onChange={(e) => handlePosItemChange(idx, 'name', e.target.value)}
+                                  onChange={(e) => {
+                                     handlePosItemChange(idx, 'name', e.target.value);
+                                     setActivePosItemDropdown(idx);
+                                  }}
+                                  onFocus={() => setActivePosItemDropdown(idx)}
                                   placeholder="ค้นหา หรือพิมพ์เอง"
-                                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data peer"
+                                  className="w-full min-w-0 px-4 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data"
                                />
-                               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden hidden peer-focus:block hover:block modal-animate-in">
-                                  <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                               {activePosItemDropdown === idx && (
+                               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[220] overflow-hidden modal-animate-in">
+                                  <div className="max-h-[200px] [@media(max-height:480px)]:max-h-[150px] overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar">
                                      {posProducts?.filter(p => !item.name || p.name.toLowerCase().includes(item.name.toLowerCase())).map(p => (
                                         <button
                                            key={p.id}
                                            type="button"
-                                           onMouseDown={(e) => {
-                                              e.preventDefault();
+                                           onMouseDown={(e) => e.preventDefault()}
+                                           onClick={() => {
                                               handlePosItemChange(idx, 'id', p.id);
+                                              setActivePosItemDropdown(null);
                                            }}
-                                           className="w-full p-3 flex items-center justify-between hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
+                                           className="w-full p-3 flex items-center justify-between gap-2 hover:bg-sky-50 transition-colors border-b border-slate-50 last:border-0 text-left"
                                         >
-                                           <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2 flex items-center gap-1.5">
-                                              {p.name}
+                                           <div className="font-bold text-slate-700 kanit-text text-sm truncate pr-2 flex items-center gap-1.5 min-w-0">
+                                              <span className="truncate">{p.name}</span>
                                               {p.isVatable && <span className="px-1.5 py-0.5 bg-sky-50 text-sky-600 text-[9px] rounded border border-sky-100 font-bold uppercase tracking-tighter shrink-0 leading-none">+VAT</span>}
                                            </div>
                                            <div className="text-xs font-black text-sky-500 font-data shrink-0">{formatCurrency(p.price)} ฿</div>
@@ -3724,9 +3749,10 @@ const FinancePage = ({
                                      )}
                                   </div>
                                </div>
+                               )}
                             </div>
-                            <div className="flex gap-3 sm:gap-4 w-full sm:w-auto">
-                               <div className="w-20">
+                            <div className="flex flex-wrap items-end gap-2.5 sm:gap-3 md:gap-4 w-full md:w-auto min-w-0">
+                               <div className="w-20 shrink-0">
                                   <label className="block text-[10px] font-black text-slate-400 mb-1 ml-1 kanit-text uppercase tracking-widest text-center">จำนวน</label>
                                   <input 
                                   type="number" 
@@ -3736,25 +3762,25 @@ const FinancePage = ({
                                   className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-center"
                                   />
                                </div>
-                               <div className="w-24 text-right">
+                               <div className="flex-1 min-w-[96px] md:w-28 md:flex-none text-right">
                                   <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">ราคา</label>
                                   <input 
                                   type="number" 
                                   value={item.price} 
                                   onChange={(e) => handlePosItemChange(idx, 'price', parseFloat(e.target.value) || 0)}
-                                  className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-right"
+                                  className="w-full min-w-0 px-3 py-2.5 rounded-2xl bg-slate-50 border border-transparent outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all text-sm font-data text-right"
                                   />
                                </div>
-                            </div>
-                            <div className="hidden sm:block min-w-[80px] text-right">
-                               <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
-                               <div className="py-2.5 font-black text-slate-700 font-data text-lg">{formatCurrency(item.total)}฿</div>
+                               <div className="min-w-[80px] text-right ml-auto md:ml-0">
+                                  <label className="block text-[10px] font-black text-slate-400 mb-1 mr-1 kanit-text uppercase tracking-widest">รวม</label>
+                                  <div className="py-2.5 font-black text-slate-700 font-data text-base sm:text-lg whitespace-nowrap">{formatCurrency(item.total)}฿</div>
+                               </div>
                             </div>
                             {(posEditForm.items || []).length > 1 && (
                                <button 
                                  type="button"
                                  onClick={() => handleRemovePosItem(idx)}
-                                 className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 sm:static sm:mt-5"
+                                 className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all absolute top-2 right-2 md:static md:mt-5 shrink-0"
                                >
                                  <Trash2 size={18} />
                                </button>
@@ -3836,8 +3862,8 @@ const FinancePage = ({
                                    <span className="kanit-text font-medium">รวมเป็นเงิน</span>
                                    <span className="font-bold">{formatCurrency(financeSubtotal)}</span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                   <span className="kanit-text font-medium text-slate-700 flex items-center gap-1">
+                                <div className="flex flex-wrap justify-between items-center gap-2">
+                                   <span className="kanit-text font-medium text-slate-700 flex flex-wrap items-center gap-1">
                                       ส่วนลด
                                       {posEditForm.discountValue > 0 && (
                                          <span className="text-rose-500 font-bold text-[10px] sm:text-xs">
@@ -3847,7 +3873,7 @@ const FinancePage = ({
                                          </span>
                                       )}
                                    </span>
-                                   <div className="flex items-center gap-1">
+                                   <div className="flex items-center gap-1 ml-auto">
                                       <input
                                          type="number"
                                          min="0"
@@ -3856,7 +3882,7 @@ const FinancePage = ({
                                          className="w-16 sm:w-20 px-2 py-1 text-right text-xs sm:text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-sky-400 transition-colors"
                                          placeholder="0.00"
                                       />
-                                      <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px]">
+                                      <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden h-[28px] shrink-0">
                                          <button type="button" onClick={() => setPosEditForm({...posEditForm, discountType: 'amount'})} className={`px-2 text-xs font-bold transition-colors ${posEditForm.discountType === 'amount' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>฿</button>
                                          <div className="w-px bg-slate-200"></div>
                                          <button type="button" onClick={() => setPosEditForm({...posEditForm, discountType: 'percent'})} className={`px-2 text-xs font-bold transition-colors ${posEditForm.discountType === 'percent' ? 'bg-sky-500 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>%</button>
@@ -3872,7 +3898,7 @@ const FinancePage = ({
 
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
                                    <span className="kanit-text font-bold text-slate-800">การคิดภาษี</span>
-                                   <div className="flex items-center gap-3 text-[10px] sm:text-xs kanit-text">
+                                   <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-[10px] sm:text-xs kanit-text">
                                       <label className="flex items-center gap-1.5 cursor-pointer group">
                                          <input type="radio" name="posTaxMode" value="include" checked={posEditForm.taxMode === 'include'} onChange={() => setPosEditForm({...posEditForm, taxMode: 'include'})} className="hidden" />
                                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${posEditForm.taxMode === 'include' ? 'border-sky-500' : 'border-slate-300 group-hover:border-sky-400'}`}>
@@ -3929,11 +3955,11 @@ const FinancePage = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+            <div className="px-4 py-3 sm:p-5 [@media(max-height:480px)]:py-2.5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-2.5 sm:gap-3 shrink-0">
               <button 
                 type="button"
                 onClick={closePosEditModal}
-                className="px-5 py-2.5 rounded-xl font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text"
+                className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm kanit-text"
               >
                 ยกเลิก
               </button>
@@ -3941,7 +3967,7 @@ const FinancePage = ({
                 type="button"
                 onClick={handleSavePosEdit}
                 disabled={isSavingPos || posEditForm.items.length === 0}
-                className="px-6 py-2.5 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2"
+                className="px-5 sm:px-6 py-2.5 rounded-xl font-bold text-sm text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-sky-500/20 kanit-text flex items-center gap-2"
               >
                 {isSavingPos ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <CheckCircle2 size={18} />} บันทึกการแก้ไข
               </button>
@@ -3953,13 +3979,14 @@ const FinancePage = ({
 
       {/* --- Custom Calendar Portal (ใช้ร่วมกับการกำหนดวันที่ทำรายการ) --- */}
       {calendarModal.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[220] flex items-center justify-center p-4 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${calendarModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/30 sm:bg-slate-900/10 backdrop-blur-sm ${calendarModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={calendarModal.close}></div>
           <div
             ref={finCalSwipeProps.ref}
             style={finCalSwipeProps.style}
-            className={`relative z-[230] w-full max-w-[420px] sm:max-w-[400px] bg-white rounded-[2rem] border border-slate-100 p-6 sm:p-7 shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
-          >            <div className="w-full pt-1 pb-4 -mt-2 sm:hidden flex justify-center items-start touch-none">
+            className={`relative z-[230] w-full max-w-[420px] sm:max-w-[400px] max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar bg-white rounded-[2rem] border border-slate-100 p-4 sm:p-6 shadow-2xl ${calendarModal.isClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+          >
+            <div className="w-full pt-1 pb-3 -mt-1 sm:hidden flex justify-center items-start touch-none">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
             </div>
             
@@ -3970,16 +3997,16 @@ const FinancePage = ({
                   <button type="button" onClick={() => setCalView('months')} className="font-bold text-slate-800 hover:text-sky-500 px-3 py-1.5 sm:py-1 rounded-xl hover:bg-slate-50 transition-colors text-base sm:text-sm kanit-text">{thaiMonths[calDate.getMonth()]} {calDate.getFullYear() + 543}</button>
                   <button type="button" onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth() + 1, 1))} className="p-2 sm:p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-full transition-colors"><ChevronRight size={20} /></button>
                 </div>
-                <div className="grid grid-cols-7 gap-1 text-center mb-3">
+                <div className="grid grid-cols-7 gap-1 text-center mb-2">
                   {['อา','จ','อ','พ','พฤ','ศ','ส'].map((d, i) => (<div key={d} className={`text-[11px] sm:text-xs font-semibold tracking-wide py-1 kanit-text ${i === 0 ? 'text-rose-500' : 'text-slate-500'}`}>{d}</div>))}
                 </div>
-                <div className="grid grid-cols-7 gap-y-2 sm:gap-y-1 text-center">
-                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-10 h-10 sm:w-8 h-8"></div>)}
+                <div className="grid grid-cols-7 gap-y-1.5 sm:gap-y-1 text-center">
+                  {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth(), 1).getDay() }, (_, i) => i).map(b => <div key={`blank-${b}`} className="w-9 h-9 xs:w-10 xs:h-10 sm:w-8 sm:h-8 mx-auto"></div>)}
                   {Array.from({ length: new Date(calDate.getFullYear(), calDate.getMonth() + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
                     const isSelected = calDate.getDate() === day;
                     const isToday = new Date().getDate() === day && new Date().getMonth() === calDate.getMonth() && new Date().getFullYear() === calDate.getFullYear();
                     return (
-                      <button key={day} type="button" onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth(), day))} className={`w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium font-data calendar-btn-anim ${isSelected ? 'cal-selected' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
+                      <button key={day} type="button" onClick={() => setCalDate(new Date(calDate.getFullYear(), calDate.getMonth(), day))} className={`w-9 h-9 xs:w-10 xs:h-10 sm:w-8 sm:h-8 mx-auto rounded-full flex items-center justify-center text-sm sm:text-xs font-medium font-data calendar-btn-anim ${isSelected ? 'cal-selected' : isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}>{day}</button>
                     )
                   })}
                 </div>
@@ -4071,18 +4098,18 @@ const FinancePage = ({
 
       {/* --- [NEW] Modal: Date Range Calendar สำหรับหน้าการเงิน --- */}
       {showFinRangeCalendar && createPortal(
-        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isFinRangeClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/40 backdrop-blur-sm ${isFinRangeClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeFinRangeCalendar}></div>
           <div 
             ref={finRangeSwipeProps.ref} 
             style={finRangeSwipeProps.style}
-            className={`relative z-[210] w-full max-w-[360px] sm:max-w-[380px] bg-white rounded-[1.5rem] border border-slate-100 shadow-2xl flex flex-col ${isFinRangeClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+            className={`relative z-[210] w-full max-w-[360px] sm:max-w-[380px] max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar bg-white rounded-[1.5rem] border border-slate-100 p-4 sm:p-6 shadow-2xl flex flex-col ${isFinRangeClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
-            <div className="w-full pt-3 pb-3 sm:hidden flex justify-center items-start touch-none">
+            <div className="w-full pt-1 pb-3 -mt-1 sm:hidden flex justify-center items-start touch-none shrink-0">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
             </div>
             
-            <div className="p-4 sm:p-5 flex-1 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 min-h-0">
               {finRangeCalView === 'days' && (
                 <>
                   <div className="flex justify-between items-center mb-4">
@@ -4121,19 +4148,19 @@ const FinancePage = ({
                       return (
                         <div key={day} className="w-full flex items-center justify-center relative my-0.5">
                             {hasBothDates && isSelectedStart && tempStartDate.getTime() !== tempEndDate.getTime() && (
-                                <div className="absolute right-0 w-1/2 h-10 sm:h-8 bg-sky-100 my-auto"></div>
+                                <div className="absolute right-0 w-1/2 h-9 xs:h-10 sm:h-8 bg-sky-100 my-auto"></div>
                             )}
                             {hasBothDates && isSelectedEnd && tempStartDate.getTime() !== tempEndDate.getTime() && (
-                                <div className="absolute left-0 w-1/2 h-10 sm:h-8 bg-sky-100 my-auto"></div>
+                                <div className="absolute left-0 w-1/2 h-9 xs:h-10 sm:h-8 bg-sky-100 my-auto"></div>
                             )}
                             {isInRange && (
-                                <div className="absolute w-full h-10 sm:h-8 bg-sky-100 my-auto"></div>
+                                <div className="absolute w-full h-9 xs:h-10 sm:h-8 bg-sky-100 my-auto"></div>
                             )}
                             
                             <button 
                                 type="button" 
                                 onClick={() => handleSelectFinRangeDate(day)} 
-                                className={`relative w-10 h-10 sm:w-8 sm:h-8 mx-auto rounded-xl flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data 
+                                className={`relative w-9 h-9 xs:w-10 xs:h-10 sm:w-8 sm:h-8 mx-auto rounded-xl flex items-center justify-center text-sm sm:text-xs font-medium transition-all font-data 
                                 ${isSelectedStart || isSelectedEnd ? 'bg-sky-500 text-white shadow-md z-10' : 
                                   isInRange ? 'text-sky-800' : 
                                   isToday ? 'bg-sky-50 text-sky-600 font-bold border border-sky-200' : 'text-slate-700 hover:bg-slate-100'}`}
@@ -4174,11 +4201,11 @@ const FinancePage = ({
               )}
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 w-full rounded-b-[1.5rem]">
-                <button type="button" onClick={closeFinRangeCalendar} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text transition-colors shadow-sm text-sm">
+            <div className="pt-4 mt-4 border-t border-slate-100 flex justify-end gap-2.5 sm:gap-3 shrink-0 w-full">
+                <button type="button" onClick={closeFinRangeCalendar} className="px-4 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold kanit-text transition-colors shadow-sm text-xs sm:text-sm">
                     ยกเลิก
                 </button>
-                <button type="button" onClick={confirmFinRange} className="px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/20 kanit-text transition-colors text-sm">
+                <button type="button" onClick={confirmFinRange} className="px-5 sm:px-6 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold shadow-md shadow-sky-500/20 kanit-text transition-colors text-xs sm:text-sm">
                     ยืนยันช่วงเวลา
                 </button>
             </div>

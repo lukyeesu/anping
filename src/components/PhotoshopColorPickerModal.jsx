@@ -303,88 +303,90 @@ export default function PhotoshopColorPickerModal({
 
   return createPortal(
     <div 
-      className="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-100"
+      className="fixed inset-0 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-100"
       style={{ zIndex }}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleCancel();
       }}
     >
       <div 
-        className="bg-[#18181b] border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl p-4 sm:p-5 text-zinc-100 animate-in zoom-in-95 duration-150"
+        className="bg-[#18181b] border border-zinc-800 rounded-2xl w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar shadow-2xl p-4 sm:p-5 [@media(max-height:460px)]:p-3 text-zinc-100 animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-200 shadow-xs">
+        <div className="flex items-center justify-between gap-2 pb-3.5 mb-4 [@media(max-height:460px)]:pb-2 [@media(max-height:460px)]:mb-2.5 border-b border-zinc-800">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 [@media(max-height:460px)]:w-7 [@media(max-height:460px)]:h-7 rounded-xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-zinc-200 shadow-xs shrink-0">
               <Pipette size={15} />
             </div>
-            <div>
-              <h3 className="font-bold text-zinc-100 text-sm kanit-text leading-tight">
+            <div className="min-w-0">
+              <h3 className="font-bold text-zinc-100 text-sm kanit-text leading-tight truncate">
                 {title}
               </h3>
-              <p className="text-[10px] text-zinc-400 kanit-text">{subtitle}</p>
+              <p className="text-[10px] text-zinc-400 kanit-text truncate [@media(max-height:460px)]:hidden">{subtitle}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={handleCancel}
-            className="w-7 h-7 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 flex items-center justify-center transition-colors cursor-pointer shrink-0"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Visual Pickers: SV Box + Hue Bar + Preview */}
-        <div className="flex gap-3 sm:gap-4 items-stretch mb-4 select-none touch-none">
-          {/* 2D SV Box */}
-          <div
-            ref={svBoxRef}
-            onPointerDown={handleSvPointerDown}
-            onPointerMove={handleSvPointerMove}
-            onPointerUp={handleSvPointerUp}
-            onPointerCancel={handleSvPointerUp}
-            className="relative flex-1 h-48 sm:h-52 rounded-xl cursor-crosshair select-none touch-none overflow-hidden shadow-inner border border-zinc-700"
-            style={{
-              backgroundColor: `hsl(${hsv.h}, 100%, 50%)`
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+        <div className="flex flex-col min-[380px]:flex-row gap-3 sm:gap-4 [@media(max-height:460px)]:gap-2.5 items-stretch mb-4 [@media(max-height:460px)]:mb-2.5 select-none">
+          <div className="flex flex-1 min-w-0 gap-2.5 sm:gap-3.5 items-stretch">
+            {/* 2D SV Box */}
             <div
-              className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white shadow-md pointer-events-none ring-1 ring-black/40 transition-transform duration-75"
+              ref={svBoxRef}
+              onPointerDown={handleSvPointerDown}
+              onPointerMove={handleSvPointerMove}
+              onPointerUp={handleSvPointerUp}
+              onPointerCancel={handleSvPointerUp}
+              className="relative flex-1 min-w-0 h-44 min-[380px]:h-48 sm:h-52 [@media(max-height:460px)]:h-32 rounded-xl cursor-crosshair select-none touch-none overflow-hidden shadow-inner border border-zinc-700"
               style={{
-                left: `${hsv.s}%`,
-                top: `${100 - hsv.v}%`,
-                backgroundColor: currentHex
+                backgroundColor: `hsl(${hsv.h}, 100%, 50%)`
               }}
-            />
-          </div>
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+              <div
+                className="absolute w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white shadow-md pointer-events-none ring-1 ring-black/40 transition-transform duration-75"
+                style={{
+                  left: `${hsv.s}%`,
+                  top: `${100 - hsv.v}%`,
+                  backgroundColor: currentHex
+                }}
+              />
+            </div>
 
-          {/* 1D Hue Bar */}
-          <div
-            ref={hueBarRef}
-            onPointerDown={handleHuePointerDown}
-            onPointerMove={handleHuePointerMove}
-            onPointerUp={handleHuePointerUp}
-            onPointerCancel={handleHuePointerUp}
-            className="relative w-7 sm:w-8 h-48 sm:h-52 rounded-xl cursor-ns-resize select-none touch-none overflow-hidden shadow-inner border border-zinc-700 shrink-0"
-            style={{
-              background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)'
-            }}
-          >
+            {/* 1D Hue Bar */}
             <div
-              className="absolute left-0 right-0 h-3 -mt-1.5 rounded-sm border-2 border-white shadow-md pointer-events-none ring-1 ring-black/60 bg-transparent transition-transform duration-75"
+              ref={hueBarRef}
+              onPointerDown={handleHuePointerDown}
+              onPointerMove={handleHuePointerMove}
+              onPointerUp={handleHuePointerUp}
+              onPointerCancel={handleHuePointerUp}
+              className="relative w-7 sm:w-8 h-44 min-[380px]:h-48 sm:h-52 [@media(max-height:460px)]:h-32 rounded-xl cursor-ns-resize select-none touch-none overflow-hidden shadow-inner border border-zinc-700 shrink-0"
               style={{
-                top: `${(hsv.h / 360) * 100}%`
+                background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)'
               }}
-            />
+            >
+              <div
+                className="absolute left-0 right-0 h-3 -mt-1.5 rounded-sm border-2 border-white shadow-md pointer-events-none ring-1 ring-black/60 bg-transparent transition-transform duration-75"
+                style={{
+                  top: `${(hsv.h / 360) * 100}%`
+                }}
+              />
+            </div>
           </div>
 
           {/* Color Preview & Values */}
-          <div className="w-22 sm:w-26 shrink-0 flex flex-col justify-between">
+          <div className="w-full min-[380px]:w-22 sm:w-26 shrink-0 flex flex-row min-[380px]:flex-col gap-2.5 min-[380px]:gap-0 justify-between">
             <div
-              className="rounded-xl overflow-hidden border border-zinc-700 shadow-sm flex-1 min-h-[85px] sm:min-h-[96px] flex flex-col items-center justify-center p-2 text-center transition-colors"
+              className="rounded-xl overflow-hidden border border-zinc-700 shadow-sm flex-1 min-h-[56px] min-[380px]:min-h-[85px] sm:min-h-[96px] [@media(max-height:460px)]:min-h-[50px] flex flex-col items-center justify-center p-2 text-center transition-colors"
               style={{
                 backgroundColor: currentHex
               }}
@@ -401,8 +403,8 @@ export default function PhotoshopColorPickerModal({
             </div>
 
             {/* Hex Display & Input */}
-            <div className="bg-[#121214] p-2 sm:p-2.5 rounded-xl border border-zinc-800 text-center mt-2.5 sm:mt-3">
-              <span className="text-[9px] font-mono font-bold text-zinc-400 block mb-1">HEX CODE</span>
+            <div className="flex-1 min-[380px]:flex-none bg-[#121214] p-2 sm:p-2.5 [@media(max-height:460px)]:p-1.5 rounded-xl border border-zinc-800 text-center mt-0 min-[380px]:mt-2.5 sm:mt-3 [@media(max-height:460px)]:mt-1.5">
+              <span className="text-[9px] font-mono font-bold text-zinc-400 block mb-1 [@media(max-height:460px)]:mb-0.5">HEX CODE</span>
               <input
                 type="text"
                 value={hexInput}
@@ -410,7 +412,7 @@ export default function PhotoshopColorPickerModal({
                 onPaste={handleHexInputPaste}
                 onBlur={handleHexInputBlur}
                 placeholder="#000000"
-                className="w-full text-center bg-zinc-900 border border-zinc-700 rounded-md py-1 px-1 font-mono font-bold text-xs text-zinc-100 tracking-wider outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                className="w-full min-w-0 text-center bg-zinc-900 border border-zinc-700 rounded-md py-1 [@media(max-height:460px)]:py-0.5 px-1 font-mono font-bold text-xs text-zinc-100 tracking-wider outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
                 title="ใส่หรือวางโค้ดสี Hex เช่น #FF5733 หรือ FF5733"
               />
             </div>
@@ -418,8 +420,8 @@ export default function PhotoshopColorPickerModal({
         </div>
 
         {/* Quick Presets */}
-        <div className="mb-4 pt-2 border-t border-zinc-800">
-          <div className="text-[11px] font-medium text-zinc-400 kanit-text mb-1.5 flex items-center justify-between">
+        <div className="mb-4 [@media(max-height:460px)]:mb-2.5 pt-2 [@media(max-height:460px)]:pt-1.5 border-t border-zinc-800">
+          <div className="text-[11px] font-medium text-zinc-400 kanit-text mb-1.5 [@media(max-height:460px)]:mb-1 flex items-center justify-between">
             <span>สียอดนิยม:</span>
             <span className="font-mono text-[10px] text-zinc-400">{currentHex}</span>
           </div>
@@ -437,7 +439,7 @@ export default function PhotoshopColorPickerModal({
                 key={item.hex}
                 type="button"
                 onClick={() => handlePickPreset(item.hex)}
-                className={`h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                className={`h-7 [@media(max-height:460px)]:h-6 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
                   currentHex === item.hex.toUpperCase() ? 'border-zinc-300 ring-2 ring-zinc-500/40 scale-105' : 'border-zinc-700 hover:border-zinc-500'
                 }`}
                 style={{ backgroundColor: item.hex }}
@@ -448,7 +450,7 @@ export default function PhotoshopColorPickerModal({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+        <div className="flex items-center justify-end gap-2 pt-2 [@media(max-height:460px)]:pt-1.5 border-t border-zinc-800">
           <button
             type="button"
             onClick={handleCancel}

@@ -77,9 +77,9 @@ const PatientModal = React.memo(({
   if (!isOpen) return null;
 
   return (
-    <div className={`fixed inset-0 z-[100] flex justify-center items-center p-3.5 sm:p-8 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-      <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1.75rem)] sm:max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-        <div className="p-3.5 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0 z-10 gap-2.5">
+    <div className={`fixed inset-0 z-[100] flex justify-center items-center p-2 sm:p-6 [@media(max-height:480px)]:p-1.5 bg-slate-900/40 backdrop-blur-sm ${isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+      <div className={`bg-white rounded-[1.5rem] sm:rounded-3xl w-full max-w-5xl h-full max-h-[calc(100dvh-1rem)] sm:max-h-[92dvh] [@media(max-height:480px)]:max-h-[96dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+        <div className="p-3 sm:p-5 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0 z-10 gap-2.5">
           <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
             <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-xs shrink-0">
                 {isViewMode ? <FileText className="w-4 h-4 sm:w-5 sm:h-5" /> : (editingId ? <Pencil className="w-4 h-4 sm:w-5 sm:h-5" /> : <Plus className="w-4 h-4 sm:w-5 sm:h-5" />)}
@@ -106,7 +106,7 @@ const PatientModal = React.memo(({
           </div>
         </div>
         
-        <div className="p-4 sm:p-5 flex-1 bg-slate-50/30 overflow-y-auto custom-scrollbar">
+        <div className="p-3 sm:p-5 [@media(max-height:480px)]:p-2.5 flex-1 bg-slate-50/30 overflow-y-auto custom-scrollbar min-h-0">
           <form id="patient-form" onSubmit={handleSavePatient}>
             <fieldset disabled={isViewMode} className="space-y-5 sm:space-y-6 border-none p-0 m-0 min-w-0">
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
@@ -138,7 +138,7 @@ const PatientModal = React.memo(({
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
                 <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">HN <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} bg-slate-100 text-slate-500 cursor-not-allowed font-data`} value={formData.hn} disabled readOnly /></div>
                 
                 <div className="relative" style={{ zIndex: 30 }}>
@@ -633,16 +633,16 @@ const PatientModal = React.memo(({
           </form>
         </div>
 
-        <div className="p-4 sm:p-6 border-t border-slate-100 flex flex-row justify-end gap-2 sm:gap-3 bg-white shrink-0 w-full">
+        <div className="p-3 sm:p-5 [@media(max-height:480px)]:py-2 border-t border-slate-100 flex flex-row justify-end gap-2 sm:gap-3 bg-white shrink-0 w-full">
             {isViewMode ? (
                 <>
-                   <button type="button" onClick={closeMedModal} className="flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text truncate">ปิดหน้าต่าง</button>
-                   <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold shadow-md transition-all active:scale-95 ${theme.primary} rounded-xl flex items-center justify-center gap-1 sm:gap-2 kanit-text truncate`}><Pencil size={18} className="shrink-0" /> แก้ไขข้อมูล</button>
+                   <button type="button" onClick={closeMedModal} className="flex-1 sm:flex-none sm:w-auto px-3 sm:px-6 py-2.5 sm:py-3 [@media(max-height:480px)]:py-1.5 min-h-[40px] text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text truncate">ปิดหน้าต่าง</button>
+                   <button type="button" onClick={(e) => { e.preventDefault(); setIsViewMode(false); }} className={`flex-1 sm:flex-none sm:w-auto px-3 sm:px-6 py-2.5 sm:py-3 [@media(max-height:480px)]:py-1.5 min-h-[40px] text-sm font-semibold shadow-md transition-all active:scale-95 ${theme.primary} rounded-xl flex items-center justify-center gap-1 sm:gap-2 kanit-text truncate`}><Pencil size={18} className="shrink-0" /> แก้ไขข้อมูล</button>
                 </>
             ) : (
                 <>
-                   <button type="button" onClick={closeMedModal} className="flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text truncate">ยกเลิก</button>
-                   <button type="submit" form="patient-form" disabled={isProcessing} className="flex-1 sm:flex-none sm:w-auto px-2 sm:px-6 py-3 text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-2 kanit-text truncate">
+                   <button type="button" onClick={closeMedModal} className="flex-1 sm:flex-none sm:w-auto px-3 sm:px-6 py-2.5 sm:py-3 [@media(max-height:480px)]:py-1.5 min-h-[40px] text-sm font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors shadow-sm kanit-text truncate">ยกเลิก</button>
+                   <button type="submit" form="patient-form" disabled={isProcessing} className="flex-1 sm:flex-none sm:w-auto px-3 sm:px-6 py-2.5 sm:py-3 [@media(max-height:480px)]:py-1.5 min-h-[40px] text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-2 kanit-text truncate">
                        {isProcessing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0"></div> : <CheckCircle2 size={18} className="shrink-0" />}
                        {editingId ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล'}
                    </button>

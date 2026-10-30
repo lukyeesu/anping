@@ -29,23 +29,30 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
     const updatePosition = useCallback(() => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
         
-        // Auto flip if there is not enough space below (250px)
-        const spaceBelow = window.innerHeight - rect.bottom;
+        // Auto flip if there is not enough space below (220px)
+        const spaceBelow = vh - rect.bottom;
         const spaceAbove = rect.top;
-        const shouldDropUp = dropUp || (spaceBelow < 250 && spaceAbove > spaceBelow);
+        const shouldDropUp = dropUp ? (spaceAbove >= 110 || spaceAbove >= spaceBelow) : (spaceBelow < 220 && spaceAbove > spaceBelow);
+        const maxAvailHeight = Math.max(96, Math.min(208, (shouldDropUp ? spaceAbove : spaceBelow) - 12));
 
-        // Auto adjust left if it goes off screen on the right
-        const isNearRightEdge = rect.right > window.innerWidth - 100;
+        // Auto adjust left/right if it goes off screen
+        const isNearRightEdge = rect.right > vw - 120;
+        const targetWidth = Math.min(rect.width, vw - 16);
+        const clampedLeft = Math.max(8, Math.min(rect.left, vw - targetWidth - 8));
 
         setDropdownStyle({
             position: 'fixed',
             top: shouldDropUp ? 'auto' : rect.bottom + 4,
-            bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto',
-            left: (compact && isNearRightEdge) ? 'auto' : rect.left,
-            right: (compact && isNearRightEdge) ? (window.innerWidth - rect.right) : 'auto',
-            width: compact && !fullWidth ? 'auto' : rect.width,
-            minWidth: compact && !fullWidth ? rect.width : undefined,
+            bottom: shouldDropUp ? (vh - rect.top + 4) : 'auto',
+            left: (compact && !fullWidth && isNearRightEdge) ? 'auto' : clampedLeft,
+            right: (compact && !fullWidth && isNearRightEdge) ? Math.max(8, vw - rect.right) : 'auto',
+            width: compact && !fullWidth ? 'auto' : targetWidth,
+            minWidth: compact && !fullWidth ? Math.min(rect.width, vw - 16) : undefined,
+            maxWidth: 'calc(100vw - 16px)',
+            maxHeight: `${maxAvailHeight}px`,
             zIndex: 99999,
             transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
         });
@@ -113,22 +120,22 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
     }, [isOpen]);
 
     return (
-        <div ref={containerRef} className={`relative ${className || ''} ${disabled ? (hasColor ? 'pointer-events-none' : 'opacity-70 pointer-events-none') : ''}`}>
+        <div ref={containerRef} className={`relative min-w-0 ${className || ''} ${disabled ? (hasColor ? 'pointer-events-none' : 'opacity-70 pointer-events-none') : ''}`}>
             <div
                 tabIndex={disabled ? -1 : 0}
                 onClick={toggleOpen}
                 className={compact 
-                    ? `flex items-center ${fullWidth ? 'w-full px-3 justify-between' : 'justify-center px-2.5'} gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-xl py-2 transition-all font-data shadow-sm`
+                    ? `flex items-center min-w-0 ${fullWidth ? 'w-full px-3 justify-between' : 'justify-center px-2.5'} gap-1 cursor-pointer outline-none bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 rounded-xl py-2 transition-all font-data shadow-sm`
                     : hasColor
-                        ? `w-full px-4 py-3 rounded-2xl border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data font-semibold transition-all ${isOpen ? 'ring-2 ring-sky-500/20' : ''} ${selectedOption.color} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`
-                        : `w-full px-4 py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
+                        ? `w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center gap-2 font-data font-semibold transition-all ${isOpen ? 'ring-2 ring-sky-500/20' : ''} ${selectedOption.color} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`
+                        : `w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-white border outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm text-left flex justify-between items-center gap-2 font-data transition-all ${isOpen ? 'border-sky-500 ring-2 ring-sky-500/20' : 'border-slate-200'} ${disabled ? 'bg-slate-50 cursor-not-allowed text-slate-500' : 'cursor-pointer text-slate-700'}`
                 }
             >
-                <span className={`truncate ${compact ? 'font-medium text-slate-600 text-sm kanit-text' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
+                <span className={`min-w-0 truncate ${compact ? 'font-medium text-slate-600 text-sm kanit-text' : ''}`}>{String(displayLabel || (compact ? '' : 'เลือก'))}</span>
                 {!disabled && (!compact || fullWidth) && <ChevronDown className={`w-4 h-4 text-slate-400 pointer-events-none shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />}
             </div>
             {isOpen && !disabled && createPortal(
-                <div ref={dropdownRef} style={dropdownStyle} className={`bg-white border border-slate-200 rounded-2xl shadow-xl overflow-y-auto custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'origin-bottom' : 'origin-top'} zoom-in-95 max-h-48 ${compact ? 'max-w-[90vw]' : ''}`}>
+                <div ref={dropdownRef} style={dropdownStyle} className={`bg-white border border-slate-200 rounded-2xl shadow-xl overflow-y-auto overflow-x-hidden custom-scrollbar animate-in fade-in duration-200 ${dropUp ? 'origin-bottom' : 'origin-top'} zoom-in-95`}>
                     {options.length > 0 ? options.map((opt, i) => {
                         const val = typeof opt === 'object' ? opt.value : opt;
                         const lbl = typeof opt === 'object' ? opt.label : opt;
@@ -138,15 +145,15 @@ const CustomSelect = ({ value, onChange, options, placeholder, className, disabl
                             <div
                                 key={i}
                                 onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange(val); setIsOpen(false); }}
-                                className={`px-4 hover:brightness-95 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-all whitespace-nowrap text-sm py-2.5 ${
+                                className={`px-3.5 sm:px-4 hover:brightness-95 cursor-pointer border-b border-slate-50 last:border-0 font-data transition-all ${compact && !fullWidth ? 'whitespace-nowrap' : 'whitespace-normal break-words'} text-sm py-2.5 ${
                                     optColor 
                                         ? `${optColor} ${isSelected ? 'font-bold ring-1 ring-inset ring-sky-500/30' : ''}` 
                                         : `${isSelected ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700 hover:bg-sky-50'}`
                                 }`}
                             >
-                                <span className="inline-flex items-center gap-2">
-                                    {optColor && <span className="w-2.5 h-2.5 rounded-full bg-current opacity-70" />}
-                                    {lbl}
+                                <span className={`inline-flex items-center gap-2 max-w-full ${compact && !fullWidth ? 'truncate' : 'min-w-0'}`}>
+                                    {optColor && <span className="w-2.5 h-2.5 shrink-0 rounded-full bg-current opacity-70" />}
+                                    <span className={compact && !fullWidth ? 'truncate' : 'min-w-0 break-words'}>{lbl}</span>
                                 </span>
                             </div>
                         );

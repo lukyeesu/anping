@@ -18,17 +18,17 @@ import { theme } from '../global/theme';
 
 const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, handleEditTransaction, handleDeleteTransaction, formatDate }) => (
     <tr key={tx.id} onClick={() => openDetailModal(tx)} className="border-b border-slate-50 last:border-0 hover:bg-sky-50/50 transition-colors group cursor-pointer">
-        <td className="p-4 pl-6 text-left">
+        <td className="py-3.5 px-2.5 xl:px-4 pl-4 xl:pl-6 text-left">
             <div className="flex flex-col items-start">
-                <span className="text-sm font-data text-slate-800 kanit-text font-medium">{formatDate(tx.date)}</span>
-                <span className="text-xs font-data text-slate-500 mt-0.5">{formatFinTime(tx.date) ? `${formatFinTime(tx.date)} น.` : '-'}</span>
+                <span className="text-sm font-data text-slate-800 kanit-text font-medium whitespace-nowrap">{formatDate(tx.date)}</span>
+                <span className="text-xs font-data text-slate-500 mt-0.5 whitespace-nowrap">{formatFinTime(tx.date) ? `${formatFinTime(tx.date)} น.` : '-'}</span>
             </div>
         </td>
-        <td className="p-4">
-            <span className="text-sm font-bold text-sky-600 kanit-text">{tx.id}</span>
+        <td className="py-3.5 px-2.5 xl:px-4">
+            <span className="text-sm font-bold text-sky-600 kanit-text whitespace-nowrap">{tx.id}</span>
         </td>
-        <td className="p-4">
-            <div className="flex flex-col gap-1">
+        <td className="py-3.5 px-2.5 xl:px-4 min-w-0">
+            <div className="flex flex-col gap-1 min-w-0">
                 {tx.patientName && (
                     <span className="text-sm text-slate-800 font-data line-clamp-1" title={tx.patientName}>
                         {tx.patientName}
@@ -38,36 +38,36 @@ const TransactionRow = React.memo(({ tx, openDetailModal, handlePrintReceipt, ha
                     {tx.note || '-'}
                 </span>
                 {(tx.doctorName || tx.doctor_name || tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && (
-                    <div className="flex flex-wrap items-center gap-x-2 text-[11px] font-data mt-0.5">
-                        {(tx.doctorName || tx.doctor_name) && <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">🩺 {tx.doctorName || tx.doctor_name}</span>}
-                        {(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">💼 {tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name}</span>}
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-data mt-0.5">
+                        {(tx.doctorName || tx.doctor_name) && <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 max-w-full truncate">🩺 {tx.doctorName || tx.doctor_name}</span>}
+                        {(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 max-w-full truncate">💼 {tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name}</span>}
                     </div>
                 )}
             </div>
         </td>
-        <td className="p-4">
+        <td className="py-3.5 px-2.5 xl:px-4">
             <div className="flex flex-col items-start justify-center">
-                {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text">{tx.category}</span>}
-                {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100">ระบบ POS</span>}
+                {!tx.isAuto && <span className="text-sm font-bold text-slate-800 kanit-text line-clamp-1">{tx.category}</span>}
+                {tx.isAuto && <span className="text-[11px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-md w-fit kanit-text border border-sky-100 whitespace-nowrap">ระบบ POS</span>}
             </div>
         </td>
-        <td className="p-4 text-center">
-            <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm">
+        <td className="py-3.5 px-2.5 xl:px-4 text-center">
+            <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold font-data uppercase tracking-wider flex items-center justify-center gap-1.5 w-fit mx-auto border border-slate-200 shadow-sm whitespace-nowrap">
                 {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : (tx.method === 'credit_card' || tx.method === 'credit') ? <><CreditCard size={12}/> บัตรเครดิต</> : tx.method}
             </span>
         </td>
-        <td className="p-4 text-right">
+        <td className="py-3.5 px-2.5 xl:px-4 text-right whitespace-nowrap">
             <span className={`text-base font-bold font-data ${tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? 'text-rose-600' : 'text-emerald-600'}`}>
                 {tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? '-' : '+'}{formatFinCurrency(tx.amount)}
             </span>
         </td>
-        <td className="p-4 text-center">
-            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold kanit-text ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+        <td className="py-3.5 px-2.5 xl:px-4 text-center">
+            <span className={`inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold kanit-text whitespace-nowrap ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                 <CheckCircle2 size={12} /> {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
             </span>
         </td>
-        <td className="p-4 pr-6 text-right whitespace-nowrap min-w-[145px]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-end gap-1.5">
+        <td className="py-3.5 px-2.5 xl:px-4 pr-4 xl:pr-6 text-right whitespace-nowrap min-w-[125px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-end gap-1 xl:gap-1.5">
                 <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors shrink-0" title="พิมพ์ใบเสร็จ">
                     <Printer size={16}/>
                 </button>

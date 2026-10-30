@@ -811,11 +811,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm fade-in">
               <div className="absolute inset-0" onClick={closeStaffModal}></div>
               <div ref={staffSwipeHandlers.ref} style={staffSwipeHandlers.style} className="bg-white rounded-[1.5rem] sm:rounded-[2rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[85dvh] overflow-hidden modal-animate-in relative z-10 mobile-bottom-sheet">
-                  <div className="py-4 -mt-4 mb-2 sm:hidden flex justify-center w-full touch-none cursor-grab active:cursor-grabbing shrink-0">
-                      <div className="w-12 h-1.5 bg-slate-200 rounded-full pointer-events-none"></div>
+                  {/* ขีดนำทางสำหรับเลื่อนปิดบนมือถือ (Mobile Swipe Down Handle) เว้นระยะด้านบนโปร่งสบาย สมดุลกับมุมโค้ง */}
+                  <div className="pt-3.5 pb-1 sm:hidden flex justify-center items-center w-full touch-none cursor-grab active:cursor-grabbing shrink-0 bg-slate-50/70">
+                      <div className="w-12 h-1.5 bg-slate-300 rounded-full pointer-events-none transition-transform active:scale-95"></div>
                   </div>
                   
-                  <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                  <div className="px-5 pt-1.5 pb-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/70 shrink-0">
                       <div className="flex items-center gap-3">
                           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner">
                               <Users size={20} className="sm:w-6 sm:h-6" />
@@ -1792,7 +1793,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 space-y-4">
         {/* Stats (ปรับ Layout ใหม่) */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group hover:border-sky-200 hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]">
               <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
@@ -1978,8 +1979,8 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                         <div className="overflow-x-auto custom-scrollbar flex-1 no-drag-zone">
                             <div className="min-w-[800px] flex flex-col">
                                 {/* Time Header */}
-                                <div className="flex border-b border-slate-100 bg-slate-50/80 sticky top-0 z-10 pointer-events-none">
-                                    <div className="w-48 shrink-0 border-r border-slate-100 p-3 font-bold text-slate-500 text-xs kanit-text flex items-center justify-center">รายชื่อพนักงาน</div>
+                                <div className="flex border-b border-slate-100 bg-slate-50/80 sticky top-0 z-20 pointer-events-none">
+                                    <div className="w-32 sm:w-48 shrink-0 sticky left-0 z-20 bg-slate-50 border-r border-slate-100 p-2 sm:p-3 font-bold text-slate-500 text-xs kanit-text flex items-center justify-center">รายชื่อพนักงาน</div>
                                     <div className="flex-1 relative flex">
                                         {hours.slice(0, -1).map(h => (
                                             <div key={h} className="flex-1 border-r border-slate-100/50 text-center py-2 text-[10px] font-bold text-slate-400 font-data">
@@ -1992,7 +1993,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                                 {/* Timeline Rows */}
                                 <div className="flex flex-col bg-white relative">
                                     {/* Background Grid Lines */}
-                                    <div className="absolute inset-0 flex pointer-events-none pl-48">
+                                    <div className="absolute inset-0 flex pointer-events-none pl-32 sm:pl-48">
                                         {hours.slice(0, -1).map(h => (
                                             <div key={h} className="flex-1 border-r border-slate-50"></div>
                                         ))}
@@ -2022,7 +2023,7 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
                                         return (
                                             <div key={ws.id || idx} className="flex border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative z-10">
-                                                <div className="w-48 shrink-0 border-r border-slate-100 p-2.5 flex items-center gap-2.5 bg-white group-hover:bg-slate-50/50 transition-colors pointer-events-none">
+                                                <div className="w-32 sm:w-48 shrink-0 sticky left-0 z-20 border-r border-slate-100 p-2 sm:p-2.5 flex items-center gap-2 bg-white group-hover:bg-slate-50/50 transition-colors pointer-events-none">
                                                     {ws.photo ? (
                                                         <img src={ws.photo} className="w-8 h-8 rounded-full object-cover border border-slate-200" alt="Profile"/>
                                                     ) : (
@@ -2551,6 +2552,9 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
                               <span className="text-[10px] font-bold kanit-text">อัปโหลดรูป</span>
                               <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
                           </label>
+                          <div className="absolute bottom-1 right-1 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-md border-2 border-white pointer-events-none group-hover:opacity-0 transition-opacity">
+                              <Camera size={14} className="sm:w-4 sm:h-4" />
+                          </div>
                       </div>
                       <span className="text-[10px] text-slate-400 kanit-text">ขนาดไม่เกิน 5MB</span>
                   </div>
@@ -2901,12 +2905,12 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
       
       {/* --- Modal: Schedule (ปฏิทินตารางงานเต็มรูปแบบ) --- */}
       {scheduleModal.isOpen && createPortal(
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm ${scheduleModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-0 sm:p-4 [@media(max-height:480px)]:p-1 bg-slate-900/40 backdrop-blur-sm ${scheduleModal.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={scheduleModal.close}></div>
-          <div className={`bg-white sm:rounded-[2rem] w-full h-[100dvh] sm:h-auto max-w-5xl sm:max-h-[90dvh] shadow-2xl flex flex-col transform sm:border border-slate-100 relative overflow-hidden ${scheduleModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+          <div className={`bg-white sm:rounded-[2rem] w-full h-[100dvh] sm:h-auto max-w-5xl sm:max-h-[90dvh] [@media(max-height:480px)]:max-h-[96dvh] shadow-2xl flex flex-col transform sm:border border-slate-100 relative overflow-hidden ${scheduleModal.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
              
              {/* Header (Fixed Top) */}
-             <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 backdrop-blur-md shrink-0 z-20 gap-3 shadow-sm sm:shadow-none">
+             <div className="p-3.5 sm:p-6 [@media(max-height:480px)]:py-2 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 backdrop-blur-md shrink-0 z-20 gap-3 shadow-sm sm:shadow-none">
                 <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shadow-inner shrink-0">
                       <CalendarClock size={24} className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -3560,9 +3564,9 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
 
       {/* --- Modal: Profile Viewer --- */}
       {viewProfileStaff && createPortal(
-        <div className={`fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm ${isProfileClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[250] flex items-center justify-center p-2.5 sm:p-6 [@media(max-height:480px)]:p-1.5 bg-slate-900/50 backdrop-blur-sm ${isProfileClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
             <div className="absolute inset-0" onClick={closeProfileModal}></div>
-            <div className={`bg-white rounded-[2rem] sm:rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-full sm:max-h-[90dvh] overflow-hidden relative z-10 ${isProfileClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className={`bg-white rounded-[2rem] sm:rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] [@media(max-height:480px)]:max-h-[96dvh] overflow-hidden relative z-10 ${isProfileClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
                 
                 {/* ปุ่มปิด: แยกออกมาให้ลอยอยู่หน้าสุด (Z-Index สูงสุด) และไม่เลื่อนหาย */}
                 <button onClick={closeProfileModal} className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-black/5 hover:bg-black/10 text-slate-500 hover:text-slate-800 rounded-full backdrop-blur-md transition-colors z-[60] shadow-sm border border-black/5">

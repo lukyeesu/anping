@@ -1401,7 +1401,7 @@ const SettingsManager = ({
                 </div>
 
                 <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">
-                  <table className="table-auto w-full border-collapse text-left text-sm">
+                  <table className="table-auto w-full border-collapse text-left text-sm min-w-[560px] sm:min-w-[640px]">
                     <thead>
                       <tr className="bg-slate-50/70 border-b border-slate-100">
                         <th className="w-[50%] p-4 font-bold text-slate-600 kanit-text">ส่วนของระบบ / แท็บการใช้งาน</th>
@@ -1604,78 +1604,106 @@ const SettingsManager = ({
                       const currentPreset = colorPresets.find(p => p.key === colorKey) || colorPresets[3];
 
                       return (
-                        <div key={label + '_' + index} className="flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors">
-                          {/* Reordering column */}
-                          <div className="flex items-center gap-1.5 mr-4">
-                            <button
-                              onClick={() => moveStatusUp(index)}
-                              disabled={index === 0}
-                              className={`p-1.5 rounded-lg border border-slate-100 bg-white transition-all ${
-                                index === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-                              }`}
-                              title="เลื่อนขึ้น"
-                            >
-                              <ChevronUp size={16} />
-                            </button>
-                            <button
-                              onClick={() => moveStatusDown(index)}
-                              disabled={index === localApptStatuses.length - 1}
-                              className={`p-1.5 rounded-lg border border-slate-100 bg-white transition-all ${
-                                index === localApptStatuses.length - 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-                              }`}
-                              title="เลื่อนลง"
-                            >
-                              <ChevronDown size={16} />
-                            </button>
-                          </div>
-
-                          {/* Info & Label */}
-                          <div className="flex-1 min-w-0 text-left">
-                            <span className="font-semibold text-sm text-slate-800 kanit-text block truncate">{label}</span>
-                            <span className="text-[10px] text-slate-400 font-data">ลำดับที่ {index + 1}</span>
-                          </div>
-
-                          {/* Quick Color Picker */}
-                          <div className="flex items-center gap-1.5 px-4">
-                            {colorPresets.map((preset) => {
-                              const isActive = colorKey === preset.key;
-                              return (
-                                <button
-                                  key={preset.key}
-                                  onClick={() => updateStatusColor(index, preset.key)}
-                                  className={`w-5 h-5 rounded-full transition-all flex items-center justify-center ${preset.bg} ${
-                                    isActive ? 'ring-2 ring-offset-2 ring-sky-500 scale-110' : 'opacity-60 hover:opacity-100 hover:scale-105'
-                                  }`}
-                                  title={`เปลี่ยนสีเป็น ${preset.name}`}
-                                >
-                                  {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Preview Badge */}
-                          <div className="w-32 flex justify-center px-2">
-                            <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${currentPreset.class}`}>
-                              {label}
-                            </span>
-                          </div>
-
-                          {/* Delete Action */}
-                          <div className="w-12 flex justify-end">
-                            {isDefault ? (
-                              <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-md border border-slate-100 kanit-text cursor-not-allowed">
-                                ระบบ
-                              </span>
-                            ) : (
+                        <div key={label + '_' + index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 hover:bg-slate-50/50 transition-colors gap-3 sm:gap-4">
+                          <div className="flex items-center gap-3 w-full sm:w-auto flex-1 min-w-0">
+                            {/* Reordering column */}
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <button
-                                onClick={() => removeApptStatus(index)}
-                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
-                                title="ลบสถานะนี้"
+                                onClick={() => moveStatusUp(index)}
+                                disabled={index === 0}
+                                className={`p-1.5 rounded-lg border border-slate-100 bg-white transition-all ${
+                                  index === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                                }`}
+                                title="เลื่อนขึ้น"
                               >
-                                <X size={16} />
+                                <ChevronUp size={16} />
                               </button>
-                            )}
+                              <button
+                                onClick={() => moveStatusDown(index)}
+                                disabled={index === localApptStatuses.length - 1}
+                                className={`p-1.5 rounded-lg border border-slate-100 bg-white transition-all ${
+                                  index === localApptStatuses.length - 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                                }`}
+                                title="เลื่อนลง"
+                              >
+                                <ChevronDown size={16} />
+                              </button>
+                            </div>
+
+                            {/* Info & Label */}
+                            <div className="flex-1 min-w-0 text-left">
+                              <span className="font-semibold text-sm text-slate-800 kanit-text block truncate">{label}</span>
+                              <span className="text-[10px] text-slate-400 font-data">ลำดับที่ {index + 1}</span>
+                            </div>
+
+                            {/* Preview Badge on Mobile */}
+                            <div className="sm:hidden shrink-0">
+                              <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${currentPreset.class}`}>
+                                {label}
+                              </span>
+                            </div>
+
+                            {/* Delete Action on Mobile */}
+                            <div className="sm:hidden shrink-0">
+                              {isDefault ? (
+                                <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-md border border-slate-100 kanit-text cursor-not-allowed">
+                                  ระบบ
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => removeApptStatus(index)}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                                  title="ลบสถานะนี้"
+                                >
+                                  <X size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                            {/* Quick Color Picker */}
+                            <div className="flex items-center gap-1.5 sm:px-4 flex-wrap">
+                              {colorPresets.map((preset) => {
+                                const isActive = colorKey === preset.key;
+                                return (
+                                  <button
+                                    key={preset.key}
+                                    onClick={() => updateStatusColor(index, preset.key)}
+                                    className={`w-5 h-5 rounded-full transition-all flex items-center justify-center ${preset.bg} ${
+                                      isActive ? 'ring-2 ring-offset-2 ring-sky-500 scale-110' : 'opacity-60 hover:opacity-100 hover:scale-105'
+                                    }`}
+                                    title={`เปลี่ยนสีเป็น ${preset.name}`}
+                                  >
+                                    {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Preview Badge on Desktop */}
+                            <div className="hidden sm:flex w-32 justify-center px-2">
+                              <span className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${currentPreset.class}`}>
+                                {label}
+                              </span>
+                            </div>
+
+                            {/* Delete Action on Desktop */}
+                            <div className="hidden sm:flex w-12 justify-end">
+                              {isDefault ? (
+                                <span className="text-[10px] text-slate-400 font-bold bg-slate-50 px-2 py-1 rounded-md border border-slate-100 kanit-text cursor-not-allowed">
+                                  ระบบ
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => removeApptStatus(index)}
+                                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                                  title="ลบสถานะนี้"
+                                >
+                                  <X size={16} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1808,7 +1836,7 @@ const SettingsManager = ({
                 )}
 
                 {/* รายการบัญชีรับเงิน */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                   {(localPosQrSettings.accounts || []).map((acc) => {
                     const bank = getBankInfo(acc.bankCode);
                     return (
@@ -3044,8 +3072,8 @@ const SettingsManager = ({
 
       {/* Modal เพิ่ม / แก้ไขบัญชีรับเงิน POS */}
       {qrModal.isOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full max-h-[calc(100dvh-1rem)] sm:max-h-[92vh] [@media(max-height:480px)]:max-h-[96dvh] overflow-y-auto custom-scrollbar p-4 sm:p-6 [@media(max-height:480px)]:p-3 border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">

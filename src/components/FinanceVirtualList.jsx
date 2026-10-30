@@ -31,22 +31,44 @@ export default function FinanceVirtualList({ transactions, renderRow, mode, empt
   const bottom = items.length ? Math.max(0, total - (items.at(-1).end - scrollMargin)) : 0;
 
   useLayoutEffect(() => {
+    measuredSize.current = null;
+    virtualizer.measure();
+  }, [table, virtualizer]);
+
+  useLayoutEffect(() => {
     const main = document.getElementById('main-scroll-container');
     if (!main || !listRoot.current?.isConnected) return;
-    let width = -1;
+    let prevWidth = -1;
     const measureMargin = () => {
-      if (main.clientWidth === width) return;
-      width = main.clientWidth;
+      if (!listRoot.current?.isConnected) return;
+      const currentWidth = listRoot.current.clientWidth || main.clientWidth;
+      if (prevWidth !== -1 && Math.abs(currentWidth - prevWidth) > 0.5) {
+        measuredSize.current = null;
+        virtualizer.measure();
+      }
+      prevWidth = currentWidth;
       const rect = main.getBoundingClientRect();
-      const scale = rect.width / main.clientWidth;
-      const margin = (listRoot.current.getBoundingClientRect().top - rect.top) / scale + main.scrollTop;
+      const scale = main.clientWidth > 0 ? (rect.width / main.clientWidth) : 1;
+      const margin = (listRoot.current.getBoundingClientRect().top - rect.top) / (scale || 1) + main.scrollTop;
       setScrollMargin(previous => Math.abs(previous - margin) > 0.5 ? margin : previous);
     };
     measureMargin();
     const observer = new ResizeObserver(measureMargin);
     observer.observe(main);
-    return () => observer.disconnect();
-  }, [transactions.length, renderRow]);
+    observer.observe(listRoot.current);
+    if (main.firstElementChild) observer.observe(main.firstElementChild);
+    const filterOuter = main.querySelector('.sticky-filter-appt');
+    const filterInner = main.querySelector('.sticky-filter-inner');
+    if (filterOuter) observer.observe(filterOuter);
+    if (filterInner) observer.observe(filterInner);
+    filterOuter?.addEventListener('transitionend', measureMargin);
+    filterInner?.addEventListener('transitionend', measureMargin);
+    return () => {
+      observer.disconnect();
+      filterOuter?.removeEventListener('transitionend', measureMargin);
+      filterInner?.removeEventListener('transitionend', measureMargin);
+    };
+  }, [transactions.length, renderRow, virtualizer]);
 
   const spacer = height => table ? (
     <tr aria-hidden="true"><td colSpan={8} style={{ height, padding: 0, border: 0 }} /></tr>

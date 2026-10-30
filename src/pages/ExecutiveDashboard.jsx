@@ -396,17 +396,17 @@ const PaymentChannelsDonut = ({
   return (
     <div className="p-2.5 sm:p-3 rounded-2xl bg-gradient-to-br from-slate-50/90 via-indigo-50/20 to-slate-50/60 border border-slate-200/70 shadow-xs relative">
       {/* Top micro header / highlight bar */}
-      <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60 mb-0.5 text-xs">
-        <span className="font-bold text-slate-700 kanit-text flex items-center gap-1.5 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-slate-200/60 mb-0.5 text-xs">
+        <span className="font-bold text-slate-700 kanit-text flex items-center gap-1.5 flex-wrap min-w-0">
           <span className="text-[11px] sm:text-xs">สัดส่วนการชำระเงิน</span>
           {topMethod.amt > 0 && (
-            <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/90 px-1.5 py-0.2 rounded-full font-data">
+            <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/90 px-1.5 py-0.2 rounded-full font-data truncate max-w-[200px] xs:max-w-none">
               🏆 นิยมสูงสุด: {topMethod.fullName || topMethod.name} ({topMethod.pct.toFixed(0)}%)
             </span>
           )}
         </span>
         {summary.checkoutsCount > 0 && (
-          <span className="text-[9.5px] sm:text-[10px] text-slate-400 font-data shrink-0">
+          <span className="text-[9.5px] sm:text-[10px] text-slate-400 font-data shrink-0 ml-auto sm:ml-0">
             เฉลี่ย {formatMoney(avgPerBill)} ฿/บิล
           </span>
         )}
@@ -2929,7 +2929,7 @@ const ExecutiveDashboard = ({
             <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 w-full select-none pt-0.5">
               
               {/* ชุดปุ่มเลือกช่วงเวลาหลัก (Segmented Control แบบคลีน) */}
-              <div className="flex bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/70 shadow-inner flex-wrap sm:flex-nowrap shrink-0">
+              <div className="flex bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/70 shadow-inner flex-nowrap overflow-x-auto max-w-full custom-scrollbar shrink-0">
                 {[
                   { id: 'today', label: 'วันนี้' },
                   { id: 'week', label: 'สัปดาห์' },
@@ -2949,7 +2949,7 @@ const ExecutiveDashboard = ({
                       else if (r.id === 'year' && timeRange === 'year') handleOpenYearPicker();
                       else if (r.id === 'custom') handleOpenExecRange();
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold kanit-text transition-all shrink-0 ${timeRange === r.id ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200/60 font-black' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80'}`}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold kanit-text transition-all shrink-0 ${timeRange === r.id ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200/60 font-black' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80'}`}
                   >
                     {r.label}
                   </button>
@@ -2957,7 +2957,7 @@ const ExecutiveDashboard = ({
               </div>
 
               {/* ชุดตัวเลือกย่อย: ปุ่มเลื่อนเปลี่ยนวัน/เดือน/ปี + ปุ่มเปรียบเทียบ (ตัดลงแถวล่างเรียบร้อยเมื่อจอแคบ) */}
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap shrink-0">
 
                 {/* Month Picker Quick Switch Pill */}
                 {timeRange === 'month' && (
@@ -3141,13 +3141,13 @@ const ExecutiveDashboard = ({
 
       <div className="w-full mx-auto px-3.5 sm:px-6 md:px-8 2xl:px-12 mt-3 sm:mt-4 space-y-4 sm:space-y-6">
         {/* KPI Cards Grid */}
-        <div className="grid grid-cols-1 min-[960px]:grid-cols-3 gap-3.5 sm:gap-4 lg:gap-6 w-full min-w-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4 lg:gap-6 w-full min-w-0">
           {/* Card 1: Revenue */}
           <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl sm:rounded-[1.75rem] lg:rounded-[2rem] p-4 sm:p-5 lg:p-7 shadow-md sm:shadow-lg shadow-emerald-500/10 flex flex-col justify-between relative overflow-hidden group min-w-0">
             <div className="flex justify-between items-start z-10 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-emerald-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">รายรับรวมทั้งหมด</p>
-                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">
+                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight truncate">
                   <NumberTicker value={summary.income} isLoading={isGlobalLoading || isDashboardLoading} />
                 </h3>
                 {isCompareActive && compareDiffStats && (
@@ -3175,7 +3175,7 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-rose-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">รายจ่ายรวมทั้งหมด</p>
-                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">
+                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight truncate">
                   <NumberTicker value={summary.expense} isLoading={isGlobalLoading || isDashboardLoading} />
                 </h3>
                 {isCompareActive && compareDiffStats && (
@@ -3203,7 +3203,7 @@ const ExecutiveDashboard = ({
             <div className="flex justify-between items-start z-10 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-indigo-100 text-[11px] sm:text-xs font-bold uppercase tracking-wider kanit-text truncate">กำไรสุทธิ (Net Profit)</p>
-                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight whitespace-nowrap">
+                <h3 className="text-2xl sm:text-3xl xl:text-4xl font-black font-data mt-1.5 sm:mt-2 tracking-tight truncate">
                   <NumberTicker value={summary.netProfit} isLoading={isGlobalLoading || isDashboardLoading} />
                 </h3>
                 {isCompareActive && compareDiffStats && (
@@ -4210,7 +4210,7 @@ const ExecutiveDashboard = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 min-[960px]:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                       {/* Income Stats Card */}
                       <div className="bg-emerald-50/40 rounded-2xl p-3 sm:p-3.5 border border-emerald-100/80 flex flex-col justify-between">
                         <div>
@@ -4729,7 +4729,7 @@ const ExecutiveDashboard = ({
                 const cardCount = summary.cardCount || 0;
 
                 return (
-                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                  <div className="grid grid-cols-1 min-[360px]:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3 gap-1.5 sm:gap-2">
                     {/* Card 1: Transfer & QR */}
                     <div 
                       onMouseEnter={() => setHoveredPayChannel('transfer')}
@@ -4929,7 +4929,7 @@ const ExecutiveDashboard = ({
             </div>
 
             <div className="overflow-x-auto custom-scrollbar -mx-2 sm:mx-0 px-2 sm:px-0">
-              <table className="table-auto w-full min-w-[320px] sm:min-w-full text-left text-xs sm:text-sm border-collapse">
+              <table className={`table-auto w-full ${staffRankingTab === 'all' ? 'min-w-[460px]' : 'min-w-[340px]'} sm:min-w-full text-left text-xs sm:text-sm border-collapse`}>
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-500 font-bold text-[11px] sm:text-xs">
                     <th className={`${staffRankingTab === 'all' ? 'w-[34%]' : 'w-[38%]'} py-2.5 sm:py-3 px-1.5 sm:px-2 kanit-text`}>
@@ -5065,7 +5065,7 @@ const ExecutiveDashboard = ({
                     type="button"
                     onClick={() => setTopProductsPage(prev => Math.max(0, prev - 1))}
                     disabled={topProductsPage === 0}
-                    className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-7 h-7 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
                     title="อันดับก่อนหน้า"
                   >
                     <ChevronLeft size={15} />
@@ -5077,7 +5077,7 @@ const ExecutiveDashboard = ({
                     type="button"
                     onClick={() => setTopProductsPage(prev => Math.min(topProductsTotalPages - 1, prev + 1))}
                     disabled={topProductsPage >= topProductsTotalPages - 1}
-                    className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-7 h-7 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-white text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-slate-600 border border-slate-200/60 shadow-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
                     title="อันดับถัดไป"
                   >
                     <ChevronRight size={15} />
@@ -5129,7 +5129,7 @@ const ExecutiveDashboard = ({
           <div 
             ref={execRangeSwipeProps.ref} 
             style={execRangeSwipeProps.style}
-            className={`relative z-[260] w-full max-w-[360px] sm:max-w-[380px] bg-white rounded-[1.5rem] border border-slate-100 shadow-2xl flex flex-col overflow-hidden ${isExecRangeClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
+            className={`relative z-[260] w-full max-w-[360px] sm:max-w-[380px] max-h-[calc(100dvh-1.5rem)] bg-white rounded-[1.5rem] border border-slate-100 shadow-2xl flex flex-col overflow-hidden ${isExecRangeClosing ? 'closing modal-animate-out' : 'modal-animate-in'}`}
           >
             <div className="w-full pt-3 pb-3 sm:hidden flex justify-center items-start touch-none">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
@@ -5427,7 +5427,7 @@ const ExecutiveDashboard = ({
       {showCompareModal && createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="absolute inset-0" onClick={() => setShowCompareModal(false)}></div>
-          <div className="relative z-[210] bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto custom-scrollbar p-5 sm:p-6 shadow-2xl border border-slate-100 flex flex-col gap-4">
+          <div className="relative z-[210] bg-white rounded-3xl max-w-lg w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[90dvh] overflow-y-auto custom-scrollbar p-4 sm:p-6 shadow-2xl border border-slate-100 flex flex-col gap-3.5 sm:gap-4">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base sm:text-lg font-bold text-slate-800 kanit-text flex items-center gap-2">

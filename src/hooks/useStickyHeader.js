@@ -122,7 +122,7 @@ export function useStickyHeader(mainRef, page, enabled) {
   useLayoutEffect(() => {
     const main = mainRef.current;
     if (!enabled || !main || typeof ResizeObserver !== 'function') return;
-    const media = matchMedia('(min-width: 768px)');
+    const media = matchMedia('(min-width: 768px) and (min-height: 481px)');
     let dispose;
     let header;
     let filter;

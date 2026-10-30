@@ -77,32 +77,32 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-2.5 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-3xl shadow-2xl max-w-5xl lg:max-w-6xl w-full max-h-[92dvh] flex flex-col border border-slate-100 animate-in zoom-in-95 duration-200 overflow-hidden"
+        className="bg-white rounded-3xl shadow-2xl max-w-5xl lg:max-w-6xl w-full max-h-[calc(100dvh-1.5rem)] flex flex-col border border-slate-100 animate-in zoom-in-95 duration-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 via-indigo-50/40 to-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
-              <BookOpen size={22} />
+        <div className="px-4 sm:px-6 py-3.5 sm:py-5 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex items-center justify-between gap-2.5 bg-gradient-to-r from-sky-50 via-indigo-50/40 to-white shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
+              <BookOpen className="w-5 h-5 sm:w-[22px] sm:h-[22px]" />
             </div>
-            <div>
-              <h3 className="font-bold text-base sm:text-lg text-slate-800 kanit-text flex items-center gap-2">
-                คู่มือการใช้ & ดาวน์โหลดแอปคลินิก
-                <Sparkles size={16} className="text-amber-500 hidden sm:inline" />
+            <div className="min-w-0">
+              <h3 className="font-bold text-sm sm:text-lg text-slate-800 kanit-text flex items-center gap-2 truncate">
+                <span className="truncate">คู่มือการใช้ & ดาวน์โหลดแอปคลินิก</span>
+                <Sparkles size={16} className="text-amber-500 hidden sm:inline shrink-0" />
               </h3>
-              <p className="text-xs text-slate-500 kanit-text">
+              <p className="text-[11px] sm:text-xs text-slate-500 kanit-text truncate [@media(max-height:480px)]:hidden">
                 อันผิงคลินิก (Anping Clinic) - วิธีใช้งานและดาวน์โหลดแอปพลิเคชัน
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer shrink-0"
             title="ปิดหน้าต่าง (Esc)"
           >
             <X size={20} />
@@ -110,58 +110,58 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-100 bg-slate-50/70 px-4 sm:px-6 gap-1 sm:gap-2 overflow-x-auto no-scrollbar shrink-0">
+        <div className="flex border-b border-slate-100 bg-slate-50/70 px-3 sm:px-6 gap-1 sm:gap-2 overflow-x-auto no-scrollbar shrink-0">
           <button
             onClick={() => setActiveTab('downloads')}
-            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`py-2.5 sm:py-3 [@media(max-height:480px)]:py-2 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'downloads'
                 ? 'border-sky-500 text-sky-600 bg-white/70 rounded-t-xl'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Download size={15} />
-            <span>ดาวน์โหลดแอป (4 ตัวเลือก)</span>
+            <Download size={15} className="shrink-0" />
+            <span>ดาวน์โหลดแอป (3 ตัวเลือก)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('smartcard')}
-            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`py-2.5 sm:py-3 [@media(max-height:480px)]:py-2 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'smartcard'
                 ? 'border-sky-500 text-sky-600 bg-white/70 rounded-t-xl'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <CreditCard size={15} />
+            <CreditCard size={15} className="shrink-0" />
             <span>เครื่องอ่านบัตรประชาชน</span>
           </button>
 
           <button
             onClick={() => setActiveTab('features')}
-            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`py-2.5 sm:py-3 [@media(max-height:480px)]:py-2 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'features'
                 ? 'border-sky-500 text-sky-600 bg-white/70 rounded-t-xl'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Stethoscope size={15} />
+            <Stethoscope size={15} className="shrink-0" />
             <span>ระบบงานคลินิก</span>
           </button>
 
           <button
             onClick={() => setActiveTab('shortcuts')}
-            className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`py-2.5 sm:py-3 [@media(max-height:480px)]:py-2 px-3 sm:px-4 text-xs sm:text-sm font-bold kanit-text border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'shortcuts'
                 ? 'border-sky-500 text-sky-600 bg-white/70 rounded-t-xl'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Keyboard size={15} />
+            <Keyboard size={15} className="shrink-0" />
             <span>แป้นพิมพ์ลัด</span>
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 text-left space-y-6">
+        <div className="p-3.5 sm:p-6 [@media(max-height:480px)]:p-3.5 min-h-0 overflow-y-auto custom-scrollbar flex-1 text-left space-y-5 sm:space-y-6">
           
           {/* TAB 1: DOWNLOADS */}
           {activeTab === 'downloads' && (
@@ -176,7 +176,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                     <h4 className="font-bold text-sm sm:text-base text-slate-900 kanit-text flex items-center gap-2 flex-wrap">
                       <span>ศูนย์ดาวน์โหลดแอปพลิเคชันและโปรแกรมอ่านบัตร</span>
                       <span className="text-[11px] font-bold text-sky-700 bg-sky-100/90 px-2.5 py-0.5 rounded-full">
-                        พร้อมใช้งาน 4 รายการ
+                        พร้อมใช้งาน 3 รายการ
                       </span>
                     </h4>
                     <p className="text-xs text-slate-600 kanit-text mt-0.5 leading-relaxed">
@@ -197,115 +197,54 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                     <span>แอปพลิเคชันสำหรับแท็บเล็ตและมือถือ Android</span>
                   </h4>
                   <span className="text-xs text-slate-400 kanit-text hidden md:inline">
-                    (ติดตั้งเพียงตัวใดตัวหนึ่งตามความต้องการ)
+                    (ติดตั้งสำหรับใช้งานประจำคลินิก)
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
-                  {/* Card 1: DemoAnping.apk (Recommended) */}
+                <div className="grid grid-cols-1 gap-4 lg:gap-5">
+                  {/* Card 1: AnpingClinic.apk (Official Production Release) */}
                   <div className="rounded-2xl border-2 border-sky-500/40 bg-gradient-to-b from-sky-50/50 via-white to-white p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-sky-500 transition-all flex flex-col justify-between relative overflow-hidden group">
                     <div className="absolute top-0 right-0 bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider flex items-center gap-1 shadow-xs">
                       <Sparkles size={11} />
-                      <span>แนะนำที่สุด</span>
+                      <span>แนะนำสำหรับแท็บเล็ต</span>
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-3 mb-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0 group-hover:scale-105 transition-transform">
-                          <Smartphone size={24} />
+                      <div className="flex items-start gap-2.5 sm:gap-3 mb-3.5 pt-3.5 min-[360px]:pt-3 min-[360px]:pr-24 sm:pr-28">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-sky-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                          <Smartphone className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
-                              DemoAnping.apk
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <h5 className="font-bold text-sm sm:text-lg text-slate-900 kanit-text">
+                              AnpingClinic.apk
                             </h5>
-                            <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-mono">
-                              v1.6.7 ใหม่ล่าสุด
+                            <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-mono shrink-0">
+                              v1.6.25 ล่าสุด
                             </span>
                           </div>
                           <p className="text-xs text-sky-700 font-medium kanit-text">
-                            React Native แท้ 100% (ติดตั้งแยก ไม่ทับตัวเดิม ชื่อ demoanping)
+                            แอปพลิเคชันระบบคลินิกสำหรับแท็บเล็ต Android พร้อมเชื่อมต่อเครื่องอ่านบัตรประชาชนในตัว
                           </p>
                         </div>
                       </div>
 
-                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3 rounded-xl border border-sky-100/60">
+                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3.5 rounded-xl border border-sky-100/60">
                         <li className="flex items-start gap-2">
                           <Zap size={14} className="text-sky-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">React Native Native แท้:</strong> UI เรนเดอร์บน Native Thread 60-120fps สลับหน้าทันที ไม่ใช้ WebView</span>
+                          <span><strong className="text-slate-800">อ่านบัตรประชาชนรวดเร็ว:</strong> เสียบเครื่องอ่านบัตร USB-C/OTG เข้าแท็บเล็ต ดึงข้อมูลส่วนตัวและรูปถ่ายเข้าสู่เวชระเบียนให้อัตโนมัติในทันที</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">In-Flow Sidebar:</strong> เมนูย่อ/ขยายผลักเนื้อหาอย่างนุ่มนวลด้วย Reanimated ไม่กระตุก</span>
+                          <span><strong className="text-slate-800">ประสิทธิภาพสูงและเสถียร:</strong> ปรับแต่งระบบ Hardware Acceleration และ Responsive แสดงผลเต็มตา 60-120fps บนแท็บเล็ตทุกขนาด</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <ShieldCheck size={14} className="text-indigo-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">ติดตั้งทดสอบคู่กันได้:</strong> ใช้ Package ID แยก (`com.anpingclinic.demo`) เปิดเทียบกับแอปเดิมได้ทันที</span>
+                          <span><strong className="text-slate-800">ฟังก์ชันคลินิกครบวงจร:</strong> เวชระเบียน (OPD), การตรวจรักษา, สิทธิประโยชน์คูปอง, การเงิน, แคชเชียร์ POS, คลังยา และนัดหมาย</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle2 size={14} className="text-sky-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">พิมพ์เอกสารผ่านเว็บเบราว์เซอร์:</strong> เปิดหน้าพิมพ์ภายนอกไปยัง Chrome อัตโนมัติ</span>
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div className="pt-4 mt-4 border-t border-slate-100">
-                      <a
-                        href="/DemoAnping.apk"
-                        download="DemoAnping.apk"
-                        className="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/25 hover:-translate-y-0.5"
-                      >
-                        <Download size={16} />
-                        <span>ดาวน์โหลด DemoAnping.apk (React Native)</span>
-                      </a>
-                      <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
-                        ขนาดประมาณ 33.5 MB • React Native (New Arch + Hermes) สำหรับ Android
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Card 2: AnpingClinic.apk (Legacy / Original) */}
-                  <div className="rounded-2xl border-2 border-slate-200/90 bg-gradient-to-b from-slate-50/50 via-white to-white p-4 sm:p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 bg-slate-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl tracking-wider shadow-xs">
-                      เวอร์ชันเดิม
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-3 mb-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-600 to-slate-700 text-white flex items-center justify-center shadow-md shadow-slate-600/20 shrink-0 group-hover:scale-105 transition-transform">
-                          <Smartphone size={24} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
-                              AnpingClinic.apk
-                            </h5>
-                            <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
-                              v1.6.6 ดั้งเดิม
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 font-medium kanit-text">
-                            แอปคลินิกเวอร์ชันมาตรฐานเดิม สำหรับผู้คุ้นเคย
-                          </p>
-                        </div>
-                      </div>
-
-                      <ul className="text-xs text-slate-600 kanit-text space-y-2 mt-4 bg-white/80 p-3 rounded-xl border border-slate-100">
-                        <li className="flex items-start gap-2">
-                          <CheckCircle2 size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">เวอร์ชันเดิม:</strong> ทำงานได้ตามปกติ สำหรับเครื่องที่ใช้งานอยู่ประจำ</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <CheckCircle2 size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">อ่านบัตรในตัว:</strong> รองรับเครื่องอ่านบัตรประชาชน USB OTG มาตรฐาน</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <CheckCircle2 size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">ฟังก์ชันครบ:</strong> ระบบเวชระเบียน ตรวจรักษา การเงิน และนัดหมาย</span>
-                        </li>
-                        <li className="flex items-start gap-2 text-slate-500">
-                          <Info size={14} className="text-amber-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-700">ข้อสังเกต:</strong> แถบเมนูข้างอาจมีการตอบสนองช้ากว่าตัว Demo บนแท็บเล็ตบางรุ่น</span>
+                          <span><strong className="text-slate-800">ระบบพิมพ์และแจ้งเตือน:</strong> รองรับการพิมพ์ใบเสร็จ สลิป และเวชระเบียน พร้อมการแจ้งเตือนแบบ Real-time</span>
                         </li>
                       </ul>
                     </div>
@@ -314,13 +253,13 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                       <a
                         href="/AnpingClinic.apk"
                         download="AnpingClinic.apk"
-                        className="w-full py-2.5 px-4 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-sm hover:-translate-y-0.5"
+                        className="w-full py-2.5 px-3 sm:px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/25 hover:-translate-y-0.5 min-w-0"
                       >
-                        <Download size={16} />
-                        <span>ดาวน์โหลด AnpingClinic.apk (v1.6.6)</span>
+                        <Download size={16} className="shrink-0" />
+                        <span className="truncate">ดาวน์โหลด AnpingClinic.apk (v1.6.25 ล่าสุด)</span>
                       </a>
                       <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
-                        ขนาดประมาณ 6.36 MB • เวอร์ชันดั้งเดิมที่เสถียร
+                        ขนาดประมาณ 8.13 MB • สำหรับแท็บเล็ตและสมาร์ตโฟน Android (ติดตั้งง่ายในคลิกเดียว)
                       </span>
                     </div>
                   </div>
@@ -333,11 +272,11 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                   <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
                     2
                   </div>
-                  <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text flex items-center gap-2">
-                    <Laptop size={18} className="text-emerald-600" />
+                  <h4 className="font-bold text-sm sm:text-base text-slate-800 kanit-text flex items-center gap-2 min-w-0">
+                    <Laptop size={18} className="text-emerald-600 shrink-0" />
                     <span>โปรแกรมสำหรับคอมพิวเตอร์ PC และการใช้งานผ่านเว็บเบราว์เซอร์</span>
                   </h4>
-                  <span className="text-xs text-slate-400 kanit-text hidden md:inline">
+                  <span className="text-xs text-slate-400 kanit-text hidden md:inline shrink-0">
                     (สำหรับอ่านบัตรประชาชนเมื่อเปิดเว็บผ่าน Google Chrome / Edge)
                   </span>
                 </div>
@@ -351,16 +290,16 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-3 mb-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 shrink-0 group-hover:scale-105 transition-transform">
-                          <Laptop size={24} />
+                      <div className="flex items-start gap-2.5 sm:gap-3 mb-3.5 pt-3.5 min-[360px]:pt-3 min-[360px]:pr-24 sm:pr-28">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                          <Laptop className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <h5 className="font-bold text-sm sm:text-lg text-slate-900 kanit-text">
                               Thai Card Agent
                             </h5>
-                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-mono">
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-mono shrink-0">
                               Windows System Tray
                             </span>
                           </div>
@@ -394,10 +333,10 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                       <a
                         href="/thai-card-agent-windows.zip"
                         download="thai-card-agent-windows.zip"
-                        className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/25 hover:-translate-y-0.5"
+                        className="w-full py-2.5 px-3 sm:px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/25 hover:-translate-y-0.5 min-w-0"
                       >
-                        <Download size={16} />
-                        <span>ดาวน์โหลด Agent Windows (.zip)</span>
+                        <Download size={16} className="shrink-0" />
+                        <span className="truncate">ดาวน์โหลด Agent Windows (.zip)</span>
                       </a>
                       <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
                         ขนาดประมาณ 4.8 MB • แตกไฟล์แล้วเปิด .vbs ใช้งานได้ทันที
@@ -413,16 +352,16 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-3 mb-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 shrink-0 group-hover:scale-105 transition-transform">
-                          <CreditCard size={24} />
+                      <div className="flex items-start gap-2.5 sm:gap-3 mb-3.5 pt-3.5 min-[360px]:pt-3 min-[360px]:pr-24 sm:pr-28">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                          <CreditCard className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h5 className="font-bold text-base sm:text-lg text-slate-900 kanit-text">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <h5 className="font-bold text-sm sm:text-lg text-slate-900 kanit-text">
                               Anping Card Agent
                             </h5>
-                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md font-mono">
+                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md font-mono shrink-0">
                               v1.4.7 Service
                             </span>
                           </div>
@@ -456,10 +395,10 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                       <a
                         href="/anping-card-agent.apk"
                         download="anping-card-agent.apk"
-                        className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/25 hover:-translate-y-0.5"
+                        className="w-full py-2.5 px-3 sm:px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/25 hover:-translate-y-0.5 min-w-0"
                       >
-                        <Download size={16} />
-                        <span>ดาวน์โหลด Card Agent.apk (v1.4.7)</span>
+                        <Download size={16} className="shrink-0" />
+                        <span className="truncate">ดาวน์โหลด Card Agent.apk (v1.4.7)</span>
                       </a>
                       <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
                         ขนาดประมาณ 6.17 MB • ติดตั้งแล้วเปิดแอป 1 ครั้งเพื่อเริ่ม Service
@@ -474,7 +413,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                 <div className="flex items-center gap-2.5">
                   <HelpCircle size={18} className="text-sky-500 shrink-0" />
                   <span>
-                    <strong>วิธีเลือกอย่างง่าย:</strong> หากใช้แท็บเล็ต แนะนำดาวน์โหลด <strong>DemoAnping.apk</strong> | หากใช้คอมเคาน์เตอร์ PC แนะนำดาวน์โหลด <strong>Thai Card Agent (Windows)</strong>
+                    <strong>วิธีเลือกอย่างง่าย:</strong> หากใช้แท็บเล็ต แนะนำดาวน์โหลด <strong>AnpingClinic.apk</strong> | หากใช้คอมเคาน์เตอร์ PC แนะนำดาวน์โหลด <strong>Thai Card Agent (Windows)</strong>
                   </span>
                 </div>
                 <button
@@ -505,10 +444,10 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                 <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
                   <div className="font-bold text-xs sm:text-sm text-sky-700 kanit-text flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-xs font-mono">1</span>
-                    แบบใช้งานผ่านแอปแท็บเล็ต DemoAnping หรือ AnpingClinic (แนะนำที่สุดสำหรับแท็บเล็ต)
+                    แบบใช้งานผ่านแอปแท็บเล็ต AnpingClinic (แนะนำที่สุดสำหรับแท็บเล็ต)
                   </div>
                   <p className="text-xs text-slate-600 kanit-text leading-relaxed pl-7">
-                    ติดตั้งแอป <strong>DemoAnping.apk</strong> (หรือ <strong>AnpingClinic.apk</strong>) บนแท็บเล็ต เสียบสายเครื่องอ่านบัตรผ่านพอร์ต USB-C/OTG เมื่อเสียบบัตรประชาชน ระบบจะดึงข้อมูลส่วนตัวและรูปถ่ายเข้าสู่ฟอร์มเวชระเบียนให้อัตโนมัติในทันที พร้อมเสียงแจ้งเตือน 1 ครั้ง
+                    ติดตั้งแอป <strong>AnpingClinic.apk</strong> บนแท็บเล็ต เสียบสายเครื่องอ่านบัตรผ่านพอร์ต USB-C/OTG เมื่อเสียบบัตรประชาชน ระบบจะดึงข้อมูลส่วนตัวและรูปถ่ายเข้าสู่ฟอร์มเวชระเบียนให้อัตโนมัติในทันที พร้อมเสียงแจ้งเตือน 1 ครั้ง
                   </p>
                 </div>
 
@@ -613,11 +552,11 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-center">
-                          <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap shrink-0 self-start sm:self-center">
+                          <div className="flex items-center gap-1 shrink-0">
                             {item.keys.map((k, kIdx) => (
                               <React.Fragment key={kIdx}>
-                                <kbd className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-700 shadow-2xs">
+                                <kbd className="shrink-0 px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-700 shadow-2xs">
                                   {k}
                                 </kbd>
                                 {kIdx < item.keys.length - 1 && (
@@ -629,10 +568,10 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
 
                           {item.altKeys && (
                             <>
-                              <span className="text-slate-300 text-xs px-0.5">หรือ</span>
-                              <div className="flex items-center gap-1">
+                              <span className="text-slate-300 text-xs px-0.5 shrink-0">หรือ</span>
+                              <div className="flex items-center gap-1 shrink-0">
                                 {item.altKeys.map((k, kIdx) => (
-                                  <kbd key={kIdx} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-700 shadow-2xs">
+                                  <kbd key={kIdx} className="shrink-0 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-700 shadow-2xs">
                                     {k}
                                   </kbd>
                                 ))}
@@ -651,13 +590,13 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 kanit-text shrink-0">
-          <span className="text-[11px] sm:text-xs">
-            กด <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono font-bold text-slate-700">Esc</kbd> เพื่อปิดหน้าต่าง
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 [@media(max-height:480px)]:py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2 text-xs text-slate-500 kanit-text shrink-0">
+          <span className="text-[11px] sm:text-xs min-w-0 truncate">
+            กด <kbd className="shrink-0 px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[11px] font-mono font-bold text-slate-700">Esc</kbd> เพื่อปิดหน้าต่าง
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold transition-all shadow-xs cursor-pointer"
+            className="px-4 sm:px-5 py-2 [@media(max-height:480px)]:py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold transition-all shadow-xs cursor-pointer shrink-0"
           >
             ปิดคู่มือ
           </button>

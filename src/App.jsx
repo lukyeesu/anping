@@ -72,8 +72,8 @@ const theme = {
   warning: 'bg-amber-500 text-white',
   slate: 'text-slate-600',
   glassPanel: 'bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.04)]',
-  card: 'bg-white rounded-3xl shadow-sm border border-slate-100/50 p-7',
-  input: 'w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:bg-white transition-all outline-none text-slate-700 text-base font-medium'
+  card: 'bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100/50 p-4 sm:p-6 lg:p-7',
+  input: 'w-full min-w-0 px-3.5 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 focus:bg-white transition-all outline-none text-slate-700 text-base font-medium'
 };
 
 // --- Map ไอคอนที่สามารถเลือกได้สำหรับระบบ POS ---
@@ -1190,9 +1190,10 @@ export default function App() {
     }
   }, [isLoggedIn]);
 
-  // --- ป้องกัน Mobile Window Scrolling / Extra Overscroll บนมือถืออย่างเด็ดขาด ---
+  // --- ป้องกัน Mobile Window Scrolling / Extra Overscroll บนมือถืออย่างเด็ดขาด (เฉพาะเมื่ออยู่ในหน้า App Shell เท่านั้น) ---
+  const isMobileShellActive = isMobile && isLoggedIn && !isGlobalLoading && !isCustomerDisplayRoute && !(pdpaToken && pdpaHn) && !resetToken && !isPrintUrl;
   useEffect(() => {
-    if (!isMobile) return;
+    if (!isMobileShellActive) return;
     const preventWindowScroll = () => {
       if (window.scrollY !== 0 || window.scrollX !== 0) {
         window.scrollTo(0, 0);
@@ -1200,7 +1201,7 @@ export default function App() {
     };
     window.addEventListener('scroll', preventWindowScroll, { passive: true });
     return () => window.removeEventListener('scroll', preventWindowScroll);
-  }, [isMobile]);
+  }, [isMobileShellActive]);
 
   // --- Global Scroll Listener for Mobile Auto-Hide Bars & Continuous Fluid Header ---
   useEffect(() => {
@@ -1801,20 +1802,20 @@ export default function App() {
   const GlobalAlertUI = () => {
       if (!globalAlert.isOpen) return null;
       return createPortal(
-          <div className={`fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${globalAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-            <div className={`bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center ${globalAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${globalAlertConfig.type === 'info' ? 'bg-sky-100 text-sky-500' : 'bg-rose-100 text-rose-500'}`}>
-                {globalAlertConfig.type === 'info' ? <FileText size={40} /> : <AlertTriangle size={40} />}
+          <div className={`fixed inset-0 z-[20000] flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-sm ${globalAlert.isClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+            <div className={`bg-white rounded-3xl p-5 sm:p-8 [@media(max-height:480px)]:p-4 max-w-sm w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar shadow-2xl flex flex-col items-center text-center ${globalAlert.isClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+              <div className={`w-16 h-16 sm:w-20 sm:h-20 [@media(max-height:480px)]:w-12 [@media(max-height:480px)]:h-12 rounded-full flex items-center justify-center mb-3 sm:mb-4 [@media(max-height:480px)]:mb-2 shrink-0 ${globalAlertConfig.type === 'info' ? 'bg-sky-100 text-sky-500' : 'bg-rose-100 text-rose-500'}`}>
+                {globalAlertConfig.type === 'info' ? <FileText className="w-8 h-8 sm:w-10 sm:h-10 [@media(max-height:480px)]:w-6 [@media(max-height:480px)]:h-6" /> : <AlertTriangle className="w-8 h-8 sm:w-10 sm:h-10 [@media(max-height:480px)]:w-6 [@media(max-height:480px)]:h-6" />}
               </div>
-              <h3 className="text-2xl font-bold text-slate-800 mb-2 kanit-text">{globalAlertConfig.title}</h3>
-              <p className="text-slate-500 mb-8 kanit-text">{globalAlertConfig.text}</p>
-              <div className="flex gap-3 w-full">
+              <h3 className="text-xl sm:text-2xl [@media(max-height:480px)]:text-lg font-bold text-slate-800 mb-2 kanit-text break-words w-full">{globalAlertConfig.title}</h3>
+              <p className="text-sm sm:text-base text-slate-500 mb-6 sm:mb-8 [@media(max-height:480px)]:mb-4 kanit-text break-words w-full">{globalAlertConfig.text}</p>
+              <div className="flex flex-col-reverse min-[360px]:flex-row gap-2.5 sm:gap-3 w-full">
                 {!globalAlertConfig.hideCancel && (
-                  <button onClick={globalAlert.close} className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">
+                  <button onClick={globalAlert.close} className="flex-1 py-3 sm:py-3.5 [@media(max-height:480px)]:py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-semibold transition-colors kanit-text">
                     ยกเลิก
                   </button>
                 )}
-                <button onClick={() => { if (globalAlertConfig.onConfirm) globalAlertConfig.onConfirm(); globalAlert.close(); }} className={`flex-1 py-3.5 text-white rounded-2xl font-semibold transition-colors shadow-lg kanit-text ${globalAlertConfig.type === 'info' ? 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30'}`}>
+                <button onClick={() => { if (globalAlertConfig.onConfirm) globalAlertConfig.onConfirm(); globalAlert.close(); }} className={`flex-1 py-3 sm:py-3.5 [@media(max-height:480px)]:py-2.5 text-white rounded-2xl font-semibold transition-colors shadow-lg kanit-text ${globalAlertConfig.type === 'info' ? 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30'}`}>
                   ยืนยัน
                 </button>
               </div>
@@ -3908,80 +3909,94 @@ export default function App() {
       );
   }
 
+  const standaloneAuthCss = `
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+    
+    body { font-family: 'Kanit', sans-serif !important; }
+    h1, h2, h3, h4, h5, h6, button, th, label, .nav-item, .kanit-text { font-family: 'Kanit', sans-serif !important; }
+    td, input, select, textarea, .font-data { font-family: 'Sarabun', sans-serif !important; }
+
+    .login-screen-container,
+    .login-screen-container *,
+    .login-screen-container input,
+    .login-screen-container select,
+    .login-screen-container textarea,
+    .login-screen-container .font-data {
+        font-family: 'Kanit', sans-serif !important;
+    }
+
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    @keyframes loading-slide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+    .animate-loading-slide {
+        animation: loading-slide 1.5s infinite linear;
+    }
+
+    /* --- Premium Animations for Login Screen --- */
+    @keyframes blob {
+      0% { transform: translate(0px, 0px) scale(1); }
+      33% { transform: translate(30px, -50px) scale(1.1); }
+      66% { transform: translate(-20px, 20px) scale(0.95); }
+      100% { transform: translate(0px, 0px) scale(1); }
+    }
+    .animate-blob {
+      animation: blob 7s infinite alternate ease-in-out;
+    }
+    .animation-delay-2000 {
+      animation-delay: 2s;
+    }
+    .animation-delay-4000 {
+      animation-delay: 4s;
+    }
+
+    @keyframes scale-up {
+      0% { transform: scale(0.95); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-scale-up {
+      animation: scale-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      100%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+      20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+    .animate-shake {
+      animation: shake 0.6s ease-in-out;
+    }
+  `;
+
   if (pdpaToken && pdpaHn) {
-      return <PdpaConsentForm token={pdpaToken} hn={pdpaHn} gdriveTokens={gdriveTokens} isAuthDataFetched={isAuthDataFetched} />;
+      return (
+        <>
+          <StaticStyles css={standaloneAuthCss} />
+          <PdpaConsentForm token={pdpaToken} hn={pdpaHn} gdriveTokens={gdriveTokens} isAuthDataFetched={isAuthDataFetched} />
+        </>
+      );
   }
 
   if (resetToken) {
-      return <ResetPasswordScreen token={resetToken} callAppScript={callAppScript} showToast={showToast} />;
+      return (
+        <>
+          <StaticStyles css={standaloneAuthCss} />
+          <ResetPasswordScreen token={resetToken} callAppScript={callAppScript} showToast={showToast} />
+          <ToastContainer />
+        </>
+      );
   }
 
   // 🔒 PDPA Compliance: หากยังไม่ได้เข้าสู่ระบบ ต้องให้เข้าสู่ระบบก่อนเสมอ แม้จะเป็นการกดลิงก์พิมพ์เอกสาร
   if (!isLoggedIn || (isGlobalLoading && !isPrintUrl)) {
       return (
         <>
-          <StaticStyles css={`
-            @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
-            
-            body { font-family: 'Kanit', sans-serif !important; }
-            h1, h2, h3, h4, h5, h6, button, th, label, .nav-item, .kanit-text { font-family: 'Kanit', sans-serif !important; }
-            td, input, select, textarea, .font-data { font-family: 'Sarabun', sans-serif !important; }
-
-            .login-screen-container,
-            .login-screen-container *,
-            .login-screen-container input,
-            .login-screen-container select,
-            .login-screen-container textarea,
-            .login-screen-container .font-data {
-                font-family: 'Kanit', sans-serif !important;
-            }
-
-            .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-            @keyframes loading-slide {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(100%); }
-            }
-            .animate-loading-slide {
-                animation: loading-slide 1.5s infinite linear;
-            }
-
-            /* --- Premium Animations for Login Screen --- */
-            @keyframes blob {
-              0% { transform: translate(0px, 0px) scale(1); }
-              33% { transform: translate(30px, -50px) scale(1.1); }
-              66% { transform: translate(-20px, 20px) scale(0.95); }
-              100% { transform: translate(0px, 0px) scale(1); }
-            }
-            .animate-blob {
-              animation: blob 7s infinite alternate ease-in-out;
-            }
-            .animation-delay-2000 {
-              animation-delay: 2s;
-            }
-            .animation-delay-4000 {
-              animation-delay: 4s;
-            }
-
-            @keyframes scale-up {
-              0% { transform: scale(0.95); opacity: 0; }
-              100% { transform: scale(1); opacity: 1; }
-            }
-            .animate-scale-up {
-              animation: scale-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            }
-
-            @keyframes shake {
-              0%, 100% { transform: translateX(0); }
-              100%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-              20%, 40%, 60%, 80% { transform: translateX(5px); }
-            }
-            .animate-shake {
-              animation: shake 0.6s ease-in-out;
-            }
-          `} />
+          <StaticStyles css={standaloneAuthCss} />
           <LoginScreen onLogin={handleLogin} callAppScript={callAppScript} isGlobalLoading={isGlobalLoading} isPrintUrl={isPrintUrl} />
+          <ToastContainer />
         </>
       );
   }
@@ -4017,7 +4032,7 @@ export default function App() {
 
         {/* Mobile Slide Menu (สร้างแยกมาต่างหาก ทำงานด้วย CSS Transform ล้วนๆ ลื่นไหล 100%) */}
         <aside 
-          className={`md:hidden fixed inset-y-0 left-0 z-[110] w-[260px] bg-white shadow-2xl flex flex-col will-change-transform transform transition-transform duration-250 ease-out ${isSidebarExpanded ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`md:hidden fixed inset-y-0 left-0 z-[110] w-[min(272px,84vw)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] bg-white shadow-2xl flex flex-col will-change-transform transform transition-transform duration-250 ease-out ${isSidebarExpanded ? 'translate-x-0' : '-translate-x-full'}`}
           style={{ WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden' }}
           onTouchStart={(e) => {
             if (e.touches && e.touches[0]) {
@@ -4036,18 +4051,18 @@ export default function App() {
             }
           }}
         >
-          <div className="p-6 flex items-center min-h-[89px] border-b border-slate-100/50 shrink-0">
-            <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
-              <Stethoscope size={24} />
+          <div className="p-5 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-2.5 flex items-center min-h-[76px] [@media(max-height:500px)]:min-h-[54px] border-b border-slate-100/50 shrink-0">
+            <div className="w-10 h-10 [@media(max-height:500px)]:w-8 [@media(max-height:500px)]:h-8 shrink-0 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30">
+              <Stethoscope size={22} />
             </div>
-            <div className="whitespace-nowrap min-w-[150px]">
-              <h2 className="font-bold text-slate-800 leading-tight kanit-text ml-3">Clinic<span className="text-sky-500">Hub</span></h2>
-              <p className="text-xs text-slate-400 kanit-text ml-3">Management System</p>
+            <div className="whitespace-nowrap min-w-0 flex-1">
+              <h2 className="font-bold text-slate-800 leading-tight kanit-text ml-3 truncate">Clinic<span className="text-sky-500">Hub</span></h2>
+              <p className="text-xs text-slate-400 kanit-text ml-3 truncate [@media(max-height:500px)]:hidden">Management System</p>
             </div>
           </div>
 
-          <div className="flex flex-col h-full overflow-hidden">
-            <div className="px-4 py-4 relative min-h-[72px] flex items-center justify-center shrink-0">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="px-4 py-3 [@media(max-height:500px)]:py-2 relative min-h-[64px] [@media(max-height:500px)]:min-h-[50px] flex items-center justify-center shrink-0">
               <CustomSelect
                   value={currentBranch}
                   onChange={(val) => setCurrentBranch(val)}
@@ -4056,24 +4071,24 @@ export default function App() {
               />            
             </div>
             
-            <nav className="flex-1 px-3 py-2 flex flex-col overflow-y-auto custom-scrollbar gap-1">
+            <nav className="flex-1 min-h-0 px-3 py-2 flex flex-col overflow-y-auto custom-scrollbar gap-1">
               {filteredNavItems.map((item) => (
                 <button 
                   key={item.id} 
                   onClick={() => handleTabClick(item.id)} 
-                  className={`flex items-center py-3 px-3 w-full rounded-2xl transition-all duration-200 kanit-text ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-normal' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-normal'}`}
+                  className={`flex items-center py-2.5 [@media(max-height:500px)]:py-2 px-3 w-full rounded-2xl transition-all duration-200 kanit-text shrink-0 ${currentTab === item.id ? 'bg-sky-500 shadow-md shadow-sky-500/20 text-white font-normal' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-normal'}`}
                 >
                   <div className="shrink-0 w-6 flex items-center justify-center">
                     <item.icon size={20} className={currentTab === item.id ? 'opacity-100' : 'opacity-70'} />
                   </div>
-                  <span className="whitespace-nowrap ml-3 flex items-center text-left">
+                  <span className="whitespace-nowrap ml-3 flex items-center text-left truncate">
                     {item.label}
                   </span>
                 </button>
               ))}
             </nav>
 
-            <div className="p-4 border-t border-slate-100/50 min-h-[80px] flex items-center gap-3 shrink-0 select-none">
+            <div className="p-4 [@media(max-height:500px)]:py-2.5 border-t border-slate-100/50 min-h-[72px] [@media(max-height:500px)]:min-h-[54px] flex items-center gap-3 shrink-0 select-none">
               {currentUser.photo ? (
                 <img src={currentUser.photo} className="w-8 h-8 shrink-0 rounded-full object-cover border border-slate-200/60 shadow-sm" alt={currentUser.name} />
               ) : (
@@ -4117,12 +4132,12 @@ export default function App() {
                 expandSidebarSmoothly();
               }
             }}
-            className="flex items-center min-h-[89px] border-b border-slate-100/50 overflow-hidden shrink-0 cursor-pointer hover:bg-slate-50/70 transition-colors group select-none"
+            className="flex items-center min-h-[89px] [@media(max-height:500px)]:min-h-[56px] border-b border-slate-100/50 overflow-hidden shrink-0 cursor-pointer hover:bg-slate-50/70 transition-colors group select-none"
             title={isSidebarExpanded ? "คลิกเพื่อย่อเมนู" : "คลิกเพื่อขยายเมนู"}
           >
             <div className="w-[80px] shrink-0 flex items-center justify-center">
-              <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30 group-hover:scale-105 transition-transform">
-                <Stethoscope size={24} />
+              <div className="w-10 h-10 [@media(max-height:500px)]:w-8 [@media(max-height:500px)]:h-8 bg-gradient-to-br from-sky-400 to-sky-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-sky-500/30 group-hover:scale-105 transition-transform">
+                <Stethoscope size={24} className="[@media(max-height:500px)]:w-5 [@media(max-height:500px)]:h-5" />
               </div>
             </div>
             <div 
@@ -4134,12 +4149,12 @@ export default function App() {
               }}
             >
               <h2 className="font-bold text-slate-800 leading-tight kanit-text truncate">Clinic<span className="text-sky-500">Hub</span></h2>
-              <p className="text-xs text-slate-400 kanit-text truncate">Management System</p>
+              <p className="text-xs text-slate-400 kanit-text truncate [@media(max-height:500px)]:hidden">Management System</p>
             </div>
           </div>
 
-          <div className={`flex flex-col h-full ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'}`}>
-            <div className="px-4 py-4 relative z-[60] min-h-[72px] flex items-center shrink-0 overflow-hidden">
+          <div className={`flex flex-col flex-1 min-h-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'}`}>
+            <div className="px-4 py-4 [@media(max-height:500px)]:py-2 relative z-[60] min-h-[72px] [@media(max-height:500px)]:min-h-[52px] flex items-center shrink-0 overflow-hidden">
               <div 
                 className="sidebar-text-label w-full absolute left-0 px-4 will-change-transform"
                 style={{
@@ -4210,10 +4225,10 @@ export default function App() {
               })}
             </nav>
 
-            <div id="profile-container-pc" className="px-4 py-3 border-t border-slate-100/50 min-h-[76px] flex items-center relative shrink-0 overflow-visible">
+            <div id="profile-container-pc" className="px-4 py-3 [@media(max-height:500px)]:py-2 border-t border-slate-100/50 min-h-[76px] [@media(max-height:500px)]:min-h-[56px] flex items-center relative shrink-0 overflow-visible">
               {/* Dropdown Menu (Expanded) */}
               {isProfileDropdownOpen && isSidebarExpanded && (
-                <div className="absolute bottom-20 left-4 right-4 bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1">
+                <div className="absolute bottom-[calc(100%+0.5rem)] left-4 right-4 max-h-[calc(100dvh-5.5rem)] overflow-y-auto custom-scrollbar bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1">
                   {/* Row 1: ชื่อและตำแหน่ง */}
                   <div className="px-3 py-2.5 border-b border-slate-100/50 select-none text-left">
                     <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
@@ -4266,7 +4281,7 @@ export default function App() {
 
               {/* Dropdown Menu (Collapsed) */}
               {isProfileDropdownOpen && !isSidebarExpanded && (
-                <div className="absolute bottom-20 left-4 w-56 min-w-[220px] bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1">
+                <div className="absolute bottom-[calc(100%+0.5rem)] left-4 w-56 min-w-[220px] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-5.5rem)] overflow-y-auto custom-scrollbar bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1">
                   {/* Row 1: ชื่อและตำแหน่ง */}
                   <div className="px-3 py-2.5 border-b border-slate-100/50 select-none text-left">
                     <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
@@ -4395,7 +4410,7 @@ export default function App() {
 
             {/* Mobile Profile Dropdown */}
             {isMobileProfileDropdownOpen && (
-              <div className="absolute top-12 right-0 bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1 w-56 min-w-[220px]">
+              <div className="absolute top-12 right-0 bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1 w-56 min-w-[200px] max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-4.5rem)] overflow-y-auto custom-scrollbar">
                 {/* Row 1: ชื่อและตำแหน่ง (ไม่เอารูป) */}
                 <div className="px-3 py-2 border-b border-slate-100/50 select-none text-left">
                   <div className="font-semibold text-slate-700 text-xs kanit-text truncate">{currentUser.name}</div>
@@ -4470,21 +4485,21 @@ export default function App() {
 
           {/* 🧪 Simulation Sandbox Mode Banner */}
           {isSimulationMode && (
-            <div className="sticky top-0 z-30 mx-4 md:mx-6 mt-3 mb-2 p-3.5 bg-gradient-to-r from-amber-500/95 via-orange-500/95 to-amber-600/95 backdrop-blur-md text-white rounded-2xl shadow-lg border border-amber-300/40 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in">
-              <div className="flex items-center gap-3">
+            <div className="sticky top-0 [@media(max-height:480px)]:relative z-30 mx-3 sm:mx-4 md:mx-6 mt-3 mb-2 p-3 sm:p-3.5 [@media(max-height:480px)]:p-2.5 bg-gradient-to-r from-amber-500/95 via-orange-500/95 to-amber-600/95 backdrop-blur-md text-white rounded-2xl shadow-lg border border-amber-300/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 animate-fade-in">
+              <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                 <div className="p-2 bg-white/20 rounded-xl shrink-0 backdrop-blur-xs">
                   <FlaskConical size={20} className="text-white animate-pulse" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-sm kanit-text tracking-wide">
                       กำลังทำงานในโหมดจำลองข้อมูล (Sandbox Simulation Mode)
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-amber-700 uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-amber-700 uppercase tracking-wider shrink-0">
                       Memory Only
                     </span>
                   </div>
-                  <p className="text-xs text-amber-100 kanit-text font-normal mt-0.5">
+                  <p className="text-xs text-amber-100 kanit-text font-normal mt-0.5 break-words">
                     ไฟล์: <span className="font-semibold text-white">{simulationMeta?.fileName || 'ข้อมูลจาก Excel'}</span>
                     {simulationMeta?.totalRecords ? ` (${simulationMeta.totalRecords.toLocaleString()} รายการ)` : ''} 
                     {' • '} ข้อมูลทั้งหมดรันบนเบราว์เซอร์ ไม่มีการส่งหรือแก้ไขข้อมูลบน Supabase
@@ -4494,7 +4509,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleExitSimulation}
-                className="px-4 py-2 bg-white text-amber-700 hover:bg-amber-50 active:scale-95 transition-all rounded-xl text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 shrink-0"
+                className="w-full sm:w-auto justify-center px-4 py-2 bg-white text-amber-700 hover:bg-amber-50 active:scale-95 transition-all rounded-xl text-xs font-bold kanit-text shadow-sm flex items-center gap-1.5 shrink-0"
               >
                 <LogOut size={14} />
                 <span>ออกจากโหมดจำลอง</span>
@@ -4880,9 +4895,9 @@ export default function App() {
           {hasMoreNavItems && (
             <div 
               ref={extraContentRef}
-              className="w-full max-w-sm mx-auto pt-2 pb-[calc(max(1.25rem,env(safe-area-inset-bottom)))] transition-opacity duration-300 opacity-0 pointer-events-auto"
+              className="w-full max-w-sm [@media(max-height:460px)_and_(min-width:520px)]:max-w-lg mx-auto pt-2 [@media(max-height:460px)]:pt-1 pb-[calc(max(1.25rem,env(safe-area-inset-bottom)))] [@media(max-height:460px)]:pb-3 transition-opacity duration-300 opacity-0 pointer-events-auto"
             >
-              <div id="extra-mobile-nav-grid" ref={extraGridRef} className="grid grid-cols-4 gap-x-2 gap-y-2 px-1 relative">
+              <div id="extra-mobile-nav-grid" ref={extraGridRef} className="grid grid-cols-4 [@media(max-height:460px)_and_(min-width:520px)]:grid-cols-5 gap-x-2 gap-y-2 [@media(max-height:460px)]:gap-y-1 px-1 relative">
                 {/* Sliding Liquid Bubble Indicator สำหรับเมนูแถวเพิ่มเติม (ขนาด w-12 h-12 เท่ากับเมนูหลัก 100%) */}
                 <div 
                   ref={extraBubbleRef}
@@ -5072,6 +5087,9 @@ export default function App() {
             bottom: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
+            max-height: 92dvh !important;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
             border-bottom-left-radius: 0 !important;
             border-bottom-right-radius: 0 !important;
             border-top-left-radius: 2rem !important;
@@ -5493,66 +5511,94 @@ export default function App() {
             padding-bottom: 0.5rem !important;
           }
         }
+
+        /* --- Mobile Landscape Compact Mode: ป้องกันแถบ Sticky ซ้อนทับจนบีบพื้นที่เนื้อหาเหลือน้อยเกินไป --- */
+        @media (max-height: 480px) and (orientation: landscape) {
+          :root {
+            --scrolled-header-h: 48px;
+          }
+          .page-sticky-header,
+          div:has(> .sticky-header-bg),
+          div[style*="--mobile-header-offset"],
+          .sticky-filter-appt,
+          .exec-sticky-header {
+            position: relative !important;
+            top: 0 !important;
+            transform: none !important;
+          }
+          .sticky-header-bg {
+            min-height: 48px !important;
+            padding-top: 0.25rem !important;
+            padding-bottom: 0.25rem !important;
+          }
+          .sticky-header-desc,
+          .header-spacer {
+            display: none !important;
+          }
+        }
       `} />
 
       {/* PDPA QR Code Modal */}
-      {pdpaQrModal.isOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-center justify-center p-3.5 sm:p-6">
-              <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[calc(100dvh-1.75rem)] overflow-y-auto p-6 animate-in fade-in zoom-in duration-200 border border-slate-100">
-                  <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
-                      <h3 className="font-bold text-lg text-slate-800 kanit-text flex items-center gap-2">
-                          <ShieldCheck size={24} className="text-sky-500" /> สแกนเพื่อยินยอม
+      {pdpaQrModal.isOpen && createPortal(
+          <div className="fixed inset-0 bg-slate-900/60 z-[10050] flex items-center justify-center p-3 sm:p-6">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar p-4 sm:p-6 [@media(max-height:480px)]:p-4 animate-in fade-in zoom-in duration-200 border border-slate-100">
+                  <div className="flex justify-between items-center mb-4 [@media(max-height:480px)]:mb-2.5 pb-3 [@media(max-height:480px)]:pb-2 border-b border-slate-100 gap-2">
+                      <h3 className="font-bold text-base sm:text-lg text-slate-800 kanit-text flex items-center gap-2 min-w-0 truncate">
+                          <ShieldCheck size={22} className="text-sky-500 shrink-0" /> <span className="truncate">สแกนเพื่อยินยอม</span>
                       </h3>
-                      <button onClick={() => setPdpaQrModal({ isOpen: false, link: '' })} className="text-slate-400 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-xl transition-colors">
+                      <button onClick={() => setPdpaQrModal({ isOpen: false, link: '' })} className="shrink-0 text-slate-400 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-xl transition-colors">
                           <XCircle size={20} />
                       </button>
                   </div>
-                  <div className="flex flex-col items-center">
-                      <div className="bg-white p-3 rounded-2xl border-2 border-dashed border-sky-200 shadow-sm mb-5 relative flex items-center justify-center min-w-[240px] min-h-[240px]">
+                  <div className="flex flex-col [@media(max-height:480px)]:flex-row items-center gap-4">
+                      <div className="bg-white p-2.5 sm:p-3 rounded-2xl border-2 border-dashed border-sky-200 shadow-sm relative flex items-center justify-center shrink-0">
                           {pdpaQrDataUrl ? (
-                              <img src={pdpaQrDataUrl} alt="QR Code" className="w-56 h-56 rounded-xl animate-in fade-in duration-150" />
+                              <img src={pdpaQrDataUrl} alt="QR Code" className="w-44 h-44 xs:w-52 xs:h-52 sm:w-56 sm:h-56 [@media(max-height:480px)]:w-32 [@media(max-height:480px)]:h-32 rounded-xl animate-in fade-in duration-150" />
                           ) : (
-                              <div className="w-56 h-56 flex flex-col items-center justify-center text-slate-400 gap-2">
+                              <div className="w-44 h-44 xs:w-52 xs:h-52 sm:w-56 sm:h-56 [@media(max-height:480px)]:w-32 [@media(max-height:480px)]:h-32 flex flex-col items-center justify-center text-slate-400 gap-2">
                                   <Loader2 className="animate-spin text-sky-500" size={32} />
                                   <span className="text-xs">กำลังสร้าง QR Code...</span>
                               </div>
                           )}
                       </div>
-                      <p className="text-sm text-slate-500 text-center mb-6 px-2 leading-relaxed">
-                          ให้ผู้ป่วยสแกน QR Code เพื่อให้ความยินยอม หรือคลิกปุ่มด้านล่างเพื่อเปิดหน้าต่างให้ผู้ป่วยทำรายการบนอุปกรณ์นี้
-                      </p>
-                      <button 
-                          onClick={() => {
-                              window.open(pdpaQrModal.link, '_blank');
-                              setPdpaQrModal({ isOpen: false, link: '' });
-                          }}
-                          className="w-full py-3.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/20 transform hover:-translate-y-0.5"
-                      >
-                          <ExternalLink size={18} /> เปิดหน้ายินยอมบนเครื่องนี้
-                      </button>
+                      <div className="flex flex-col items-center [@media(max-height:480px)]:items-start flex-1 min-w-0 w-full">
+                          <p className="text-xs sm:text-sm text-slate-500 text-center [@media(max-height:480px)]:text-left mb-4 [@media(max-height:480px)]:mb-3 px-1 leading-relaxed">
+                              ให้ผู้ป่วยสแกน QR Code เพื่อให้ความยินยอม หรือคลิกปุ่มด้านล่างเพื่อเปิดหน้าต่างให้ผู้ป่วยทำรายการบนอุปกรณ์นี้
+                          </p>
+                          <button 
+                              onClick={() => {
+                                  window.open(pdpaQrModal.link, '_blank');
+                                  setPdpaQrModal({ isOpen: false, link: '' });
+                              }}
+                              className="w-full py-3 sm:py-3.5 [@media(max-height:480px)]:py-2.5 px-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/20 transform hover:-translate-y-0.5"
+                          >
+                              <ExternalLink size={18} className="shrink-0" /> <span>เปิดหน้ายินยอมบนเครื่องนี้</span>
+                          </button>
+                      </div>
                   </div>
               </div>
-          </div>
+          </div>,
+          document.body
       )}
 
       {/* Modal แจ้งเตือนเมื่อมีข้อมูลที่ยังไม่ได้บันทึกก่อนเปลี่ยนหน้าหลัก */}
-      {navUnsavedModal.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100 animate-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-4 border border-amber-200/60 shadow-xs">
-              <AlertTriangle size={26} />
+      {navUnsavedModal.isOpen && createPortal(
+        <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto custom-scrollbar p-5 sm:p-6 [@media(max-height:480px)]:p-4 border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 [@media(max-height:480px)]:w-10 [@media(max-height:480px)]:h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3 sm:mb-4 [@media(max-height:480px)]:mb-2 border border-amber-200/60 shadow-xs">
+              <AlertTriangle size={24} />
             </div>
-            <h3 className="text-lg font-black text-slate-800 text-center kanit-text mb-2">
+            <h3 className="text-base sm:text-lg font-black text-slate-800 text-center kanit-text mb-2">
               มีข้อมูลที่ยังไม่ได้บันทึก!
             </h3>
-            <p className="text-slate-600 text-xs sm:text-sm text-center kanit-text leading-relaxed mb-6">
+            <p className="text-slate-600 text-xs sm:text-sm text-center kanit-text leading-relaxed mb-5 sm:mb-6 [@media(max-height:480px)]:mb-3.5">
               คุณได้กรอกหรือแก้ไขข้อมูลการตั้งค่าแจ้งเตือน (บอท LINE / Discord) ไว้แต่ยังไม่ได้กดบันทึก หากออกจากหน้านี้ข้อมูลที่แก้ไขจะสูญหาย
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col-reverse min-[380px]:flex-row gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setNavUnsavedModal({ isOpen: false, targetTab: null })}
-                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-sm kanit-text transition-colors"
+                className="flex-1 py-3 [@media(max-height:480px)]:py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-sm kanit-text transition-colors"
               >
                 อยู่หน้านี้ต่อ
               </button>
@@ -5568,13 +5614,14 @@ export default function App() {
                     if (isMobile) setIsSidebarExpanded(false);
                   }
                 }}
-                className="flex-1 py-3 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm kanit-text transition-colors shadow-sm"
+                className="flex-1 py-3 [@media(max-height:480px)]:py-2.5 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm kanit-text transition-colors shadow-sm"
               >
                 ออกจากหน้านี้ (ไม่บันทึก)
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal แป้นพิมพ์ลัด */}

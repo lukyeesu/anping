@@ -17,61 +17,61 @@ import {
 import { theme } from '../global/theme';
 
 const TransactionCard = React.memo(({ tx, openDetailModal, handlePrintReceipt, handleEditTransaction, handleDeleteTransaction, formatDate }) => (
-    <div key={tx.id} onClick={() => openDetailModal(tx)} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98]">
-        <div className="flex justify-between items-start mb-2.5">
-            <div className="flex flex-col gap-1">
-                <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-[180px]">{tx.id}</span>
-                <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 font-data mt-0.5"><Clock size={12} className="text-slate-400"/> {formatDate(tx.date)} {formatFinTime(tx.date) ? `${formatFinTime(tx.date)} น.` : ''}</div>
+    <div key={tx.id} onClick={() => openDetailModal(tx)} className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col cursor-pointer hover:border-sky-300 hover:shadow-md transition-all active:scale-[0.98] min-w-0">
+        <div className="flex justify-between items-start gap-2 mb-2.5 min-w-0">
+            <div className="flex flex-col gap-1 min-w-0 flex-1">
+                <span className="font-bold text-sky-600 kanit-text text-xs bg-sky-50 px-2 py-0.5 rounded-md w-fit truncate max-w-full">{tx.id}</span>
+                <div className="text-[11px] font-bold text-slate-500 flex flex-wrap items-center gap-1.5 font-data mt-0.5 min-w-0"><Clock size={12} className="text-slate-400 shrink-0"/> <span className="truncate">{formatDate(tx.date)} {formatFinTime(tx.date) ? `${formatFinTime(tx.date)} น.` : ''}</span></div>
             </div>
             <span className={`text-[10px] font-bold px-2 py-1 rounded-md kanit-text shrink-0 border ${tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                 {tx.status === 'completed' ? 'สำเร็จ' : tx.status}
             </span>
         </div>
         
-        <div className="mb-1">
+        <div className="mb-1 min-w-0 flex-1">
             {tx.patientName ? (
-                <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{tx.patientName}</div>
+                <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1 break-words">{tx.patientName}</div>
             ) : null}
-            <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1`}>
+            <div className={`text-xs ${tx.patientName ? 'text-slate-500' : 'text-slate-800 font-bold'} kanit-text line-clamp-2 mt-1 break-words`}>
                 {tx.note || '-'}
             </div>
             {(tx.doctorName || tx.doctor_name || tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && (
-                <div className="flex flex-wrap items-center gap-x-2 text-[11px] font-data mt-1">
-                    {(tx.doctorName || tx.doctor_name) && <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">🩺 {tx.doctorName || tx.doctor_name}</span>}
-                    {(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">💼 {tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name}</span>}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-data mt-1 min-w-0">
+                    {(tx.doctorName || tx.doctor_name) && <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 max-w-full truncate">🩺 {tx.doctorName || tx.doctor_name}</span>}
+                    {(tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name) && <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 max-w-full truncate">💼 {tx.sellerName || tx.seller_name || tx.staffName || tx.staff_name}</span>}
                 </div>
             )}
         </div>
 
-        <div className="flex justify-between items-end mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <div className="flex flex-col gap-1.5 min-w-0 pr-2">
-                <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap justify-between items-end gap-2 mt-3 bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-100 min-w-0">
+            <div className="flex flex-col gap-1.5 min-w-0 flex-1 pr-1">
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                     {!tx.isAuto ? (
-                        <span className="text-[11px] font-bold text-slate-700 kanit-text truncate">{tx.category}</span>
+                        <span className="text-[11px] font-bold text-slate-700 kanit-text truncate max-w-full">{tx.category}</span>
                     ) : (
-                        <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200">ระบบ POS</span>
+                        <span className="text-[10px] font-bold text-sky-600 bg-sky-100 px-1.5 py-0.5 rounded-md kanit-text border border-sky-200 shrink-0">ระบบ POS</span>
                     )}
                 </div>
-                <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5">
-                    {tx.method === 'cash' ? <><Banknote size={12}/> เงินสด</> : tx.method === 'transfer' ? <><QrCode size={12}/> โอนเงิน</> : (tx.method === 'credit_card' || tx.method === 'credit') ? <><CreditCard size={12}/> บัตรเครดิต</> : <><Package size={12}/> {tx.method}</>}
+                <div className="text-[10px] font-semibold text-slate-500 kanit-text flex items-center gap-1.5 min-w-0">
+                    {tx.method === 'cash' ? <><Banknote size={12} className="shrink-0"/> <span className="truncate">เงินสด</span></> : tx.method === 'transfer' ? <><QrCode size={12} className="shrink-0"/> <span className="truncate">โอนเงิน</span></> : (tx.method === 'credit_card' || tx.method === 'credit') ? <><CreditCard size={12} className="shrink-0"/> <span className="truncate">บัตรเครดิต</span></> : <><Package size={12} className="shrink-0"/> <span className="truncate">{tx.method}</span></>}
                 </div>
             </div>
-            <div className="text-right flex flex-col gap-1 shrink-0">
-                <div className={`font-black font-data text-lg leading-none tracking-tight ${tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? 'text-rose-600' : 'text-emerald-600'}`}>
+            <div className="text-right flex flex-col gap-1 shrink-0 ml-auto">
+                <div className={`font-black font-data text-base sm:text-lg leading-none tracking-tight ${tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? 'text-rose-600' : 'text-emerald-600'}`}>
                     {tx.type === 'expense' || String(tx.id || '').toUpperCase().startsWith('EXP') ? '-' : '+'}{formatFinCurrency(tx.amount)}
                 </div>
             </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
-            <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                <Printer size={14} /> พิมพ์
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-3 pt-3 border-t border-slate-100">
+            <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(tx, 'A4'); }} className="min-h-[40px] flex items-center justify-center gap-1.5 px-2 py-2 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100 min-w-0">
+                <Printer size={14} className="shrink-0" /> <span className="truncate">พิมพ์</span>
             </button>
-            <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="flex items-center justify-center gap-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100">
-                <Pencil size={14} /> แก้ไข
+            <button onClick={(e) => { e.stopPropagation(); handleEditTransaction(tx); }} className="min-h-[40px] flex items-center justify-center gap-1.5 px-2 py-2 text-slate-500 hover:text-sky-600 bg-slate-50 hover:bg-sky-50 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-100 min-w-0">
+                <Pencil size={14} className="shrink-0" /> <span className="truncate">แก้ไข</span>
             </button>
-            <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className={`flex items-center justify-center gap-2 py-2 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border ${tx.status === 'cancelled' ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-100'}`}>
-                <Trash2 size={14} /> {tx.isAuto || tx.category === 'รายได้จาก POS' ? (tx.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกบิล') : 'ลบ'}
+            <button onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(tx); }} className={`min-h-[40px] flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl transition-colors font-medium text-xs kanit-text shadow-sm border min-w-0 ${tx.status === 'cancelled' ? 'text-slate-300 bg-slate-50 border-slate-100 cursor-not-allowed' : 'text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border-slate-100'}`}>
+                <Trash2 size={14} className="shrink-0" /> <span className="truncate">{tx.isAuto || tx.category === 'รายได้จาก POS' ? (tx.status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ยกเลิกบิล') : 'ลบ'}</span>
             </button>
         </div>
     </div>

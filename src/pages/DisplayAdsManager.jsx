@@ -798,7 +798,7 @@ export default function DisplayAdsManager({
             <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               {/* Branch Selector Tabs */}
               {branchesData && branchesData.length > 1 && (
-                <div className="flex items-center gap-1 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl bg-slate-100/90 border border-slate-200/80 mr-0.5 sm:mr-1 shrink-0">
+                <div className="flex items-center gap-1 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl bg-slate-100/90 border border-slate-200/80 mr-0.5 sm:mr-1 shrink-0 max-w-[130px] min-[400px]:max-w-[180px] sm:max-w-none overflow-x-auto no-scrollbar">
                   <Building2 className="w-3.5 h-3.5 text-slate-500 ml-1 sm:ml-1.5 shrink-0" />
                   <span className="text-[11px] font-semibold text-slate-500 mr-1 hidden md:inline">สาขา:</span>
                   {branchesData.map(b => (
@@ -1412,10 +1412,10 @@ export default function DisplayAdsManager({
 
       {/* Add / Edit Ad Modal */}
       {modalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-4 sm:p-5 md:p-6 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-6xl overflow-hidden max-h-[84vh] sm:max-h-[88vh] flex flex-col my-auto">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/65 backdrop-blur-sm p-2.5 sm:p-5 md:p-6 [@media(max-height:480px)]:p-1.5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-6xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88vh] [@media(max-height:480px)]:max-h-[96dvh] flex flex-col my-auto">
             {/* Modal Header */}
-            <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
+            <div className="px-3.5 py-2.5 sm:px-6 sm:py-4 [@media(max-height:480px)]:py-1.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-sky-500/10 text-sky-600 flex items-center justify-center shadow-2xs shrink-0">
                   <Megaphone className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2272,7 +2272,7 @@ export default function DisplayAdsManager({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
+            <div className="px-4 py-3 sm:px-6 sm:py-4 [@media(max-height:480px)]:py-2 border-t border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}

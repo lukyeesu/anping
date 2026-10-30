@@ -28,18 +28,18 @@ const FinanceTableSection = React.memo(({
           <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden flex flex-col min-h-[400px]">
             <div className="px-2 sm:px-4 py-4">
                 {/* --- Desktop View (Table) --- */}
-                <div className="hidden lg:block overflow-x-auto overflow-y-hidden">
-                  <table className="w-full text-left border-collapse min-w-[1050px] table-auto">
+                <div className="hidden xl:block overflow-x-auto overflow-y-hidden">
+                  <table className="w-full text-left border-collapse min-w-[920px] table-auto">
                     <thead>
-                      <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm">
-                        <th className="w-[13%] p-4 font-medium text-left pl-6 min-w-[110px] kanit-text">วันที่/เวลา</th>
-                        <th className="w-[11%] p-4 font-medium min-w-[110px] kanit-text">เลขที่บิล</th>
-                        <th className="w-[20%] p-4 font-medium kanit-text">รายละเอียด</th>
-                        <th className="w-[12%] p-4 font-medium kanit-text">ประเภท/บทบาท</th>
-                        <th className="w-[11%] p-4 font-medium text-center min-w-[110px] kanit-text">ช่องทาง</th>
-                        <th className="w-[13%] p-4 font-medium text-right min-w-[120px] kanit-text">จำนวนเงิน</th>
-                        <th className="w-[10%] p-4 font-medium text-center min-w-[100px] kanit-text">สถานะ</th>
-                        <th className="p-4 font-medium text-right pr-6 w-[150px] min-w-[145px] kanit-text">ดำเนินการ</th>
+                      <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-xs xl:text-sm">
+                        <th className="w-[13%] py-3.5 px-2.5 xl:px-4 font-medium text-left pl-4 xl:pl-6 min-w-[100px] kanit-text">วันที่/เวลา</th>
+                        <th className="w-[11%] py-3.5 px-2.5 xl:px-4 font-medium min-w-[95px] kanit-text">เลขที่บิล</th>
+                        <th className="w-[21%] py-3.5 px-2.5 xl:px-4 font-medium kanit-text">รายละเอียด</th>
+                        <th className="w-[12%] py-3.5 px-2.5 xl:px-4 font-medium kanit-text">ประเภท/บทบาท</th>
+                        <th className="w-[11%] py-3.5 px-2.5 xl:px-4 font-medium text-center min-w-[95px] kanit-text">ช่องทาง</th>
+                        <th className="w-[13%] py-3.5 px-2.5 xl:px-4 font-medium text-right min-w-[105px] kanit-text">จำนวนเงิน</th>
+                        <th className="w-[9%] py-3.5 px-2.5 xl:px-4 font-medium text-center min-w-[85px] kanit-text">สถานะ</th>
+                        <th className="py-3.5 px-2.5 xl:px-4 font-medium text-right pr-4 xl:pr-6 w-[130px] min-w-[125px] kanit-text">ดำเนินการ</th>
                       </tr>
                     </thead>
                     <tbody className="">
@@ -95,7 +95,7 @@ const FinanceTableSection = React.memo(({
                 </div>
   
                 {/* --- Mobile View (Cards) --- */}
-                <div className="lg:hidden space-y-3 mt-2">
+                <div className="xl:hidden space-y-3 mt-2">
                   {isGlobalLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
                       <div key={`skel-mob-fin-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -125,7 +125,7 @@ const FinanceTableSection = React.memo(({
                     </div>
                   )}
   
-                  <div className="w-full flex flex-col gap-3 py-2 pb-6">
+                  <div className="w-full flex flex-wrap flex-col gap-2 py-2 pb-6">
                     {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
                       <div key={`skel-mob-fin-more-${i}`} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
                           <div className="flex justify-between items-center mb-1.5"><div className="w-full max-w-[64px] h-[20px] bg-slate-200 animate-pulse rounded-xl"></div><div className="w-full max-w-[64px] h-[20px] bg-slate-200 animate-pulse rounded-md"></div></div>

@@ -47,17 +47,17 @@ const StatCard = ({ title, value, icon: Icon, color }) => {
   const st = styles[color] || styles.slate;
 
   return (
-    <div className={`bg-white p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group ${st.hoverBorder} hover:shadow-md transition-all h-full min-h-[110px] sm:min-h-[140px]`}>
-      <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-4 relative z-10">
-        <div className={`w-10 h-10 sm:w-12 sm:h-12 ${st.iconBg} rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm`}>
-          <Icon size={20} className="sm:w-6 sm:h-6" />
+    <div className={`bg-white p-3.5 sm:p-4 xl:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group ${st.hoverBorder} hover:shadow-md transition-all h-full min-h-[96px] sm:min-h-[120px] [@media(max-height:480px)]:min-h-[88px] min-w-0`}>
+      <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-3 [@media(max-height:480px)]:mb-1.5 relative z-10 min-w-0">
+        <div className={`w-8 h-8 sm:w-10 sm:h-10 ${st.iconBg} rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm`}>
+          <Icon size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider truncate leading-tight" title={title}>{title}</p>
+          <p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words" title={title}>{title}</p>
         </div>
       </div>
-      <div className="relative z-10 mt-auto w-full">
-        <p className={`font-black ${st.text} font-data whitespace-nowrap overflow-hidden mt-0.5 ${getDynamicTextSize(formatStatNumber(value))}`}>{formatStatNumber(value)}</p>
+      <div className="relative z-10 mt-auto w-full min-w-0">
+        <p className={`font-black ${st.text} font-data min-w-0 truncate mt-0.5 ${getDynamicTextSize(formatStatNumber(value))}`}>{formatStatNumber(value)}</p>
       </div>
       <div className={`absolute -bottom-6 -right-6 w-20 h-20 sm:w-24 sm:h-24 ${st.blob} rounded-full opacity-0 group-hover:opacity-100 transition-all duration-500 z-0 pointer-events-none transform group-hover:scale-150`}></div>
     </div>

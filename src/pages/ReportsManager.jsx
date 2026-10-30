@@ -519,7 +519,7 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
       if (type === 'receipt') colorClass = 'bg-sky-50 text-sky-600 border-sky-100';
       if (type === 'medcert') colorClass = 'bg-rose-50 text-rose-600 border-rose-100';
       if (type === 'consent') colorClass = 'bg-amber-50 text-amber-600 border-amber-100';
-      return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold kanit-text border ${colorClass}`}>{label}</span>;
+      return <span className={`inline-block max-w-full truncate px-2 py-0.5 rounded-md text-[10px] font-bold kanit-text border ${colorClass}`}>{label}</span>;
   };
 
   // Infinite Scroll & Sticky Behavior
@@ -629,16 +629,16 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
-            <div>
-              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title">รายงานและสรุปเอกสาร</h1>
-              <p className="text-slate-500 kanit-text sticky-header-desc">พิมพ์ประวัติ และใบเสร็จรับเงินย้อนหลังแบบชุด</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title truncate">รายงานและสรุปเอกสาร</h1>
+              <p className="text-slate-500 kanit-text sticky-header-desc line-clamp-1">พิมพ์ประวัติ และใบเสร็จรับเงินย้อนหลังแบบชุด</p>
             </div>
             <button 
               onClick={handleBulkPrint} 
               disabled={selectedDocs.length === 0 || isPrinting}
-              className={`flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3 ${selectedDocs.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+              className={`min-h-[40px] flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 kanit-text sticky-header-btn px-3.5 py-2 sm:px-6 sm:py-3 ${selectedDocs.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
             >
-              {isPrinting ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />} 
+              {isPrinting ? <Loader2 size={18} className="animate-spin shrink-0" /> : <Printer size={18} className="shrink-0" />} 
               <span className="hidden sm:inline">พิมพ์ที่เลือก ({selectedDocs.length})</span>
               <span className="sm:hidden">พิมพ์ ({selectedDocs.length})</span>
             </button>
@@ -647,48 +647,48 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
       </div>
 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 mb-0 relative z-20 pointer-events-auto">
-         <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
-            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
-              <div className="flex items-center gap-2.5 mb-2 relative z-10">
-                <div className="w-10 h-10 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl flex items-center justify-center shrink-0"><LayoutList size={20} /></div>
-                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">เอกสารทั้งหมด</p></div>
+         <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
+            <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[96px] sm:min-h-[125px] [@media(max-height:480px)]:min-h-[88px] min-w-0">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-50 text-slate-500 border border-slate-100 rounded-xl flex items-center justify-center shrink-0"><LayoutList size={18} className="sm:w-5 sm:h-5" /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words">เอกสารทั้งหมด</p></div>
               </div>
-              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-slate-800 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.total)}</p>}</div>
+              <div className="relative z-10 mt-auto min-w-0">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-slate-800 font-data text-xl sm:text-3xl min-w-0 truncate">{formatStatNumber(stats.total)}</p>}</div>
             </div>
-            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
-              <div className="flex items-center gap-2.5 mb-2 relative z-10">
-                <div className="w-10 h-10 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-xl flex items-center justify-center shrink-0"><Users size={20} /></div>
-                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">เวชระเบียน</p></div>
+            <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[96px] sm:min-h-[125px] [@media(max-height:480px)]:min-h-[88px] min-w-0">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-xl flex items-center justify-center shrink-0"><Users size={18} className="sm:w-5 sm:h-5" /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words">เวชระเบียน</p></div>
               </div>
-              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-indigo-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.records)}</p>}</div>
+              <div className="relative z-10 mt-auto min-w-0">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-indigo-600 font-data text-xl sm:text-3xl min-w-0 truncate">{formatStatNumber(stats.records)}</p>}</div>
             </div>
-            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
-              <div className="flex items-center gap-2.5 mb-2 relative z-10">
-                <div className="w-10 h-10 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl flex items-center justify-center shrink-0"><Stethoscope size={20} /></div>
-                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบ OPD</p></div>
+            <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[96px] sm:min-h-[125px] [@media(max-height:480px)]:min-h-[88px] min-w-0">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-50 text-emerald-500 border border-emerald-100 rounded-xl flex items-center justify-center shrink-0"><Stethoscope size={18} className="sm:w-5 sm:h-5" /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words">ใบ OPD</p></div>
               </div>
-              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-emerald-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.opds)}</p>}</div>
+              <div className="relative z-10 mt-auto min-w-0">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-emerald-600 font-data text-xl sm:text-3xl min-w-0 truncate">{formatStatNumber(stats.opds)}</p>}</div>
             </div>
-            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
-              <div className="flex items-center gap-2.5 mb-2 relative z-10">
-                <div className="w-10 h-10 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl flex items-center justify-center shrink-0"><FileText size={20} /></div>
-                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบรับรองแพทย์</p></div>
+            <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[96px] sm:min-h-[125px] [@media(max-height:480px)]:min-h-[88px] min-w-0">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-rose-50 text-rose-500 border border-rose-100 rounded-xl flex items-center justify-center shrink-0"><FileText size={18} className="sm:w-5 sm:h-5" /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words">ใบรับรองแพทย์</p></div>
               </div>
-              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-rose-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.medcerts)}</p>}</div>
+              <div className="relative z-10 mt-auto min-w-0">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-rose-600 font-data text-xl sm:text-3xl min-w-0 truncate">{formatStatNumber(stats.medcerts)}</p>}</div>
             </div>
-            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
-              <div className="flex items-center gap-2.5 mb-2 relative z-10">
-                <div className="w-10 h-10 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl flex items-center justify-center shrink-0"><HeartPulse size={20} /></div>
-                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบยินยอมรักษา</p></div>
+            <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[96px] sm:min-h-[125px] [@media(max-height:480px)]:min-h-[88px] min-w-0">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-50 text-amber-500 border border-amber-100 rounded-xl flex items-center justify-center shrink-0"><HeartPulse size={18} className="sm:w-5 sm:h-5" /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words">ใบยินยอมรักษา</p></div>
               </div>
-              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-amber-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.consents)}</p>}</div>
+              <div className="relative z-10 mt-auto min-w-0">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-amber-600 font-data text-xl sm:text-3xl min-w-0 truncate">{formatStatNumber(stats.consents)}</p>}</div>
             </div>
-            <div className="bg-white p-4 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[110px] sm:min-h-[140px]">
-              <div className="flex items-center gap-2.5 mb-2 relative z-10">
-                <div className="w-10 h-10 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl flex items-center justify-center shrink-0"><Receipt size={20} /></div>
-                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider">ใบเสร็จ</p></div>
+            <div className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden h-full min-h-[96px] sm:min-h-[125px] [@media(max-height:480px)]:min-h-[88px] min-w-0">
+              <div className="flex items-center gap-2.5 mb-2 relative z-10 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-sky-50 text-sky-500 border border-sky-100 rounded-xl flex items-center justify-center shrink-0"><Receipt size={18} className="sm:w-5 sm:h-5" /></div>
+                <div className="min-w-0 flex-1"><p className="text-[10px] sm:text-[11px] font-black text-slate-400 kanit-text uppercase tracking-wider line-clamp-2 leading-tight break-words">ใบเสร็จ</p></div>
               </div>
-              <div className="relative z-10 mt-auto">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-sky-600 font-data text-2xl sm:text-3xl">{formatStatNumber(stats.receipts)}</p>}</div>
+              <div className="relative z-10 mt-auto min-w-0">{isStatsLoading ? <div className="h-8 w-16 bg-slate-200 rounded animate-pulse"></div> : <p className="font-black text-sky-600 font-data text-xl sm:text-3xl min-w-0 truncate">{formatStatNumber(stats.receipts)}</p>}</div>
             </div>
          </div>
       </div>
@@ -738,8 +738,8 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
         <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-100/50 relative overflow-hidden flex flex-col min-h-[400px]">
-          <div className="px-2 sm:px-4 py-4">
-            <div className="hidden md:block overflow-x-auto overflow-y-hidden">
+          <div className="px-2.5 sm:px-4 py-4">
+            <div className="hidden xl:block overflow-x-auto overflow-y-hidden">
               <table className="w-full text-left border-collapse min-w-[800px] table-auto">
                 <thead>
                   <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-500 text-sm kanit-text"><th className="p-4 w-16 text-center"><button onClick={toggleSelectAll} className="flex items-center justify-center w-full">{isAllSelected ? <CheckSquare size={20} className="text-sky-500" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded"></div>}</button></th><th className="p-4 font-medium w-[12%]">วันที่ / เวลา</th><th className="p-4 font-medium w-[16%]">ประเภท</th><th className="p-4 font-medium w-[18%]">รหัสอ้างอิง</th><th className="p-4 font-medium w-[46%]">ชื่อลูกค้า</th><th className="p-4 font-medium text-center w-[8%]">พิมพ์</th></tr>
@@ -786,7 +786,30 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
             </table>
           </div>
           
-          <div className="md:hidden space-y-3 mt-2">
+          <div className="xl:hidden mt-1">
+              {!isGlobalLoading && filteredDocs.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-3.5 py-2.5 bg-slate-50/80 rounded-2xl border border-slate-100">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="min-h-[38px] inline-flex items-center gap-2.5 text-xs sm:text-sm font-bold text-slate-700 hover:text-sky-600 kanit-text transition-colors cursor-pointer"
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare size={20} className="text-sky-500 shrink-0" />
+                    ) : (
+                      <div className="w-5 h-5 border-2 border-slate-300 bg-white rounded shrink-0"></div>
+                    )}
+                    <span>{isAllSelected ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกทั้งหมด'} ({filteredDocs.length})</span>
+                  </button>
+                  {selectedDocs.length > 0 && (
+                    <span className="text-xs font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-100 kanit-text shrink-0">
+                      เลือกแล้ว {selectedDocs.length} รายการ
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {isGlobalLoading ? (
                  Array.from({ length: 4 }).map((_, i) => (
                     <div key={`skel-rep-mob-${i}`} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -810,28 +833,28 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
                   const isSelected = selectedDocs.includes(doc.id);
                   const d = new Date(doc.timestamp);
                   return (
-                    <div key={doc.id} onClick={() => toggleSelection(doc.id)} className={`bg-white p-4 rounded-2xl border shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] ${isSelected ? 'border-sky-300 ring-2 ring-sky-100 bg-sky-50/10' : 'border-slate-100 hover:border-sky-200 hover:shadow-md'}`}>
-                        <div className="flex justify-between items-start mb-2.5">
-                            <div className="flex items-center gap-2.5">
+                    <div key={doc.id} onClick={() => toggleSelection(doc.id)} className={`bg-white p-3.5 sm:p-4 rounded-2xl border shadow-sm flex flex-col cursor-pointer transition-all active:scale-[0.98] min-w-0 ${isSelected ? 'border-sky-300 ring-2 ring-sky-100 bg-sky-50/10' : 'border-slate-100 hover:border-sky-200 hover:shadow-md'}`}>
+                        <div className="flex flex-wrap justify-between items-center gap-2 mb-2.5 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {isSelected ? <CheckSquare size={20} className="text-sky-500 shrink-0" /> : <div className="w-5 h-5 border-2 border-slate-300 rounded shrink-0"></div>}
-                                <span className="font-bold text-slate-500 kanit-text text-[11px] sm:text-xs bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 truncate max-w-[120px]">{doc.refNo}</span>
+                                <span className="font-bold text-slate-500 kanit-text text-[11px] sm:text-xs bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 truncate min-w-0">{doc.refNo}</span>
                             </div>
                             <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1 font-data shrink-0"><Clock size={12} className="shrink-0"/> {d.toLocaleDateString('th-TH')} {d.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</div>
                         </div>
-                        <div className="mb-3 px-1">
-                            <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1">{doc.patientName}</div>
+                        <div className="mb-3 px-1 min-w-0">
+                            <div className="font-bold text-slate-800 text-sm kanit-text line-clamp-1 break-words">{doc.patientName}</div>
                         </div>
-                        <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                            <div className="flex items-center shrink-0">
+                        <div className="mt-auto flex flex-wrap justify-between items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 min-w-0">
+                            <div className="flex items-center min-w-0">
                                 {getDocBadge(doc.type, doc.typeLabel)}
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); handleSinglePrint(doc); }} className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-sky-600 bg-white hover:bg-sky-50 rounded-lg transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-200 shrink-0">
-                                <Printer size={14} /> พิมพ์
+                            <button onClick={(e) => { e.stopPropagation(); handleSinglePrint(doc); }} className="min-h-[36px] flex items-center justify-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-sky-600 bg-white hover:bg-sky-50 rounded-lg transition-colors font-medium text-xs kanit-text shadow-sm border border-slate-200 shrink-0 ml-auto">
+                                <Printer size={14} className="shrink-0" /> พิมพ์
                             </button>
                         </div>
                     </div>
                   )
-              }) : (<div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 border-dashed"><Printer size={40} className="mx-auto mb-3 opacity-30" /><p className="kanit-text font-bold text-sm">ไม่มีข้อมูลเอกสาร</p></div>)}
+              }) : (<div className="md:col-span-2 text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 border-dashed"><Printer size={40} className="mx-auto mb-3 opacity-30" /><p className="kanit-text font-bold text-sm">ไม่มีข้อมูลเอกสาร</p></div>)}
               
               {isLoadingMore && Array.from({ length: 2 }).map((_, i) => (
                   <div key={`skel-rep-mob-more-${i}`} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
@@ -851,6 +874,7 @@ const ReportsManager = ({ patientsData = [], setPatientsData, posHistoryData = [
                       </div>
                   </div>
               ))}
+              </div>
             </div>
           <div className="h-10 w-full flex flex-col justify-start"></div>
         </div>

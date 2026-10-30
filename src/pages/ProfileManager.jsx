@@ -223,44 +223,49 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Profile Card Header */}
         <div className="bg-white rounded-2xl border border-slate-200/50 shadow-sm overflow-hidden">
           <div className="h-24 bg-gradient-to-r from-sky-400 to-sky-600 relative"></div>
-          <div className="px-6 pb-6 relative flex flex-col md:flex-row items-center md:items-end gap-5 -mt-10">
-            <div className="relative group w-28 h-28 rounded-full border-4 border-white bg-slate-100 shadow-md overflow-hidden cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
-              {formData.photo ? (
-                <img src={formData.photo} alt={formData.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50"><User size={48} /></div>
-              )}
-              <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera size={20} className="mb-0.5" />
-                <span className="text-[10px] kanit-text">เปลี่ยนรูป</span>
+          <div className="px-4 sm:px-6 pb-6 relative flex flex-col md:flex-row items-center md:items-end gap-4 sm:gap-5 -mt-10">
+            <div className="relative group w-28 h-28 shrink-0 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+              <div className="w-full h-full rounded-full border-4 border-white bg-slate-100 shadow-md overflow-hidden relative">
+                {formData.photo ? (
+                  <img src={formData.photo} alt={formData.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50"><User size={48} /></div>
+                )}
+                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
+                  <Camera size={20} className="mb-0.5" />
+                  <span className="text-[10px] kanit-text">เปลี่ยนรูป</span>
+                </div>
               </div>
+              <span className="absolute bottom-0.5 right-0.5 w-8 h-8 rounded-full bg-sky-500 text-white border-2 border-white shadow-md flex items-center justify-center pointer-events-none z-10">
+                <Camera size={14} />
+              </span>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
             </div>
             
-            <div className="text-center md:text-left flex-1 min-w-0 md:pb-2">
-              <h2 className="text-xl font-bold text-slate-800 kanit-text truncate">{formData.name} {formData.nickname && <span className="text-slate-400 font-medium text-lg">({formData.nickname})</span>}</h2>
+            <div className="text-center md:text-left flex-1 min-w-0 w-full md:pb-2">
+              <h2 className="text-xl font-bold text-slate-800 kanit-text break-words">{formData.name} {formData.nickname && <span className="text-slate-400 font-medium text-lg">({formData.nickname})</span>}</h2>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-1.5 text-xs text-slate-500 kanit-text font-medium text-left">
-                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg">รหัสพนักงาน: {formData.empCode || formData.id}</span>
-                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg">แผนก: {formData.category === 'doctor' ? 'แพทย์' : formData.category === 'staff' ? 'สต๊าฟ/พนักงาน' : formData.category || 'ทั่วไป'}</span>
-                <span className="bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-lg font-bold border border-emerald-100 flex items-center gap-1.5">
-                  <span className="w-full max-w-[6px] h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  ตำแหน่ง: {formData.position || roleLabels[formData.role] || formData.role || 'พนักงาน'}
+                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg shrink-0 max-w-full break-words">รหัสพนักงาน: {formData.empCode || formData.id}</span>
+                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg shrink-0 max-w-full break-words">แผนก: {formData.category === 'doctor' ? 'แพทย์' : formData.category === 'staff' ? 'สต๊าฟ/พนักงาน' : formData.category || 'ทั่วไป'}</span>
+                <span className="bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-lg font-bold border border-emerald-100 inline-flex items-center gap-1.5 shrink-0 max-w-full break-words">
+                  <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>ตำแหน่ง: {formData.position || roleLabels[formData.role] || formData.role || 'พนักงาน'}</span>
                 </span>
-                {formData.branchId && <span className="bg-sky-50 text-sky-600 px-2.5 py-1 rounded-lg">สาขา: {formData.branchId === 'all' ? 'ทุกสาขา' : branchesData.find(b => b.id === formData.branchId)?.name || formData.branchId}</span>}
+                {formData.branchId && <span className="bg-sky-50 text-sky-600 px-2.5 py-1 rounded-lg shrink-0 max-w-full break-words">สาขา: {formData.branchId === 'all' ? 'ทุกสาขา' : branchesData.find(b => b.id === formData.branchId)?.name || formData.branchId}</span>}
               </div>
             </div>
           </div>
         </div>
 
         {/* บัญชีผู้ใช้เข้าระบบ */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><UserCheck size={18} /> ข้อมูลบัญชีผู้ใช้</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><UserCheck size={18} className="shrink-0" /> ข้อมูลบัญชีผู้ใช้</h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5 ml-1 kanit-text">ID พนักงาน (Username สำหรับเข้าระบบ)</label>
               <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed text-sm font-data" value={formData.username || ''} readOnly disabled placeholder="สำหรับเข้าสู่ระบบ" />
@@ -269,15 +274,15 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
               {!showPasswordForm ? (
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5 ml-1 kanit-text">รหัสผ่าน</label>
-                  <button type="button" onClick={() => setShowPasswordForm(true)} className="w-full py-2.5 bg-sky-50 border border-sky-100 text-sky-600 hover:text-sky-700 hover:bg-sky-100 rounded-xl font-bold kanit-text text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
-                    <Key size={14} /> เปลี่ยนรหัสผ่านใหม่
+                  <button type="button" onClick={() => setShowPasswordForm(true)} className="w-full min-h-[42px] py-2.5 bg-sky-50 border border-sky-100 text-sky-600 hover:text-sky-700 hover:bg-sky-100 rounded-xl font-bold kanit-text text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                    <Key size={14} className="shrink-0" /> เปลี่ยนรหัสผ่านใหม่
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 relative animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex justify-between items-center mb-1">
-                    <h4 className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5"><Key size={14} className="text-sky-500" /> ตั้งค่ารหัสผ่านใหม่</h4>
-                    <button type="button" onClick={() => { setShowPasswordForm(false); setOldPassword(''); setNewPassword(''); setConfirmNewPassword(''); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold kanit-text transition-colors">ยกเลิก</button>
+                  <div className="flex justify-between items-center mb-1 gap-2">
+                    <h4 className="text-xs font-bold text-slate-700 kanit-text flex items-center gap-1.5"><Key size={14} className="text-sky-500 shrink-0" /> ตั้งค่ารหัสผ่านใหม่</h4>
+                    <button type="button" onClick={() => { setShowPasswordForm(false); setOldPassword(''); setNewPassword(''); setConfirmNewPassword(''); }} className="text-slate-400 hover:text-slate-600 text-xs font-bold kanit-text transition-colors px-2 py-1">ยกเลิก</button>
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-500 mb-1 ml-1 kanit-text">รหัสผ่านเดิม <span className="text-rose-500">*</span></label>
@@ -298,12 +303,12 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
         </div>
 
         {/* Form Sections Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
           
           {/* ข้อมูลทั่วไป */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><UserCheck size={18} /> ข้อมูลส่วนตัว</h3>
-            <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><UserCheck size={18} className="shrink-0" /> ข้อมูลส่วนตัว</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">คำนำหน้า <span className="text-rose-500">*</span></label>
                 <select required className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm kanit-text" value={formData.prefix} onChange={(e) => handleInputChange('prefix', e.target.value)}>
@@ -319,13 +324,13 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                   <option value="น.ส.">น.ส.</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">ชื่อจริง <span className="text-rose-500">*</span></label>
                 <input required type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} />
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">นามสกุล <span className="text-rose-500">*</span></label>
                 <input required type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} />
@@ -336,7 +341,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">ตำแหน่งงาน</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.position || ''} onChange={(e) => handleInputChange('position', e.target.value)} placeholder="เช่น แพทย์แผนจีน, ผู้ช่วย..." />
@@ -347,7 +352,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">วันเกิด</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.dob || ''} onChange={handleDobChange} placeholder="DD/MM/YYYY" maxLength="10" />
@@ -363,7 +368,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">เบอร์โทรศัพท์ <span className="text-rose-500">*</span></label>
                 <input required type="tel" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.phone || ''} onChange={(e) => handleInputChange('phone', e.target.value)} placeholder="08X-XXX-XXXX" />
@@ -381,8 +386,8 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           </div>
 
           {/* ข้อมูลโซเชียลและการติดต่อ */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><Phone size={18} /> โซเชียลมีเดีย</h3>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><Phone size={18} className="shrink-0" /> โซเชียลมีเดีย</h3>
             
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5 ml-1 kanit-text">Line ID</label>
@@ -403,13 +408,13 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           </div>
 
           {/* ที่อยู่ตามทะเบียนบ้าน */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><Home size={18} /> ที่อยู่ตามทะเบียนบ้าน</h3>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><Home size={18} className="shrink-0" /> ที่อยู่ตามทะเบียนบ้าน</h3>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">ที่อยู่ (เลขที่ / ชื่อหมู่บ้าน)</label>
               <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.address || ''} onChange={(e) => handleInputChange('address', e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">หมู่ที่</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.moo || ''} onChange={(e) => handleInputChange('moo', e.target.value)} />
@@ -419,7 +424,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.road || ''} onChange={(e) => handleInputChange('road', e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">แขวง/ตำบล</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.subDistrict || ''} onChange={(e) => handleInputChange('subDistrict', e.target.value)} />
@@ -429,7 +434,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.district || ''} onChange={(e) => handleInputChange('district', e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">จังหวัด</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.province || ''} onChange={(e) => handleInputChange('province', e.target.value)} />
@@ -442,16 +447,16 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           </div>
 
           {/* ที่อยู่ปัจจุบัน */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <h3 className="text-sm font-bold text-sky-600 flex items-center gap-2 kanit-text"><MapPin size={18} /> ที่อยู่ปัจจุบัน</h3>
-              <button type="button" onClick={copyAddressToCurrent} className="text-[11px] font-bold text-sky-500 hover:text-sky-600 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-lg kanit-text transition-colors">คัดลอกจากทะเบียนบ้าน</button>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-bold text-sky-600 flex items-center gap-2 kanit-text"><MapPin size={18} className="shrink-0" /> ที่อยู่ปัจจุบัน</h3>
+              <button type="button" onClick={copyAddressToCurrent} className="min-h-[34px] text-[11px] font-bold text-sky-500 hover:text-sky-600 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-lg kanit-text transition-colors shrink-0">คัดลอกจากทะเบียนบ้าน</button>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">ที่อยู่ (เลขที่ / ชื่อหมู่บ้าน)</label>
               <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.curAddress || ''} onChange={(e) => handleInputChange('curAddress', e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">หมู่ที่</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.curMoo || ''} onChange={(e) => handleInputChange('curMoo', e.target.value)} />
@@ -461,7 +466,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.curRoad || ''} onChange={(e) => handleInputChange('curRoad', e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">แขวง/ตำบล</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.curSubDistrict || ''} onChange={(e) => handleInputChange('curSubDistrict', e.target.value)} />
@@ -471,7 +476,7 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.curDistrict || ''} onChange={(e) => handleInputChange('curDistrict', e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">จังหวัด</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-sm font-data" value={formData.curProvince || ''} onChange={(e) => handleInputChange('curProvince', e.target.value)} />
@@ -484,8 +489,8 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           </div>
 
           {/* ผู้ติดต่อกรณีฉุกเฉิน */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4 md:col-span-2">
-            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><Phone size={18} /> ผู้ติดต่อกรณีฉุกเฉิน</h3>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/50 shadow-sm space-y-4 xl:col-span-2">
+            <h3 className="text-sm font-bold text-sky-600 border-b border-slate-100 pb-3 flex items-center gap-2 kanit-text"><Phone size={18} className="shrink-0" /> ผู้ติดต่อกรณีฉุกเฉิน</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1 kanit-text">ชื่อผู้ติดต่อ</label>
@@ -507,9 +512,9 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           </div>
 
           {/* ข้อมูลการทำงานและค่าตอบแทน (Read-only) */}
-          <div className="bg-slate-100/70 p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 md:col-span-2">
-            <h3 className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-3 flex items-center gap-2 kanit-text"><Lock size={18} className="text-slate-500" /> ข้อมูลระบบการจ้างงานและค่าตอบแทน (ล็อกเฉพาะผู้ดูแลระบบแก้ไขได้)</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="bg-slate-100/70 p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 xl:col-span-2">
+            <h3 className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-3 flex items-start sm:items-center gap-2 kanit-text"><Lock size={18} className="text-slate-500 shrink-0 mt-0.5 sm:mt-0" /> <span>ข้อมูลระบบการจ้างงานและค่าตอบแทน (ล็อกเฉพาะผู้ดูแลระบบแก้ไขได้)</span></h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5 ml-1 kanit-text">ตำแหน่งงาน (Position)</label>
                 <input type="text" className="w-full px-4 py-2.5 rounded-xl bg-slate-200/60 border border-slate-300 text-slate-500 cursor-not-allowed text-sm font-data" value={formData.position || roleLabels[formData.role] || formData.role} readOnly />
@@ -541,12 +546,12 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           </div>
 
           {/* จัดการแคชข้อมูลในเครื่อง (IndexedDB) */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 md:col-span-2">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 xl:col-span-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 kanit-text">
-                  <Database size={18} className="text-sky-500" />
-                  จัดการแคชข้อมูลในเครื่อง (IndexedDB Local Storage)
+                  <Database size={18} className="text-sky-500 shrink-0" />
+                  <span>จัดการแคชข้อมูลในเครื่อง (IndexedDB Local Storage)</span>
                 </h3>
                 <p className="text-slate-500 text-xs mt-1 kanit-text">
                   ระบบจะทำการบันทึกข้อมูลไว้ในเครื่องของคุณอัตโนมัติ เพื่อให้เปิดหน้าเว็บได้เร็วทันใจใน 0.05 วินาที หากต้องการล้างแคชในเครื่องทั้งหมดและดึงข้อมูลใหม่สดๆ สามารถกดปุ่มนี้ได้ทันที
@@ -561,9 +566,9 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
                     setTimeout(() => window.location.reload(), 1000);
                   }
                 }}
-                className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold kanit-text text-xs transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
+                className="w-full sm:w-auto min-h-[42px] px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold kanit-text text-xs transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
               >
-                <RotateCcw size={14} />
+                <RotateCcw size={14} className="shrink-0" />
                 ล้างแคชในเครื่องทั้งหมด
               </button>
             </div>
@@ -575,9 +580,9 @@ const ProfileManager = ({ currentUser, setCurrentUser, staffData = [], setStaffD
           <button 
             type="submit" 
             disabled={isProcessing || isGlobalLoading}
-            className="px-6 py-3 bg-gradient-to-br from-sky-400 to-sky-600 hover:from-sky-500 hover:to-sky-700 text-white rounded-xl font-bold kanit-text text-sm shadow-md shadow-sky-500/20 flex items-center gap-2 transition-all active:scale-[0.98] disabled:opacity-75 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto min-h-[48px] justify-center px-6 py-3 bg-gradient-to-br from-sky-400 to-sky-600 hover:from-sky-500 hover:to-sky-700 text-white rounded-xl font-bold kanit-text text-sm shadow-md shadow-sky-500/20 flex items-center gap-2 transition-all active:scale-[0.98] disabled:opacity-75 disabled:cursor-not-allowed"
           >
-            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {isProcessing ? <Loader2 size={16} className="animate-spin shrink-0" /> : <Save size={16} className="shrink-0" />}
             บันทึกการเปลี่ยนแปลงโปรไฟล์
           </button>
         </div>

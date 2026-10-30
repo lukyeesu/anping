@@ -1127,7 +1127,7 @@ const InventoryManager = ({
         ) : filteredData.length > 0 ? (
           <>
           {/* --- Desktop View (Table) --- */}
-          <div className="hidden lg:block overflow-x-auto custom-scrollbar">
+          <div className="hidden xl:block overflow-x-auto custom-scrollbar">
             <table className="table-auto w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-slate-50/70 border-b border-slate-100"><th className="w-[32%] px-7 py-5 text-sm font-black text-slate-500 kanit-text uppercase tracking-wider whitespace-nowrap">สินค้า / เวชภัณฑ์</th><th className="w-[16%] px-7 py-5 text-sm font-black text-slate-500 kanit-text uppercase tracking-wider text-center whitespace-nowrap">สาขาที่เปิด</th><th className="w-[8%] px-7 py-5 text-sm font-black text-slate-500 kanit-text uppercase tracking-wider text-center whitespace-nowrap">ล็อต & วันหมดอายุ</th><th className="w-[16%] px-7 py-5 text-sm font-black text-slate-500 kanit-text uppercase tracking-wider text-center whitespace-nowrap">คงเหลือ</th><th className="w-[16%] px-7 py-5 text-sm font-black text-slate-500 kanit-text uppercase tracking-wider text-center whitespace-nowrap">ความปลอดภัย</th><th className="w-[140px] px-7 py-5 text-sm font-black text-slate-500 kanit-text uppercase tracking-wider text-right whitespace-nowrap">จัดการ</th></tr>
@@ -1265,7 +1265,7 @@ const InventoryManager = ({
                         )}
                       </td>
                       <td className="px-7 py-5 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity no-drag-zone">
+                        <div className="flex items-center justify-end gap-2 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity no-drag-zone">
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleOpenLogs(item); }}
                             className="p-2.5 text-indigo-500 hover:bg-indigo-50 rounded-xl transition-colors border border-transparent hover:border-indigo-100"
@@ -1296,8 +1296,8 @@ const InventoryManager = ({
             </table>
           </div>
 
-          {/* --- Mobile View (Cards) --- */}
-          <div className="lg:hidden flex flex-col gap-3 p-3 bg-slate-50/50">
+          {/* --- Mobile/Tablet View (Cards) --- */}
+          <div className="xl:hidden flex flex-col gap-3 p-3 bg-slate-50/50">
              {filteredData.map((item, idx) => {
                   const prod = item.product || { name: item.name || 'สินค้า', icon: 'Package', type: 'ทั่วไป' };
                   const Icon = POS_ICONS[prod.icon] || Package;
@@ -1468,12 +1468,12 @@ const InventoryManager = ({
 
             {/* Add/Edit Modal */}
       {isModalOpen && createPortal(
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/40 backdrop-blur-sm ${isModalClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeModal}></div>
-          <div className={`bg-white rounded-3xl w-full max-w-lg max-h-[92dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+          <div className={`bg-white rounded-3xl w-full max-w-lg max-h-[calc(100dvh-1rem)] sm:max-h-[92dvh] [@media(max-height:480px)]:max-h-[96dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isModalClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
             
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+            <div className="p-4 sm:p-6 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner shrink-0 ${
                   formData.itemSource === 'internal' ? 'bg-indigo-100 text-indigo-600' : 'bg-sky-100 text-sky-600'
@@ -1855,10 +1855,10 @@ const InventoryManager = ({
 
       {/* Adjustment Modal */}
       {isAdjustModalOpen && createPortal(
-        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm ${isAdjustClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+        <div className={`fixed inset-0 z-[160] flex items-center justify-center p-2.5 sm:p-4 [@media(max-height:480px)]:p-1.5 bg-slate-900/40 backdrop-blur-sm ${isAdjustClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
           <div className="absolute inset-0" onClick={closeAdjustModal}></div>
-          <div className={`bg-white rounded-[2rem] w-full max-w-2xl max-h-[90dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isAdjustClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+          <div className={`bg-white rounded-[2rem] w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] [@media(max-height:480px)]:max-h-[96dvh] shadow-2xl flex flex-col transform border border-slate-100 relative overflow-hidden ${isAdjustClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="p-4 sm:p-6 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-sky-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20 shrink-0">
                   <ArrowUpDown size={24} />

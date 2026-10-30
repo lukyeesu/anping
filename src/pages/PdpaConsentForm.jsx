@@ -44,12 +44,16 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
     // Canvas States & Snappy drawing refs
     const [isEmpty, setIsEmpty] = useState(true);
     const canvasRef = useRef(null);
+    const scrollContainerRef = useRef(null);
     const isDrawingRef = useRef(false);
     const lastCoordsRef = useRef({ x: 0, y: 0 });
 
     // Scroll to top of window instantly when moving between steps
     useEffect(() => {
         window.scrollTo(0, 0);
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+        }
     }, [step]);
 
     const [savingStep, setSavingStep] = useState(0);
@@ -73,6 +77,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
         const getCoords = (e) => {
             const rect = canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return { x: 0, y: 0 };
             let clientX, clientY;
             if (e.touches && e.touches.length > 0) {
                 clientX = e.touches[0].clientX;
@@ -155,7 +160,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
             canvas.removeEventListener('touchend', handleEnd);
             canvas.removeEventListener('touchcancel', handleEnd);
         };
-    }, [riskAgreed, voluntaryAgreed]);
+    }, [riskAgreed, voluntaryAgreed, step, status]);
 
     const clearCanvas = () => {
         const canvas = canvasRef.current;
@@ -357,18 +362,20 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
     if (status === 'loading') {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-start pt-24 sm:pt-36 bg-white p-6 font-sans">
-                <div className="mb-12 animate-[pulse_2s_infinite_ease-in-out]">
-                    <img src="/anpingclinic.png" alt="Anping Clinic Logo" className="w-64 sm:w-80 h-auto object-contain" />
-                </div>
-                <div className="flex flex-col items-center gap-4">
-                    <div className="relative w-10 h-10">
-                        <div className="absolute inset-0 rounded-full border-2 border-slate-100"></div>
-                        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-sky-500 animate-spin"></div>
+            <div className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-start bg-white p-6 font-sans">
+                <div className="my-auto py-6 flex flex-col items-center text-center">
+                    <div className="mb-8 sm:mb-12 [@media(max-height:500px)]:mb-4 animate-[pulse_2s_infinite_ease-in-out]">
+                        <img src="/anpingclinic.png" alt="Anping Clinic Logo" className="w-40 sm:w-64 [@media(max-height:500px)]:w-28 h-auto object-contain" />
                     </div>
-                    <p className="text-slate-400 text-xs tracking-widest kanit-text animate-[pulse_1.5s_infinite_ease-in-out] mt-2">
-                        กำลังดึงข้อมูลเอกสาร...
-                    </p>
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="relative w-10 h-10">
+                            <div className="absolute inset-0 rounded-full border-2 border-slate-100"></div>
+                            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-500 border-r-sky-500 animate-spin"></div>
+                        </div>
+                        <p className="text-slate-400 text-xs tracking-widest kanit-text animate-[pulse_1.5s_infinite_ease-in-out] mt-2">
+                            กำลังดึงข้อมูลเอกสาร...
+                        </p>
+                    </div>
                 </div>
             </div>
         );
@@ -376,10 +383,10 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
     if (status === 'invalid') {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans">
-                <div className="max-w-md w-full text-center">
+            <div className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-start bg-white p-6 font-sans">
+                <div className="max-w-md w-full text-center my-auto py-6">
                     <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6"><XCircle size={40} /></div>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-3 kanit-text">ลิงก์ไม่ถูกต้อง หรือ หมดอายุ</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-3 kanit-text">ลิงก์ไม่ถูกต้อง หรือ หมดอายุ</h2>
                     <p className="text-slate-400">กรุณาติดต่อเจ้าหน้าที่คลินิกเพื่อขอลิงก์ใหม่อีกครั้ง</p>
                 </div>
             </div>
@@ -388,37 +395,39 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
     if (status === 'saving') {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-start pt-24 sm:pt-36 bg-white p-6 font-sans text-center animate-in fade-in duration-300">
-                <div className="mb-12 animate-[pulse_2s_infinite_ease-in-out]">
-                    <img src="/anpingclinic.png" alt="Anping Clinic Logo" className="w-64 sm:w-80 h-auto object-contain" />
-                </div>
-                
-                <div className="max-w-md w-full flex flex-col items-center">
-                    {/* Cool custom radar/pulse loading circle representing data transfer */}
-                    <div className="relative flex items-center justify-center w-16 h-16 mb-8">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-20 animate-ping"></span>
-                        <div className="relative rounded-full h-12 w-12 bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-500 shadow-sm shadow-emerald-500/10">
-                            <svg className="animate-spin h-6 w-6 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        </div>
+            <div className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-start bg-white p-6 font-sans text-center animate-in fade-in duration-300">
+                <div className="my-auto py-6 flex flex-col items-center max-w-md w-full">
+                    <div className="mb-8 sm:mb-12 [@media(max-height:500px)]:mb-4 animate-[pulse_2s_infinite_ease-in-out]">
+                        <img src="/anpingclinic.png" alt="Anping Clinic Logo" className="w-40 sm:w-64 [@media(max-height:500px)]:w-28 h-auto object-contain" />
                     </div>
                     
-                    <h2 className="text-xl font-bold text-slate-800 kanit-text">
-                        กำลังยืนยันและบันทึกข้อมูล
-                    </h2>
-                    
-                    {/* Static status text */}
-                    <div className="h-6 mt-3 flex items-center justify-center">
-                        <p className="text-emerald-600 font-semibold text-sm transition-all duration-300 animate-[pulse_1.5s_infinite_ease-in-out]">
-                            กำลังบันทึกเอกสารยินยอม...
+                    <div className="w-full flex flex-col items-center">
+                        {/* Cool custom radar/pulse loading circle representing data transfer */}
+                        <div className="relative flex items-center justify-center w-16 h-16 mb-6 sm:mb-8 [@media(max-height:500px)]:mb-4">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-20 animate-ping"></span>
+                            <div className="relative rounded-full h-12 w-12 bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-500 shadow-sm shadow-emerald-500/10">
+                                <svg className="animate-spin h-6 w-6 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        
+                        <h2 className="text-xl font-bold text-slate-800 kanit-text">
+                            กำลังยืนยันและบันทึกข้อมูล
+                        </h2>
+                        
+                        {/* Static status text */}
+                        <div className="h-6 mt-3 flex items-center justify-center">
+                            <p className="text-emerald-600 font-semibold text-sm transition-all duration-300 animate-[pulse_1.5s_infinite_ease-in-out]">
+                                กำลังบันทึกเอกสารยินยอม...
+                            </p>
+                        </div>
+                        
+                        <p className="text-slate-400 mt-4 text-xs max-w-xs leading-relaxed">
+                            กรุณารอสักครู่ ระบบกำลังยืนยันตัวตนและบันทึกข้อมูลการยินยอมการเก็บข้อมูลและการรักษาพยาบาล
                         </p>
                     </div>
-                    
-                    <p className="text-slate-400 mt-4 text-xs max-w-xs leading-relaxed">
-                        กรุณารอสักครู่ ระบบกำลังยืนยันตัวตนและบันทึกข้อมูลการยินยอมการเก็บข้อมูลและการรักษาพยาบาล
-                    </p>
                 </div>
             </div>
         );
@@ -433,16 +442,16 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
         };
 
         return (
-            <div className="min-h-screen flex items-center justify-center bg-white p-6 font-sans">
-                <div className="max-w-md w-full text-center animate-in fade-in zoom-in duration-500">
-                    <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-500/10">
-                        <CheckCircle2 size={48} />
+            <div className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden flex flex-col items-center justify-start bg-white p-6 font-sans">
+                <div className="max-w-md w-full text-center my-auto py-6 animate-in fade-in zoom-in duration-500">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 [@media(max-height:500px)]:w-16 [@media(max-height:500px)]:h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 [@media(max-height:500px)]:mb-4 shadow-xl shadow-emerald-500/10">
+                        <CheckCircle2 size={44} className="sm:w-12 sm:h-12 [@media(max-height:500px)]:w-9 [@media(max-height:500px)]:h-9" />
                     </div>
-                    <h2 className="text-3xl font-bold text-slate-800 mb-3 kanit-text">เรียบร้อยแล้ว</h2>
-                    <p className="text-slate-500 leading-relaxed mb-8">ขอบคุณที่ให้ความยินยอมการเก็บข้อมูลและการรักษาพยาบาล<br/>อันผิงคลินิกจะดูแลข้อมูลการรักษาและการบริการอย่างปลอดภัยสูงสุด</p>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-3 kanit-text">เรียบร้อยแล้ว</h2>
+                    <p className="text-slate-500 leading-relaxed mb-6 sm:mb-8 [@media(max-height:500px)]:mb-5 text-sm sm:text-base">ขอบคุณที่ให้ความยินยอมการเก็บข้อมูลและการรักษาพยาบาล<br/>อันผิงคลินิกจะดูแลข้อมูลการรักษาและการบริการอย่างปลอดภัยสูงสุด</p>
                     <button
                         onClick={handleCloseTab}
-                        className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] text-sm kanit-text"
+                        className="min-h-[44px] px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] text-sm kanit-text"
                     >
                         ปิดหน้าต่างนี้
                     </button>
@@ -452,7 +461,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
     }
 
     return (
-        <div className="min-h-screen flex flex-col bg-white font-sans selection:bg-sky-100">
+        <div ref={scrollContainerRef} className="h-[100dvh] w-full overflow-y-auto overflow-x-hidden flex flex-col bg-white font-sans selection:bg-sky-100">
             {/* Progress Bar Container */}
             <div className="fixed top-0 left-0 w-full h-1.5 bg-slate-50 z-50">
                 <div 
@@ -461,11 +470,11 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                 ></div>
             </div>
 
-            <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 max-w-4xl mx-auto w-full">
+            <main className="flex-1 flex flex-col items-center justify-start my-auto p-4 sm:p-8 md:p-10 max-w-4xl mx-auto w-full">
                 {step === 1 && (
                     <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <header className="mb-10 text-left w-full">
-                            <div className="flex justify-center w-full mb-6">
+                        <header className="mb-8 sm:mb-10 text-left w-full">
+                            <div className="flex justify-center w-full mb-5 sm:mb-6">
                                 <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl shadow-sm"><ShieldCheck size={28} /></div>
                             </div>
                             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text leading-tight">ความยินยอมและรับทราบ<br/>การเก็บรวบรวมข้อมูลส่วนบุคคล</h1>
@@ -474,34 +483,34 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                         <div className="relative group">
                             {/* Full Read Area */}
                             <div className="text-slate-600 space-y-5 mb-8 leading-relaxed py-2">
-                                <p className="text-lg text-slate-700 font-medium italic">"อันผิงคลินิก ให้ความสำคัญกับความเป็นส่วนตัวของท่านเป็นอันดับหนึ่ง"</p>
+                                <p className="text-base sm:text-lg text-slate-700 font-medium italic">"อันผิงคลินิก ให้ความสำคัญกับความเป็นส่วนตัวของท่านเป็นอันดับหนึ่ง"</p>
                                 <p>ท่านรับทราบและยินยอมให้คลินิก เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคล เพื่อวัตถุประสงค์ในการให้บริการทางการแพทย์ การตรวจวินิจฉัย การรักษาด้วยศาสตร์แพทย์แผนจีน การจัดทำเวชระเบียน และการติดต่อนัดหมาย</p>
                                 
                                 <section>
                                     <h3 className="font-bold text-slate-800 mb-2">1. ข้อมูลที่เราจัดเก็บ</h3>
                                     <ul className="space-y-3">
-                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> ชื่อ-นามสกุล, วันเกิด, เลขบัตรประชาชน หรือหนังสือเดินทาง</li>
-                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> ที่อยู่, เบอร์โทรศัพท์, LINE ID</li>
-                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> ประวัติสุขภาพ, อาการ, ข้อมูลแพ้ยา, ผลการวินิจฉัยและการรักษา</li>
+                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> <span>ชื่อ-นามสกุล, วันเกิด, เลขบัตรประชาชน หรือหนังสือเดินทาง</span></li>
+                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> <span>ที่อยู่, เบอร์โทรศัพท์, LINE ID</span></li>
+                                        <li className="flex gap-3"><span className="w-1.5 h-1.5 rounded-full bg-sky-300 mt-2 shrink-0"></span> <span>ประวัติสุขภาพ, อาการ, ข้อมูลแพ้ยา, ผลการวินิจฉัยและการรักษา</span></li>
                                     </ul>
                                 </section>
 
-                                <div className="p-5 bg-slate-50 rounded-2xl border-none text-slate-500 text-sm leading-relaxed">
+                                <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border-none text-slate-500 text-sm leading-relaxed">
                                     <strong className="text-slate-700 block mb-1">ความสำคัญ:</strong> ข้อมูลดังกล่าวเป็นพื้นฐานจำเป็นในการประเมินและวางแผนการรักษา หากท่านไม่ให้ข้อมูลที่จำเป็น คลินิกอาจไม่สามารถให้บริการทางการแพทย์ได้อย่างครบถ้วนและปลอดภัยสูงสุด
                                 </div>
                                 <p className="text-slate-400 text-xs text-center py-4 italic">...ขอบคุณที่ร่วมเป็นส่วนหนึ่งของการพัฒนาบริการของเรา...</p>
                             </div>
                         </div>
 
-                        <div className="space-y-6">
+                        <div className="space-y-5 sm:space-y-6">
                             <label 
-                                className={`flex items-center gap-4 p-6 rounded-3xl transition-all duration-300 select-none cursor-pointer ${
+                                className={`flex items-center gap-3.5 sm:gap-4 p-4 sm:p-6 rounded-2xl sm:rounded-3xl transition-all duration-300 select-none cursor-pointer ${
                                     page1Agreed 
                                         ? 'bg-sky-50 ring-2 ring-sky-500/20' 
                                         : 'bg-slate-50 hover:bg-slate-100'
                                 }`}
                             >
-                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-300 ${page1Agreed ? 'bg-sky-500 text-white shadow-md' : 'bg-white border-2 border-slate-200'}`}>
+                                <div className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center transition-all duration-300 ${page1Agreed ? 'bg-sky-500 text-white shadow-md' : 'bg-white border-2 border-slate-200'}`}>
                                     {page1Agreed && <CheckSquare size={16} />}
                                     <input 
                                         type="checkbox" 
@@ -510,13 +519,13 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                                         onChange={(e) => setPage1Agreed(e.target.checked)} 
                                     />
                                 </div>
-                                <span className={`font-bold kanit-text text-lg ${page1Agreed ? 'text-sky-700' : 'text-slate-600'}`}>รับทราบและยินยอมเงื่อนไข</span>
+                                <span className={`font-bold kanit-text text-base sm:text-lg min-w-0 break-words ${page1Agreed ? 'text-sky-700' : 'text-slate-600'}`}>รับทราบและยินยอมเงื่อนไข</span>
                             </label>
 
                             <button 
                                 onClick={() => setStep(2)} 
                                 disabled={!page1Agreed}
-                                className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
+                                className={`w-full py-3.5 sm:py-5 rounded-2xl sm:rounded-3xl font-bold text-base sm:text-xl transition-all duration-500 ${
                                     page1Agreed 
                                         ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/25 hover:bg-sky-600 hover:scale-[1.02] active:scale-95' 
                                         : 'bg-slate-100 text-slate-300 cursor-not-allowed'
@@ -530,63 +539,63 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
                 {step === 2 && patient && (
                     <div className="w-full animate-in fade-in slide-in-from-right-8 duration-700">
-                        <button onClick={() => setStep(1)} className="group text-slate-400 hover:text-sky-500 mb-8 flex items-center gap-1.5 text-sm font-bold transition-colors">
-                            <ChevronLeft className="group-hover:-translate-x-1 transition-transform" size={18} /> ย้อนกลับ
+                        <button onClick={() => setStep(1)} className="min-h-[44px] py-2 px-1 -ml-1 group text-slate-400 hover:text-sky-500 mb-5 sm:mb-8 inline-flex items-center gap-1.5 text-sm font-bold transition-colors">
+                            <ChevronLeft className="group-hover:-translate-x-1 transition-transform shrink-0" size={18} /> ย้อนกลับ
                         </button>
 
-                        <header className="mb-8 text-left w-full">
+                        <header className="mb-6 sm:mb-8 text-left w-full">
                             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text mb-3 leading-tight">ยืนยันตัวตนและข้อตกลง<br/>ทางอิเล็กทรอนิกส์</h1>
                             <p className="text-slate-400 text-sm leading-relaxed">การให้ความยินยอมผ่านระบบนี้ มีผลทางกฎหมายสมบูรณ์เทียบเท่าการลงนามในเอกสาร</p>
                         </header>
 
-                        <div className="bg-slate-50/50 p-6 sm:p-8 rounded-[2.5rem] mb-10 space-y-4">
-                            <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                                <div><span className="text-slate-400 block mb-1">ชื่อ-นามสกุล</span> <strong className="text-slate-700 text-base">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</strong></div>
-                                <div><span className="text-slate-400 block mb-1">วันเกิด</span> <strong className="text-slate-700 text-base">{patient.dob ? formatDate(patient.dob) : '-'}</strong></div>
-                                <div><span className="text-slate-400 block mb-1">เลขบัตรประชาชน</span> <strong className="text-slate-700 text-base font-data tracking-wider">{patient.idCard || '-'}</strong></div>
-                                <div><span className="text-slate-400 block mb-1">เบอร์โทรศัพท์</span> <strong className="text-slate-700 text-base font-data">{patient.phone || patient.phone1 || '-'}</strong></div>
+                        <div className="bg-slate-50/50 p-4 sm:p-8 rounded-3xl sm:rounded-[2.5rem] mb-8 sm:mb-10 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                                <div className="min-w-0 break-words"><span className="text-slate-400 block mb-1">ชื่อ-นามสกุล</span> <strong className="text-slate-700 text-base">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</strong></div>
+                                <div className="min-w-0 break-words"><span className="text-slate-400 block mb-1">วันเกิด</span> <strong className="text-slate-700 text-base">{patient.dob ? formatDate(patient.dob) : '-'}</strong></div>
+                                <div className="min-w-0 break-words"><span className="text-slate-400 block mb-1">เลขบัตรประชาชน</span> <strong className="text-slate-700 text-base font-data tracking-wider">{patient.idCard || '-'}</strong></div>
+                                <div className="min-w-0 break-words"><span className="text-slate-400 block mb-1">เบอร์โทรศัพท์</span> <strong className="text-slate-700 text-base font-data">{patient.phone || patient.phone1 || '-'}</strong></div>
                             </div>
                         </div>
 
-                        <div className="space-y-6 mb-12">
-                            <h3 className="font-bold text-slate-800 kanit-text text-xl flex items-center gap-2">
-                                ความยินยอมเพิ่มเติม <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full">ทางเลือก</span>
+                        <div className="space-y-6 mb-10 sm:mb-12">
+                            <h3 className="font-bold text-slate-800 kanit-text text-lg sm:text-xl flex flex-wrap items-center gap-2">
+                                ความยินยอมเพิ่มเติม <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-full shrink-0">ทางเลือก</span>
                             </h3>
 
                             {/* Marketing Consent */}
-                            <div className="space-y-4">
+                            <div className="space-y-3 sm:space-y-4">
                                 <p className="text-sm text-slate-500 leading-relaxed">1. ให้คลินิกติดต่อเพื่อแจ้งสิทธิประโยชน์ โปรโมชั่น หรือข่าวสารทางการตลาด</p>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                                     <button 
                                         onClick={() => setMarketingConsent('no')}
-                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                        className={`min-h-[44px] py-3.5 sm:py-4 px-2.5 sm:px-4 rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 ${marketingConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                                     >
-                                        <XCircle size={18} /> ไม่ยินยอม
+                                        <XCircle size={18} className="shrink-0" /> <span>ไม่ยินยอม</span>
                                     </button>
                                     <button 
                                         onClick={() => setMarketingConsent('yes')}
-                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${marketingConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                        className={`min-h-[44px] py-3.5 sm:py-4 px-2.5 sm:px-4 rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 ${marketingConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                                     >
-                                        <CheckCircle2 size={18} /> ยินยอม
+                                        <CheckCircle2 size={18} className="shrink-0" /> <span>ยินยอม</span>
                                     </button>
                                 </div>
                             </div>
 
                             {/* Review Consent */}
-                            <div className="space-y-4">
+                            <div className="space-y-3 sm:space-y-4">
                                 <p className="text-sm text-slate-500 leading-relaxed">2. ให้นำข้อมูลหรือภาพถ่าย (โดยปกปิดตัวตน) ไปใช้เพื่อการศึกษาหรือรีวิวการรักษา</p>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                                     <button 
                                         onClick={() => setReviewConsent('no')}
-                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                        className={`min-h-[44px] py-3.5 sm:py-4 px-2.5 sm:px-4 rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 ${reviewConsent === 'no' ? 'bg-slate-800 text-white shadow-lg shadow-slate-800/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                                     >
-                                        <XCircle size={18} /> ไม่ยินยอม
+                                        <XCircle size={18} className="shrink-0" /> <span>ไม่ยินยอม</span>
                                     </button>
                                     <button 
                                         onClick={() => setReviewConsent('yes')}
-                                        className={`py-4 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${reviewConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                        className={`min-h-[44px] py-3.5 sm:py-4 px-2.5 sm:px-4 rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 flex items-center justify-center gap-1.5 sm:gap-2 ${reviewConsent === 'yes' ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                                     >
-                                        <CheckCircle2 size={18} /> ยินยอม
+                                        <CheckCircle2 size={18} className="shrink-0" /> <span>ยินยอม</span>
                                     </button>
                                 </div>
                             </div>
@@ -595,7 +604,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                         <button 
                             onClick={() => setStep(3)} 
                             disabled={marketingConsent === null || reviewConsent === null}
-                            className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
+                            className={`w-full py-3.5 sm:py-5 rounded-2xl sm:rounded-3xl font-bold text-base sm:text-xl transition-all duration-500 ${
                                 marketingConsent !== null && reviewConsent !== null
                                     ? 'bg-sky-500 text-white shadow-xl shadow-sky-500/25 hover:bg-sky-600 hover:scale-[1.02] active:scale-95' 
                                     : 'bg-slate-100 text-slate-300 cursor-not-allowed'
@@ -608,12 +617,12 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
                 {step === 3 && patient && (
                     <div className="w-full animate-in fade-in slide-in-from-right-8 duration-700">
-                        <button onClick={() => setStep(2)} className="group text-slate-400 hover:text-sky-500 mb-8 flex items-center gap-1.5 text-sm font-bold transition-colors">
-                            <ChevronLeft className="group-hover:-translate-x-1 transition-transform" size={18} /> ย้อนกลับ
+                        <button onClick={() => setStep(2)} className="min-h-[44px] py-2 px-1 -ml-1 group text-slate-400 hover:text-sky-500 mb-5 sm:mb-8 inline-flex items-center gap-1.5 text-sm font-bold transition-colors">
+                            <ChevronLeft className="group-hover:-translate-x-1 transition-transform shrink-0" size={18} /> ย้อนกลับ
                         </button>
 
                         <header className="mb-6 text-left w-full">
-                            <div className="flex justify-center w-full mb-6">
+                            <div className="flex justify-center w-full mb-5 sm:mb-6">
                                 <div className="inline-flex items-center justify-center w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl shadow-sm"><HeartPulse size={28} /></div>
                             </div>
                             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 kanit-text leading-tight font-sans">ใบยินยอมรับการรักษาพยาบาล<br/>(Informed Consent)</h1>
@@ -621,10 +630,10 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                         </header>
 
                         {/* Patient info details */}
-                        <div className="bg-slate-50/50 p-4 rounded-2xl mb-6 flex flex-wrap gap-4 text-xs justify-between">
-                            <div><span className="text-slate-400">ชื่อผู้รับบริการ:</span> <strong className="text-slate-700 ml-1">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</strong></div>
-                            <div><span className="text-slate-400">เลขประจำตัวผู้ป่วย (HN):</span> <strong className="text-slate-700 ml-1 font-data">{patient.hn || patient.id || '-'}</strong></div>
-                            <div><span className="text-slate-400">วันที่ทำรายการ:</span> <strong className="text-slate-700 ml-1">{new Date().toLocaleDateString('th-TH')} {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</strong></div>
+                        <div className="bg-slate-50/50 p-4 rounded-2xl mb-6 flex flex-wrap gap-3 sm:gap-4 text-xs justify-between">
+                            <div className="min-w-0 break-words"><span className="text-slate-400">ชื่อผู้รับบริการ:</span> <strong className="text-slate-700 ml-1">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</strong></div>
+                            <div className="min-w-0 break-words"><span className="text-slate-400">เลขประจำตัวผู้ป่วย (HN):</span> <strong className="text-slate-700 ml-1 font-data">{patient.hn || patient.id || '-'}</strong></div>
+                            <div className="min-w-0 break-words"><span className="text-slate-400">วันที่ทำรายการ:</span> <strong className="text-slate-700 ml-1">{new Date().toLocaleDateString('th-TH')} {new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</strong></div>
                         </div>
 
                         {/* Full Read Area for Clinical details */}
@@ -710,9 +719,9 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                                             value="patient" 
                                             checked={signerType === 'patient'} 
                                             onChange={() => setSignerType('patient')}
-                                            className="accent-sky-500 w-4 h-4"
+                                            className="accent-sky-500 w-4 h-4 shrink-0"
                                         />
-                                        <div>
+                                        <div className="min-w-0 break-words">
                                             <span className="font-bold text-slate-700 block">ผู้ป่วย</span>
                                             <span className="text-xs text-slate-400">{patient.prefix || ''}{patient.firstName || ''} {patient.lastName || ''}</span>
                                         </div>
@@ -724,9 +733,9 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                                             value="representative" 
                                             checked={signerType === 'representative'} 
                                             onChange={() => setSignerType('representative')}
-                                            className="accent-sky-500 w-4 h-4"
+                                            className="accent-sky-500 w-4 h-4 shrink-0"
                                         />
-                                        <div>
+                                        <div className="min-w-0 break-words">
                                             <span className="font-bold text-slate-700 block">ผู้แทนโดยชอบธรรม</span>
                                             <span className="text-xs text-slate-400">ระบุผู้มีอำนาจลงนามแทน</span>
                                         </div>
@@ -812,15 +821,15 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
 
                         {/* Signature Canvas Area */}
                         <div className="space-y-2 mb-8">
-                            <div className="flex justify-between items-center px-1">
+                            <div className="flex flex-wrap justify-between items-center gap-2 px-1">
                                 <label className="block text-sm font-bold text-slate-700 kanit-text flex items-center gap-1.5 select-none">
-                                    <Pencil size={16} className="text-sky-500" /> ลงลายมือชื่ออิเล็กทรอนิกส์
+                                    <Pencil size={16} className="text-sky-500 shrink-0" /> ลงลายมือชื่ออิเล็กทรอนิกส์
                                 </label>
                                 {!isEmpty && (
                                     <button 
                                         type="button" 
                                         onClick={clearCanvas}
-                                        className="text-xs text-rose-500 hover:text-rose-600 font-bold transition-colors flex items-center gap-1 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-100"
+                                        className="min-h-[40px] px-3 py-1.5 text-xs text-rose-500 hover:text-rose-600 font-bold transition-colors inline-flex items-center gap-1 bg-rose-50 rounded-lg border border-rose-100"
                                     >
                                         ล้างลายเซ็น
                                     </button>
@@ -832,17 +841,17 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                                     ref={canvasRef}
                                     width={600}
                                     height={300}
-                                    className={`w-full h-64 sm:h-72 block cursor-crosshair touch-none ${(!riskAgreed || !voluntaryAgreed) ? 'pointer-events-none opacity-30' : ''}`}
+                                    className={`aspect-[2/1] w-full h-auto max-h-[220px] sm:max-h-[280px] [@media(max-height:480px)]:max-h-[150px] block cursor-crosshair touch-none ${(!riskAgreed || !voluntaryAgreed) ? 'pointer-events-none opacity-30' : ''}`}
                                 />
                                 {/* Overlay if locked */}
                                 {(!riskAgreed || !voluntaryAgreed) && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-100/60 backdrop-blur-[1px] text-slate-500 font-bold kanit-text text-sm p-4 text-center select-none leading-relaxed">
+                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-100/60 backdrop-blur-[1px] text-slate-500 font-bold kanit-text text-xs sm:text-sm p-4 text-center select-none leading-relaxed">
                                         กรุณาเลือกยอมรับความยินยอมการรักษาทั้ง 2 ข้อด้านบน เพื่อเปิดการลงลายมือชื่อ
                                     </div>
                                 )}
                                 {/* Background pen watermark */}
                                 {riskAgreed && voluntaryAgreed && isEmpty && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 pointer-events-none select-none">
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 pointer-events-none select-none p-2 text-center">
                                         <Pencil size={24} className="mb-1 opacity-50" />
                                         <span className="text-xs kanit-text font-medium opacity-50">ใช้นิ้วหรือปากกาวาดลายเซ็นที่นี่</span>
                                     </div>
@@ -860,7 +869,7 @@ const PdpaConsentForm = ({ token, hn, gdriveTokens, isAuthDataFetched }) => {
                                 isEmpty || 
                                 (signerType === 'representative' && (!representativeName.trim() || !relationship.trim()))
                             }
-                            className={`w-full py-5 rounded-3xl font-bold text-xl transition-all duration-500 ${
+                            className={`w-full py-3.5 sm:py-5 rounded-2xl sm:rounded-3xl font-bold text-base sm:text-xl transition-all duration-500 ${
                                 riskAgreed && 
                                 voluntaryAgreed && 
                                 !isEmpty && 

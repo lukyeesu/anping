@@ -438,15 +438,15 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       <div ref={headerRef} className="sticky z-30 w-full pointer-events-none transition-all duration-300 ease-in-out flex flex-col" style={{ top: 'var(--mobile-header-offset, 0px)' }}>
         <div className="w-full pointer-events-auto sticky-header-bg shrink-0">
           <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 flex flex-row justify-between items-center gap-2 sm:gap-4 sticky-header-inner">
-            <div>
-              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2">
-                <Tag className="text-sky-500" /> สินค้า/บริการ
+            <div className="min-w-0">
+              <h1 className="font-bold text-slate-800 tracking-tight kanit-text sticky-header-title flex items-center gap-2 truncate">
+                <Tag className="text-sky-500 shrink-0" /> <span className="truncate">สินค้า/บริการ</span>
               </h1>
-              <p className="text-slate-500 kanit-text sticky-header-desc">จัดการสินค้า, บริการ, คอร์ส และแพ็กเกจ ทั้งหมดในคลินิก</p>
+              <p className="text-slate-500 kanit-text sticky-header-desc truncate">จัดการสินค้า, บริการ, คอร์ส และแพ็กเกจ ทั้งหมดในคลินิก</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               {!isEditFormOpen && (
-                <button onClick={handleOpenAddProduct} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-sky-500 text-white hover:bg-sky-600 kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3">
+                <button onClick={() => handleOpenAddProduct()} className="flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl font-semibold shadow-sm transition-transform active:scale-95 shrink-0 bg-sky-500 text-white hover:bg-sky-600 kanit-text sticky-header-btn px-4 py-2 sm:px-6 sm:py-3">
                   <Plus size={18} /> <span className="hidden sm:inline">เพิ่มรายการใหม่</span>
                 </button>
               )}
@@ -458,29 +458,29 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       {/* --- 2. Ranking Cards Section (Non-sticky, จะเลื่อนหายไปตามการ Scroll) --- */}
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-4 sm:mt-5 mb-0 relative z-20 pointer-events-auto">
         {!isGlobalLoading && (rankings.topProducts.length > 0 || rankings.topServices.length > 0) && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
                 
                 {/* Card 1: สินค้าขายดี */}
-                <div className="bg-white rounded-[2rem] p-6 sm:p-7 border border-slate-100 shadow-sm flex flex-col">
-                    <div className="flex items-center gap-3 sm:gap-4 mb-6">
+                <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col min-w-0">
+                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6 min-w-0">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-500 text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 shrink-0">
-                            <Package size={24} className="sm:w-6 sm:h-6" />
+                            <Package size={22} className="sm:w-6 sm:h-6" />
                         </div>
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text">5 อันดับสินค้าขายดี</h3>
+                        <h3 className="text-base sm:text-xl font-bold text-slate-800 kanit-text truncate">5 อันดับสินค้าขายดี</h3>
                     </div>
                     
-                    <div className="flex flex-col gap-4 sm:gap-5 flex-1">
+                    <div className="flex flex-col gap-3.5 sm:gap-5 flex-1 min-w-0">
                         {rankings.topProducts.length > 0 ? rankings.topProducts.map((item, i) => (
-                            <div key={i} className="relative flex flex-col justify-center">
-                                <div className="flex justify-between items-end mb-1.5 z-10 relative px-1">
-                                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
+                            <div key={i} className="relative flex flex-col justify-center min-w-0">
+                                <div className="flex justify-between items-end gap-2 mb-1.5 z-10 relative px-1 min-w-0">
+                                    <div className="flex items-center gap-2.5 sm:gap-4 flex-1 min-w-0 pr-1 sm:pr-4">
                                         <span className="text-amber-500 font-black text-sm sm:text-base w-4 text-center shrink-0">{i + 1}</span>
-                                        <span className="font-bold text-slate-700 kanit-text text-sm sm:text-base truncate">{item.name}</span>
+                                        <span className="font-bold text-slate-700 kanit-text text-xs sm:text-base truncate">{item.name}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                    <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                                         <span className="text-slate-400 font-data text-[10px] sm:text-xs">฿{formatCurrency(item.revenue)}</span>
-                                        <div className="text-indigo-600 font-black font-data text-sm sm:text-base w-16 text-right">
-                                            {item.qty} <span className="text-xs sm:text-sm font-bold kanit-text">ชิ้น</span>
+                                        <div className="text-indigo-600 font-black font-data text-xs sm:text-base min-w-[3.25rem] sm:w-16 text-right">
+                                            {item.qty} <span className="text-[11px] sm:text-sm font-bold kanit-text">ชิ้น</span>
                                         </div>
                                     </div>
                                 </div>
@@ -495,26 +495,26 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                 </div>
 
                 {/* Card 2: บริการ/คอร์สยอดนิยม */}
-                <div className="bg-white rounded-[2rem] p-6 sm:p-7 border border-slate-100 shadow-sm flex flex-col">
-                    <div className="flex items-center gap-3 sm:gap-4 mb-6">
+                <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 border border-slate-100 shadow-sm flex flex-col min-w-0">
+                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6 min-w-0">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 text-emerald-500 rounded-xl sm:rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm shrink-0">
-                            <Stethoscope size={24} className="sm:w-6 sm:h-6" />
+                            <Stethoscope size={22} className="sm:w-6 sm:h-6" />
                         </div>
-                        <h3 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text">5 อันดับบริการ / คอร์สยอดนิยม</h3>
+                        <h3 className="text-base sm:text-xl font-bold text-slate-800 kanit-text truncate">5 อันดับบริการ / คอร์สยอดนิยม</h3>
                     </div>
                     
-                    <div className="flex flex-col gap-4 sm:gap-5 flex-1">
+                    <div className="flex flex-col gap-3.5 sm:gap-5 flex-1 min-w-0">
                         {rankings.topServices.length > 0 ? rankings.topServices.map((item, i) => (
-                            <div key={i} className="relative flex flex-col justify-center">
-                                <div className="flex justify-between items-end mb-1.5 z-10 relative px-1">
-                                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 pr-4">
+                            <div key={i} className="relative flex flex-col justify-center min-w-0">
+                                <div className="flex justify-between items-end gap-2 mb-1.5 z-10 relative px-1 min-w-0">
+                                    <div className="flex items-center gap-2.5 sm:gap-4 flex-1 min-w-0 pr-1 sm:pr-4">
                                         <span className="text-amber-500 font-black text-sm sm:text-base w-4 text-center shrink-0">{i + 1}</span>
-                                        <span className="font-bold text-slate-700 kanit-text text-sm sm:text-base truncate">{item.name}</span>
+                                        <span className="font-bold text-slate-700 kanit-text text-xs sm:text-base truncate">{item.name}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                    <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                                         <span className="text-slate-400 font-data text-[10px] sm:text-xs">฿{formatCurrency(item.revenue)}</span>
-                                        <div className="text-emerald-600 font-black font-data text-sm sm:text-base w-16 text-right">
-                                            {item.qty} <span className="text-xs sm:text-sm font-bold kanit-text">ครั้ง</span>
+                                        <div className="text-emerald-600 font-black font-data text-xs sm:text-base min-w-[3.25rem] sm:w-16 text-right">
+                                            {item.qty} <span className="text-[11px] sm:text-sm font-bold kanit-text">ครั้ง</span>
                                         </div>
                                     </div>
                                 </div>
@@ -559,7 +559,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[140px] sm:w-[180px]">
+            <div className="flex items-center gap-2 pointer-events-auto shrink-0 z-50 w-[115px] sm:w-[150px]">
               <CustomSelect 
                 value={filterType}
                 onChange={(val) => setFilterType(val)}
@@ -582,11 +582,11 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       <div className="w-full mx-auto px-4 md:px-8 2xl:px-12 mt-0 mb-12 flex-1 flex flex-col pointer-events-auto z-10">
 
         {isGlobalLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 min-[390px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5">
             {Array.from({ length: 10 }).map((_, i) => (
-              <div key={`skel-cat-${i}`} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4">
+              <div key={`skel-cat-${i}`} className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-3 sm:gap-4 min-w-0">
                 <div className="flex items-start justify-between relative z-10">
-                  <div className="w-full max-w-[56px] h-14 bg-slate-200 rounded-2xl animate-pulse"></div>
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-200 rounded-2xl animate-pulse"></div>
                 </div>
                 <div className="min-w-0 relative z-10">
                   <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -603,47 +603,49 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
             ))}
           </div>
         ) : filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 min-[390px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 sm:gap-5">
             {filteredProducts.map((prod) => {
               const PIcon = typeof prod.icon === 'string' ? (POS_ICONS[prod.icon] || Package) : (prod.icon || Package);
               return (
-                <div key={prod.id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-4 hover:border-sky-300 hover:shadow-xl hover:shadow-sky-500/5 transition-all group relative overflow-hidden">
-                  <div className="flex items-start justify-between relative z-10">
-                    <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0 border border-sky-100 shadow-inner">
-                      <PIcon size={28} />
+                <div key={prod.id} className="bg-white p-3.5 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border border-slate-100 shadow-sm flex flex-col gap-3 sm:gap-4 hover:border-sky-300 hover:shadow-xl hover:shadow-sky-500/5 transition-all group relative overflow-hidden min-w-0">
+                  <div className="flex items-start justify-between gap-2 relative z-10">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center shrink-0 border border-sky-100 shadow-inner">
+                      <PIcon size={24} className="sm:w-7 sm:h-7" />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <button onClick={() => handleOpenEditProduct(prod)} className="p-2.5 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all border border-slate-100 shadow-sm"><Pencil size={16} /></button>
-                      <button onClick={() => handleDeleteProduct(prod)} className="p-2.5 bg-white text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-100 shadow-sm"><Trash2 size={16} /></button>
+                    <div className="flex flex-row min-[390px]:flex-col sm:flex-row lg:flex-col gap-1.5 shrink-0">
+                      <button onClick={() => handleOpenEditProduct(prod)} className="min-w-[36px] min-h-[36px] p-2 sm:p-2.5 bg-white text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all border border-slate-100 shadow-sm flex items-center justify-center" aria-label="แก้ไข"><Pencil size={15} /></button>
+                      <button onClick={() => handleDeleteProduct(prod)} className="min-w-[36px] min-h-[36px] p-2 sm:p-2.5 bg-white text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-slate-100 shadow-sm flex items-center justify-center" aria-label="ลบ"><Trash2 size={15} /></button>
                     </div>
                   </div>
-                  <div className="min-w-0 relative z-10">
-                    <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-                        <span className="inline-flex items-center justify-center px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold kanit-text truncate uppercase border border-slate-200 leading-none">{prod.category || prod.type || 'ทั่วไป'}</span>
+                  <div className="min-w-0 flex-1 flex flex-col relative z-10">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-2.5 min-w-0">
+                        <span className="inline-flex items-center justify-center px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] sm:text-[11px] font-bold kanit-text max-w-full truncate uppercase border border-slate-200 leading-none">{prod.category || prod.type || 'ทั่วไป'}</span>
                         {checkIsMembership(prod) && (
-                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold kanit-text uppercase border border-amber-200 leading-none">
-                            <Crown size={12} className="text-amber-500" />
-                            {(() => {
-                              const bType = prod.vipBenefitType || prod.vip_benefit_type || 'coupon';
-                              const alVal = prod.vipAlwaysDiscountValue ?? prod.vip_always_discount_value ?? 10;
-                              const alType = (prod.vipAlwaysDiscountType || prod.vip_always_discount_type) === 'amount' ? '฿' : '%';
-                              const cpCount = prod.vipCouponCount ?? prod.vip_coupon_count ?? 1;
-                              if (bType === 'both') return `VIP (ลด ${alVal}${alType} + คูปอง ${cpCount} ใบ)`;
-                              if (bType === 'always_discount') return `VIP (ลด ${alVal}${alType} ทุกครั้ง)`;
-                              return `VIP (คูปอง ${cpCount} ใบ)`;
-                            })()}
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] sm:text-[11px] font-bold kanit-text uppercase border border-amber-200 leading-none max-w-full truncate">
+                            <Crown size={12} className="text-amber-500 shrink-0" />
+                            <span className="truncate">
+                              {(() => {
+                                const bType = prod.vipBenefitType || prod.vip_benefit_type || 'coupon';
+                                const alVal = prod.vipAlwaysDiscountValue ?? prod.vip_always_discount_value ?? 10;
+                                const alType = (prod.vipAlwaysDiscountType || prod.vip_always_discount_type) === 'amount' ? '฿' : '%';
+                                const cpCount = prod.vipCouponCount ?? prod.vip_coupon_count ?? 1;
+                                if (bType === 'both') return `VIP (ลด ${alVal}${alType} + คูปอง ${cpCount} ใบ)`;
+                                if (bType === 'always_discount') return `VIP (ลด ${alVal}${alType} ทุกครั้ง)`;
+                                return `VIP (คูปอง ${cpCount} ใบ)`;
+                              })()}
+                            </span>
                           </span>
                         )}
-                        {checkIsStock(prod) && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-bold kanit-text uppercase border border-indigo-100 leading-none">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)})</span>}
-                        {checkIsCourse(prod) && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold kanit-text uppercase border border-amber-100 leading-none">คอร์ส ({prod.courseSessions || prod.course_sessions || 1})</span>}
-                        {prod.isVatable && <span className="inline-flex items-center justify-center px-2.5 py-1 bg-sky-50 text-sky-600 rounded-lg text-[11px] font-bold kanit-text uppercase border border-sky-100 leading-none">+VAT</span>}
+                        {checkIsStock(prod) && <span className="inline-flex items-center justify-center px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] sm:text-[11px] font-bold kanit-text uppercase border border-indigo-100 leading-none max-w-full truncate">ตัดสต็อก (ขั้นต่ำ {prod.minStock !== undefined ? prod.minStock : (prod.min_stock !== undefined ? prod.min_stock : 5)})</span>}
+                        {checkIsCourse(prod) && <span className="inline-flex items-center justify-center px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] sm:text-[11px] font-bold kanit-text uppercase border border-amber-100 leading-none max-w-full truncate">คอร์ส ({prod.courseSessions || prod.course_sessions || 1})</span>}
+                        {prod.isVatable && <span className="inline-flex items-center justify-center px-2 py-1 bg-sky-50 text-sky-600 rounded-lg text-[10px] sm:text-[11px] font-bold kanit-text uppercase border border-sky-100 leading-none shrink-0">+VAT</span>}
                     </div>
-                    <h4 className="font-bold text-slate-800 text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
-                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-50">
-                        <span className="text-xl font-black text-sky-600 font-data">฿{Number(prod.price).toLocaleString()}</span>
+                    <h4 className="font-bold text-slate-800 text-sm sm:text-base kanit-text line-clamp-2 leading-tight mb-3">{prod.name}</h4>
+                    <div className="flex items-center justify-between mt-auto pt-2.5 sm:pt-3 border-t border-slate-50 min-w-0">
+                        <span className="text-base sm:text-xl font-black text-sky-600 font-data truncate">฿{Number(prod.price).toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-slate-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700"></div>
+                  <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-slate-50 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-700 pointer-events-none"></div>
                 </div>
               );
             })}
@@ -692,28 +694,28 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
       </div>
 
       {isEditFormOpen && createPortal(
-        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isEditFormClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
-          <div className={`bg-white w-full max-w-3xl rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${isEditFormClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner">
+        <div className={`fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 [@media(max-height:480px)]:p-2 bg-slate-900/50 backdrop-blur-sm ${isEditFormClosing ? 'backdrop-animate-out' : 'fade-in'}`}>
+          <div className={`bg-white w-full max-w-3xl rounded-2xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100dvh-1.5rem)] [@media(max-height:480px)]:max-h-[calc(100dvh-1rem)] overflow-hidden ${isEditFormClosing ? 'modal-animate-out' : 'modal-animate-in'}`}>
+            <div className="px-4 py-3.5 sm:p-5 [@media(max-height:480px)]:py-2.5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center shadow-inner shrink-0">
                         <Tag size={20} />
                     </div>
-                    <h4 className="font-bold text-slate-800 text-xl kanit-text">{productForm.id ? 'แก้ไขข้อมูลรายการ' : 'เพิ่มข้อมูลรายการใหม่'}</h4>
+                    <h4 className="font-bold text-slate-800 text-base sm:text-xl kanit-text truncate">{productForm.id ? 'แก้ไขข้อมูลรายการ' : 'เพิ่มข้อมูลรายการใหม่'}</h4>
                 </div>
-                <button type="button" onClick={closeEditForm} disabled={isProcessingProduct} className="text-slate-400 hover:bg-white p-2 rounded-xl transition-colors shadow-sm border border-transparent hover:border-slate-200"><X size={20}/></button>
+                <button type="button" onClick={closeEditForm} disabled={isProcessingProduct} className="text-slate-400 hover:bg-white p-2 rounded-xl transition-colors shadow-sm border border-transparent hover:border-slate-200 shrink-0"><X size={20}/></button>
             </div>
             
-            <form id="catalog-form" onSubmit={handleSaveProduct} className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 md:p-8 bg-slate-50/30">
-                <div className="bg-white p-6 sm:p-8 rounded-[1.5rem] border border-slate-100 shadow-sm">
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <div className="space-y-2">
+            <form id="catalog-form" onSubmit={handleSaveProduct} className="flex-1 min-h-0 overflow-hidden flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 sm:p-6 md:p-8 [@media(max-height:480px)]:p-3 bg-slate-50/30">
+                <div className="bg-white p-4 sm:p-8 [@media(max-height:480px)]:p-4 rounded-2xl sm:rounded-[1.5rem] border border-slate-100 shadow-sm">
+                    <div className="space-y-5 sm:space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                            <div className="space-y-2 min-w-0">
                                 <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">ชื่อรายการ <span className="text-rose-500">*</span></label>
                                 <input required type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 transition-all font-data" value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} placeholder="เช่น เลเซอร์ฝ้า, ครีมกันแดด" />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-2 min-w-0">
                                 <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">ราคา (บาท) <span className="text-rose-500">*</span></label>
                                 <input required type="number" min="0" step="0.01" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-sky-500 focus:bg-white focus:ring-2 focus:ring-sky-500/20 transition-all font-data font-bold text-sky-600 text-lg" value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} placeholder="0.00" />
                             </div>
@@ -736,11 +738,12 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                     <ChevronDown size={18} className="transition-transform duration-200 peer-focus:rotate-180" />
                                 </div>
                                 {showCategorySuggest && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
+                                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar animate-in fade-in zoom-in-95 duration-200 origin-top">
                                         {categories.filter(c => Boolean(c) && String(c) !== 'ทั้งหมด' && String(c).toLowerCase().includes(String(productForm.category || '').toLowerCase())).map((cat, idx) => (
                                             <div 
                                                 key={idx} 
-                                                onMouseDown={(e) => { e.preventDefault(); setProductForm({...productForm, category: cat}); setShowCategorySuggest(false); }} 
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={() => { setProductForm({...productForm, category: cat}); setShowCategorySuggest(false); }} 
                                                 className={`px-4 py-2.5 hover:bg-sky-50 cursor-pointer border-b border-slate-50 last:border-0 font-data text-sm transition-colors ${productForm.category === cat ? 'bg-sky-50 text-sky-600 font-bold' : 'text-slate-700'}`}
                                             >
                                                 {cat}
@@ -758,7 +761,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
 
                         <div className="space-y-2 relative z-10">
                             <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">เลือกไอคอน <span className="text-rose-500">*</span></label>
-                            <div className="grid grid-cols-5 sm:grid-cols-8 gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <div className="grid grid-cols-4 xs:grid-cols-5 sm:grid-cols-8 gap-2 sm:gap-2.5 bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-100">
                                 {Object.keys(POS_ICONS).map(iconKey => {
                                     const CurrentIcon = POS_ICONS[iconKey];
                                     const isSelected = productForm.icon === iconKey;
@@ -766,9 +769,9 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                         <button 
                                             key={iconKey} type="button" 
                                             onClick={() => setProductForm({...productForm, icon: iconKey})}
-                                            className={`aspect-square flex items-center justify-center rounded-xl transition-all ${isSelected ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/30 scale-110 z-10' : 'bg-white text-slate-500 hover:bg-sky-50 border border-slate-200 hover:border-sky-200'}`}
+                                            className={`aspect-square min-h-[42px] flex items-center justify-center rounded-xl transition-all ${isSelected ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/30 scale-105 sm:scale-110 z-10' : 'bg-white text-slate-500 hover:bg-sky-50 border border-slate-200 hover:border-sky-200'}`}
                                         >
-                                            <CurrentIcon size={24} />
+                                            <CurrentIcon size={22} className="sm:w-6 sm:h-6" />
                                         </button>
                                     )
                                 })}
@@ -780,7 +783,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                           <label className="block text-sm font-bold text-slate-600 ml-1 kanit-text uppercase tracking-wide">
                             ประเภทรายการ <span className="text-rose-500">*</span>
                           </label>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
                             {/* Option 1: บริการทั่วไป */}
                             <div 
                               onClick={() => setProductForm({...productForm, itemKind: 'service', stockManaged: false, isCourse: false, isMembership: false})}
@@ -1040,8 +1043,8 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                             </span>
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                            <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div className="min-w-0">
                                                 <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
                                                     ประเภทส่วนลดคูปอง
                                                 </label>
@@ -1056,7 +1059,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                                 />
                                             </div>
 
-                                            <div>
+                                            <div className="min-w-0">
                                                 <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
                                                     มูลค่าส่วนลด ({productForm.vipDiscountType === 'percent' ? '%' : 'บาท'})
                                                 </label>
@@ -1074,7 +1077,7 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                                                 </div>
                                             </div>
 
-                                            <div>
+                                            <div className="min-w-0">
                                                 <label className="block text-xs font-bold text-amber-900 mb-1 kanit-text">
                                                     จำนวนคูปองที่แจก (ใบ)
                                                 </label>
@@ -1120,10 +1123,10 @@ const CatalogManager = ({ products = [], setProducts, callAppScript, showToast, 
                 </div>
               </div>
 
-              <div className="p-4 sm:p-6 border-t border-slate-100 bg-white shrink-0 flex gap-4">
-                  <button type="button" onClick={closeEditForm} className="flex-[1] py-4 bg-slate-100 border border-slate-200 text-slate-700 rounded-2xl font-bold kanit-text hover:bg-slate-200 transition-colors">ยกเลิก</button>
-                  <button type="submit" disabled={isProcessingProduct} className="flex-[2] py-4 bg-sky-500 text-white rounded-2xl font-bold shadow-xl shadow-sky-500/30 kanit-text hover:bg-sky-600 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 text-lg">
-                      {isProcessingProduct ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />} ยืนยันการบันทึก
+              <div className="px-4 py-3 sm:p-6 [@media(max-height:480px)]:py-2.5 border-t border-slate-100 bg-white shrink-0 flex gap-3 sm:gap-4">
+                  <button type="button" onClick={closeEditForm} className="flex-[1] py-3 sm:py-4 [@media(max-height:480px)]:py-2.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-xl sm:rounded-2xl font-bold kanit-text text-sm sm:text-base hover:bg-slate-200 transition-colors">ยกเลิก</button>
+                  <button type="submit" disabled={isProcessingProduct} className="flex-[2] py-3 sm:py-4 [@media(max-height:480px)]:py-2.5 bg-sky-500 text-white rounded-xl sm:rounded-2xl font-bold shadow-xl shadow-sky-500/30 kanit-text hover:bg-sky-600 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-2 text-sm sm:text-lg">
+                      {isProcessingProduct ? <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> : <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />} ยืนยันการบันทึก
                   </button>
               </div>
             </form>

@@ -272,15 +272,15 @@ export default function DatabaseStorageManager({
   return (
     <div className="space-y-6">
       {/* --- ส่วนหัวหลัก (Header & Refresh) --- */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-100 shadow-xs">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100 shadow-xs shrink-0">
             <Database size={24} />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 kanit-text flex items-center gap-2">
-              จัดการฐานข้อมูล แคช & พื้นที่จัดเก็บ
-              <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800 kanit-text flex flex-wrap items-center gap-2">
+              <span>จัดการฐานข้อมูล แคช & พื้นที่จัดเก็บ</span>
+              <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200/60 px-2 py-0.5 rounded-full shrink-0">
                 Real-time Live
               </span>
             </h2>
@@ -293,22 +293,22 @@ export default function DatabaseStorageManager({
         <button
           onClick={fetchStats}
           disabled={isLoadingStats}
-          className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl font-bold kanit-text text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shrink-0"
+          className="w-full sm:w-auto px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-2xl font-bold kanit-text text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shrink-0"
         >
-          <RefreshCw size={15} className={isLoadingStats ? 'animate-spin text-sky-500' : 'text-slate-500'} />
+          <RefreshCw size={15} className={`shrink-0 ${isLoadingStats ? 'animate-spin text-sky-500' : 'text-slate-500'}`} />
           <span>{isLoadingStats ? 'กำลังตรวจสอบ...' : 'รีเฟรชสถิติเรียลไทม์'}</span>
         </button>
       </div>
 
       {/* --- แดชบอร์ดสรุปโควตา Egress & เนื้อที่จัดเก็บ (Metrics Grid) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Metric 1: Egress Quota (Data Transfer) */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider">
+        <div className="min-w-0 bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider min-w-0 truncate">
               โควตา Egress ({stats?.currentMonthLabel || 'เดือนนี้'})
             </span>
-            <span className={`p-2 rounded-xl border ${
+            <span className={`p-2 rounded-xl border shrink-0 ${
               (stats?.egressUsagePercent || 0) > 80 
                 ? 'bg-rose-50 text-rose-600 border-rose-100' 
                 : (stats?.egressUsagePercent || 0) > 50 
@@ -320,7 +320,7 @@ export default function DatabaseStorageManager({
           </div>
 
           <div>
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-2xl font-black text-slate-800 kanit-text">
                 {stats ? formatBytes(stats.estimatedMonthlyEgressBytes) : '-'}
               </span>
@@ -342,34 +342,34 @@ export default function DatabaseStorageManager({
                 style={{ width: `${Math.max(2, stats?.egressUsagePercent || 1)}%` }}
               />
             </div>
-            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex justify-between">
+            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex flex-wrap justify-between gap-1">
               <span>ใช้งานไปแล้ว {stats?.egressUsagePercent != null ? `${stats.egressUsagePercent}%` : '0%'}</span>
               <span className="text-emerald-600 font-medium">ประหยัดได้ {stats?.egressSavingsPercent != null ? `${stats.egressSavingsPercent}%` : '99.8%'}</span>
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs kanit-text">
+          <div className="mt-4 pt-3 border-t border-slate-50 flex flex-wrap items-center justify-between gap-1 text-xs kanit-text">
             <span className="text-slate-500">โควตาคงเหลือเดือนนี้:</span>
             <span className="text-emerald-600 font-bold flex items-center gap-1">
-              <CheckCircle2 size={13} />
+              <CheckCircle2 size={13} className="shrink-0" />
               {stats ? formatBytes(stats.egressRemainingBytes) : '5.00 GB'}
             </span>
           </div>
         </div>
 
         {/* Metric 2: Database Storage Size */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider">
+        <div className="min-w-0 bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider min-w-0 truncate">
               ขนาดฐานข้อมูล (Database)
             </span>
-            <span className="p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
+            <span className="p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100 shrink-0">
               <HardDrive size={16} />
             </span>
           </div>
 
           <div>
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-2xl font-black text-slate-800 kanit-text">
                 {stats ? formatBytes(stats.estimatedDbBytes) : '-'}
               </span>
@@ -385,13 +385,13 @@ export default function DatabaseStorageManager({
                 style={{ width: `${Math.max(2, stats?.dbUsagePercent || 1)}%` }}
               />
             </div>
-            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex justify-between">
+            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex flex-wrap justify-between gap-1">
               <span>ใช้งานไปแล้ว {stats?.dbUsagePercent || 0}%</span>
               <span>{stats?.totalRows ? `${stats.totalRows.toLocaleString()} แถว` : '-'}</span>
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs kanit-text">
+          <div className="mt-4 pt-3 border-t border-slate-50 flex flex-wrap items-center justify-between gap-1 text-xs kanit-text">
             <span className="text-slate-500">ความจุคงเหลือ:</span>
             <span className="text-sky-600 font-bold">
               {stats ? formatBytes(Math.max(0, stats.dbLimitBytes - stats.estimatedDbBytes)) : '-'}
@@ -400,18 +400,18 @@ export default function DatabaseStorageManager({
         </div>
 
         {/* Metric 3: File Storage (Buckets) */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider">
+        <div className="min-w-0 md:col-span-2 xl:col-span-1 bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className="text-xs font-bold text-slate-400 kanit-text uppercase tracking-wider min-w-0 truncate">
               พื้นที่ไฟล์ (Storage Files)
             </span>
-            <span className="p-2 rounded-xl bg-violet-50 text-violet-600 border border-violet-100">
+            <span className="p-2 rounded-xl bg-violet-50 text-violet-600 border border-violet-100 shrink-0">
               <Layers size={16} />
             </span>
           </div>
 
           <div>
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-2xl font-black text-slate-800 kanit-text">
                 {stats ? formatBytes(stats.totalStorageBytes) : '-'}
               </span>
@@ -433,13 +433,13 @@ export default function DatabaseStorageManager({
                 style={{ width: `${Math.max(2, stats?.storageUsagePercent || 1)}%` }}
               />
             </div>
-            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex justify-between">
+            <p className="text-[11px] text-slate-500 kanit-text mt-1.5 flex flex-wrap justify-between gap-1">
               <span>ใช้งานไปแล้ว {stats?.storageUsagePercent != null ? `${stats.storageUsagePercent}%` : '0%'}</span>
               <span>{stats?.totalFilesCount ? `${stats.totalFilesCount.toLocaleString()} ไฟล์` : '0 ไฟล์'} ({stats?.bucketStats?.length || 0} ถัง)</span>
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs kanit-text">
+          <div className="mt-4 pt-3 border-t border-slate-50 flex flex-wrap items-center justify-between gap-1 text-xs kanit-text">
             <span className="text-slate-500">พื้นที่คงเหลือ:</span>
             <span className="text-violet-600 font-bold">
               {stats ? formatBytes(stats.storageRemainingBytes) : '1.00 GB'}
@@ -502,17 +502,17 @@ export default function DatabaseStorageManager({
         </div>
 
         {/* --- เนื้อหาในแต่ละแท็บ --- */}
-        <div className="p-6">
+        <div className="p-3.5 sm:p-6">
           {/* ========================================================================= */}
           {/* TAB 1: EXPORT TO EXCEL */}
           {/* ========================================================================= */}
           {activeActionTab === 'export' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-slate-800 kanit-text flex items-center gap-2">
-                    <FileSpreadsheet className="text-emerald-500" size={18} />
-                    ส่งออกข้อมูลจาก Supabase เป็นไฟล์ Excel (.xlsx) แบบหลาย Sheet
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-800 kanit-text flex items-start sm:items-center gap-2">
+                    <FileSpreadsheet className="text-emerald-500 shrink-0 mt-0.5 sm:mt-0" size={18} />
+                    <span>ส่งออกข้อมูลจาก Supabase เป็นไฟล์ Excel (.xlsx) แบบหลาย Sheet</span>
                   </h3>
                   <p className="text-xs text-slate-500 kanit-text mt-1">
                     ดาวน์โหลดข้อมูลเอกสารการเงิน บิล POS การเข้างานพนักงาน และ Log ระบบ เพื่อนำไปเก็บสำรองข้อมูลไว้ดูย้อนหลังก่อนทำการลบ
@@ -521,21 +521,21 @@ export default function DatabaseStorageManager({
                 <button
                   type="button"
                   onClick={() => setIsStatementModalOpen(true)}
-                  className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 rounded-2xl font-bold kanit-text text-xs shadow-2xs flex items-center gap-2 shrink-0 transition-all active:scale-95"
+                  className="w-full sm:w-auto px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 rounded-2xl font-bold kanit-text text-xs shadow-2xs flex items-center justify-center gap-2 shrink-0 transition-all active:scale-95"
                   title="พิมพ์ / ส่งออก Statement สไตล์ธนาคารพาณิชย์"
                 >
-                  <Printer size={15} />
+                  <Printer size={15} className="shrink-0" />
                   <span>พิมพ์ Statement คลินิก (Bank Style)</span>
                 </button>
               </div>
 
               {/* 1. เลือกช่วงเวลา */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+              <div className="bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-100 space-y-3">
                 <span className="text-xs font-bold text-slate-700 kanit-text block">
                   1. เลือกช่วงเวลาที่ต้องการส่งออก:
                 </span>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                   {[
                     { id: 'all', label: 'ข้อมูลทั้งหมด' },
                     { id: 'year', label: 'เลือกทั้งปี' },
@@ -547,7 +547,7 @@ export default function DatabaseStorageManager({
                       key={tab.id}
                       type="button"
                       onClick={() => setExportRangeType(tab.id)}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold kanit-text border transition-all ${
+                      className={`py-2 px-2.5 sm:px-3 rounded-xl text-xs font-bold kanit-text border transition-all ${
                         exportRangeType === tab.id
                           ? 'bg-white text-sky-600 border-sky-300 shadow-xs'
                           : 'bg-slate-100/60 text-slate-600 border-transparent hover:bg-white'
@@ -561,12 +561,12 @@ export default function DatabaseStorageManager({
                 {/* ตัวกรองตามประเภทช่วงเวลา */}
                 <div className="pt-2">
                   {exportRangeType === 'year' && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                       <label className="text-xs text-slate-600 kanit-text font-medium">ปี พ.ศ./ค.ศ.:</label>
                       <select
                         value={exportYear}
                         onChange={(e) => setExportYear(Number(e.target.value))}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500 min-w-0"
                       >
                         {AVAILABLE_YEARS.map(y => (
                           <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
@@ -577,24 +577,24 @@ export default function DatabaseStorageManager({
 
                   {exportRangeType === 'month' && (
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-xs text-slate-600 kanit-text font-medium">ปี:</label>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <label className="text-xs text-slate-600 kanit-text font-medium shrink-0">ปี:</label>
                         <select
                           value={exportYear}
                           onChange={(e) => setExportYear(Number(e.target.value))}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500 min-w-0"
                         >
                           {AVAILABLE_YEARS.map(y => (
                             <option key={y} value={y}>พ.ศ. {y + 543} ({y})</option>
                           ))}
                         </select>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <label className="text-xs text-slate-600 kanit-text font-medium">เดือน:</label>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <label className="text-xs text-slate-600 kanit-text font-medium shrink-0">เดือน:</label>
                         <select
                           value={exportMonth}
                           onChange={(e) => setExportMonth(Number(e.target.value))}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500 min-w-0"
                         >
                           {THAI_MONTHS.map(m => (
                             <option key={m.value} value={m.value}>{m.label}</option>
@@ -605,36 +605,36 @@ export default function DatabaseStorageManager({
                   )}
 
                   {exportRangeType === 'custom' && (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-slate-500 kanit-text">ตั้งแต่วันที่:</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+                        <span className="text-xs text-slate-500 kanit-text shrink-0">ตั้งแต่วันที่:</span>
                         <input
                           type="date"
                           value={exportStartDate}
                           onChange={(e) => setExportStartDate(e.target.value)}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                          className="w-full sm:w-auto flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
                         />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-slate-500 kanit-text">ถึงวันที่:</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+                        <span className="text-xs text-slate-500 kanit-text shrink-0">ถึงวันที่:</span>
                         <input
                           type="date"
                           value={exportEndDate}
                           onChange={(e) => setExportEndDate(e.target.value)}
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                          className="w-full sm:w-auto flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
                         />
                       </div>
                     </div>
                   )}
 
                   {exportRangeType === 'single' && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 kanit-text">ระบุวันที่:</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 min-w-0">
+                      <span className="text-xs text-slate-500 kanit-text shrink-0">ระบุวันที่:</span>
                       <input
                         type="date"
                         value={exportSingleDate}
                         onChange={(e) => setExportSingleDate(e.target.value)}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
+                        className="w-full sm:w-auto min-w-0 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 kanit-text focus:outline-sky-500"
                       />
                     </div>
                   )}
@@ -643,11 +643,11 @@ export default function DatabaseStorageManager({
 
               {/* 2. เลือกตารางที่ต้องการ Export */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-700 kanit-text">
                     2. เลือกตารางที่ต้องการบรรจุลงในไฟล์ Excel:
                   </span>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={() => setExportSelectedTables(PURGEABLE_TABLES.map(t => t.key))}
@@ -668,11 +668,11 @@ export default function DatabaseStorageManager({
 
                 {/* แถบสรุปช่วงเวลาและจำนวนแถวจริงในช่วงเวลานี้ */}
                 <div className="p-3 rounded-2xl bg-sky-50/70 border border-sky-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs kanit-text">
-                  <div className="flex items-center gap-2 text-sky-800 font-medium">
-                    <Info size={14} className="text-sky-600 shrink-0" />
-                    <span>ช่วงเวลา: <strong className="text-sky-950 font-bold">{currentExportBounds.label}</strong></span>
+                  <div className="flex items-start sm:items-center gap-2 text-sky-800 font-medium min-w-0">
+                    <Info size={14} className="text-sky-600 shrink-0 mt-0.5 sm:mt-0" />
+                    <span className="min-w-0 break-words">ช่วงเวลา: <strong className="text-sky-950 font-bold">{currentExportBounds.label}</strong></span>
                   </div>
-                  <div className="text-sky-700 font-bold">
+                  <div className="text-sky-700 font-bold shrink-0">
                     รวมแถวที่เลือก: {isLoadingExportCounts ? (
                       <span className="animate-pulse text-sky-500">กำลังคำนวณ...</span>
                     ) : (
@@ -681,14 +681,14 @@ export default function DatabaseStorageManager({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
                   {PURGEABLE_TABLES.map(tbl => {
                     const isChecked = exportSelectedTables.includes(tbl.key);
                     const count = exportCounts[tbl.key] !== undefined ? exportCounts[tbl.key] : (stats?.tableCounts?.[tbl.key] || 0);
                     return (
                       <label
                         key={tbl.key}
-                        className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                        className={`p-3 rounded-2xl border flex items-center justify-between gap-2 cursor-pointer transition-all min-w-0 ${
                           isChecked 
                             ? 'bg-sky-50/60 border-sky-200 text-sky-900 shadow-2xs' 
                             : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
@@ -702,11 +702,11 @@ export default function DatabaseStorageManager({
                               if (e.target.checked) setExportSelectedTables([...exportSelectedTables, tbl.key]);
                               else setExportSelectedTables(exportSelectedTables.filter(k => k !== tbl.key));
                             }}
-                            className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
+                            className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 shrink-0"
                           />
                           <span className="text-xs font-bold kanit-text truncate">{tbl.name}</span>
                         </div>
-                        <span className={`text-[11px] font-bold kanit-text px-2 py-0.5 rounded-lg border transition-all ${
+                        <span className={`text-[11px] font-bold kanit-text px-2 py-0.5 rounded-lg border transition-all shrink-0 ${
                           count > 0 
                             ? 'bg-sky-100/70 border-sky-200 text-sky-800' 
                             : 'bg-slate-50 border-slate-100 text-slate-400'
@@ -729,10 +729,10 @@ export default function DatabaseStorageManager({
                   type="button"
                   onClick={handleExecuteExport}
                   disabled={isExporting || exportSelectedTables.length === 0}
-                  className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold kanit-text text-sm transition-all shadow-md hover:shadow-lg flex items-center gap-2.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto px-5 sm:px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold kanit-text text-xs sm:text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-w-0"
                 >
-                  <Download size={18} className={isExporting ? 'animate-bounce' : ''} />
-                  <span>{isExporting ? 'กำลังสร้างไฟล์ Excel...' : 'ดาวน์โหลดไฟล์ Excel (.xlsx) สำรองข้อมูล'}</span>
+                  <Download size={18} className={`shrink-0 ${isExporting ? 'animate-bounce' : ''}`} />
+                  <span className="truncate">{isExporting ? 'กำลังสร้างไฟล์ Excel...' : 'ดาวน์โหลดไฟล์ Excel (.xlsx) สำรองข้อมูล'}</span>
                 </button>
               </div>
             </div>

@@ -50,16 +50,25 @@ const PortalDropdown = ({ isVisible, children, className }) => {
     if (!isVisible) return <span ref={wrapperRef} style={{display: 'none'}} />;
     if (!rect) return <span ref={wrapperRef} style={{display: 'none'}} />;
 
-    const shouldDropUp = typeof window !== 'undefined' && window.innerHeight - rect.bottom < 220;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+    const spaceBelow = vh - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldDropUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const clampedWidth = Math.min(rect.width, vw - 16);
+    const clampedLeft = Math.max(8, Math.min(rect.left, vw - clampedWidth - 8));
+    const maxAvailHeight = Math.max(96, Math.min(240, (shouldDropUp ? spaceAbove : spaceBelow) - 12));
 
     return createPortal(
         <div 
-            className={`fixed z-[99999] ${className || ''}`}
+            className={`fixed z-[99999] overflow-y-auto custom-scrollbar ${className || ''}`}
             style={{
                 top: shouldDropUp ? 'auto' : rect.bottom + 4,
-                bottom: shouldDropUp ? (window.innerHeight - rect.top + 4) : 'auto',
-                left: rect.left,
-                width: rect.width,
+                bottom: shouldDropUp ? (vh - rect.top + 4) : 'auto',
+                left: clampedLeft,
+                width: clampedWidth,
+                maxWidth: 'calc(100vw - 16px)',
+                maxHeight: `${maxAvailHeight}px`,
                 transformOrigin: shouldDropUp ? 'bottom center' : 'top center'
             }}
         >
