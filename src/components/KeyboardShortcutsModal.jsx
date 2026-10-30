@@ -220,11 +220,11 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                               AnpingClinic.apk
                             </h5>
                             <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-mono shrink-0">
-                              v1.6.25 ล่าสุด
+                              v1.6.26 ล่าสุด
                             </span>
                           </div>
                           <p className="text-xs text-sky-700 font-medium kanit-text">
-                            แอปพลิเคชันระบบคลินิกสำหรับแท็บเล็ต Android พร้อมเชื่อมต่อเครื่องอ่านบัตรประชาชนในตัว
+                            แอปพลิเคชันระบบคลินิกสำหรับแท็บเล็ตและสมาร์ตโฟน Android พร้อมเชื่อมต่อเครื่องอ่านบัตรประชาชนในตัว
                           </p>
                         </div>
                       </div>
@@ -236,7 +236,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">ประสิทธิภาพสูงและเสถียร:</strong> ปรับแต่งระบบ Hardware Acceleration และ Responsive แสดงผลเต็มตา 60-120fps บนแท็บเล็ตทุกขนาด</span>
+                          <span><strong className="text-slate-800">ประสิทธิภาพสูงและเสถียร:</strong> ปรับแต่งระบบ Responsive และขยาย Font Size ชัดเจน พร้อมตัวขีดเลื่อนปิดหน้าจอที่สวยงาม 60-120fps บนทุกขนาดจอ</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <ShieldCheck size={14} className="text-indigo-500 shrink-0 mt-0.5" />
@@ -256,10 +256,10 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                         className="w-full py-2.5 px-3 sm:px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/25 hover:-translate-y-0.5 min-w-0"
                       >
                         <Download size={16} className="shrink-0" />
-                        <span className="truncate">ดาวน์โหลด AnpingClinic.apk (v1.6.25 ล่าสุด)</span>
+                        <span className="truncate">ดาวน์โหลด AnpingClinic.apk (v1.6.26 ล่าสุด)</span>
                       </a>
                       <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
-                        ขนาดประมาณ 8.13 MB • สำหรับแท็บเล็ตและสมาร์ตโฟน Android (ติดตั้งง่ายในคลิกเดียว)
+                        ขนาดประมาณ 8.14 MB • สำหรับแท็บเล็ตและสมาร์ตโฟน Android (ติดตั้งง่ายในคลิกเดียว)
                       </span>
                     </div>
                   </div>
