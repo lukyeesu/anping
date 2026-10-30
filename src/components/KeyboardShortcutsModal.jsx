@@ -220,7 +220,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                               AnpingClinic.apk
                             </h5>
                             <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-mono shrink-0">
-                              v1.6.28 ล่าสุด
+                              v1.6.29 ล่าสุด
                             </span>
                           </div>
                           <p className="text-xs text-sky-700 font-medium kanit-text">
@@ -236,7 +236,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">ประสิทธิภาพสูงและเสถียร:</strong> ปลดล็อกปุ่มจัดการ OPD ใช้งานได้ทันที, สั่งพิมพ์เอกสารเปิดเบราว์เซอร์อัตโนมัติบน APK, แก้ไขสีสถานะคูปองคมชัด, แจ้งเตือนอ่านบัตรแบบ Toast และปรับแต่ง Responsive 60-120fps</span>
+                          <span><strong className="text-slate-800">เสถียรภาพสูงสุด 100%:</strong> ป้องกันปัญหาแอปค้าง/หยุดทำงานซ้ำๆ (ANR ปิดหรือรอ) บน Android 14+ ด้วย Foreground Service มาตรฐานใหม่ และระบบกู้คืนหน่วยความจำอัตโนมัติ</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <ShieldCheck size={14} className="text-indigo-500 shrink-0 mt-0.5" />
@@ -244,7 +244,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle2 size={14} className="text-sky-500 shrink-0 mt-0.5" />
-                          <span><strong className="text-slate-800">ระบบพิมพ์และแจ้งเตือน:</strong> รองรับการพิมพ์ใบเสร็จ สลิป และเวชระเบียน พร้อมการแจ้งเตือนแบบ Real-time</span>
+                          <span><strong className="text-slate-800">ระบบพิมพ์และแจ้งเตือน:</strong> สั่งพิมพ์เอกสารเปิดเบราว์เซอร์อัตโนมัติ พร้อมการแจ้งเตือนอ่านบัตรแบบ Toast สั้นๆ ไม่บังหน้าจอ</span>
                         </li>
                       </ul>
                     </div>
@@ -256,10 +256,10 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                         className="w-full py-2.5 px-3 sm:px-4 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs sm:text-sm kanit-text flex items-center justify-center gap-2 transition-all shadow-md shadow-sky-500/25 hover:-translate-y-0.5 min-w-0"
                       >
                         <Download size={16} className="shrink-0" />
-                        <span className="truncate">ดาวน์โหลด AnpingClinic.apk (v1.6.28 ล่าสุด)</span>
+                        <span className="truncate">ดาวน์โหลด AnpingClinic.apk (v1.6.29 ล่าสุด)</span>
                       </a>
                       <span className="block text-center text-[10px] text-slate-400 mt-2 font-medium">
-                        ขนาดประมาณ 8.15 MB • สำหรับแท็บเล็ตและสมาร์ตโฟน Android (ติดตั้งง่ายในคลิกเดียว)
+                        ขนาดประมาณ 12.6 MB • สำหรับแท็บเล็ตและสมาร์ตโฟน Android (ติดตั้งง่ายในคลิกเดียว)
                       </span>
                     </div>
                   </div>

@@ -110,22 +110,32 @@ class CardReaderService : Service() {
 
         createNotificationChannel()
         try {
+            val notification = buildNotification("ระบบพร้อมทำงานในพื้นหลัง (พอร์ต 8181)")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
-                    buildNotification("ระบบพร้อมทำงานในพื้นหลัง (พอร์ต 8181)"),
+                    notification,
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
                 )
             } else {
-                startForeground(NOTIFICATION_ID, buildNotification("ระบบพร้อมทำงานในพื้นหลัง (พอร์ต 8181)"))
+                startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Throwable) {
-            Log.e(TAG, "startForeground error: ${e.message}")
+            Log.e(TAG, "startForeground error: ${e.message}", e)
             try {
-                startForeground(NOTIFICATION_ID, buildNotification("ระบบพร้อมทำงานในพื้นหลัง (พอร์ต 8181)"))
+                val notification = buildNotification("ระบบพร้อมทำงานในพื้นหลัง (พอร์ต 8181)")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
             } catch (e2: Throwable) {
-                Log.e(TAG, "Fallback startForeground error: ${e2.message}")
+                Log.e(TAG, "Fallback startForeground error: ${e2.message}", e2)
             }
         }
 
@@ -159,7 +169,10 @@ class CardReaderService : Service() {
         )
         httpServer?.start()
 
-        checkConnectedDevices()
+        // ย้ายการสแกนอุปกรณ์ USB ไปยัง Background Dispatchers.IO เพื่อไม่ให้บล็อก Main UI Thread ในช่วงเปิดแอป (แก้ปัญหา ANR 100%)
+        serviceScope.launch(Dispatchers.IO) {
+            checkConnectedDevices()
+        }
         startStatusMonitor()
     }
 
@@ -313,35 +326,40 @@ class CardReaderService : Service() {
     }
 
     fun isSmartCardReader(device: UsbDevice): Boolean {
-        // ตัด USB Hub ออกทันที (Class 9)
-        if (device.deviceClass == android.hardware.usb.UsbConstants.USB_CLASS_HUB) return false
+        return try {
+            // ตัด USB Hub ออกทันที (Class 9)
+            if (device.deviceClass == android.hardware.usb.UsbConstants.USB_CLASS_HUB) return false
 
-        // 1. Class 11 = CCID Smart Card Reader (มาตรฐานสากล)
-        for (i in 0 until device.interfaceCount) {
-            if (device.getInterface(i).interfaceClass == 11) return true
-        }
-        if (device.deviceClass == 11) return true
-
-        // 2. ตรวจสอบจากชื่ออุปกรณ์ ต้องมีคีย์เวิร์ดเครื่องอ่านบัตร และไม่ใช่อุปกรณ์ประเภท Storage หรือ Hub
-        val prod = (device.productName ?: "").lowercase()
-        val isSmartCardName = prod.contains("smart card") ||
-                prod.contains("smartcard") ||
-                prod.contains("ccid") ||
-                prod.contains("acr39") ||
-                prod.contains("acr38") ||
-                prod.contains("scr3310") ||
-                prod.contains("feitian")
-
-        if (isSmartCardName) {
-            val isStorageOrHub = (0 until device.interfaceCount).any {
-                val cls = device.getInterface(it).interfaceClass
-                cls == android.hardware.usb.UsbConstants.USB_CLASS_MASS_STORAGE ||
-                cls == android.hardware.usb.UsbConstants.USB_CLASS_HUB
+            // 1. Class 11 = CCID Smart Card Reader (มาตรฐานสากล)
+            for (i in 0 until device.interfaceCount) {
+                if (device.getInterface(i).interfaceClass == 11) return true
             }
-            if (!isStorageOrHub) return true
-        }
+            if (device.deviceClass == 11) return true
 
-        return false
+            // 2. ตรวจสอบจากชื่ออุปกรณ์ ต้องมีคีย์เวิร์ดเครื่องอ่านบัตร และไม่ใช่อุปกรณ์ประเภท Storage หรือ Hub
+            val prod = try { (device.productName ?: "").lowercase() } catch (_: Exception) { "" }
+            val isSmartCardName = prod.contains("smart card") ||
+                    prod.contains("smartcard") ||
+                    prod.contains("ccid") ||
+                    prod.contains("acr39") ||
+                    prod.contains("acr38") ||
+                    prod.contains("scr3310") ||
+                    prod.contains("feitian")
+
+            if (isSmartCardName) {
+                val isStorageOrHub = (0 until device.interfaceCount).any {
+                    val cls = device.getInterface(it).interfaceClass
+                    cls == android.hardware.usb.UsbConstants.USB_CLASS_MASS_STORAGE ||
+                    cls == android.hardware.usb.UsbConstants.USB_CLASS_HUB
+                }
+                if (!isStorageOrHub) return true
+            }
+
+            false
+        } catch (e: Exception) {
+            Log.w(TAG, "isSmartCardReader error: ${e.message}")
+            false
+        }
     }
 
     fun attachDevice(device: UsbDevice) {

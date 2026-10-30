@@ -64,6 +64,8 @@ class MainActivity : AppCompatActivity() {
     private val bundledWebContent by lazy { BundledWebContent(this, Uri.parse(CLINIC_URL).host!!) }
     private var lastBackPressTime: Long = 0
     @Volatile private var canWebScrollUp: Boolean = true
+    private var activeWebView: WebView? = null
+    private fun getActiveWebView(): WebView = activeWebView ?: binding.webView
 
     // File Chooser สำหรับกล้องและรูปภาพ
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
@@ -213,7 +215,7 @@ class MainActivity : AppCompatActivity() {
 
         // ตั้งค่าคลิกที่ป้ายสถานะเครื่องอ่าน เพื่อเปิดดูข้อมูลบัตรฉบับเต็มบน Web App
         binding.cardReaderPill.setOnClickListener {
-            binding.webView.evaluateJavascript("""
+            getActiveWebView().evaluateJavascript("""
                 (function() {
                     try {
                         window.dispatchEvent(new CustomEvent('open-card-inspector'));
@@ -222,11 +224,9 @@ class MainActivity : AppCompatActivity() {
             """.trimIndent(), null)
         }
 
-        // ตั้งค่าปุ่ม Retry กรณีออฟไลน์
+        // ตั้งค่าปุ่ม Retry กรณีออฟไลน์หรือหน่วยความจำถูกรีเซ็ต
         binding.btnRetry.setOnClickListener {
-            binding.layoutError.visibility = View.GONE
-            binding.webView.visibility = View.VISIBLE
-            binding.webView.loadUrl(CLINIC_URL)
+            resetAndReloadWebView()
         }
 
         // ตั้งค่าการกดปุ่ม Back แบบป้องกันการปิดแอปโดยไม่ตั้งใจ
@@ -276,8 +276,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        val webView = binding.webView
+    private fun setupWebView(targetWebView: WebView? = null) {
+        val webView = targetWebView ?: binding.webView
+        activeWebView = webView
 
         // ตั้งค่า Pull-to-Refresh ผ่าน SwipeRefreshLayout
         binding.swipeRefreshLayout.setColorSchemeColors(
@@ -285,10 +286,10 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.getColor(this, android.R.color.holo_green_dark)
         )
         binding.swipeRefreshLayout.setOnRefreshListener {
-            binding.webView.reload()
+            getActiveWebView().reload()
         }
         binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
-            canWebScrollUp || binding.webView.scrollY > 0
+            canWebScrollUp || getActiveWebView().scrollY > 0
         }
 
         // ปิด offscreen layer type เพื่อให้ Chromium compositing ทำงานตรงกับ Hardware Surface (ลื่นไหล 60FPS)
@@ -314,7 +315,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.25"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.29"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -371,7 +372,7 @@ class MainActivity : AppCompatActivity() {
             @JavascriptInterface
             fun showCardInspector() {
                 runOnUiThread {
-                    binding.webView.evaluateJavascript("""
+                    getActiveWebView().evaluateJavascript("""
                         (function() {
                             try {
                                 window.dispatchEvent(new CustomEvent('open-card-inspector'));
@@ -461,6 +462,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.webViewClient = object : WebViewClient() {
+            private var renderProcessGoneCount = 0
+            private var lastRenderProcessGoneTime = 0L
+
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 return request?.let { bundledWebContent.intercept(it) }
             }
@@ -469,16 +473,18 @@ class MainActivity : AppCompatActivity() {
                 detail: RenderProcessGoneDetail?
             ): Boolean {
                 val didCrash = detail?.didCrash() ?: false
+                val now = System.currentTimeMillis()
                 Log.e(TAG, "WebView render process gone! didCrash=$didCrash")
-                // ป้องกันไม่ให้แอปปิดตัวเอง โดยคืนค่า true ให้ระบบรู้ว่าเรารับมือแล้ว (Prevent App Crash 100%)
+
+                if (now - lastRenderProcessGoneTime > 30000) {
+                    renderProcessGoneCount = 0
+                }
+                renderProcessGoneCount++
+                lastRenderProcessGoneTime = now
+
+                // ป้องกันไม่ให้แอปปิดตัวเอง และป้องกัน Recreation Loop ไม่รู้จบ (ตัดสาเหตุ ANR ปิดหรือรอ 100%)
                 runOnUiThread {
-                    try {
-                        binding.layoutError.visibility = View.VISIBLE
-                        binding.tvErrorMessage.text = "หน่วยความจำระบบได้รับการรีเซ็ต กำลังเปิดหน้าคลินิกใหม่อัตโนมัติ..."
-                        (view?.parent as? android.view.ViewGroup)?.removeView(view)
-                        view?.destroy()
-                        recreate()
-                    } catch (_: Exception) {}
+                    handleRenderProcessGone(view, didCrash, renderProcessGoneCount)
                 }
                 return true
             }
@@ -547,6 +553,44 @@ class MainActivity : AppCompatActivity() {
 
         // โหลดหน้าระบบอันผิงคลินิก
         webView.loadUrl(CLINIC_URL)
+    }
+
+    private fun handleRenderProcessGone(view: WebView?, didCrash: Boolean, crashCount: Int) {
+        try {
+            (view?.parent as? ViewGroup)?.removeView(view)
+            view?.destroy()
+        } catch (_: Exception) {}
+
+        activeWebView = null
+        binding.layoutError.visibility = View.VISIBLE
+
+        if (crashCount <= 1) {
+            binding.tvErrorMessage.text = "หน่วยความจำระบบได้รับการรีเซ็ต กำลังเปิดหน้าคลินิกใหม่อัตโนมัติ..."
+            binding.root.postDelayed({
+                try {
+                    resetAndReloadWebView()
+                } catch (e: Exception) {
+                    Log.e(TAG, "resetAndReloadWebView error: ${e.message}")
+                }
+            }, 1200)
+        } else {
+            binding.tvErrorMessage.text = "หน่วยความจำระบบเต็มชั่วคราว กรุณากดปุ่มด้านล่างเพื่อเปิดหน้าคลินิกใหม่อีกครั้ง"
+        }
+    }
+
+    private fun resetAndReloadWebView() {
+        binding.layoutError.visibility = View.GONE
+        binding.swipeRefreshLayout.removeAllViews()
+        val newWebView = WebView(this).apply {
+            id = R.id.webView
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        binding.swipeRefreshLayout.addView(newWebView)
+        activeWebView = newWebView
+        setupWebView(newWebView)
     }
 
     private fun injectScrollDetection(view: WebView?) {
@@ -642,7 +686,7 @@ class MainActivity : AppCompatActivity() {
                 } catch(e) {}
             })();
         """.trimIndent()
-        binding.webView.evaluateJavascript(jsCode, null)
+        getActiveWebView().evaluateJavascript(jsCode, null)
     }
 
     private fun notifyWebCardRemoved() {
@@ -654,7 +698,7 @@ class MainActivity : AppCompatActivity() {
                 } catch(e) {}
             })();
         """.trimIndent()
-        binding.webView.evaluateJavascript(jsCode, null)
+        getActiveWebView().evaluateJavascript(jsCode, null)
     }
 
     private var pillDismissRunnable: Runnable? = null
@@ -785,8 +829,9 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                val web = getActiveWebView()
                 // Same-document modal history is not always reflected by WebView.canGoBack().
-                binding.webView.evaluateJavascript("""
+                web.evaluateJavascript("""
                     (function() {
                         if (window.history.state && window.history.state.modal) {
                             window.history.back();
@@ -796,8 +841,8 @@ class MainActivity : AppCompatActivity() {
                     })()
                 """.trimIndent()) { handled ->
                     if (handled == "true") return@evaluateJavascript
-                    if (binding.webView.canGoBack()) {
-                        binding.webView.goBack()
+                    if (web.canGoBack()) {
+                        web.goBack()
                     } else {
                         val currentTime = System.currentTimeMillis()
                         if (currentTime - lastBackPressTime < 2000) {
@@ -820,19 +865,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleUsbDeviceIntent(intent: Intent?) {
         if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
-            val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-            }
-            device?.let {
-                if (cardService?.isSmartCardReader(it) == true) {
-                    if (usbManager?.hasPermission(it) == true) {
-                        cardService?.attachDevice(it)
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                     } else {
-                        requestUsbPermission(it)
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     }
+                    device?.let {
+                        if (cardService?.isSmartCardReader(it) == true) {
+                            if (usbManager?.hasPermission(it) == true) {
+                                cardService?.attachDevice(it)
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    requestUsbPermission(it)
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "handleUsbDeviceIntent error: ${e.message}")
                 }
             }
         }
@@ -890,7 +943,9 @@ class MainActivity : AppCompatActivity() {
 
                 if (latestCode > currentCode) {
                     withContext(Dispatchers.Main) {
-                        showUpdateDialog(latestName, changelog, apkUrl)
+                        if (!isFinishing && !isDestroyed) {
+                            showUpdateDialog(latestName, changelog, apkUrl)
+                        }
                     }
                 }
             } catch (e: Exception) {

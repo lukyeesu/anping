@@ -1,8 +1,15 @@
-# WebView รุ่นทดลอง 1.6.26
+# WebView รุ่น 1.6.29
 
-Release 1.6.26 วันที่ 28/10/2026: ขยาย Whole-Content Scaling ของ Sidebar ครบทั้ง 15 หน้า
-SHA-256: `0395848d49c7b589465edec9f08735e8b92f12d944fde06b0934e95d8881c0b0`
-ไฟล์ติดตั้ง: `../public/AnpingClinic.apk` — package `com.anping.clinic`, versionCode `48`
+Release 1.6.29 วันที่ 30/10/2026: แก้ไขปัญหาแอพหยุดทำงานซ้ำๆ (Crash Loop) และ ANR (ปิดหรือรอ) ขณะเปิดแอพ
+SHA-256: `49049B774EC403941EA6EBD2C67969FD12DC12368C3E924170113020DC3B6C7D`
+ไฟล์ติดตั้ง: `../public/AnpingClinic.apk` — package `com.anping.clinic`, versionCode `52`
+
+## 1.6.29: แก้ไขอาการ Crash Loop และ ANR ปิดหรือรอ ขณะเปิดแอป
+- **แก้ไข Foreground Service ตามข้อกำหนด Android 14+**: เพิ่มสิทธิ์ `CHANGE_NETWORK_STATE` และ `CHANGE_WIFI_STATE` ใน `AndroidManifest.xml` เพื่อปฏิบัติตามข้อกำหนดความปลอดภัยของ `FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE` เมื่อเริ่มทำงานโดยยังไม่ได้เสียบเครื่องอ่านบัตร ป้องกัน `SecurityException` และ `ForegroundServiceDidNotStartInTimeException` ที่เป็นต้นเหตุของ ANR ปิดหรือรอ
+- **กำจัด Recreation Loop ใน WebView Render Process**: ยกเลิกการเรียก `recreate()` ที่เป็นลูปทำลายและสร้าง Activity ซ้ำๆ ทันทีที่เปิดแอป เปลี่ยนเป็นระบบกู้คืนหน่วยความจำ `handleRenderProcessGone` พร้อมสลับสร้างอินสแตนซ์ WebView ใหม่แบบไดนามิก ป้องกันการค้างและปัญหา UI Thread ถูกบล็อก
+- **ย้ายการตรวจสอบ USB สู่ Background Thread**: ดึงการประมวลผล USB Manager (`checkConnectedDevices`, `handleUsbDeviceIntent`) ออกจาก Main UI Thread สู่ Coroutine `Dispatchers.IO` เริ่มต้นแอปเร็วทันที 0ms UI Block
+- **เปิดใช้ aaptOptions noCompress สำหรับ Asset หน้าเว็บ**: ไฟล์ Web Bundle ขนาดใหญ่จะถูก map ผ่านหน่วยความจำตรงจาก APK ไม่ต้อง Decompress ผ่าน RAM ของ AssetManager ลดภาระหน่วยความจำและตัดปัญหา OutOfMemory บนแท็บเล็ตทุกรุ่น
+- **ความปลอดภัยของ BundledWebContent**: จัดการ Exception ในการอ่าน Asset และเพิ่ม CORS Header ทุกคำขอที่ Intercept แบบครบถ้วน 100%
 
 ## 1.6.26: Sidebar เลื่อนไม่กระตุกทุกหน้าแบบหน้าเวชระเบียน
 - ขยายกลไก whole-content scaling และ WAAPI motion ควบคุมด้วย `useSidebarBlocks` ให้ครอบคลุมทั้ง 15 แท็บใน authenticated shell: records, queue, exec_dashboard, finance, dashboard, catalog, coupons, inventory, reports, staff, branch, settings, profile, pos, display_ads
