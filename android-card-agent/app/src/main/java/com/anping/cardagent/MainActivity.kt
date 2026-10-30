@@ -98,16 +98,18 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread { updateReaderStatusPill(connected, readerName, hasCard) }
             }
 
-            // เมื่อเสียบบัตรและอ่านสำเร็จ นำส่งข้อมูลเข้าสู่ WebView
+            // เมื่อเสียบบัตรและอ่านสำเร็จ นำส่งข้อมูลเข้าสู่ WebView พร้อมแจ้งเตือน Toast สั้นๆ
             cardService?.onCardAutoRead = { card ->
                 runOnUiThread {
                     notifyWebCardInserted(card)
+                    Toast.makeText(this@MainActivity, "อ่านข้อมูลจากบัตรประชาชนสำเร็จ", Toast.LENGTH_SHORT).show()
                 }
             }
 
             cardService?.onCardRemoved = {
                 runOnUiThread {
                     notifyWebCardRemoved()
+                    Toast.makeText(this@MainActivity, "ถอดบัตรประชาชนออกแล้ว", Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -625,30 +627,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var pillDismissRunnable: Runnable? = null
+    private var lastPillConnected: Boolean? = null
+    private var lastPillHasCard: Boolean? = null
 
     private fun updateReaderStatusPill(connected: Boolean, readerName: String, hasCard: Boolean) {
+        // ซ่อนป้ายลอยถาวร ไม่ให้ขึ้นมาค้างบังปุ่มและแถบนำทางด้านล่าง
         pillDismissRunnable?.let { binding.cardReaderPill.removeCallbacks(it) }
-        binding.cardReaderPill.visibility = View.VISIBLE
+        binding.cardReaderPill.visibility = View.GONE
 
-        if (!connected) {
-            binding.dotPillStatus.setBackgroundResource(R.drawable.shape_circle_red)
-            binding.tvPillText.text = "ไม่มีเครื่องอ่านบัตร"
-            binding.tvPillText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
-            val r = Runnable { binding.cardReaderPill.visibility = View.GONE }
-            pillDismissRunnable = r
-            binding.cardReaderPill.postDelayed(r, 3000)
-        } else if (hasCard) {
-            binding.dotPillStatus.setBackgroundResource(R.drawable.shape_circle_green)
-            binding.tvPillText.text = "พบบัตรประชาชน (แตะดูข้อมูลฉบับเต็ม)"
-            binding.tvPillText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-            // เมื่อเสียบบัตรอยู่ ให้คงป้ายสถานะไว้ เพื่อให้เจ้าหน้าที่แตะเปิดดูข้อมูลได้ตลอดเวลา
-        } else {
-            binding.dotPillStatus.setBackgroundResource(R.drawable.shape_circle_yellow)
-            binding.tvPillText.text = "เครื่องอ่านเชื่อมต่อแล้ว: $readerName"
-            binding.tvPillText.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
-            val r = Runnable { binding.cardReaderPill.visibility = View.GONE }
-            pillDismissRunnable = r
-            binding.cardReaderPill.postDelayed(r, 3500)
+        // แสดงแจ้งเตือนแบบ Toast สั้นๆ อัตโนมัติแทนป๊อปอัพ เพื่อไม่ให้ค้างบังหน้าจอ
+        val isFirstCheck = (lastPillConnected == null && lastPillHasCard == null)
+        val prevConnected = lastPillConnected
+        val prevHasCard = lastPillHasCard
+
+        if (connected != prevConnected || hasCard != prevHasCard) {
+            lastPillConnected = connected
+            lastPillHasCard = hasCard
+
+            if (!connected) {
+                if (prevConnected == true) {
+                    Toast.makeText(this@MainActivity, "ถอดเครื่องอ่านบัตรแล้ว", Toast.LENGTH_SHORT).show()
+                }
+            } else if (hasCard) {
+                if (prevHasCard != true) {
+                    Toast.makeText(this@MainActivity, "พบบัตรประชาชน (กำลังอ่านข้อมูล...)", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                if (!isFirstCheck && prevConnected != true) {
+                    Toast.makeText(this@MainActivity, "พบเครื่องอ่านบัตร: $readerName", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 

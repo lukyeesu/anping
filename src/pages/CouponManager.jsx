@@ -6960,7 +6960,13 @@ const CouponManager = ({
                       onClick={() => setStatusFilter(tab.id)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold kanit-text transition-all ${
                         statusFilter === tab.id
-                          ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                          ? tab.id === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 shadow-2xs font-extrabold border border-emerald-200/80'
+                            : tab.id === 'used'
+                            ? 'bg-slate-200 text-slate-800 shadow-2xs font-extrabold'
+                            : tab.id === 'expired'
+                            ? 'bg-rose-50 text-rose-700 shadow-2xs font-extrabold border border-rose-200/80'
+                            : 'bg-white text-slate-800 shadow-2xs font-extrabold'
                           : 'text-slate-500 hover:text-slate-700'
                       }`}
                     >
@@ -7034,7 +7040,13 @@ const CouponManager = ({
                         onClick={() => setStatusFilter(tab.id)}
                         className={`py-1.5 rounded-lg text-xs font-bold kanit-text text-center transition-all ${
                           statusFilter === tab.id
-                            ? 'bg-white text-slate-800 shadow-2xs font-extrabold'
+                            ? tab.id === 'active'
+                              ? 'bg-emerald-50 text-emerald-700 shadow-2xs font-extrabold border border-emerald-200/80'
+                              : tab.id === 'used'
+                              ? 'bg-slate-200 text-slate-800 shadow-2xs font-extrabold'
+                              : tab.id === 'expired'
+                              ? 'bg-rose-50 text-rose-700 shadow-2xs font-extrabold border border-rose-200/80'
+                              : 'bg-white text-slate-800 shadow-2xs font-extrabold'
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
@@ -7190,17 +7202,17 @@ const CouponManager = ({
 
                           {/* Status Counter Chips */}
                           <div className="grid grid-cols-3 gap-2 mt-3 pt-0.5">
-                            <div className="py-1.5 px-2 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 text-center">
-                              <div className="text-[10px] font-bold text-white/85 kanit-text">พร้อมใช้</div>
+                            <div className="py-1.5 px-2 rounded-xl bg-emerald-500/25 border border-emerald-400/35 text-center">
+                              <div className="text-[10px] font-bold text-emerald-200 kanit-text">พร้อมใช้</div>
                               <div className="text-base md:text-lg font-black font-data text-white drop-shadow-sm">{batch.activeCount}</div>
                             </div>
-                            <div className="py-1.5 px-2 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 text-center">
-                              <div className="text-[10px] font-bold text-white/70 kanit-text">ใช้แล้ว</div>
-                              <div className="text-base md:text-lg font-black font-data text-white/90 drop-shadow-sm">{batch.usedCount}</div>
+                            <div className="py-1.5 px-2 rounded-xl bg-black/30 border border-white/20 text-center">
+                              <div className="text-[10px] font-bold text-white/75 kanit-text">ใช้แล้ว</div>
+                              <div className="text-base md:text-lg font-black font-data text-white/95 drop-shadow-sm">{batch.usedCount}</div>
                             </div>
-                            <div className="py-1.5 px-2 rounded-xl bg-black/25 backdrop-blur-sm border border-white/15 text-center">
-                              <div className="text-[10px] font-bold text-white/70 kanit-text">หมดอายุ</div>
-                              <div className="text-base md:text-lg font-black font-data text-white/90 drop-shadow-sm">{batch.expiredCount}</div>
+                            <div className="py-1.5 px-2 rounded-xl bg-black/40 border border-white/15 text-center">
+                              <div className="text-[10px] font-bold text-rose-300/90 kanit-text">หมดอายุ</div>
+                              <div className="text-base md:text-lg font-black font-data text-rose-200/90 drop-shadow-sm">{batch.expiredCount}</div>
                             </div>
                           </div>
                         </div>

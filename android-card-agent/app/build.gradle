@@ -11,8 +11,8 @@ android {
         applicationId "com.anping.clinic"
         minSdk 24
         targetSdk 34
-        versionCode 49
-        versionName "1.6.26"
+        versionCode 50
+        versionName "1.6.27"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -3107,54 +3107,62 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
 
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
-                  <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><Users size={20} /> ข้อมูลส่วนตัว</h4>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      {!isViewMode && (
-                        <>
-                          {/* ปุ่มอ่านบัตรจากเครื่อง Smart Card Reader (เพิ่มใหม่) */}
+                  <div className="border-b border-sky-100 pb-3 mb-4 sm:mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-3">
+                    <h4 className="text-base sm:text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text">
+                      <Users size={20} className="shrink-0" /> ข้อมูลส่วนตัว
+                    </h4>
+                    {!isViewMode && (
+                      <div className="w-full sm:w-auto flex items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+                        {/* ปุ่มอ่านบัตรจากเครื่อง Smart Card Reader */}
+                        <button
+                          type="button" 
+                          onClick={() => handleSmartCardRead(false)} 
+                          disabled={isReadingCard}
+                          className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2 sm:px-3.5 py-2 sm:py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:bg-emerald-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-emerald-200/80 shadow-xs disabled:opacity-50 cursor-pointer active:scale-95"
+                          title="อ่านข้อมูลจากเครื่องอ่านบัตรประชาชน"
+                        >
+                          {isReadingCard ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin shrink-0"></div>
+                              <span className="hidden sm:inline truncate">กำลังอ่านบัตร...</span>
+                              <span className="sm:hidden truncate">กำลังอ่าน...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard size={15} className="shrink-0 text-emerald-600" />
+                              <span className="hidden sm:inline truncate">อ่านข้อมูลจากบัตร</span>
+                              <span className="sm:hidden truncate">อ่านบัตร</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* ปุ่มดูข้อมูลบัตรฉบับเต็ม */}
+                        {(smartCardInspectData || (typeof window !== 'undefined' && window.AndroidCardBridge)) && (
                           <button
                             type="button" 
-                            onClick={() => handleSmartCardRead(false)} 
-                            disabled={isReadingCard}
-                            className="text-xs sm:text-sm px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-emerald-100 shadow-sm disabled:opacity-50 cursor-pointer"
+                            onClick={() => setShowCardInspectModal(true)}
+                            className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2 sm:px-3.5 py-2 sm:py-1.5 bg-sky-50 text-sky-700 hover:bg-sky-100 active:bg-sky-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-sky-200/80 shadow-xs cursor-pointer active:scale-95"
+                            title="ดูข้อมูลและรูปถ่ายจากบัตรประชาชนฉบับเต็ม"
                           >
-                            {isReadingCard ? (
-                              <>
-                                <div className="w-3.5 h-3.5 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin shrink-0"></div>
-                                <span className="hidden sm:inline">กำลังอ่านบัตร...</span>
-                                <span className="sm:hidden">กำลังอ่าน...</span>
-                              </>
-                            ) : (
-                              <>
-                                <CreditCard size={16} /> <span className="hidden sm:inline">อ่านข้อมูลจากบัตร</span><span className="sm:hidden">อ่านบัตร</span>
-                              </>
-                            )}
+                            <Eye size={15} className="shrink-0 text-sky-600" />
+                            <span className="hidden sm:inline truncate">ดูข้อมูลบัตรฉบับเต็ม</span>
+                            <span className="sm:hidden truncate">ดูบัตร</span>
                           </button>
+                        )}
 
-                          {/* ปุ่มดูข้อมูลบัตรฉบับเต็ม */}
-                          {(smartCardInspectData || (typeof window !== 'undefined' && window.AndroidCardBridge)) && (
-                            <button
-                              type="button" 
-                              onClick={() => setShowCardInspectModal(true)}
-                              className="text-xs sm:text-sm px-3 py-1.5 bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-sky-100 shadow-sm cursor-pointer"
-                              title="ดูข้อมูลและรูปถ่ายจากบัตรประชาชนฉบับเต็ม"
-                            >
-                              <Eye size={16} /> <span className="hidden sm:inline">ดูข้อมูลบัตรฉบับเต็ม</span><span className="sm:hidden">ดูบัตร</span>
-                            </button>
-                          )}
-
-                          {/* ปุ่มสแกนกล้อง (OCR) เดิม */}
-                          <button 
-                            type="button" 
-                            onClick={scannerModal.open}
-                            className="text-xs sm:text-sm px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-indigo-100 shadow-sm"
-                          >
-                            <ScanText size={16} /> <span className="hidden sm:inline">สแกนจากกล้อง (OCR)</span><span className="sm:hidden">สแกนกล้อง</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
+                        {/* ปุ่มสแกนกล้อง (OCR) */}
+                        <button 
+                          type="button" 
+                          onClick={scannerModal.open}
+                          className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2 sm:px-3.5 py-2 sm:py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:bg-indigo-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-indigo-200/80 shadow-xs cursor-pointer active:scale-95"
+                          title="สแกนบัตรประชาชนผ่านกล้อง (OCR)"
+                        >
+                          <ScanText size={15} className="shrink-0 text-indigo-600" />
+                          <span className="hidden sm:inline truncate">สแกนจากกล้อง (OCR)</span>
+                          <span className="sm:hidden truncate">สแกนกล้อง</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
                     <div><label className="block text-sm font-medium text-slate-600 mb-1.5 ml-1 kanit-text">HN <span className="text-rose-500">*</span></label><input required type="text" className={`${theme.input} bg-slate-100 text-slate-500 cursor-not-allowed font-data`} value={formData.hn} disabled readOnly /></div>

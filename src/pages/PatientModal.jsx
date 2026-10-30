@@ -110,31 +110,33 @@ const PatientModal = React.memo(({
           <form id="patient-form" onSubmit={handleSavePatient}>
             <fieldset disabled={isViewMode} className="space-y-5 sm:space-y-6 border-none p-0 m-0 min-w-0">
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm relative z-10">
-              <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><Users size={20} /> ข้อมูลส่วนตัว</h4>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="border-b border-sky-100 pb-3 mb-4 sm:mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-3">
+                <h4 className="text-base sm:text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text">
+                  <Users size={20} className="shrink-0" /> ข้อมูลส่วนตัว
+                </h4>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   {!isViewMode && (
-                    <>
+                    <div className="flex items-stretch sm:items-center gap-1.5 sm:gap-2.5 w-full sm:w-auto">
                       <button 
                         type="button" 
                         onClick={handleSmartCardRead} 
                         disabled={isProcessing}
-                        className="text-xs sm:text-sm px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-emerald-100 shadow-sm disabled:opacity-50"
+                        className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2.5 sm:px-3 py-2 sm:py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:bg-emerald-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-emerald-200/80 shadow-xs disabled:opacity-50 active:scale-95 cursor-pointer"
                       >
-                        <CreditCard size={16} /> <span className="hidden sm:inline">อ่านข้อมูลจากบัตร</span><span className="sm:hidden">อ่านบัตร</span>
+                        <CreditCard size={15} className="shrink-0 text-emerald-600" /> <span className="hidden sm:inline truncate">อ่านข้อมูลจากบัตร</span><span className="sm:hidden truncate">อ่านบัตร</span>
                       </button>
 
                       <button 
                         type="button" 
                         onClick={() => setIsScannerOpen(true)} 
-                        className="text-xs sm:text-sm px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-indigo-100 shadow-sm"
+                        className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2.5 sm:px-3 py-2 sm:py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:bg-indigo-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-indigo-200/80 shadow-xs active:scale-95 cursor-pointer"
                       >
-                        <ScanText size={16} /> <span className="hidden sm:inline">สแกนจากกล้อง (OCR)</span><span className="sm:hidden">สแกนกล้อง</span>
+                        <ScanText size={15} className="shrink-0 text-indigo-600" /> <span className="hidden sm:inline truncate">สแกนจากกล้อง (OCR)</span><span className="sm:hidden truncate">สแกนกล้อง</span>
                       </button>
-                    </>
+                    </div>
                   )}
-                  <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 kanit-text">
-                    <Clock size={16} className="text-slate-400" /><span>ลงทะเบียน: {formatDateTime(formData.createdAt)}</span>
+                  <div className="text-xs sm:text-sm font-medium text-slate-500 flex items-center justify-center sm:justify-start gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 kanit-text shrink-0">
+                    <Clock size={15} className="text-slate-400 shrink-0" /><span className="truncate">ลงทะเบียน: {formatDateTime(formData.createdAt)}</span>
                   </div>
                 </div>
               </div>

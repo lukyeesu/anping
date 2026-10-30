@@ -2527,14 +2527,25 @@ const StaffManager = ({ staffData = [], setStaffData, financeData = [], setFinan
         <form onSubmit={handleSaveStaff} className="p-4 sm:p-6 space-y-6">
            
            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative z-[50]">
-              <div className="border-b border-sky-100 pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <h4 className="text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text"><UserCog size={20} /> ข้อมูลพื้นฐานพนักงาน</h4>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <button type="button" onClick={handleSmartCardRead} disabled={isProcessing} className="text-xs sm:text-sm px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-emerald-100 shadow-sm disabled:opacity-50">
-                    <CreditCard size={16} /> <span className="hidden sm:inline">อ่านข้อมูลจากบัตร</span><span className="sm:hidden">อ่านบัตร</span>
+              <div className="border-b border-sky-100 pb-3 mb-4 sm:mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-3">
+                <h4 className="text-base sm:text-lg font-bold text-sky-600 flex items-center gap-2 kanit-text">
+                  <UserCog size={20} className="shrink-0" /> ข้อมูลพื้นฐานพนักงาน
+                </h4>
+                <div className="w-full sm:w-auto flex items-stretch sm:items-center gap-1.5 sm:gap-2.5">
+                  <button 
+                    type="button" 
+                    onClick={handleSmartCardRead} 
+                    disabled={isProcessing} 
+                    className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2.5 sm:px-3 py-2 sm:py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 active:bg-emerald-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-emerald-200/80 shadow-xs disabled:opacity-50 active:scale-95 cursor-pointer"
+                  >
+                    <CreditCard size={15} className="shrink-0 text-emerald-600" /> <span className="hidden sm:inline truncate">อ่านข้อมูลจากบัตร</span><span className="sm:hidden truncate">อ่านบัตร</span>
                   </button>
-                  <button type="button" onClick={() => setIsScannerOpen(true)} className="text-xs sm:text-sm px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl font-medium transition-colors flex items-center gap-1.5 kanit-text border border-indigo-100 shadow-sm">
-                    <ScanText size={16} /> <span className="hidden sm:inline">สแกนจากกล้อง (OCR)</span><span className="sm:hidden">สแกนกล้อง</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsScannerOpen(true)} 
+                    className="flex-1 sm:flex-initial min-w-0 min-h-[38px] px-2.5 sm:px-3 py-2 sm:py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:bg-indigo-200 rounded-xl font-medium transition-all flex items-center justify-center gap-1.5 kanit-text text-xs sm:text-sm border border-indigo-200/80 shadow-xs active:scale-95 cursor-pointer"
+                  >
+                    <ScanText size={15} className="shrink-0 text-indigo-600" /> <span className="hidden sm:inline truncate">สแกนจากกล้อง (OCR)</span><span className="sm:hidden truncate">สแกนกล้อง</span>
                   </button>
                 </div>
               </div>
