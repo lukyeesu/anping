@@ -31,5 +31,5 @@ async function copyTree(source, isPublic = false) {
 await copyTree(resolve(work, 'web-dist'));
 await copyTree(resolve(root, 'public'), true);
 if (!files['/index.html']) throw new Error('Bundled index.html is missing');
-await writeFile(resolve(output, 'asset-manifest.json'), JSON.stringify({ version: '1.6.27', files }, null, 2));
+await writeFile(resolve(output, 'asset-manifest.json'), JSON.stringify({ version: '1.6.28', files }, null, 2));
 console.log(`Bundled ${Object.keys(files).length} web assets; API requests still use the clinic server.`);

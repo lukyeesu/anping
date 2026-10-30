@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import CustomSelect from './CustomSelect';
 import CalendarDay from './CalendarDay';
-import { unlockAudio, playCardBeep, rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from '../global/helpers';
+import { unlockAudio, playCardBeep, rAFThrottle, formatDate, formatDateTime, formatStatNumber, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, buildRecordPrintUrl, openExternalPrint, cachePrintPayload } from '../global/helpers';
 import { 
   LayoutDashboard, Users, CalendarRange, Calculator, 
   Package, BarChart3, Settings, Building2, Search, 
@@ -1387,46 +1387,51 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
   const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
 
-  // เพิ่มฟังก์ชันพิมพ์เวชระเบียนเพื่อให้สามารถเรียกใช้งานได้ทั้งบน Desktop และ Mobile
+  // เพิ่มฟังก์ชันพิมพ์เวชระเบียนเพื่อให้สามารถเรียกใช้งานได้ทั้งบน Desktop และ Mobile (รองรับ External Browser บน APK)
   const handlePrintRecord = (patient) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-        return;
-    }
-
-    try {
-        const html = globalGenerateRecordHtml(patient, branchesData, currentBranch);
-        printWindow.document.write(html);
-        printWindow.document.close();
-        setTimeout(() => {
-            if (printWindow.print) printWindow.print();
-        }, 500);
-    } catch (e) {
-        console.error("Print Error:", e);
-        showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
-    }
+    cachePrintPayload('record', patient?.hn || patient?.id, { patient, branches: branchesData });
+    const url = buildRecordPrintUrl(patient, 0);
+    openExternalPrint(url, () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+            return;
+        }
+        try {
+            const html = globalGenerateRecordHtml(patient, branchesData, currentBranch);
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => {
+                if (printWindow.print) printWindow.print();
+            }, 500);
+        } catch (e) {
+            console.error("Print Error:", e);
+            showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
+        }
+    }, showToast);
   };
 
   const handlePrintInformedConsent = (patient) => {
-    console.log("handlePrintInformedConsent called with patient:", patient);
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-        return;
-    }
-
-    try {
-        const html = globalGenerateInformedConsentHtml(patient, branchesData, currentBranch);
-        printWindow.document.write(html);
-        printWindow.document.close();
-        setTimeout(() => {
-            if (printWindow.print) printWindow.print();
-        }, 500);
-    } catch (e) {
-        console.error("Print Error:", e);
-        showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "danger");
-    }
+    cachePrintPayload('record', patient?.hn || patient?.id, { patient, branches: branchesData });
+    const url = buildRecordPrintUrl(patient, 0, null, false, true);
+    openExternalPrint(url, () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+            return;
+        }
+        try {
+            const html = globalGenerateInformedConsentHtml(patient, branchesData, currentBranch);
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => {
+                if (printWindow.print) printWindow.print();
+            }, 500);
+        } catch (e) {
+            console.error("Print Error:", e);
+            showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "danger");
+        }
+    }, showToast);
   };
 
   // --- 3. Derived State (Memos & Filtering) ---
@@ -1783,28 +1788,31 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     setShowOpdCalendar(true);
   };
 
-  // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) ---
+  // --- เพิ่มฟังก์ชันสำหรับพิมพ์ใบประวัติการรักษา (OPD) (รองรับ External Browser บน APK) ---
   const handlePrintOpdRecord = (record, index) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-        return;
-    }
+    cachePrintPayload('record', formData?.hn || formData?.id, { patient: formData, branches: branchesData });
+    const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
+    const url = buildRecordPrintUrl(formData, visitNumber, record.datetime);
 
-    try {
-        const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-        const html = globalGenerateOpdHtml(formData, record, visitNumber, branchesData, currentBranch);
+    openExternalPrint(url, () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+            return;
+        }
 
-        printWindow.document.write(html);
-        printWindow.document.close();
-
-        setTimeout(() => {
-            if (printWindow.print) printWindow.print();
-        }, 500);
-    } catch (e) {
-        console.error("Print Error:", e);
-        showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
-    }
+        try {
+            const html = globalGenerateOpdHtml(formData, record, visitNumber, branchesData, currentBranch);
+            printWindow.document.write(html);
+            printWindow.document.close();
+            setTimeout(() => {
+                if (printWindow.print) printWindow.print();
+            }, 500);
+        } catch (e) {
+            console.error("Print Error:", e);
+            showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
+        }
+    }, showToast);
   };
 
   // --- อัปเกรด: ฟังก์ชันพิมพ์ใบรับรองแพทย์ พร้อมระบบ Auto-Increment เลขรัน และเซฟลงฐานข้อมูล ---
@@ -1814,20 +1822,26 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     
     // ฟังก์ชันจัดการเปิดหน้าต่างพิมพ์ (เรียกใช้ซ้ำได้)
     const executePrint = (printData, rec) => {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-            showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-            return;
-        }
-        try {
-            const html = globalGenerateMedicalCertificateHtml(printData, rec, branchesData, currentBranch, staffData);
-            printWindow.document.write(html);
-            printWindow.document.close();
-            setTimeout(() => { if (printWindow.print) printWindow.print(); }, 500);
-        } catch (e) {
-            console.error("Print Error:", e);
-            showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
-        }
+        cachePrintPayload('record', printData?.hn || printData?.id, { patient: printData, branches: branchesData });
+        const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
+        const url = buildRecordPrintUrl(printData, visitNumber, rec.datetime, true);
+
+        openExternalPrint(url, () => {
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                showToast('เบราว์เซอร์บล็อกการเปิดหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+                return;
+            }
+            try {
+                const html = globalGenerateMedicalCertificateHtml(printData, rec, branchesData, currentBranch, staffData);
+                printWindow.document.write(html);
+                printWindow.document.close();
+                setTimeout(() => { if (printWindow.print) printWindow.print(); }, 500);
+            } catch (e) {
+                console.error("Print Error:", e);
+                showToast("เกิดข้อผิดพลาดในการพิมพ์: " + e.message, "error");
+            }
+        }, showToast);
     };
     
     // 1. ตรวจสอบว่าประวัติการรักษานี้ มีเลขใบรับรองแพทย์แล้วหรือยัง?
@@ -4187,7 +4201,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                     </div>
                   )}
 
-                  <fieldset disabled={isViewMode} className="border-none p-0 m-0 min-w-0">
+                  <div className="min-w-0">
                   {formData.opdRecords && formData.opdRecords.length > 0 ? (
                     <div className="border border-slate-100 rounded-xl bg-white overflow-hidden">
                       {/* --- Desktop View (Table) --- */}
@@ -4213,7 +4227,15 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
                               return (
                                 <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/80 align-top font-data">
-                                  <td className="p-3 text-slate-700 whitespace-nowrap"><div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div><div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div></td>
+                                  <td className="p-3 text-slate-700 whitespace-nowrap">
+                                    <div className="font-semibold">{record.datetime ? record.datetime.split(' ')[0] : '-'}</div>
+                                    <div className="text-xs text-slate-500">{record.datetime ? record.datetime.split(' ').slice(1).join(' ') : ''}</div>
+                                    {(record.medCertNumber || record.med_cert_number) && (
+                                      <div className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded font-mono font-medium mt-1" title={`ออกใบรับรองแพทย์แล้ว: ${record.medCertNumber || record.med_cert_number}`}>
+                                        📄 {record.medCertNumber || record.med_cert_number}
+                                      </div>
+                                    )}
+                                  </td>
                                   <td className="p-3 text-slate-700 whitespace-nowrap">
                                     <div className="text-[11px] font-semibold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100/80 w-fit">
                                       {branchesData.find(b => b.id === record.branchId)?.name || record.branchId || '-'}
@@ -4247,7 +4269,16 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                                         <button type="button" onClick={() => handlePrintOpdRecord(record, index)} className="w-7 h-7 flex items-center justify-center text-sky-600 bg-sky-50 border border-sky-200/80 rounded-lg shadow-sm hover:bg-sky-100 transition-all hover:scale-105 active:scale-95" title="พิมพ์ใบ OPD">
                                           <Printer size={14} />
                                         </button>
-                                        <button type="button" onClick={() => handlePrintMedicalCertificate(record, index)} className="w-7 h-7 flex items-center justify-center text-emerald-600 bg-emerald-50 border border-emerald-200/80 rounded-lg shadow-sm hover:bg-emerald-100 transition-all hover:scale-105 active:scale-95" title="พิมพ์ใบรับรองแพทย์">
+                                        <button 
+                                          type="button" 
+                                          onClick={() => handlePrintMedicalCertificate(record, index)} 
+                                          className={`w-7 h-7 flex items-center justify-center rounded-lg shadow-sm transition-all hover:scale-105 active:scale-95 ${
+                                            (record.medCertNumber || record.med_cert_number)
+                                              ? 'text-emerald-700 bg-emerald-100 border border-emerald-300 ring-1 ring-emerald-300' 
+                                              : 'text-emerald-600 bg-emerald-50 border border-emerald-200/80 hover:bg-emerald-100'
+                                          }`} 
+                                          title={(record.medCertNumber || record.med_cert_number) ? `พิมพ์ซ้ำใบรับรองแพทย์ (${record.medCertNumber || record.med_cert_number})` : "ออกใบรับรองแพทย์"}
+                                        >
                                           <FileText size={14} />
                                         </button>
                                       </div>
@@ -4345,7 +4376,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
                   ) : (
                     <div className="text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 border-dashed kanit-text"><FileText size={32} className="mx-auto mb-2 text-slate-300" /><p className="text-sm">ยังไม่มีประวัติการรักษา</p></div>
                   )}
-                  </fieldset>
+                  </div>
                 </div>
               </form>
             </div>

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, formatTreatmentRecord, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass } from './global/helpers';
+import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, formatTreatmentRecord, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, parseRecordKey, buildReceiptPrintUrl, openExternalPrint, getSortedOpdRecords, cachePrintPayload, getCachedPrintPayload } from './global/helpers';
 
 // ... other imports if any
 import ProfileManager from './pages/ProfileManager';
@@ -299,9 +299,10 @@ export default function App() {
     getUrlParam('print_pos') || 
     getUrlParam('print_receipt') || 
     getUrlParam('print_opd') || 
-    getUrlParam('print_opd_hn') ||
-    getUrlParam('print_cert') ||
-    getUrlParam('print_bill')
+    getUrlParam('print_opd_hn') || 
+    getUrlParam('print_cert') || 
+    getUrlParam('print_bill') ||
+    (typeof window !== 'undefined' && /^\/records\/[^\/]+-(?:\d{6})?\d{2,}$/i.test(window.location.pathname))
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -1359,6 +1360,7 @@ export default function App() {
 
       const executePrintPos = async () => {
         const sessionToken = localStorage.getItem('clinic_session_token') || '';
+        const reqFormat = urlParams.get('format') || 'A4';
 
         let txn = (Array.isArray(financeData) ? financeData : []).find(t => 
           String(t.receiptNo || t.receipt_no || t.id).trim().toLowerCase() === String(printPosId).trim().toLowerCase()
@@ -1367,6 +1369,15 @@ export default function App() {
         let safeBranches = Array.isArray(branchesData) && branchesData.length > 0 ? branchesData : [];
         let safePatients = Array.isArray(patientsData) && patientsData.length > 0 ? patientsData : [];
         let safeProducts = Array.isArray(posProducts) && posProducts.length > 0 ? posProducts : [];
+
+        // 0. ตรวจสอบ Print Cache ใน LocalStorage ก่อนเสมอ เพื่อลด Egress เหลือ 0 KB
+        const cachedPos = getCachedPrintPayload('pos', printPosId);
+        if (cachedPos?.txn) {
+          txn = cachedPos.txn;
+          if (cachedPos.branches && cachedPos.branches.length > 0) safeBranches = cachedPos.branches;
+          if (cachedPos.patients && cachedPos.patients.length > 0) safePatients = cachedPos.patients;
+          if (cachedPos.posProducts && cachedPos.posProducts.length > 0) safeProducts = cachedPos.posProducts;
+        }
 
         // 1. ถ้ายังไม่มีใน memory ให้ลองดึงผ่าน /api/db (ซึ่งมี Supabase Admin Service Role ปลอดภัยและทะลุ RLS ได้ 100%)
         if (!txn) {
@@ -1439,7 +1450,32 @@ export default function App() {
             } catch (e) {}
           }
 
-          const html = globalGenerateReceiptHtml(txn, 'A4', safeBranches, safePatients, safeProducts, txn.branch_id || txn.branchId || currentBranch);
+          let html = globalGenerateReceiptHtml(txn, reqFormat, safeBranches, safePatients, safeProducts, txn.branch_id || txn.branchId || currentBranch);
+          
+          const actionBarHtml = `
+            <div class="anping-print-action-bar" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: white; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 99999; box-shadow: 0 4px 14px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif;">
+              <div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;">
+                <span style="font-size: 18px;">🧾</span>
+                <span>ใบเสร็จรับเงิน ${txn.receiptNo || txn.receipt_no || txn.id}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button onclick="window.print()" style="background: #0ea5e9; color: white; border: none; padding: 7px 16px; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer;">พิมพ์เอกสาร</button>
+                <a href="/" style="background: rgba(255,255,255,0.15); color: white; text-decoration: none; padding: 7px 16px; border-radius: 10px; font-size: 13px; font-weight: 500;">กลับหน้าหลัก</a>
+              </div>
+            </div>
+            <style>
+              @media print {
+                .anping-print-action-bar { display: none !important; }
+              }
+            </style>
+          `;
+
+          if (html.includes('<body>')) {
+            html = html.replace('<body>', `<body>${actionBarHtml}`);
+          } else {
+            html = actionBarHtml + html;
+          }
+
           document.open();
           document.write(html);
           document.close();
@@ -1670,7 +1706,200 @@ export default function App() {
 
       executePrintOpd();
     }
-  }, [isLoggedIn, patientsData, financeData, branchesData, currentBranch, posProducts]);
+
+    // 3. ตรวจสอบการสั่งพิมพ์เวชระเบียน / OPD / ใบรับรองแพทย์ จาก Route เช่น /records/hn69-0093-26102600 หรือ /records/hn69-0093-26102601
+    const pathRecordMatch = location.pathname.match(/^\/records\/([^\/]+)$/i);
+    const pathRecordKey = pathRecordMatch ? pathRecordMatch[1] : null;
+
+    if (pathRecordKey && !window.__autoPrintRecordDone) {
+      const recParsed = parseRecordKey(pathRecordKey);
+      if (recParsed) {
+        window.__autoPrintRecordDone = true;
+
+        const executePrintRecordRoute = async () => {
+          const sessionToken = localStorage.getItem('clinic_session_token') || '';
+          const targetHn = recParsed.hn.trim().toLowerCase();
+
+          let patient = (Array.isArray(patientsData) ? patientsData : []).find(p => 
+            String(p.hn || p.id || '').trim().toLowerCase() === targetHn
+          );
+          let safeBranches = Array.isArray(branchesData) && branchesData.length > 0 ? branchesData : [];
+
+          // 0. ตรวจสอบ Print Cache ใน LocalStorage ก่อนเสมอ เพื่อลด Egress เหลือ 0 KB
+          const cachedRec = getCachedPrintPayload('record', targetHn);
+          if (cachedRec?.patient) {
+            patient = cachedRec.patient;
+            if (cachedRec.branches && cachedRec.branches.length > 0) safeBranches = cachedRec.branches;
+          }
+
+          // 1. ถ้ายังไม่มีใน memory ให้ลองดึงผ่าน /api/db (Admin Service Role ทะลุ RLS)
+          if (!patient) {
+            try {
+              const apiRes = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  ...(sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {})
+                },
+                body: JSON.stringify({
+                  action: 'GET_PRINT_PAYLOAD',
+                  payload: { printType: 'opd', id: targetHn },
+                  token: sessionToken
+                })
+              });
+
+              if (apiRes.status === 401) {
+                console.warn('[AutoPrint Record] Session unauthorized. Redirecting to login.');
+                window.__autoPrintRecordDone = false;
+                localStorage.removeItem('clinic_isLoggedIn');
+                localStorage.removeItem('clinic_session_token');
+                setIsLoggedIn(false);
+                return;
+              }
+
+              if (apiRes.ok) {
+                const apiJson = await apiRes.json();
+                if (apiJson && apiJson.status === 'success' && apiJson.patient) {
+                  patient = {
+                    ...apiJson.patient,
+                    opdRecords: apiJson.patient.opdRecords || (Array.isArray(apiJson.treatments) ? apiJson.treatments.map(t => ({
+                      ...t,
+                      datetime: t.treatment_date || t.treatmentDate || t.date || (t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH') : '-'),
+                      doctor: t.doctor_name || t.doctorName || t.doctor || '-',
+                      cc: t.chief_complaint || t.chiefComplaint || '',
+                      tx: t.prescription || t.treatment_detail || []
+                    })) : [])
+                  };
+                  if (apiJson.branches && apiJson.branches.length > 0) safeBranches = apiJson.branches;
+                }
+              }
+            } catch (e) {
+              console.warn('[AutoPrint Record] /api/db fetch note:', e?.message);
+            }
+          }
+
+          // 2. ถ้ายังไม่ได้ ให้ fallback ไปที่ Supabase
+          if (!patient && supabase) {
+            try {
+              const { data: pRow } = await supabase
+                .from('patients')
+                .select('*')
+                .or(`id.ilike.%${targetHn}%,hn.ilike.%${targetHn}%`)
+                .maybeSingle();
+
+              if (pRow) {
+                const { data: txRows } = await supabase
+                  .from('treatments')
+                  .select('*')
+                  .or(`patient_id.eq.${pRow.id},hn.eq.${pRow.id},patient_id.eq.${pRow.hn},hn.eq.${pRow.hn}`)
+                  .order('created_at', { ascending: false });
+
+                patient = {
+                  ...pRow,
+                  hn: pRow.hn || pRow.id,
+                  opdRecords: (txRows || []).map(t => ({
+                    ...t,
+                    datetime: t.treatment_date || t.treatmentDate || t.date || (t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH') : '-'),
+                    doctor: t.doctor_name || t.doctorName || t.doctor || '-',
+                    cc: t.chief_complaint || t.chiefComplaint || pRow.chief_complaint || '',
+                    tx: t.prescription || t.treatment_detail || []
+                  }))
+                };
+              }
+            } catch (e) {
+              console.warn('[AutoPrint Record] Supabase fetch error:', e);
+            }
+          }
+
+          if (patient) {
+            if (safeBranches.length === 0 && supabase) {
+              try {
+                const { data: bData } = await supabase.from('branches').select('*');
+                if (bData && bData.length > 0) safeBranches = bData;
+              } catch (_) {}
+            }
+
+            const isConsent = urlParams.get('consent') === '1';
+            const isCert = urlParams.get('cert') === '1' || recParsed.visitCode === '99';
+            let html = '';
+            let docTitle = '';
+
+            if (recParsed.visitCode === '00') {
+              if (isConsent) {
+                docTitle = `ใบยินยอมการรักษา - ${patient.hn || patient.id}`;
+                html = globalGenerateInformedConsentHtml(patient, safeBranches, currentBranch);
+              } else {
+                docTitle = `ใบเวชระเบียน - ${patient.hn || patient.id}`;
+                html = globalGenerateRecordHtml(patient, safeBranches, currentBranch);
+              }
+            } else {
+              const visitNum = parseInt(recParsed.visitCode, 10) || 1;
+              const opds = Array.isArray(patient.opdRecords) ? patient.opdRecords : [];
+              const sortedOpds = getSortedOpdRecords(opds);
+              const targetIdx = sortedOpds.length - visitNum;
+              const targetRec = (targetIdx >= 0 && targetIdx < sortedOpds.length) 
+                ? sortedOpds[targetIdx] 
+                : (sortedOpds[0] || { datetime: new Date().toLocaleDateString('th-TH'), cc: '', tx: [] });
+
+              if (isCert) {
+                docTitle = `ใบรับรองแพทย์ - ${patient.hn || patient.id}`;
+                html = globalGenerateMedicalCertificateHtml(patient, targetRec, safeBranches, currentBranch, staffData);
+              } else {
+                docTitle = `ใบประวัติการรักษา OPD (ครั้งที่ ${visitNum}) - ${patient.hn || patient.id}`;
+                html = globalGenerateOpdHtml(patient, targetRec, visitNum, safeBranches, currentBranch);
+              }
+            }
+
+            // แทรก Action Bar สำหรับมุมมองหน้าจอ
+            const actionBarHtml = `
+              <div class="anping-print-action-bar" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: white; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 99999; box-shadow: 0 4px 14px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;">
+                  <span style="font-size: 18px;">🖨️</span>
+                  <span>${docTitle}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <button onclick="window.print()" style="background: #0ea5e9; color: white; border: none; padding: 7px 16px; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer;">พิมพ์เอกสาร</button>
+                  <a href="/records" style="background: rgba(255,255,255,0.15); color: white; text-decoration: none; padding: 7px 16px; border-radius: 10px; font-size: 13px; font-weight: 500;">กลับสู่หน้าคลินิก</a>
+                </div>
+              </div>
+              <style>
+                @media print {
+                  .anping-print-action-bar { display: none !important; }
+                }
+              </style>
+            `;
+
+            if (html.includes('<body>')) {
+              html = html.replace('<body>', `<body>${actionBarHtml}`);
+            } else {
+              html = actionBarHtml + html;
+            }
+
+            document.open();
+            document.write(html);
+            document.close();
+
+            setTimeout(() => {
+              window.print();
+            }, 800);
+          } else {
+            document.open();
+            document.write(`
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif; text-align: center; margin-top: 15%; color: #334155; padding: 24px;">
+                <div style="font-size: 52px; margin-bottom: 16px;">⚠️</div>
+                <h2 style="color: #ef4444; font-size: 22px; margin-bottom: 8px;">ไม่พบข้อมูลคนไข้</h2>
+                <p style="color: #64748b; font-size: 15px; margin-bottom: 24px;">ไม่พบประวัติคนไข้ในระบบฐานข้อมูล หรือสิทธิ์การเข้าถึงข้อมูลไม่เพียงพอ</p>
+                <a href="/records" style="display: inline-block; background: #0ea5e9; color: white; padding: 10px 24px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(14,165,233,0.25);">กลับสู่หน้าหลัก</a>
+              </div>
+            `);
+            document.close();
+          }
+        };
+
+        executePrintRecordRoute();
+      }
+    }
+  }, [isLoggedIn, patientsData, financeData, branchesData, currentBranch, posProducts, staffData, location.pathname]);
 
   useEffect(() => {
     if (pdpaQrModal.isOpen && pdpaQrModal.link) {
@@ -2164,17 +2393,23 @@ export default function App() {
         return;
     }
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-        showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
-        return;
-    }
+    const receiptNo = txn.receiptNo || txn.receipt_no || txn.id;
+    cachePrintPayload('pos', receiptNo, { txn, format, branches: branchesData, patients: patientsData, posProducts, branch: currentBranch });
+    const url = buildReceiptPrintUrl(receiptNo, format);
 
-    const html = globalGenerateReceiptHtml(txn, format, branchesData, patientsData, posProducts, currentBranch);
+    openExternalPrint(url, () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+            return;
+        }
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => { printWindow.print(); }, 800); // เผื่อเวลาโหลดฟอนต์
+        const html = globalGenerateReceiptHtml(txn, format, branchesData, patientsData, posProducts, currentBranch);
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+        setTimeout(() => { printWindow.print(); }, 800); // เผื่อเวลาโหลดฟอนต์
+    }, showToast);
   };
 
   // --- [NEW] ดึงข้อมูลคนไข้แบบ Paginated (Server-side Infinite Loading) พร้อม Treatments เฉพาะกลุ่ม ---
@@ -2998,6 +3233,15 @@ export default function App() {
   useEffect(() => {
     const loadInitialData = async () => {
       if (!GOOGLE_SCRIPT_URL) {
+        setIsAuthDataFetched(true);
+        setIsDataFetched(true);
+        setIsGlobalLoading(false);
+        return;
+      }
+
+      // หากเป็น Print URL เช่น /records/... หรือ ?print_pos=... 
+      // ข้ามการโหลดฐานข้อมูลรวมทั้งคลินิก (reloadAllClinicData) 100% เพื่อประหยัด Egress สูงสุด (ลดจากหลาย MB เหลือ 0 - 3 KB)
+      if (isPrintUrl) {
         setIsAuthDataFetched(true);
         setIsDataFetched(true);
         setIsGlobalLoading(false);

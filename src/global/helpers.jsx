@@ -2218,3 +2218,195 @@ export const playCardBeep = () => {
     playModernSynthChime();
   }
 };
+
+/**
+ * จัดเรียงประวัติการรักษา OPD ตามวันที่/เวลา จากใหม่ไปเก่า (Descending)
+ */
+export const getSortedOpdRecords = (records = []) => {
+  if (!Array.isArray(records) || records.length === 0) return [];
+  return [...records].sort((a, b) => {
+    const parseDateVal = (item) => {
+      const str = item?.datetime || `${item?.date || ''} ${item?.time || ''}`.trim();
+      if (!str) return 0;
+      if (str.includes('/')) {
+        const parts = str.split(' ');
+        const dateParts = parts[0].split('/');
+        const timeStr = parts[1] || '00:00';
+        if (dateParts.length === 3) {
+          let day = parseInt(dateParts[0], 10);
+          let month = parseInt(dateParts[1], 10) - 1;
+          let year = parseInt(dateParts[2], 10);
+          if (year > 2500) year -= 543;
+          const [h, m] = timeStr.split(':').map(n => parseInt(n, 10) || 0);
+          return new Date(year, month, day, h, m).getTime();
+        }
+      }
+      const t = new Date(str).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    return parseDateVal(b) - parseDateVal(a);
+  });
+};
+
+/**
+ * ดึงรหัสวันที่ YYMMDD สำหรับสร้าง URL เวชระเบียน
+ * เช่น 26/10/2569 หรือ 2026-10-26 -> '261026'
+ */
+export const getRecordDateCode = (datetimeStr = null) => {
+  let d = new Date();
+  if (datetimeStr) {
+    if (typeof datetimeStr === 'string' && datetimeStr.includes('/')) {
+      const parts = datetimeStr.split(' ')[0].split('/');
+      if (parts.length === 3) {
+        let yr = parseInt(parts[2], 10);
+        if (yr > 2500) yr -= 543;
+        const parsedD = new Date(yr, parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        if (!isNaN(parsedD.getTime())) d = parsedD;
+      }
+    } else {
+      const parsed = new Date(datetimeStr);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
+  }
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}${mm}${dd}`;
+};
+
+/**
+ * วิเคราะห์รหัส Record จาก URL
+ * รูปแบบหลัก: {hn}-{YYMMDD}{visitCode} เช่น hn69-0093-26102600 หรือ hn69-0093-26102601
+ * รูปแบบสำรอง: {hn}-{visitCode} เช่น hn69-0093-00
+ */
+export const parseRecordKey = (key) => {
+  if (!key) return null;
+  const cleanKey = String(key).trim();
+  // Pattern 1: {hn}-{YYMMDD}{visitCode} (เช่น hn69-0093-26102600 หรือ hn69-0093-26102601)
+  const m1 = cleanKey.match(/^(.+?)-(\d{6})(\d{2,})$/);
+  if (m1) {
+    return { hn: m1[1], dateCode: m1[2], visitCode: m1[3] };
+  }
+  // Pattern 2: {hn}-{visitCode} (เช่น hn69-0093-00 หรือ hn69-0093-01)
+  const m2 = cleanKey.match(/^(.+?)-(\d{2})$/);
+  if (m2) {
+    return { hn: m2[1], dateCode: null, visitCode: m2[2] };
+  }
+  return null;
+};
+
+/**
+ * สร้าง URL สำหรับพิมพ์เวชระเบียน / OPD / ใบรับรองแพทย์
+ * เช่น https://anpingclinic.vercel.app/records/hn69-0093-26102600 (เวชระเบียน)
+ * หรือ https://anpingclinic.vercel.app/records/hn69-0093-26102601 (OPD ครั้งที่ 1)
+ */
+export const buildRecordPrintUrl = (patient, visitNumber = 0, datetimeStr = null, isCert = false, isConsent = false) => {
+  const origin = (typeof window !== 'undefined' && window.location.origin) 
+    ? window.location.origin 
+    : 'https://anpingclinic.vercel.app';
+
+  const rawHn = String(patient?.hn || patient?.id || '').trim().toLowerCase();
+  const dateCode = getRecordDateCode(datetimeStr || patient?.lastVisit || patient?.createdAt || new Date().toISOString());
+  const visitCode = visitNumber === 0 ? '00' : String(visitNumber).padStart(2, '0');
+
+  let url = `${origin}/records/${rawHn}-${dateCode}${visitCode}`;
+  if (isCert) {
+    url += '?cert=1';
+  } else if (isConsent) {
+    url += '?consent=1';
+  }
+  return url;
+};
+
+/**
+ * สร้าง URL สำหรับพิมพ์ใบเสร็จ/สลิป POS
+ * เช่น https://anpingclinic.vercel.app/?print_pos=REC69090025&format=A4
+ */
+export const buildReceiptPrintUrl = (receiptNo, format = 'A4') => {
+  const origin = (typeof window !== 'undefined' && window.location.origin) 
+    ? window.location.origin 
+    : 'https://anpingclinic.vercel.app';
+
+  const cleanNo = String(receiptNo || '').trim();
+  return `${origin}/?print_pos=${encodeURIComponent(cleanNo)}&format=${format}`;
+};
+
+/**
+ * สั่งพิมพ์เอกสาร: หากอยู่บน Android APK (WebView) จะส่งไปเปิดในเบราว์เซอร์ภายนอกอัตโนมัติ
+ * หากอยู่บน PC หรือเบราว์เซอร์ปกติ จะเปิดหน้าต่างแท็บใหม่สำหรับพิมพ์
+ */
+export const openExternalPrint = (url, fallbackFn = null, showToast = null) => {
+  const isAndroidApp = typeof window !== 'undefined' && (
+    Boolean(window.AndroidCardBridge?.openExternalBrowser) ||
+    (navigator.userAgent && navigator.userAgent.includes('AnpingClinicApp'))
+  );
+
+  if (isAndroidApp && window.AndroidCardBridge?.openExternalBrowser) {
+    try {
+      window.AndroidCardBridge.openExternalBrowser(url);
+      showToast?.('กำลังเปิดเบราว์เซอร์ภายนอกเพื่อพิมพ์เอกสาร...', 'info');
+      return;
+    } catch (e) {
+      console.warn('AndroidCardBridge.openExternalBrowser error:', e);
+    }
+  }
+
+  try {
+    const printWindow = window.open(url, '_blank');
+    if (!printWindow) {
+      if (typeof fallbackFn === 'function') {
+        fallbackFn();
+      } else {
+        showToast?.('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต Pop-ups', 'warning');
+      }
+    }
+  } catch (e) {
+    if (typeof fallbackFn === 'function') {
+      fallbackFn();
+    }
+  }
+};
+
+/**
+ * บันทึก Cache ข้อมูลการพิมพ์ลงใน LocalStorage ชั่วคราว (มีอายุ 10 นาที)
+ * ช่วยให้อุปกรณ์เครื่องเดียวกันหรือแท็บใหม่ที่เปิดขึ้นมา ดึงข้อมูลไปพิมพ์ได้ทันที
+ * โดยไม่ต้องส่ง Request ไปถาม Supabase / Backend ลด Egress ได้ 100% (0 KB)
+ */
+export const cachePrintPayload = (type, key, payload) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage && key) {
+      const cleanKey = String(key).trim().toLowerCase();
+      localStorage.setItem(`clinic_print_cache_${type}`, JSON.stringify({
+        key: cleanKey,
+        payload,
+        time: Date.now()
+      }));
+    }
+  } catch (e) {
+    console.warn('[Print Cache] cache write note:', e?.message);
+  }
+};
+
+/**
+ * ดึง Cache ข้อมูลการพิมพ์จาก LocalStorage
+ */
+export const getCachedPrintPayload = (type, key, maxAgeMs = 600000) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage && key) {
+      const cleanKey = String(key).trim().toLowerCase();
+      const raw = localStorage.getItem(`clinic_print_cache_${type}`);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (data && data.key === cleanKey) {
+        if (Date.now() - data.time < maxAgeMs) {
+          return data.payload;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Print Cache] cache read note:', e?.message);
+  }
+  return null;
+};
+
+

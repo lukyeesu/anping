@@ -380,6 +380,21 @@ class MainActivity : AppCompatActivity() {
                     """.trimIndent(), null)
                 }
             }
+
+            @JavascriptInterface
+            fun openExternalBrowser(url: String) {
+                runOnUiThread {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "openExternalBrowser error: ${e.message}")
+                        Toast.makeText(this@MainActivity, "ไม่สามารถเปิดเบราว์เซอร์ได้", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }, "AndroidCardBridge")
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -500,12 +515,28 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
+
+                // หากเป็นลิงก์สำหรับพิมพ์เอกสาร (เช่น ?print_ หรือ /records/... ที่มีรหัสเอกสาร) ให้เปิดในเบราว์เซอร์ภายนอกอัตโนมัติ
+                if (url.contains("print_") || url.matches(Regex(".*/records/[^/]+-(?:\\d{6})?\\d{2,}.*"))) {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        return true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Cannot launch external browser: ${e.message}")
+                    }
+                }
+
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     return false // โหลดภายในแอป WebView ตามปกติ
                 }
                 // ถ้าเป็นลิงก์ภายนอก เช่น tel: หรือ mailto: หรือ line:
                 try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                     startActivity(intent)
                     return true
                 } catch (_: Exception) {

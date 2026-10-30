@@ -23,7 +23,7 @@ const TABLE_COLUMNS = {
     'is_shareable', 'shared_patient_ids', 'expire_date', 'notes', 
     'purchased_at', 'created_at', 'updated_at', 'is_deleted'
   ],
-  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'created_at', 'updated_at', 'is_deleted'],
+  treatments: ['id', 'patient_id', 'datetime', 'date', 'time', 'doctor', 'chief_complaint', 'diagnosis', 'treatment_detail', 'prescription', 'vital_signs', 'attachments', 'cost', 'branch_id', 'med_cert_number', 'created_at', 'updated_at', 'is_deleted'],
   branches: ['id', 'name', 'clinic_reg_name', 'clinic_license', 'clinic_tax', 'address', 'phone', 'email', 'manager', 'logo', 'rooms', 'is_active', 'status', 'created_at', 'updated_at', 'is_deleted'],
   queue: ['id', 'hn', 'patient_name', 'phone', 'raw_date_time', 'doctor', 'service', 'reason', 'status', 'branch_id', 'notes', 'treated', 'created_at', 'updated_at', 'is_deleted'],
   pos_transactions: ['id', 'receipt_no', 'hn', 'patient_name', 'branch_id', 'branch_name', 'total_amount', 'discount', 'net_amount', 'payment_method', 'items', 'staff_name', 'date', 'time', 'status', 'transaction_type', 'created_at', 'updated_at', 'is_deleted'],
@@ -331,6 +331,12 @@ export default async function handler(req, res) {
           let branches = [];
 
           if (pRow) {
+            // ตัดฟิลด์รูปภาพขนาดใหญ่ (Base64) เพื่อประหยัด Egress แบนด์วิดท์สูงสุด
+            delete pRow.photo;
+            delete pRow.id_card_image;
+            delete pRow.idCardPhoto;
+            delete pRow.card_image;
+
             const [trtRes, bRes] = await Promise.all([
               supabaseAdmin.from('treatments').select('*').eq('patient_id', pRow.id).order('created_at', { ascending: false }),
               supabaseAdmin.from('branches').select('*')
