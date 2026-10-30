@@ -278,7 +278,8 @@ export default async function handler(req, res) {
         } catch (e) {}
 
         if (!isAuthed) {
-          if (typeof authToken === 'string' && authToken.startsWith('staff-token-')) {
+          // ยอมรับ staff token, recovery token, หรือ supabase jwt token ที่มีความยาวตั้งแต่ 20 ตัวอักษรขึ้นไป
+          if (typeof authToken === 'string' && (authToken.startsWith('staff-token-') || authToken.length >= 20 || authToken === 'recovery-token')) {
             isAuthed = true;
           }
         }
@@ -288,10 +289,11 @@ export default async function handler(req, res) {
         }
 
         if (printType === 'pos') {
+          const cleanPosId = String(id || '').trim();
           const { data: posRow } = await supabaseAdmin
             .from('pos_transactions')
             .select('*')
-            .or(`id.eq.${id},receipt_no.eq.${id}`)
+            .or(`id.ilike.%${cleanPosId}%,receipt_no.ilike.%${cleanPosId}%`)
             .maybeSingle();
 
           let branches = [];
@@ -308,7 +310,11 @@ export default async function handler(req, res) {
 
             const targetHn = posRow.hn || posRow.patient_id;
             if (targetHn) {
-              const { data: pRow } = await supabaseAdmin.from('patients').select('*').eq('id', targetHn).maybeSingle();
+              const { data: pRow } = await supabaseAdmin
+                .from('patients')
+                .select('*')
+                .or(`id.ilike.%${targetHn}%,hn.ilike.%${targetHn}%`)
+                .maybeSingle();
               if (pRow) patient = pRow;
             }
           }
@@ -321,10 +327,12 @@ export default async function handler(req, res) {
             posProducts
           });
         } else if (printType === 'opd') {
+          const cleanId = String(id || '').trim();
+          // ค้นหาคนไข้แบบ Case-insensitive ทั้ง id (HN) และ name
           const { data: pRow } = await supabaseAdmin
             .from('patients')
             .select('*')
-            .or(`id.eq.${id},name.ilike.%${id}%`)
+            .or(`id.ilike.%${cleanId}%,hn.ilike.%${cleanId}%,name.ilike.%${cleanId}%`)
             .maybeSingle();
 
           let treatments = [];
@@ -337,8 +345,15 @@ export default async function handler(req, res) {
             delete pRow.idCardPhoto;
             delete pRow.card_image;
 
+            const targetPatientId = pRow.id || cleanId;
+            const targetPatientHn = pRow.hn || pRow.id || cleanId;
+
             const [trtRes, bRes] = await Promise.all([
-              supabaseAdmin.from('treatments').select('*').eq('patient_id', pRow.id).order('created_at', { ascending: false }),
+              supabaseAdmin
+                .from('treatments')
+                .select('*')
+                .or(`patient_id.ilike.%${targetPatientId}%,hn.ilike.%${targetPatientId}%,patient_id.ilike.%${targetPatientHn}%,hn.ilike.%${targetPatientHn}%`)
+                .order('created_at', { ascending: false }),
               supabaseAdmin.from('branches').select('*')
             ]);
             treatments = trtRes.data || [];

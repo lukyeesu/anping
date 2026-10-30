@@ -2353,9 +2353,34 @@ export const openExternalPrint = (url, fallbackFn = null, showToast = null) => {
     (navigator.userAgent && navigator.userAgent.includes('AnpingClinicApp'))
   );
 
+  let targetUrl = url;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const sessionToken = localStorage.getItem('clinic_session_token');
+      const currentUser = localStorage.getItem('clinic_currentUser');
+      if (sessionToken) {
+        const u = new URL(url, window.location.origin);
+        u.searchParams.set('auth_token', sessionToken);
+        if (currentUser) {
+          try {
+            const parsedUser = typeof currentUser === 'string' ? JSON.parse(currentUser) : currentUser;
+            if (parsedUser) {
+              if (parsedUser.id) u.searchParams.set('auth_uid', parsedUser.id);
+              if (parsedUser.name || parsedUser.username) u.searchParams.set('auth_name', parsedUser.name || parsedUser.username);
+              if (parsedUser.role) u.searchParams.set('auth_role', parsedUser.role);
+            }
+          } catch (_) {}
+        }
+        targetUrl = u.toString();
+      }
+    } catch (e) {
+      console.warn('[openExternalPrint] session append note:', e);
+    }
+  }
+
   if (isAndroidApp && window.AndroidCardBridge?.openExternalBrowser) {
     try {
-      window.AndroidCardBridge.openExternalBrowser(url);
+      window.AndroidCardBridge.openExternalBrowser(targetUrl);
       showToast?.('กำลังเปิดเบราว์เซอร์ภายนอกเพื่อพิมพ์เอกสาร...', 'info');
       return;
     } catch (e) {
@@ -2364,7 +2389,7 @@ export const openExternalPrint = (url, fallbackFn = null, showToast = null) => {
   }
 
   try {
-    const printWindow = window.open(url, '_blank');
+    const printWindow = window.open(targetUrl, '_blank');
     if (!printWindow) {
       if (typeof fallbackFn === 'function') {
         fallbackFn();

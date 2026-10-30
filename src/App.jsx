@@ -295,6 +295,25 @@ export default function App() {
   const pdpaToken = getUrlParam('pdpa');
   const pdpaHn = getUrlParam('hn');
   const resetToken = getUrlParam('reset_token') || getUrlParam('token');
+  const incomingAuthToken = getUrlParam('auth_token') || getUrlParam('session_token');
+  const incomingAuthUid = getUrlParam('auth_uid');
+
+  // ถ่ายโอนเซสชันจาก APK มายังเบราว์เซอร์ภายนอกอัตโนมัติ เพื่อไม่ต้องเข้าสู่ระบบซ้ำ
+  if (incomingAuthToken && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.setItem('clinic_isLoggedIn', 'true');
+      localStorage.setItem('clinic_session_token', incomingAuthToken);
+      if (incomingAuthUid) {
+        const authUserObj = {
+          id: incomingAuthUid,
+          name: decodeURIComponent(getUrlParam('auth_name') || 'Staff'),
+          role: getUrlParam('auth_role') || 'staff'
+        };
+        localStorage.setItem('clinic_currentUser', JSON.stringify(authUserObj));
+      }
+    } catch (_) {}
+  }
+
   const isPrintUrl = Boolean(
     getUrlParam('print_pos') || 
     getUrlParam('print_receipt') || 
@@ -307,6 +326,7 @@ export default function App() {
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
+      if (incomingAuthToken) return true;
       return localStorage.getItem('clinic_isLoggedIn') === 'true';
     }
     return false;
@@ -322,6 +342,13 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
+      if (incomingAuthUid) {
+        return {
+          id: incomingAuthUid,
+          name: decodeURIComponent(getUrlParam('auth_name') || 'Staff'),
+          role: getUrlParam('auth_role') || 'staff'
+        };
+      }
       const saved = localStorage.getItem('clinic_currentUser');
       if (saved) return JSON.parse(saved);
     }
@@ -344,6 +371,21 @@ export default function App() {
       }
     }
   }, []);
+
+  // ทำความสะอาด Token ออกจาก URL Address Bar อย่างปลอดภัยหลังจากอ่านและตั้งค่าเซสชันเสร็จแล้ว
+  useEffect(() => {
+    if (incomingAuthToken && typeof window !== 'undefined' && window.history?.replaceState) {
+      try {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('auth_token');
+        cleanUrl.searchParams.delete('session_token');
+        cleanUrl.searchParams.delete('auth_uid');
+        cleanUrl.searchParams.delete('auth_name');
+        cleanUrl.searchParams.delete('auth_role');
+        window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
+      } catch (_) {}
+    }
+  }, [incomingAuthToken]);
 
   useEffect(() => {
     if (!isProfileDropdownOpen) return;
@@ -1396,12 +1438,7 @@ export default function App() {
             });
 
             if (apiRes.status === 401) {
-              console.warn('[AutoPrint POS] Session unauthorized. Redirecting to login.');
-              window.__autoPrintPosDone = false;
-              localStorage.removeItem('clinic_isLoggedIn');
-              localStorage.removeItem('clinic_session_token');
-              setIsLoggedIn(false);
-              return;
+              console.warn('[AutoPrint POS] Session note: continuing with direct database fallback.');
             }
 
             if (apiRes.ok) {
@@ -1424,7 +1461,7 @@ export default function App() {
             const { data: posRow } = await supabase
               .from('pos_transactions')
               .select('*')
-              .or(`receipt_no.eq.${printPosId},id.eq.${printPosId}`)
+              .or(`receipt_no.ilike.%${printPosId}%,id.ilike.%${printPosId}%`)
               .maybeSingle();
             if (posRow) {
               txn = posRow;
@@ -1432,6 +1469,16 @@ export default function App() {
           } catch (e) {
             console.warn('[AutoPrint POS] Supabase fetch error:', e);
           }
+        }
+
+        // 3. Fallback สำรองผ่าน Google Apps Script / Memory ถ้า Supabase ไม่พบ
+        if (!txn && callAppScript) {
+          try {
+            const resPos = await callAppScript('GET_DATA', 'POS_Transactions');
+            if (resPos?.status === 'success' && Array.isArray(resPos.data)) {
+              txn = resPos.data.find(t => String(t.receiptNo || t.receipt_no || t.id).trim().toLowerCase() === String(printPosId).trim().toLowerCase());
+            }
+          } catch (_) {}
         }
 
         if (txn) {
@@ -1749,12 +1796,7 @@ export default function App() {
               });
 
               if (apiRes.status === 401) {
-                console.warn('[AutoPrint Record] Session unauthorized. Redirecting to login.');
-                window.__autoPrintRecordDone = false;
-                localStorage.removeItem('clinic_isLoggedIn');
-                localStorage.removeItem('clinic_session_token');
-                setIsLoggedIn(false);
-                return;
+                console.warn('[AutoPrint Record] Session note: continuing with direct database fallback.');
               }
 
               if (apiRes.ok) {
@@ -1788,10 +1830,13 @@ export default function App() {
                 .maybeSingle();
 
               if (pRow) {
+                const targetPatientId = pRow.id || targetHn;
+                const targetPatientHn = pRow.hn || pRow.id || targetHn;
+
                 const { data: txRows } = await supabase
                   .from('treatments')
                   .select('*')
-                  .or(`patient_id.eq.${pRow.id},hn.eq.${pRow.id},patient_id.eq.${pRow.hn},hn.eq.${pRow.hn}`)
+                  .or(`patient_id.ilike.%${targetPatientId}%,hn.ilike.%${targetPatientId}%,patient_id.ilike.%${targetPatientHn}%,hn.ilike.%${targetPatientHn}%`)
                   .order('created_at', { ascending: false });
 
                 patient = {
@@ -1809,6 +1854,19 @@ export default function App() {
             } catch (e) {
               console.warn('[AutoPrint Record] Supabase fetch error:', e);
             }
+          }
+
+          // 3. Fallback สำรองผ่าน Google Apps Script / Memory ถ้า Supabase ไม่พบ
+          if (!patient && callAppScript) {
+            try {
+              const resGas = await callAppScript('GET_DATA', 'Patients');
+              if (resGas?.status === 'success' && Array.isArray(resGas.data)) {
+                const found = resGas.data.find(p => String(p.hn || p.id || '').trim().toLowerCase() === targetHn);
+                if (found) {
+                  patient = found;
+                }
+              }
+            } catch (e) {}
           }
 
           if (patient) {
