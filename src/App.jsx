@@ -302,7 +302,7 @@ export default function App() {
     getUrlParam('print_opd_hn') || 
     getUrlParam('print_cert') || 
     getUrlParam('print_bill') ||
-    (typeof window !== 'undefined' && /^\/records\/[^\/]+-(?:\d{6})?\d{2,}$/i.test(window.location.pathname))
+    (typeof window !== 'undefined' && /^\/records\/[^\/]+-(?:\d{6})?\d{2,}(?:-(?:cert|consent))?$/i.test(window.location.pathname))
   );
 
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -1819,8 +1819,8 @@ export default function App() {
               } catch (_) {}
             }
 
-            const isConsent = urlParams.get('consent') === '1';
-            const isCert = urlParams.get('cert') === '1' || recParsed.visitCode === '99';
+            const isConsent = urlParams.get('consent') === '1' || Boolean(recParsed.isConsent);
+            const isCert = urlParams.get('cert') === '1' || Boolean(recParsed.isCert) || recParsed.visitCode === '99';
             let html = '';
             let docTitle = '';
 

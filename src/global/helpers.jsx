@@ -2281,16 +2281,28 @@ export const getRecordDateCode = (datetimeStr = null) => {
  */
 export const parseRecordKey = (key) => {
   if (!key) return null;
-  const cleanKey = String(key).trim();
+  let cleanKey = String(key).trim();
+  let isCert = false;
+  let isConsent = false;
+
+  // รองรับ Suffix ในตัว Path โดยตรง เช่น -cert หรือ -consent
+  if (/-cert$/i.test(cleanKey)) {
+    isCert = true;
+    cleanKey = cleanKey.replace(/-cert$/i, '');
+  } else if (/-consent$/i.test(cleanKey)) {
+    isConsent = true;
+    cleanKey = cleanKey.replace(/-consent$/i, '');
+  }
+
   // Pattern 1: {hn}-{YYMMDD}{visitCode} (เช่น hn69-0093-26102600 หรือ hn69-0093-26102601)
   const m1 = cleanKey.match(/^(.+?)-(\d{6})(\d{2,})$/);
   if (m1) {
-    return { hn: m1[1], dateCode: m1[2], visitCode: m1[3] };
+    return { hn: m1[1], dateCode: m1[2], visitCode: m1[3], isCert, isConsent };
   }
   // Pattern 2: {hn}-{visitCode} (เช่น hn69-0093-00 หรือ hn69-0093-01)
   const m2 = cleanKey.match(/^(.+?)-(\d{2})$/);
   if (m2) {
-    return { hn: m2[1], dateCode: null, visitCode: m2[2] };
+    return { hn: m2[1], dateCode: null, visitCode: m2[2], isCert, isConsent };
   }
   return null;
 };
