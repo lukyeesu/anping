@@ -3666,7 +3666,7 @@ const POSSystem = ({
 
           {/* --- แก้ไข: Middle Area (รวมรายการบิล และ หน้าต่างตั้งค่าส่วนลดแบบ Overlay) --- */}
           {/* แก้ไข 2: ถอด overflow-hidden ออก และเพิ่ม z-20 เพื่อให้แท็บยืดทะลุไปบังคอร์สคงเหลือได้แบบอิสระ */}
-          <div className="flex-1 min-h-0 relative flex flex-col bg-slate-50/20 z-20">
+          <div className="flex-1 min-h-0 relative flex flex-col bg-slate-50/70 z-20">
             
             {/* 1. Cart Items List (อยู่ด้านหลังเสมอ) */}
             {/* Spacer div ดันด้านล่าง 100px ป้องกันรายการสุดท้ายโดนบัง */}
@@ -3676,17 +3676,32 @@ const POSSystem = ({
                   {cart.map((item, idx) => {
                     const CartItemIcon = typeof item.product.icon === 'string' ? (POS_ICONS[item.product.icon] || Package) : (item.product.icon || Package);
                     return (
-                      <div key={idx} className="flex flex-col gap-3 relative group p-3 sm:p-4 bg-white border border-slate-100 rounded-[1.5rem] hover:border-sky-200 transition-all shadow-sm">
+                      <div 
+                        key={idx} 
+                        className={`flex flex-col gap-3 relative group p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border-2 transition-all shadow-xs hover:shadow-md ${
+                          item.product.isNote
+                            ? 'bg-gradient-to-br from-amber-50/80 via-white to-amber-50/30 border-amber-200 hover:border-amber-300'
+                            : item.product.isRedeem
+                              ? 'bg-gradient-to-br from-indigo-50/80 via-white to-indigo-50/30 border-indigo-200 hover:border-indigo-300'
+                              : 'bg-gradient-to-br from-sky-50/80 via-sky-50/40 to-white border-sky-200/90 hover:border-sky-400'
+                        }`}
+                      >
                          
                          {/* ส่วนบน: ไอคอน + รายละเอียด + ปุ่มลบ */}
                          <div className="flex gap-3 sm:gap-4 items-start">
-                             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 ${item.product.isNote ? 'bg-amber-50 text-amber-500' : item.product.isRedeem ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-50 text-slate-400'}`}>
-                                <CartItemIcon size={24} className="sm:w-7 sm:h-7 stroke-[1.5]" />
+                             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+                               item.product.isNote 
+                                 ? 'bg-amber-500 text-white shadow-amber-500/20' 
+                                 : item.product.isRedeem 
+                                   ? 'bg-indigo-500 text-white shadow-indigo-500/20' 
+                                   : 'bg-sky-500 text-white shadow-sky-500/25'
+                             }`}>
+                                <CartItemIcon size={24} className="sm:w-7 sm:h-7 stroke-[1.8]" />
                              </div>
                              
                              <div className="flex-1 min-w-0 pt-1">
                                <div className="flex justify-between items-start gap-2">
-                                 <h4 className={`font-bold text-sm sm:text-base kanit-text leading-tight ${item.product.isNote ? 'text-amber-700' : item.product.isRedeem ? 'text-indigo-700' : 'text-slate-800'}`}>
+                                 <h4 className={`font-bold text-sm sm:text-base kanit-text leading-tight ${item.product.isNote ? 'text-amber-700' : item.product.isRedeem ? 'text-indigo-700' : 'text-slate-900 group-hover:text-sky-700 transition-colors'}`}>
                                    {item.product.isRedeem && (
                                       <span className={`mr-1.5 px-1.5 py-0.5 text-white text-[9px] rounded uppercase font-black tracking-tighter align-middle ${item.product.ownerPatientName ? 'bg-purple-600' : 'bg-indigo-500'}`}>
                                         {item.product.ownerPatientName ? 'ตัดคอร์สแชร์' : 'ตัดคอร์ส'}
@@ -3748,11 +3763,11 @@ const POSSystem = ({
                                 const itemQty = Number(item.quantity) || 0;
                                 const isMax = isStock && itemQty >= availableStock;
                                 return (
-                                  <div className="flex items-center gap-1 bg-slate-50/90 rounded-xl border border-slate-200 p-1 w-fit shadow-xs">
+                                  <div className="flex items-center gap-1 bg-white rounded-xl border border-sky-200/80 p-1 w-fit shadow-xs">
                                     <button 
                                       type="button"
                                       onClick={() => updateQuantity(item.product.id, -1)} 
-                                      className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-500 shadow-sm border border-slate-100 hover:text-sky-500 active:scale-95 transition-all"
+                                      className="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-sky-50 rounded-lg text-slate-600 hover:text-sky-600 shadow-2xs border border-slate-200/80 hover:border-sky-300 active:scale-95 transition-all"
                                       title="ลดจำนวน"
                                     >
                                       <Minus size={14} strokeWidth={2.5}/>
@@ -3790,7 +3805,7 @@ const POSSystem = ({
                                           e.target.blur();
                                         }
                                       }}
-                                      className="font-black text-sm sm:text-base text-slate-800 w-12 sm:w-14 text-center font-data bg-transparent hover:bg-white focus:bg-white border border-transparent focus:border-sky-300 focus:ring-2 focus:ring-sky-100 rounded-lg py-0.5 transition-all outline-none"
+                                      className="font-black text-sm sm:text-base text-slate-800 w-12 sm:w-14 text-center font-data bg-transparent hover:bg-slate-50 focus:bg-white border border-transparent focus:border-sky-300 focus:ring-2 focus:ring-sky-100 rounded-lg py-0.5 transition-all outline-none"
                                       title="คลิกเพื่อพิมพ์ตัวเลขได้โดยตรง"
                                       placeholder="1"
                                     />
@@ -3804,10 +3819,10 @@ const POSSystem = ({
                                         updateQuantity(item.product.id, 1);
                                       }} 
                                       disabled={isMax}
-                                      className={`w-8 h-8 flex items-center justify-center rounded-lg shadow-sm border transition-all ${
+                                      className={`w-8 h-8 flex items-center justify-center rounded-lg shadow-2xs border transition-all ${
                                         isMax 
                                           ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed' 
-                                          : 'bg-white text-slate-500 border-slate-100 hover:text-sky-500 active:scale-95 cursor-pointer'
+                                          : 'bg-slate-50 hover:bg-sky-50 text-slate-600 hover:text-sky-600 border-slate-200/80 hover:border-sky-300 active:scale-95 cursor-pointer'
                                       }`}
                                       title={isMax ? `สต็อกคงเหลือสูงสุดแล้ว (${availableStock} ${item.product.unit || 'ชิ้น'})` : "เพิ่มจำนวน"}
                                     >
@@ -3822,7 +3837,7 @@ const POSSystem = ({
                                 {(Number(item.quantity) || 0) > 1 && !item.product.isRedeem && (
                                     <span className="text-[10px] text-slate-400 font-data mb-0.5 tracking-tight">{formatCurrency(item.product.price)} / หน่วย</span>
                                 )}
-                                <span className={`font-black text-lg sm:text-xl font-data leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-500' : 'text-slate-800'}`}>
+                                <span className={`font-black text-lg sm:text-xl font-data leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-600' : 'text-sky-600'}`}>
                                   {item.product.isRedeem ? '0.00' : formatCurrency(item.product.price * (Number(item.quantity) || 0))}
                                 </span>
                               </div>
