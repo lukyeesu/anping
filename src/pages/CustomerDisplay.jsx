@@ -2067,24 +2067,17 @@ export default function CustomerDisplay({
         {/* ============================================================== */}
         {displayMode === 'PAYMENT_QR' && (
           <div 
-            className="relative lg:absolute lg:inset-0 w-full lg:h-full min-h-0 overflow-y-auto custom-scrollbar bg-slate-950 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white flex flex-col items-center justify-start p-4 sm:p-6 lg:p-8 [@media(max-height:500px)]:p-3 z-20"
+            className="relative lg:absolute lg:inset-0 w-full lg:h-full min-h-0 overflow-y-auto custom-scrollbar bg-slate-950 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 text-white flex flex-col items-center justify-start p-4 sm:p-6 lg:p-8 [@media(max-height:500px)]:p-3 z-20"
             style={{ backgroundColor: '#020617' }}
           >
-            {/* Ambient Herbal Jade Glow */}
-            <div className="absolute w-[600px] h-[600px] bg-emerald-500/15 rounded-full blur-[140px] pointer-events-none" />
+            {/* Ambient PromptPay Blue Glow */}
+            <div className="absolute w-[600px] h-[600px] bg-sky-500/15 rounded-full blur-[140px] pointer-events-none" />
 
-            {/* Top-Left Clock ("เวลา" per layout-หน้าคิดเงินใหม่.jpg) */}
-            {isClockEnabledGlobal && (
-              <StandbyClock 
-                pixelShift={pixelShiftClock} 
-                compact={true}
-                className="self-start mb-3 md:mb-0 md:absolute md:top-5 md:left-5 lg:top-6 lg:left-6 z-30 pointer-events-auto shrink-0 select-none [@media(max-height:500px)]:hidden"
-              />
-            )}
+            {/* Note: ซ่อนนาฬิกาชั่วคราวขณะสแกน QR เพื่อป้องกันการบัง QR Code/รายละเอียดบนอุปกรณ์อื่น (Tablet/Webview/จอลูกค้า) พอชำระเสร็จ (STANDBY_ADS / ACTIVE_CART) จะกลับมาแสดงขนาดเท่าเดิม */}
 
             <div className="relative z-10 my-auto flex flex-col [@media(max-height:500px)]:flex-row items-center justify-center gap-3 [@media(max-height:500px)]:gap-5 max-w-xl [@media(max-height:500px)]:max-w-3xl w-full text-center [@media(max-height:500px)]:text-left py-1">
               {/* Giant QR Code Frame (Left in compact landscape, middle on normal portrait/desktop) */}
-              <div className="order-2 [@media(max-height:500px)]:order-1 p-3.5 sm:p-5 [@media(max-height:500px)]:p-2.5 bg-white rounded-3xl [@media(max-height:500px)]:rounded-2xl shadow-2xl border-4 border-emerald-400/30 flex flex-col items-center relative shrink-0">
+              <div className="order-2 [@media(max-height:500px)]:order-1 p-3.5 sm:p-5 [@media(max-height:500px)]:p-2.5 bg-white rounded-3xl [@media(max-height:500px)]:rounded-2xl shadow-2xl border-4 border-sky-400/30 flex flex-col items-center relative shrink-0">
                 {qrPaymentData.qrUrl ? (
                   <img
                     src={qrPaymentData.qrUrl}
@@ -2095,7 +2088,7 @@ export default function CustomerDisplay({
                   />
                 ) : (
                   <div className="w-48 h-48 xs:w-56 xs:h-56 sm:w-64 sm:h-64 md:w-68 md:h-68 lg:w-72 lg:h-72 xl:w-80 xl:h-80 [@media(max-height:500px)]:w-36 [@media(max-height:500px)]:h-36 flex items-center justify-center text-slate-400">
-                    <RefreshCw className="w-10 h-10 animate-spin text-emerald-600" />
+                    <RefreshCw className="w-10 h-10 animate-spin text-sky-500" />
                   </div>
                 )}
                 <div className="mt-1.5 sm:mt-2 [@media(max-height:500px)]:mt-1 text-center">
@@ -2111,9 +2104,9 @@ export default function CustomerDisplay({
               {/* Header + Account + Amount details */}
               <div className="contents [@media(max-height:500px)]:flex [@media(max-height:500px)]:flex-col [@media(max-height:500px)]:items-start [@media(max-height:500px)]:order-2 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1">
                 <div className="order-1 flex flex-col items-center [@media(max-height:500px)]:items-start">
-                  {/* Header Badge */}
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-emerald-300 font-semibold text-xs sm:text-sm mb-2 sm:mb-3 [@media(max-height:500px)]:mb-1.5">
-                    <QrCode className="w-4 h-4 text-emerald-400 shrink-0" />
+                  {/* Header Badge (Styled in Sky Blue / PromptPay theme matching POS webapp tab) */}
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-1.5 rounded-2xl bg-gradient-to-r from-sky-500/20 via-sky-500/25 to-indigo-500/20 backdrop-blur-md border border-sky-400/40 text-sky-300 font-semibold text-xs sm:text-sm mb-2 sm:mb-3 [@media(max-height:500px)]:mb-1.5 shadow-sm shadow-sky-500/20">
+                    <QrCode className="w-4 h-4 text-sky-400 shrink-0" />
                     <span>Thai QR Payment / พร้อมเพย์</span>
                   </div>
 
@@ -2130,11 +2123,11 @@ export default function CustomerDisplay({
                   <div className="px-4 py-2 sm:px-5 sm:py-2.5 [@media(max-height:500px)]:px-3 [@media(max-height:500px)]:py-1.5 bg-black/40 backdrop-blur-md rounded-2xl border border-white/10 text-xs text-slate-200 flex flex-wrap items-center justify-center [@media(max-height:500px)]:justify-start gap-x-4 gap-y-1 max-w-full">
                     <div className="min-w-0 break-words">ชื่อบัญชี: <strong className="text-white">{qrPaymentData.accountName || 'คลินิกการแพทย์แผนจีนอันผิง'}</strong></div>
                     {qrPaymentData.bankName && <div className="min-w-0 break-words">ธนาคาร: <strong className="text-white">{qrPaymentData.bankName}</strong></div>}
-                    {qrPaymentData.bankAccountNumber && <div className="min-w-0 break-words">เลขที่บัญชี: <strong className="font-mono text-emerald-300">{qrPaymentData.bankAccountNumber}</strong></div>}
+                    {qrPaymentData.bankAccountNumber && <div className="min-w-0 break-words">เลขที่บัญชี: <strong className="font-mono text-sky-300">{qrPaymentData.bankAccountNumber}</strong></div>}
                   </div>
 
                   {/* Prominent Amount Pill */}
-                  <div className="mt-2.5 sm:mt-3 [@media(max-height:500px)]:mt-2 px-4 sm:px-6 py-2 [@media(max-height:500px)]:py-1.5 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-mono font-bold text-base sm:text-lg [@media(max-height:500px)]:text-sm max-w-full truncate">
+                  <div className="mt-2.5 sm:mt-3 [@media(max-height:500px)]:mt-2 px-4 sm:px-6 py-2 [@media(max-height:500px)]:py-1.5 rounded-2xl bg-sky-500/20 border border-sky-400/40 text-sky-300 font-mono font-bold text-base sm:text-lg [@media(max-height:500px)]:text-sm max-w-full truncate shadow-sm shadow-sky-500/10">
                     ยอดชำระ: {Number(qrPaymentData.amount || cartData.grandTotal).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท
                   </div>
                 </div>
@@ -2210,11 +2203,6 @@ export default function CustomerDisplay({
                       <span className="text-xs sm:text-sm font-bold text-slate-800 kanit-text truncate">
                         {cartData.patient.name}
                       </span>
-                      {cartData.patient.nickname && (
-                        <span className="text-xs text-slate-500 kanit-text font-normal truncate">
-                          ({cartData.patient.nickname})
-                        </span>
-                      )}
                       {cartData?.patient?.isVip && (
                         <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-white kanit-text shrink-0">
                           VIP
@@ -2224,7 +2212,7 @@ export default function CustomerDisplay({
                   </div>
                 </div>
                 <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 shrink-0">
-                  HN: {cartData.patient.hn || '-'}
+                  {cartData.patient.hn || '-'}
                 </span>
               </div>
             )}
@@ -2295,7 +2283,7 @@ export default function CustomerDisplay({
                 }`}>
                   รวมส่วนลด
                 </span>
-                <div className={`text-2xl sm:text-3xl lg:text-4xl font-black font-data tracking-tight leading-tight mt-0.5 ${
+                <div className={`text-2xl sm:text-3xl lg:text-4xl font-black font-mono tracking-tight leading-tight mt-0.5 ${
                   hasDiscount ? 'text-rose-600' : 'text-slate-700'
                 }`}>
                   {totalDisc > 0 
@@ -2305,12 +2293,12 @@ export default function CustomerDisplay({
                 {hasDiscount && (cDiscount > 0 || aDiscount > 0) && (
                   <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1.5 mt-1.5 border-t border-rose-200/70 text-[11px] kanit-text">
                     {cDiscount > 0 && (
-                      <span className="px-2 py-0.5 rounded-lg bg-white/90 border border-rose-200 text-rose-700 font-medium">
+                      <span className="px-2 py-0.5 rounded-lg bg-white/90 border border-rose-200 text-rose-700 font-medium font-mono">
                         คูปอง {cartData.couponCode ? `(${cartData.couponCode})` : ''}: -{cDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
                       </span>
                     )}
                     {aDiscount > 0 && (
-                      <span className="px-2 py-0.5 rounded-lg bg-white/90 border border-rose-200 text-rose-700 font-medium">
+                      <span className="px-2 py-0.5 rounded-lg bg-white/90 border border-rose-200 text-rose-700 font-medium font-mono">
                         ส่วนลดเพิ่ม: -{aDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
                       </span>
                     )}
@@ -2336,7 +2324,7 @@ export default function CustomerDisplay({
               ยอดสุทธิ
             </span>
             <div 
-              className="text-3xl xs:text-4xl sm:text-5xl lg:text-5xl font-black font-data tracking-tight text-white leading-none mt-1 drop-shadow-sm select-none"
+              className="text-3xl xs:text-4xl sm:text-5xl lg:text-5xl font-black font-mono tracking-tight text-white leading-none mt-1 drop-shadow-sm select-none"
               style={{ color: '#ffffff' }}
             >
               {Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
