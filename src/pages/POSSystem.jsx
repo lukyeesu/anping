@@ -2718,8 +2718,16 @@ const POSSystem = ({
 
           if (moreP.length > 0) {
             setPatientsData(prev => {
-              const existingIds = new Set(prev.map(p => String(p.id || p.hn).toLowerCase()));
-              const newUnique = moreP.filter(p => !existingIds.has(String(p.id || p.hn).toLowerCase()));
+              const existingKeys = new Set();
+              (prev || []).forEach(p => {
+                if (p?.id) existingKeys.add(String(p.id).trim().toLowerCase());
+                if (p?.hn) existingKeys.add(String(p.hn).trim().toLowerCase());
+              });
+              const newUnique = moreP.filter(p => {
+                const pId = p?.id ? String(p.id).trim().toLowerCase() : '';
+                const pHn = p?.hn ? String(p.hn).trim().toLowerCase() : '';
+                return (!pId || !existingKeys.has(pId)) && (!pHn || !existingKeys.has(pHn));
+              });
               return newUnique.length > 0 ? [...newUnique, ...prev] : prev;
             });
           }
@@ -2846,7 +2854,54 @@ const POSSystem = ({
   }, [patientsData, todayTreatments, posHistoryData]);
 
   const patientOptions = useMemo(() => {
-    const sortedPatients = [...(patientsData || [])].sort((a, b) => {
+    // 1. กำจัดคนไข้ที่ซ้ำซ้อนกันใน patientsData โดยยึด HN หรือ ID เป็นเอกลักษณ์ ป้องกันไม่ให้แสดงชื่อคนเดียวกันซ้ำใน Dropdown เด็ดขาด
+    const uniquePatientsMap = new Map();
+    (patientsData || []).forEach(p => {
+      if (!p) return;
+      const cleanHn = String(p.hn || '').trim().toUpperCase();
+      const cleanId = String(p.id || '').trim().toLowerCase();
+      const primaryKey = cleanHn || cleanId;
+      if (!primaryKey) return;
+
+      let existingKey = null;
+      if (cleanHn && uniquePatientsMap.has(cleanHn)) {
+        existingKey = cleanHn;
+      } else if (cleanId && uniquePatientsMap.has(cleanId)) {
+        existingKey = cleanId;
+      } else {
+        for (const [k, existing] of uniquePatientsMap.entries()) {
+          const exHn = String(existing.hn || '').trim().toUpperCase();
+          const exId = String(existing.id || '').trim().toLowerCase();
+          if (
+            (cleanHn && exHn && cleanHn === exHn) ||
+            (cleanId && exId && cleanId === exId) ||
+            (cleanHn && exId && cleanHn === exId.toUpperCase()) ||
+            (cleanId && exHn && cleanId.toUpperCase() === exHn)
+          ) {
+            existingKey = k;
+            break;
+          }
+        }
+      }
+
+      if (existingKey) {
+        const existing = uniquePatientsMap.get(existingKey);
+        const merged = {
+          ...existing,
+          ...p,
+          id: existing.id || p.id,
+          hn: existing.hn || p.hn,
+          phone: existing.phone || p.phone || existing.phone1 || p.phone1,
+          opdRecords: (p.opdRecords?.length || 0) > (existing.opdRecords?.length || 0) ? p.opdRecords : existing.opdRecords,
+        };
+        uniquePatientsMap.set(existingKey, merged);
+      } else {
+        uniquePatientsMap.set(primaryKey, p);
+      }
+    });
+
+    const uniquePatients = Array.from(uniquePatientsMap.values());
+    const sortedPatients = uniquePatients.sort((a, b) => {
       const aId = String(a.id || '').trim().toLowerCase();
       const aHn = String(a.hn || '').trim().toLowerCase();
       const bId = String(b.id || '').trim().toLowerCase();
@@ -2905,11 +2960,23 @@ const POSSystem = ({
   // รายการคนไข้ที่ผ่านการกรอง (หากไม่ค้นหา จะแสดงทั้งหมดเพื่อให้สามารถเลื่อนดู/scroll คนไข้ทุกคนได้ครบถ้วน)
   const filteredPatientOptions = useMemo(() => {
     const list = patientOptions.filter(p => p.value !== '');
+    
+    // กรองซ้ำซ้อนระดับ Option ขั้นสุดท้าย โดยใช้ HN หรือ value ป้องกัน duplicate 100%
+    const seen = new Set();
+    const uniqueOptions = [];
+    for (const opt of list) {
+      const key = String(opt.hn || opt.value || '').trim().toUpperCase();
+      if (!key || !seen.has(key)) {
+        if (key) seen.add(key);
+        uniqueOptions.push(opt);
+      }
+    }
+
     if (!patientSearchTerm || !patientSearchTerm.trim()) {
-      return list;
+      return uniqueOptions;
     }
     const term = patientSearchTerm.toLowerCase().trim();
-    return list.filter(p => {
+    return uniqueOptions.filter(p => {
       const matchLabel = (p.label || '').toLowerCase().includes(term);
       const matchName = (p.name || '').toLowerCase().includes(term);
       const matchHn = (p.hn || '').toLowerCase().includes(term);
@@ -2952,8 +3019,16 @@ const POSSystem = ({
       if (res && res.status === 'success' && Array.isArray(res.patients)) {
         if (res.patients.length > 0) {
           setPatientsData(prev => {
-            const existingIds = new Set(prev.map(p => String(p.id || p.hn || '').trim().toLowerCase()));
-            const newItems = res.patients.filter(p => !existingIds.has(String(p.id || p.hn || '').trim().toLowerCase()));
+            const existingKeys = new Set();
+            (prev || []).forEach(p => {
+              if (p?.id) existingKeys.add(String(p.id).trim().toLowerCase());
+              if (p?.hn) existingKeys.add(String(p.hn).trim().toLowerCase());
+            });
+            const newItems = res.patients.filter(p => {
+              const pId = p?.id ? String(p.id).trim().toLowerCase() : '';
+              const pHn = p?.hn ? String(p.hn).trim().toLowerCase() : '';
+              return (!pId || !existingKeys.has(pId)) && (!pHn || !existingKeys.has(pHn));
+            });
             return [...prev, ...newItems];
           });
         }
@@ -3035,7 +3110,7 @@ const POSSystem = ({
       >
         
         {/* Header ของ POS (Responsive: 2 แถวบน Mobile เพื่อความเป็นระเบียบ ไม่เบียดกัน) */}
-        <div className="pos-header flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 shrink-0 w-full">
+        <div className="pos-header flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4 [@media(max-height:480px)]:mb-1.5 [@media(max-height:480px)]:gap-1.5 shrink-0 w-full">
           <div className="flex items-center justify-between sm:justify-start gap-2">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 kanit-text tracking-tight flex items-center gap-2 leading-none">
               <Calculator className="w-5 h-5 sm:w-6 sm:h-6 text-sky-500 shrink-0" /> 
@@ -3050,7 +3125,7 @@ const POSSystem = ({
             <button
               type="button"
               onClick={() => setIsStationModalOpen(true)}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 [@media(max-height:480px)]:py-1 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
               title="ตั้งค่าเคาน์เตอร์และเชื่อมต่อจอแสดงผลฝั่งลูกค้า"
             >
               <Monitor size={15} className="sm:w-[18px] sm:h-[18px] text-emerald-600 shrink-0" />
@@ -3061,7 +3136,7 @@ const POSSystem = ({
             <button
               type="button"
               onClick={handleOpenDailySummaryModal}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 hover:text-blue-800 hover:bg-blue-100 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 [@media(max-height:480px)]:py-1 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 hover:text-blue-800 hover:bg-blue-100 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
               title="สรุปยอดขายประจำวัน & ส่งแจ้งเตือนเข้า LINE / Discord"
             >
               <BarChart3 size={15} className="sm:w-[18px] sm:h-[18px] text-blue-600 shrink-0" /> 
@@ -3070,7 +3145,7 @@ const POSSystem = ({
             <button
               type="button"
               onClick={() => historyModal.open()}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 [@media(max-height:480px)]:py-1 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-sky-600 hover:bg-sky-50 transition-colors shadow-2xs kanit-text text-xs sm:text-sm font-medium"
               title="ประวัติการขาย"
             >
               <History size={15} className="sm:w-[18px] sm:h-[18px] shrink-0" /> 
@@ -3086,15 +3161,15 @@ const POSSystem = ({
           <div className={`flex-[6] lg:flex-1 flex flex-col bg-white rounded-[1.5rem] sm:rounded-[2rem] lg:rounded-[2.5rem] shadow-sm border border-slate-100/50 overflow-hidden min-h-0 ${isMobileCartOpen ? 'hidden lg:flex' : 'flex'}`}>
             
             {/* Search & Filter Bar */}
-            <div className="pos-search-bar p-4 sm:p-5 border-b border-slate-100 bg-slate-50 shrink-0">
-              <div className="relative mb-4">
-                <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <div className="pos-search-bar p-4 sm:p-5 [@media(max-height:480px)]:p-2.5 border-b border-slate-100 bg-slate-50 shrink-0">
+              <div className="relative mb-4 [@media(max-height:480px)]:mb-1.5">
+                <Search className="w-5 h-5 [@media(max-height:480px)]:w-4 [@media(max-height:480px)]:h-4 text-slate-400 absolute left-4 [@media(max-height:480px)]:left-3 top-1/2 -translate-y-1/2" />
                 <input 
                   type="text" 
                   placeholder="ค้นหารหัส, ชื่อสินค้า หรือบริการ..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-11 py-3 sm:py-3.5 bg-white border border-slate-200 rounded-2xl text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors font-data shadow-sm"
+                  className="w-full pl-12 pr-11 py-3 sm:py-3.5 [@media(max-height:480px)]:py-1.5 [@media(max-height:480px)]:pl-9 [@media(max-height:480px)]:text-sm [@media(max-height:480px)]:rounded-xl bg-white border border-slate-200 rounded-2xl text-base outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-colors font-data shadow-sm"
                 />
                 {searchQuery && (
                   <button
@@ -3109,12 +3184,12 @@ const POSSystem = ({
               </div>
               
               {/* Category Pills */}
-              <div className="flex items-center gap-2.5 overflow-x-auto custom-scrollbar pb-2.5 pt-1 -mx-1 px-1">
+              <div className="flex items-center gap-2.5 overflow-x-auto custom-scrollbar pb-2.5 pt-1 -mx-1 px-1 [@media(max-height:480px)]:pb-1 [@media(max-height:480px)]:pt-0 [@media(max-height:480px)]:gap-1.5">
                 {categories.map(cat => (
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`whitespace-nowrap px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-sm font-bold kanit-text transition-all shrink-0 ${
+                    className={`whitespace-nowrap px-4 py-2 sm:px-5 sm:py-2.5 [@media(max-height:480px)]:px-2.5 [@media(max-height:480px)]:py-1 [@media(max-height:480px)]:text-xs rounded-xl font-bold kanit-text transition-all shrink-0 ${
                       activeCategory === cat 
                       ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20' 
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -3127,7 +3202,7 @@ const POSSystem = ({
             </div>
 
             {/* Product Grid */}
-            <div className="pos-product-grid flex-1 p-3 sm:p-6 pb-24 lg:pb-6 overflow-y-auto custom-scrollbar bg-slate-50/30" style={{ overscrollBehaviorY: 'none' }}>
+            <div className="pos-product-grid flex-1 p-3 sm:p-6 pb-24 lg:pb-6 [@media(max-height:480px)]:pb-16 overflow-y-auto custom-scrollbar bg-slate-50/30" style={{ overscrollBehaviorY: 'none' }}>
               {isGlobalLoading ? (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 sm:gap-5 auto-rows-max">
                   {Array.from({ length: 12 }).map((_, i) => (
@@ -3386,13 +3461,23 @@ const POSSystem = ({
                         </div>
                       ) : null
                     )}
-                    {filteredPatientOptions.map((opt) => (
+                    {filteredPatientOptions.map((opt, optIdx) => (
                         <div
-                            key={opt.value}
+                            key={`${opt.hn || opt.value || ''}-${optIdx}`}
                             onMouseDown={(e) => { 
                                e.preventDefault(); 
-                               if (opt.raw && !patientsData.find(p => (p.id || p.hn) === opt.value)) {
+                               if (opt.raw) {
+                                 const pVal = String(opt.value || '').trim().toLowerCase();
+                                 const pHn = String(opt.hn || '').trim().toLowerCase();
+                                 const alreadyInState = (patientsData || []).some(p => {
+                                   if (!p) return false;
+                                   const pId = String(p.id || '').trim().toLowerCase();
+                                   const exHn = String(p.hn || '').trim().toLowerCase();
+                                   return (pVal && (pId === pVal || exHn === pVal)) || (pHn && (pId === pHn || exHn === pHn));
+                                 });
+                                 if (!alreadyInState) {
                                    setPatientsData(prev => [...prev, opt.raw]);
+                                 }
                                }
                                handleSelectPatient(opt.value, opt.label); 
                             }}
@@ -4035,35 +4120,35 @@ const POSSystem = ({
           
           </div> {/* End of Right Column */}
 
-          {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือ/แท็บเล็ตแนวตั้งตอนอยู่หน้าเลือกสินค้า) --- */}
+          {/* --- Floating Mobile Cart Button (แสดงเฉพาะบนมือถือ/แท็บเล็ตตอนอยู่หน้าเลือกสินค้า) --- */}
           {!isMobileCartOpen && (
             <div 
-              className="lg:hidden fixed left-4 right-4 z-40"
+              className="lg:hidden fixed left-4 md:left-[96px] right-4 z-40 [@media(max-height:480px)]:bottom-2"
               style={{
-                bottom: showMobileBars ? '76px' : '24px',
+                bottom: (isMobile && showMobileBars) ? '76px' : '16px',
                 transition: 'bottom 0.35s cubic-bezier(0.32, 0.72, 0, 1)'
               }}
             >
               <button 
                 onClick={() => setIsMobileCartOpen(true)}
-                className={`w-full p-4 rounded-2xl shadow-xl flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}
+                className={`w-full p-3 sm:p-4 [@media(max-height:480px)]:p-2 rounded-2xl [@media(max-height:480px)]:rounded-xl shadow-xl flex items-center justify-between transition-all active:scale-95 ${cart.length > 0 ? 'bg-sky-500 text-white shadow-sky-500/30' : 'bg-white text-slate-600 border border-slate-200 shadow-slate-200/50'}`}
               >
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${cart.length > 0 ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                    <ShoppingCart size={24} />
+                <div className="flex items-center gap-3 sm:gap-4 [@media(max-height:480px)]:gap-2.5">
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:480px)]:w-8 [@media(max-height:480px)]:h-8 rounded-xl flex items-center justify-center shrink-0 ${cart.length > 0 ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <ShoppingCart size={22} className="[@media(max-height:480px)]:w-4 [@media(max-height:480px)]:h-4" />
                   </div>
                   <div className="text-left flex flex-col justify-center">
-                    <p className={`text-[10px] font-black kanit-text leading-none mb-1.5 uppercase tracking-widest ${cart.length > 0 ? 'text-sky-100' : 'text-slate-400'}`}>
+                    <p className={`text-[10px] [@media(max-height:480px)]:text-[9px] font-black kanit-text leading-none mb-1 [@media(max-height:480px)]:mb-0.5 uppercase tracking-widest ${cart.length > 0 ? 'text-sky-100' : 'text-slate-400'}`}>
                       ตะกร้าสินค้า ({cart.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)})
                     </p>
-                    <p className={`text-lg font-bold font-data leading-none ${cart.length > 0 ? 'text-white' : 'text-slate-600'}`}>
+                    <p className={`text-base sm:text-lg [@media(max-height:480px)]:text-sm font-bold font-data leading-none ${cart.length > 0 ? 'text-white' : 'text-slate-600'}`}>
                       {formatCurrency(grandTotal)}
                     </p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-1.5 kanit-text font-black text-sm ${cart.length > 0 ? 'bg-white/20 pl-4 pr-2.5 py-2 rounded-xl' : 'opacity-50'}`}>
+                <div className={`flex items-center gap-1.5 kanit-text font-black text-xs sm:text-sm ${cart.length > 0 ? 'bg-white/20 pl-3 pr-2 py-1.5 sm:pl-4 sm:pr-2.5 sm:py-2 [@media(max-height:480px)]:py-1 [@media(max-height:480px)]:px-2 rounded-xl' : 'opacity-50'}`}>
                    <span>{cart.length > 0 ? 'ดูบิล' : 'เปิดตะกร้า'}</span>
-                   <ChevronRight size={18} />
+                   <ChevronRight size={18} className="[@media(max-height:480px)]:w-3.5 [@media(max-height:480px)]:h-3.5" />
                 </div>
               </button>
             </div>
@@ -4285,11 +4370,11 @@ const POSSystem = ({
                                  </div>
                               )}
 
-                              {/* ส่วนแสดงภาพ QR Code */}
-                              <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 shrink-0 relative mb-3 flex flex-col items-center w-full max-w-[280px]">
+                              {/* ส่วนแสดงภาพ QR Code (สัดส่วน 1:1 จัตุรัสสมบูรณ์ กรอบสีฟ้าไม่งอหรือโดนบีบ) */}
+                              <div className="bg-white p-3.5 sm:p-4 rounded-2xl shadow-sm border border-slate-200 shrink-0 relative mb-3 flex flex-col items-center justify-center aspect-square w-52 sm:w-60 max-w-full mx-auto">
                                  <div className="absolute inset-0 border-2 border-sky-400 rounded-2xl animate-pulse opacity-30 pointer-events-none"></div>
 
-                                 <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center bg-white rounded-xl overflow-hidden">
+                                 <div className="relative w-full h-full flex items-center justify-center bg-white rounded-xl overflow-hidden p-1">
                                     {isGeneratingQr ? (
                                        <div className="flex flex-col items-center gap-2 text-sky-600">
                                           <Loader2 size={30} className="animate-spin" />
@@ -4299,7 +4384,7 @@ const POSSystem = ({
                                        <img 
                                           src={dynamicQrUrl} 
                                           alt="Payment QR" 
-                                          className="w-full h-full object-contain pointer-events-none select-none relative z-10" 
+                                          className="w-full h-full object-contain aspect-square pointer-events-none select-none relative z-10" 
                                        />
                                     ) : (
                                        <div className="text-slate-400 text-xs kanit-text text-center p-2">

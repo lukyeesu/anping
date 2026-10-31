@@ -1,8 +1,17 @@
-# WebView รุ่น 1.6.29
+# WebView รุ่น 1.6.30
 
-Release 1.6.29 วันที่ 30/10/2026: แก้ไขปัญหาแอพหยุดทำงานซ้ำๆ (Crash Loop) และ ANR (ปิดหรือรอ) ขณะเปิดแอพ
-SHA-256: `49049B774EC403941EA6EBD2C67969FD12DC12368C3E924170113020DC3B6C7D`
-ไฟล์ติดตั้ง: `../public/AnpingClinic.apk` — package `com.anping.clinic`, versionCode `52`
+Release 1.6.30 วันที่ 31/10/2026: แก้ไขหน้าแคชเชียร์ POS แสดงชื่อคนไข้และสถานะรอชำระเงินซ้ำ 2 ครั้ง
+SHA-256: `D5B95EFE3AE472465115A83FE69EE18331592577C6F22A89D4128BB1DEC8A200`
+ไฟล์ติดตั้ง: `../public/AnpingClinic.apk` — package `com.anping.clinic`, versionCode `53`
+
+## 1.6.30: แก้ไขรายการคนไข้ซ้ำในหน้าแคชเชียร์ POS (Deduplication)
+- **แก้ไขการตรวจสอบตัวตนคนไข้ใน App.jsx**: ปรับ `syncLocalStateOnSave` และ `deleteLocalStateOnDelete` จากเดิมที่ใช้ `(p.id || p.hn)` ซึ่งเมื่อ `p.id` เป็น UUID และเปรียบเทียบกับ HN จะเทียบผิดพลาด ทำให้ดึงข้อมูลคนไข้มาต่อท้าย State ซ้ำ เปลี่ยนเป็นตรวจสอบทั้ง `p.id` และ `p.hn` พร้อมกัน
+- **ขจัดรายการซ้ำใน POSSystem.jsx**:
+  - `patientOptions` เพิ่มระบบ Deduplication ด้วย Map รวมข้อมูลตาม `HN` และ `ID` หากมีอ็อบเจกต์คนไข้ซ้ำกันจะ merge ข้อมูลประวัติการรักษา `opdRecords` รวมกันอย่างถูกต้อง
+  - `filteredPatientOptions` เพิ่ม Set ตรวจสอบ `value` ไม่ให้มีรายการซ้ำแสดงบน Dropdown เมนู
+  - `fetchTodayTreatments` และ `loadMorePatients` ปรับการตรวจสอบ `existingKeys` ให้เช็คทั้ง `id` และ `hn`
+  - ปรับปรุง `onMouseDown` ใน Dropdown ไม่ให้บันทึกคนไข้ซ้ำซ้อนลงใน `patientsData`
+- ป้องกันความสับสนเมื่อคนไข้คนเดียวกันแสดงสถานะ "รอชำระเงิน" ซ้ำ 2 ครั้ง และเมื่อชำระเงินรายการหนึ่ง อีกรายการจะเปลี่ยนสถานะตามอย่างถูกต้อง
 
 ## 1.6.29: แก้ไขอาการ Crash Loop และ ANR ปิดหรือรอ ขณะเปิดแอป
 - **แก้ไข Foreground Service ตามข้อกำหนด Android 14+**: เพิ่มสิทธิ์ `CHANGE_NETWORK_STATE` และ `CHANGE_WIFI_STATE` ใน `AndroidManifest.xml` เพื่อปฏิบัติตามข้อกำหนดความปลอดภัยของ `FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE` เมื่อเริ่มทำงานโดยยังไม่ได้เสียบเครื่องอ่านบัตร ป้องกัน `SecurityException` และ `ForegroundServiceDidNotStartInTimeException` ที่เป็นต้นเหตุของ ANR ปิดหรือรอ

@@ -4456,9 +4456,9 @@ export default function App() {
           </div>
 
           <div className={`flex flex-col flex-1 min-h-0 ${(!isSidebarExpanded && isProfileDropdownOpen) ? 'overflow-visible' : 'overflow-hidden'}`}>
-            <div className="px-4 py-4 [@media(max-height:500px)]:py-2 relative z-[60] min-h-[72px] [@media(max-height:500px)]:min-h-[52px] flex items-center shrink-0 overflow-hidden">
+            <div className="px-3.5 py-4 [@media(max-height:500px)]:py-2 relative z-[60] min-h-[72px] [@media(max-height:500px)]:min-h-[52px] flex items-center shrink-0 overflow-hidden">
               <div 
-                className="sidebar-text-label w-full absolute left-0 px-4 will-change-transform"
+                className="sidebar-text-label w-full absolute left-0 px-3.5 will-change-transform"
                 style={{
                   opacity: isSidebarExpanded ? 1 : 0,
                   pointerEvents: isSidebarExpanded ? 'auto' : 'none',
@@ -4490,7 +4490,7 @@ export default function App() {
               </div>
             </div>
 
-            <nav className="flex-1 px-4 py-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative">
+            <nav className="flex-1 px-3.5 py-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative">
               {filteredNavItems.map((item) => {
                 const isActive = currentTab === item.id;
                 return (
@@ -4509,11 +4509,11 @@ export default function App() {
                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 font-normal'
                     }`}
                   >
-                    <div className="w-12 h-11 shrink-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-12 max-w-full h-11 shrink-0 flex items-center justify-center pointer-events-none">
                       <item.icon size={20} className={isActive ? 'opacity-100' : 'opacity-70'} />
                     </div>
                     <span 
-                      className="sidebar-text-label whitespace-nowrap overflow-hidden text-left font-normal text-sm pl-1 pointer-events-none will-change-transform"
+                      className="sidebar-text-label flex-1 min-w-0 whitespace-nowrap overflow-hidden text-left font-normal text-sm pl-1 pointer-events-none will-change-transform"
                       style={{
                         opacity: isSidebarExpanded ? 1 : 0,
                         transform: `translate3d(${isSidebarExpanded ? 0 : -8}px, 0, 0)`,
@@ -4527,7 +4527,7 @@ export default function App() {
               })}
             </nav>
 
-            <div id="profile-container-pc" className="px-4 py-3 [@media(max-height:500px)]:py-2 border-t border-slate-100/50 min-h-[76px] [@media(max-height:500px)]:min-h-[56px] flex items-center relative shrink-0 overflow-visible">
+            <div id="profile-container-pc" className="px-3.5 py-3 [@media(max-height:500px)]:py-2 border-t border-slate-100/50 min-h-[76px] [@media(max-height:500px)]:min-h-[56px] flex items-center relative shrink-0 overflow-visible">
               {/* Dropdown Menu (Expanded) */}
               {isProfileDropdownOpen && isSidebarExpanded && (
                 <div className="absolute bottom-[calc(100%+0.5rem)] left-4 right-4 max-h-[calc(100dvh-5.5rem)] overflow-y-auto custom-scrollbar bg-white rounded-2xl shadow-xl border border-slate-200/80 p-2 z-[999] animate-scale-up text-left space-y-1">
@@ -4642,7 +4642,7 @@ export default function App() {
                 }}
                 className="w-full h-11 flex items-center cursor-pointer hover:bg-slate-50/80 rounded-2xl transition-colors select-none overflow-hidden"
               >
-                <div className="w-12 shrink-0 flex items-center justify-center">
+                <div className="w-12 max-w-full shrink-0 flex items-center justify-center">
                   {currentUser.photo ? (
                     <img src={currentUser.photo} className="w-9 h-9 rounded-full object-cover border border-slate-200 ring-2 ring-white shadow-sm" alt={currentUser.name} />
                   ) : (

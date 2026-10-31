@@ -32,6 +32,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.anping.cardagent.databinding.ActivityMainBinding
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -315,7 +316,7 @@ class MainActivity : AppCompatActivity() {
             // ไม่ต้องใช้ WideViewPort/OverviewMode เพื่อไม่ให้ WebView คำนวณ Scale เพิ่มเติม
             useWideViewPort = false
             loadWithOverviewMode = false
-            userAgentString = "$userAgentString AnpingClinicApp/1.6.29"
+            userAgentString = "$userAgentString AnpingClinicApp/1.6.30"
         }
 
         // Bridge เชื่อมต่อ Smart Card Reader แบบ Native
@@ -396,9 +397,73 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+
+            // รองรับโหมดเต็มจอระดับระบบปฏิบัติการ (Immersive System Bars Fullscreen)
+            private var isImmersiveFullscreen = false
+
+            @JavascriptInterface
+            fun isFullscreen(): Boolean = isImmersiveFullscreen
+
+            @JavascriptInterface
+            fun toggleFullscreen(): Boolean {
+                val next = !isImmersiveFullscreen
+                setFullscreen(next)
+                return next
+            }
+
+            @JavascriptInterface
+            fun setFullscreen(fullscreen: Boolean) {
+                runOnUiThread {
+                    isImmersiveFullscreen = fullscreen
+                    val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+                    if (fullscreen) {
+                        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+                    } else {
+                        windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+                    }
+                    getActiveWebView().evaluateJavascript("""
+                        (function() {
+                            try {
+                                window.dispatchEvent(new CustomEvent('native-fullscreen-change', { detail: { isFullscreen: $fullscreen } }));
+                            } catch(e) {}
+                        })();
+                    """.trimIndent(), null)
+                }
+            }
         }, "AndroidCardBridge")
 
         webView.webChromeClient = object : WebChromeClient() {
+            private var customView: View? = null
+            private var customViewCallback: CustomViewCallback? = null
+
+            // รองรับโหมดเต็มจอของแท็ก HTML5 <video> และ requestFullscreen() ใน WebView
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                runOnUiThread {
+                    if (customView != null) {
+                        callback?.onCustomViewHidden()
+                        return@runOnUiThread
+                    }
+                    customView = view
+                    customViewCallback = callback
+                    val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+                    windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+                    binding.root.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                    binding.swipeRefreshLayout.visibility = View.GONE
+                }
+            }
+
+            override fun onHideCustomView() {
+                runOnUiThread {
+                    binding.swipeRefreshLayout.visibility = View.VISIBLE
+                    customView?.let { binding.root.removeView(it) }
+                    customView = null
+                    customViewCallback?.onCustomViewHidden()
+                    val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+                    windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
             // อนุมัติสิทธิ์กล้องและไมค์ทันทีเมื่อหน้าเว็บต้องการสแกนกล้อง (High Performance Camera Scanning)
             override fun onPermissionRequest(request: PermissionRequest?) {
                 runOnUiThread {

@@ -220,8 +220,8 @@ export default function CustomerDisplay({
     return () => clearInterval(timer);
   }, []);
 
-  // Detect if an advertisement video is actively playing on screen
-  const isAdVideoPlaying = displayMode === 'STANDBY_ADS' && (
+  // Detect if an advertisement video is actively playing on screen (in STANDBY_ADS or ACTIVE_CART)
+  const isAdVideoPlaying = (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART') && (
     (activeLayer === 'A' && layerAData && isMediaVideo(layerAData.url, layerAData.type)) ||
     (activeLayer === 'B' && layerBData && isMediaVideo(layerBData.url, layerBData.type))
   );
@@ -603,9 +603,9 @@ export default function CustomerDisplay({
     };
   }, [branchId, stationId]);
 
-  // Pause all background videos when not in STANDBY_ADS or inactive layer to free GPU/CPU
+  // Pause all background videos when not in STANDBY_ADS/ACTIVE_CART or inactive layer to free GPU/CPU
   useEffect(() => {
-    if (displayMode === 'STANDBY_ADS') {
+    if (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART') {
       if (activeLayer === 'A') {
         if (videoRefB.current) { 
           try { videoRefB.current.muted = true; videoRefB.current.pause(); } catch (_) {} 
@@ -867,7 +867,7 @@ export default function CustomerDisplay({
       touchStartXRef.current = e.touches[0].clientX;
       touchStartYRef.current = e.touches[0].clientY;
       touchStartTimeRef.current = Date.now();
-      if (displayMode === 'STANDBY_ADS') {
+      if (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART') {
         setIsPausedByTouch(true);
       }
     }
@@ -894,7 +894,7 @@ export default function CustomerDisplay({
   };
 
   const handleTouchMove = (e) => {
-    if (e.touches.length === 1 && displayMode === 'STANDBY_ADS') {
+    if (e.touches.length === 1 && (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART')) {
       const currentX = e.touches[0].clientX;
       const currentY = e.touches[0].clientY;
       const diffX = currentX - touchStartXRef.current;
@@ -913,7 +913,7 @@ export default function CustomerDisplay({
     if (touchTapCountRef.current > 0) return;
 
     // Swipe navigation (single finger swipe)
-    if (displayMode === 'STANDBY_ADS' && e.changedTouches && e.changedTouches.length === 1) {
+    if ((displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART') && e.changedTouches && e.changedTouches.length === 1) {
       const endX = e.changedTouches[0].clientX;
       const endY = e.changedTouches[0].clientY;
       const diffX = endX - touchStartXRef.current;
@@ -939,7 +939,7 @@ export default function CustomerDisplay({
       try {
         if (!activeVideo.paused) activeVideo.pause();
       } catch (_) {}
-    } else if (displayMode === 'STANDBY_ADS') {
+    } else if (displayMode === 'STANDBY_ADS' || displayMode === 'ACTIVE_CART') {
       try {
         if (activeVideo.paused) activeVideo.play()?.catch?.(() => {});
       } catch (_) {}
@@ -971,7 +971,7 @@ export default function CustomerDisplay({
 
   // 6. Bufferless Dual-Player Engine (A/B Crossfade)
   const transitionToSlide = useCallback(async (targetIndex) => {
-    if (displayMode !== 'STANDBY_ADS') return;
+    if (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART') return;
     const ads = activeAdsRef.current;
     if (!ads || ads.length === 0) return;
     const safeIndex = ((targetIndex % ads.length) + ads.length) % ads.length;
@@ -1169,9 +1169,9 @@ export default function CustomerDisplay({
     }
   }, [activeAds]);
 
-  // Slide Timer Loop for Standby Mode (Precise duration execution)
+  // Slide Timer Loop for Standby & Active Cart Mode (Precise duration execution)
   useEffect(() => {
-    if (displayMode !== 'STANDBY_ADS' || isPausedByTouch || activeAds.length <= 1) {
+    if ((displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART') || isPausedByTouch || activeAds.length <= 1) {
       if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
       return;
     }
@@ -1208,7 +1208,7 @@ export default function CustomerDisplay({
     if (activeLayerRef.current !== fromLayer) {
       return;
     }
-    if (displayMode !== 'STANDBY_ADS') return;
+    if (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART') return;
 
     const ads = activeAdsRef.current;
     if (!ads || ads.length <= 1) {
@@ -1261,7 +1261,7 @@ export default function CustomerDisplay({
 
   // Sync video audio mute state strictly with active ad (Guarantees NO sound clashing)
   useEffect(() => {
-    if (displayMode !== 'STANDBY_ADS') {
+    if (displayMode !== 'STANDBY_ADS' && displayMode !== 'ACTIVE_CART') {
       if (videoRefA.current && !videoRefA.current.paused) { 
         try { videoRefA.current.muted = true; videoRefA.current.pause(); } catch (_) {} 
       }
@@ -1367,8 +1367,19 @@ export default function CustomerDisplay({
     showToast?.('ตั้งค่าเคาน์เตอร์และสาขาเรียบร้อย', 'success');
   };
 
-  // Toggle Fullscreen (Cross-Browser & iOS / iPadOS Safari WebKit Support)
+  // Toggle Fullscreen (Cross-Browser, iOS / iPadOS Safari & Android Native WebView Support)
   const toggleFullscreen = () => {
+    // 1. If running inside Android WebView native app, use native Android Immersive Fullscreen
+    if (typeof window !== 'undefined' && window.AndroidCardBridge && typeof window.AndroidCardBridge.toggleFullscreen === 'function') {
+      try {
+        const next = window.AndroidCardBridge.toggleFullscreen();
+        setIsFullscreen(prev => typeof next === 'boolean' ? next : !prev);
+        return;
+      } catch (e) {
+        console.warn('AndroidCardBridge toggleFullscreen error:', e);
+      }
+    }
+
     const doc = document;
     const docEl = document.documentElement;
 
@@ -1412,7 +1423,7 @@ export default function CustomerDisplay({
     }
   };
 
-  // Sync fullscreen state with native browser events
+  // Sync fullscreen state with native browser & Android WebView bridge events
   useEffect(() => {
     const handleFullscreenSync = () => {
       const isFull = !!(
@@ -1423,11 +1434,27 @@ export default function CustomerDisplay({
       );
       setIsFullscreen(isFull);
     };
+
+    const handleNativeFullscreen = (e) => {
+      if (e?.detail && typeof e.detail.isFullscreen === 'boolean') {
+        setIsFullscreen(e.detail.isFullscreen);
+      }
+    };
+
+    // Check initial native Android fullscreen state on mount
+    if (typeof window !== 'undefined' && window.AndroidCardBridge && typeof window.AndroidCardBridge.isFullscreen === 'function') {
+      try {
+        setIsFullscreen(Boolean(window.AndroidCardBridge.isFullscreen()));
+      } catch (_) {}
+    }
+
     document.addEventListener('fullscreenchange', handleFullscreenSync);
     document.addEventListener('webkitfullscreenchange', handleFullscreenSync);
+    window.addEventListener('native-fullscreen-change', handleNativeFullscreen);
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenSync);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenSync);
+      window.removeEventListener('native-fullscreen-change', handleNativeFullscreen);
     };
   }, []);
 
@@ -2122,125 +2149,100 @@ export default function CustomerDisplay({
       {/* ============================================================== */}
       {(displayMode === 'ACTIVE_CART' || displayMode === 'PAYMENT_QR') && (
         <div className="w-full lg:w-[32%] lg:min-w-[320px] lg:max-w-[460px] lg:h-full min-h-[280px] [@media(max-height:500px)]:min-h-[220px] lg:min-h-0 flex-1 lg:flex-none flex flex-col gap-2.5 sm:gap-4 [@media(max-height:500px)]:gap-2 shrink-0 z-20">
-          {/* Card 1: TOP CARD ("LOGO" box per layout image) */}
-          <div className="rounded-2xl sm:rounded-3xl bg-white p-3 sm:p-4 [@media(max-height:500px)]:p-2.5 shadow-xl border border-slate-200/80 flex items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-              {branchLogo ? (
-                <img 
-                  src={formatDirectImageUrl(branchLogo) || branchLogo}
-                  alt={branchDisplayName}
-                  draggable={false}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className="w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:500px)]:w-9 [@media(max-height:500px)]:h-9 rounded-2xl object-cover border border-slate-200/80 shadow-xs bg-white shrink-0 pointer-events-none select-none"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:500px)]:w-9 [@media(max-height:500px)]:h-9 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shadow-xs shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}>
-                <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm sm:text-lg font-bold text-slate-800 kanit-text tracking-tight leading-tight truncate">
-                  {branchDisplayName || 'อันผิงคลินิกแพทย์แผนจีน'}
-                </h2>
-                <p className="text-xs text-slate-500 kanit-text mt-0.5 truncate">
-                  จุดชำระเงิน • เคาน์เตอร์ {String(stationId || '1').replace('station_', '')}
-                </p>
-              </div>
-            </div>
-
-            <div className="shrink-0">
-              <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-2xs whitespace-nowrap">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span>{displayMode === 'PAYMENT_QR' ? 'รอสแกนชำระ' : 'กำลังคิดเงิน'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: BOTTOM CARD (Cart & Items box per layout image) */}
-          <div className="flex-1 rounded-2xl sm:rounded-3xl bg-white p-3.5 sm:p-5 [@media(max-height:500px)]:p-3 shadow-xl border border-slate-200/80 flex flex-col min-h-0 overflow-hidden">
-            {/* Header: Patient Info (Show ONLY when a patient is selected - "ลูกค้าทั่วไป" ไม่ต้องโชว์) */}
-            {cartData?.patient ? (
-              <div className="pb-3 border-b border-slate-100 shrink-0">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                    ข้อมูลผู้รับบริการ
+          {/* Card 1: TOP CARD ("LOGO & Patient" box per user layout sketch) */}
+          <div className="rounded-2xl sm:rounded-3xl bg-white p-3 sm:p-4 [@media(max-height:500px)]:p-2.5 shadow-xl border border-slate-200/80 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                {branchLogo ? (
+                  <img 
+                    src={formatDirectImageUrl(branchLogo) || branchLogo}
+                    alt={branchDisplayName}
+                    draggable={false}
+                    onContextMenu={(e) => e.preventDefault()}
+                    className="w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:500px)]:w-9 [@media(max-height:500px)]:h-9 rounded-2xl object-cover border border-slate-200/80 shadow-xs bg-white shrink-0 pointer-events-none select-none"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 [@media(max-height:500px)]:w-9 [@media(max-height:500px)]:h-9 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shadow-xs shrink-0 ${branchLogo ? 'hidden' : 'flex'}`}>
+                  <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] sm:text-xs font-bold text-emerald-600 kanit-text uppercase tracking-wider block">
+                    ยินดีต้อนรับ
                   </span>
-                  {cartData?.patient?.isVip && (
-                    <span 
-                      className="text-[10px] sm:text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-white kanit-text border border-amber-300/60 shadow-xs flex items-center gap-1 shrink-0"
-                      style={{ backgroundColor: '#f59e0b', backgroundImage: 'linear-gradient(to right, #f59e0b, #eab308, #d97706)' }}
-                    >
-                      <Crown size={11} className="fill-amber-200 text-white" /> VIP
-                    </span>
-                  )}
-                </div>
-
-                <div className={`p-2.5 rounded-xl flex flex-col gap-1.5 transition-all ${
-                  cartData?.patient?.isVip
-                    ? 'border-amber-300/90 border-l-4 border-l-amber-500 bg-amber-100 bg-gradient-to-r from-amber-100/90 via-yellow-50/90 to-amber-100/80 shadow-xs'
-                    : 'bg-slate-50 border border-slate-200/80'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                        cartData?.patient?.isVip 
-                          ? 'bg-amber-200/80 text-amber-900 border border-amber-300/70'
-                          : 'bg-emerald-100/70 text-emerald-700'
-                      }`}>
-                        {cartData?.patient?.isVip ? (
-                          <Crown className="w-4 h-4 text-amber-600 fill-amber-300" />
-                        ) : (
-                          <User className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className={`text-xs sm:text-sm font-bold kanit-text truncate ${
-                          cartData?.patient?.isVip ? 'text-amber-950 font-black' : 'text-slate-800'
-                        }`}>
-                          {cartData.patient.name}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md border shrink-0 ${
-                      cartData?.patient?.isVip
-                        ? 'bg-amber-50/90 text-amber-950 border-amber-300/80 font-bold'
-                        : 'bg-white text-slate-600 border-slate-200'
-                    }`}>
-                      HN: {cartData.patient.hn || '-'}
-                    </span>
-                  </div>
-
-                  {/* Remaining Courses */}
-                  {Array.isArray(cartData.patient.remainingCourses) && cartData.patient.remainingCourses.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-slate-200/60">
-                      {cartData.patient.remainingCourses.map((c, i) => (
-                        <div 
-                          key={c?.id || i}
-                          className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-medium kanit-text flex items-center gap-1"
-                        >
-                          <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-                          <span className="truncate max-w-[200px]">{c?.name || 'คอร์ส'}: เหลือ <strong>{c?.remaining ?? 0}</strong> ครั้ง</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <h2 className="text-sm sm:text-base font-bold text-slate-800 kanit-text tracking-tight leading-tight truncate">
+                    {branchDisplayName || 'อันผิงคลินิกแพทย์แผนจีน'}
+                  </h2>
+                  <p className="text-[11px] text-slate-400 kanit-text truncate">
+                    จุดชำระเงิน • เคาน์เตอร์ {String(stationId || '1').replace('station_', '')}
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div className="pb-2.5 border-b border-slate-100 shrink-0 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">
-                  รายการสินค้า / บริการ
-                </span>
-                <span className="text-xs font-mono font-semibold text-slate-500">
-                  {Array.isArray(cartData?.items) ? cartData.items.length : 0} รายการ
+
+              <div className="shrink-0">
+                <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-2xs whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <span>{displayMode === 'PAYMENT_QR' ? 'รอสแกนชำระ' : 'กำลังคิดเงิน'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Patient Info in Top Card (Show name and HN at the top per user's annotation) */}
+            {cartData?.patient && (
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                    cartData?.patient?.isVip 
+                      ? 'bg-amber-200/80 text-amber-900 border border-amber-300/70'
+                      : 'bg-emerald-100/70 text-emerald-700'
+                  }`}>
+                    {cartData?.patient?.isVip ? (
+                      <Crown className="w-4 h-4 text-amber-600 fill-amber-300" />
+                    ) : (
+                      <User className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs sm:text-sm font-bold text-slate-800 kanit-text truncate">
+                        {cartData.patient.name}
+                      </span>
+                      {cartData.patient.nickname && (
+                        <span className="text-xs text-slate-500 kanit-text font-normal truncate">
+                          ({cartData.patient.nickname})
+                        </span>
+                      )}
+                      {cartData?.patient?.isVip && (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-white kanit-text shrink-0">
+                          VIP
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200 text-slate-700 shrink-0">
+                  HN: {cartData.patient.hn || '-'}
                 </span>
               </div>
             )}
+          </div>
 
-            {/* Scrollable Items List */}
+          {/* Card 2: BOTTOM CARD (Items & Total box per user layout image) */}
+          <div className="flex-1 rounded-2xl sm:rounded-3xl bg-white p-3.5 sm:p-5 [@media(max-height:500px)]:p-3 shadow-xl border border-slate-200/80 flex flex-col min-h-0 overflow-hidden">
+            {/* Header: Item List Title */}
+            <div className="pb-2.5 border-b border-slate-100 shrink-0 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono">
+                รายการสินค้า / บริการ
+              </span>
+              <span className="text-xs font-mono font-semibold text-slate-500">
+                {Array.isArray(cartData?.items) ? cartData.items.length : 0} รายการ
+              </span>
+            </div>
+
+            {/* Scrollable Items List ("ช่องแสดงรายการ") */}
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 py-2 pr-1 min-h-0">
               {(Array.isArray(cartData?.items) ? cartData.items : []).map((item, index) => {
                 if (!item) return null;
@@ -2272,83 +2274,72 @@ export default function CustomerDisplay({
                   </div>
                 );
               })}
-
-              {/* Itemized Discounts (Displayed directly below items list) */}
-              {(() => {
-                const cDiscount = Number(cartData?.couponDiscount || 0);
-                const aDiscount = Number(cartData?.additionalDiscount || 0);
-                const totalDisc = cDiscount + aDiscount || Number(cartData?.discount || 0);
-
-                if (totalDisc <= 0 && cDiscount <= 0 && aDiscount <= 0) return null;
-
-                return (
-                  <div className="pt-2.5 mt-2.5 border-t-2 border-dashed border-slate-200 space-y-2">
-                    {/* Coupon Discount Line */}
-                    {cDiscount > 0 && (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2 text-emerald-800 text-xs font-semibold shadow-2xs">
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
-                          <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span className="truncate">
-                            คูปองส่วนลด {cartData.couponTitle ? `${cartData.couponTitle} ` : ''}{cartData.couponCode ? `(${cartData.couponCode})` : ''}
-                          </span>
-                        </div>
-                        <span className="font-mono font-bold text-emerald-600 whitespace-nowrap shrink-0">
-                          -{cDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Additional Discount Line */}
-                    {aDiscount > 0 && (
-                      <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-amber-900 text-xs font-semibold shadow-2xs">
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span className="truncate">ส่วนลดเพิ่มเติม:</span>
-                        </div>
-                        <span className="font-mono font-bold text-amber-700 whitespace-nowrap shrink-0">
-                          {cartData?.discountType === 'percent' && cartData?.discountValue
-                            ? `${cartData.discountValue}% (${aDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿)`
-                            : `-${aDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿`}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Total Discount Line */}
-                    <div className="flex items-center justify-between gap-2 px-1 text-xs font-bold text-slate-700 pt-1 min-w-0">
-                      <span className="kanit-text truncate">รวมส่วนลด:</span>
-                      <span className="font-mono text-rose-600 font-extrabold text-sm whitespace-nowrap shrink-0">
-                        -{totalDisc.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
+          </div>
 
-            {/* Cart Summary Bottom Bar: Net Payable (Ultra-Prominent Grand Total) */}
-            <div className="pt-2.5 sm:pt-3.5 [@media(max-height:500px)]:pt-2 pb-1 border-t-2 border-slate-200/80 shrink-0 flex flex-wrap xs:flex-nowrap items-center justify-between gap-2 sm:gap-3 min-w-0">
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-semibold text-slate-500 block kanit-text leading-tight truncate">ยอดชำระสุทธิ</span>
-                <span className="text-sm sm:text-lg font-black text-slate-800 kanit-text leading-tight block truncate">Net Payable</span>
-              </div>
-              <div 
-                className="px-3.5 py-2 sm:px-6 sm:py-3.5 [@media(max-height:500px)]:px-3.5 [@media(max-height:500px)]:py-1.5 rounded-2xl sm:rounded-3xl bg-emerald-600 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white font-mono font-black text-xl xs:text-2xl sm:text-3xl lg:text-3xl xl:text-4xl [@media(max-height:500px)]:text-xl shadow-xl tracking-tight flex items-baseline gap-1.5 sm:gap-2 min-w-0 max-w-full"
-                style={{
-                  backgroundColor: '#059669',
-                  backgroundImage: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
-                  WebkitTransform: 'translateZ(0)',
-                  transform: 'translateZ(0)',
-                  isolation: 'isolate',
-                  color: '#ffffff'
-                }}
-              >
-                <span className="drop-shadow-sm font-black text-white min-w-0 truncate" style={{ color: '#ffffff' }}>
-                  {Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+          {/* Card 3: Dedicated Discount Box ("ส่วนลดช่องนี้" per Untitled-2.jpg) */}
+          {(() => {
+            const cDiscount = Number(cartData?.couponDiscount || 0);
+            const aDiscount = Number(cartData?.additionalDiscount || 0);
+            const totalDisc = cDiscount + aDiscount || Number(cartData?.discount || 0);
+            const hasDiscount = totalDisc > 0;
+
+            return (
+              <div className={`rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xl shrink-0 text-center transition-all ${
+                hasDiscount 
+                  ? 'bg-rose-50/90 border border-rose-200/90 text-rose-800' 
+                  : 'bg-white border border-slate-200/80 text-slate-700'
+              }`}>
+                <span className={`text-xs sm:text-sm font-bold kanit-text block ${
+                  hasDiscount ? 'text-rose-700' : 'text-slate-500'
+                }`}>
+                  รวมส่วนลด
                 </span>
-                <span className="text-xs sm:text-base font-semibold opacity-95 font-sans text-emerald-50 shrink-0" style={{ color: '#ecfdf5' }}>
-                  บาท
-                </span>
+                <div className={`text-2xl sm:text-3xl lg:text-4xl font-black font-data tracking-tight leading-tight mt-0.5 ${
+                  hasDiscount ? 'text-rose-600' : 'text-slate-700'
+                }`}>
+                  {totalDisc > 0 
+                    ? `${totalDisc.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} บาท`
+                    : '0 บาท'}
+                </div>
+                {hasDiscount && (cDiscount > 0 || aDiscount > 0) && (
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1.5 mt-1.5 border-t border-rose-200/70 text-[11px] kanit-text">
+                    {cDiscount > 0 && (
+                      <span className="px-2 py-0.5 rounded-lg bg-white/90 border border-rose-200 text-rose-700 font-medium">
+                        คูปอง {cartData.couponCode ? `(${cartData.couponCode})` : ''}: -{cDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                      </span>
+                    )}
+                    {aDiscount > 0 && (
+                      <span className="px-2 py-0.5 rounded-lg bg-white/90 border border-rose-200 text-rose-700 font-medium">
+                        ส่วนลดเพิ่ม: -{aDiscount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} ฿
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+            );
+          })()}
+
+          {/* Card 4: Dedicated Grand Total Box ("ยอดสุทธิ" per Untitled-2.jpg) */}
+          <div 
+            className="rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 [@media(max-height:500px)]:p-2.5 shadow-xl flex flex-col items-center justify-center text-center text-white shrink-0"
+            style={{
+              backgroundColor: '#059669',
+              backgroundImage: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
+              WebkitTransform: 'translateZ(0)',
+              transform: 'translateZ(0)',
+              isolation: 'isolate',
+              color: '#ffffff'
+            }}
+          >
+            <span className="text-xs sm:text-sm font-bold text-emerald-100/90 kanit-text tracking-wider uppercase block">
+              ยอดสุทธิ
+            </span>
+            <div 
+              className="text-3xl xs:text-4xl sm:text-5xl lg:text-5xl font-black font-data tracking-tight text-white leading-none mt-1 drop-shadow-sm select-none"
+              style={{ color: '#ffffff' }}
+            >
+              {Number(cartData?.grandTotal || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
             </div>
           </div>
         </div>

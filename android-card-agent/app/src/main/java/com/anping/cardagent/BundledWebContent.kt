@@ -26,7 +26,7 @@ class BundledWebContent(context: Context, private val host: String) {
             val stream = runCatching { assets.open("web${key}") }.getOrNull() ?: return null
             val mime = info.optString("mime", "application/octet-stream")
             val encoding = if (mime.startsWith("text/") || mime.contains("javascript") || mime.contains("svg")) "UTF-8" else null
-            val version = manifest?.optString("version", "1.6.29") ?: "1.6.29"
+            val version = manifest?.optString("version", "1.6.30") ?: "1.6.30"
             val headers = mutableMapOf(
                 "Access-Control-Allow-Origin" to "*",
                 "Cache-Control" to if (key.startsWith("/assets/")) "public, max-age=31536000, immutable" else "no-store",
