@@ -1110,6 +1110,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isActivityVisible = true
+        checkForAppUpdates()
     }
 
     override fun onPause() {
