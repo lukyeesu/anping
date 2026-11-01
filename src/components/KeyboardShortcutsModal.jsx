@@ -220,7 +220,7 @@ const KeyboardShortcutsModal = ({ isOpen, onClose }) => {
                               AnpingClinic.apk
                             </h5>
                             <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md font-mono shrink-0">
-                              v1.6.32 ล่าสุด
+                              v1.6.34 ล่าสุด
                             </span>
                           </div>
                           <p className="text-xs text-sky-700 font-medium kanit-text">

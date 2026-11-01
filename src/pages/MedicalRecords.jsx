@@ -1399,7 +1399,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         }
         try {
             const html = globalGenerateRecordHtml(patient, branchesData, currentBranch);
-            printWindow.document.write(html);
+            const docTitle = `ใบเวชระเบียน - ${patient?.hn || patient?.id}`;
+            const topBar = `<div class="anping-print-action-bar" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: white; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 99999; box-shadow: 0 4px 14px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif;"><div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;"><span style="font-size: 18px;">🖨️</span><span>${docTitle}</span></div><div style="display: flex; align-items: center; gap: 8px;"><button onclick="window.print()" style="background: #0ea5e9; color: white; border: none; padding: 7px 16px; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer;">พิมพ์เอกสาร</button><button onclick="window.close()" style="background: rgba(255,255,255,0.15); color: white; border: none; padding: 7px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;">✕ ปิด</button></div></div><style>@media print { .anping-print-action-bar { display: none !important; } }</style>`;
+            printWindow.document.write(html.includes('<body>') ? html.replace('<body>', `<body>${topBar}`) : topBar + html);
             printWindow.document.close();
             setTimeout(() => {
                 if (printWindow.print) printWindow.print();
@@ -1422,7 +1424,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
         }
         try {
             const html = globalGenerateInformedConsentHtml(patient, branchesData, currentBranch);
-            printWindow.document.write(html);
+            const docTitle = `ใบยินยอมการรักษา - ${patient?.hn || patient?.id}`;
+            const topBar = `<div class="anping-print-action-bar" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: white; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 99999; box-shadow: 0 4px 14px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif;"><div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;"><span style="font-size: 18px;">🖨️</span><span>${docTitle}</span></div><div style="display: flex; align-items: center; gap: 8px;"><button onclick="window.print()" style="background: #0ea5e9; color: white; border: none; padding: 7px 16px; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer;">พิมพ์เอกสาร</button><button onclick="window.close()" style="background: rgba(255,255,255,0.15); color: white; border: none; padding: 7px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;">✕ ปิด</button></div></div><style>@media print { .anping-print-action-bar { display: none !important; } }</style>`;
+            printWindow.document.write(html.includes('<body>') ? html.replace('<body>', `<body>${topBar}`) : topBar + html);
             printWindow.document.close();
             setTimeout(() => {
                 if (printWindow.print) printWindow.print();
@@ -1792,7 +1796,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
   const handlePrintOpdRecord = (record, index) => {
     cachePrintPayload('record', formData?.hn || formData?.id, { patient: formData, branches: branchesData });
     const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-    const url = buildRecordPrintUrl(formData, visitNumber, record.datetime);
+    const url = buildRecordPrintUrl(formData, visitNumber, record.datetime, false, false, record?.id);
 
     openExternalPrint(url, () => {
         const printWindow = window.open('', '_blank');
@@ -1803,7 +1807,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
 
         try {
             const html = globalGenerateOpdHtml(formData, record, visitNumber, branchesData, currentBranch);
-            printWindow.document.write(html);
+            const docTitle = `ใบประวัติการรักษา OPD (ครั้งที่ ${visitNumber}) - ${formData?.hn || formData?.id}`;
+            const topBar = `<div class="anping-print-action-bar" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: white; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 99999; box-shadow: 0 4px 14px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif;"><div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;"><span style="font-size: 18px;">🖨️</span><span>${docTitle}</span></div><div style="display: flex; align-items: center; gap: 8px;"><button onclick="window.print()" style="background: #0ea5e9; color: white; border: none; padding: 7px 16px; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer;">พิมพ์เอกสาร</button><button onclick="window.close()" style="background: rgba(255,255,255,0.15); color: white; border: none; padding: 7px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;">✕ ปิด</button></div></div><style>@media print { .anping-print-action-bar { display: none !important; } }</style>`;
+            printWindow.document.write(html.includes('<body>') ? html.replace('<body>', `<body>${topBar}`) : topBar + html);
             printWindow.document.close();
             setTimeout(() => {
                 if (printWindow.print) printWindow.print();
@@ -1824,7 +1830,7 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
     const executePrint = (printData, rec) => {
         cachePrintPayload('record', printData?.hn || printData?.id, { patient: printData, branches: branchesData });
         const visitNumber = (formData.opdRecords ? formData.opdRecords.length : 1) - index;
-        const url = buildRecordPrintUrl(printData, visitNumber, rec.datetime, true);
+        const url = buildRecordPrintUrl(printData, visitNumber, rec.datetime, true, false, rec?.id);
 
         openExternalPrint(url, () => {
             const printWindow = window.open('', '_blank');
@@ -1834,7 +1840,9 @@ const MedicalRecords = ({ patientsData, setPatientsData, patientCoursesData = []
             }
             try {
                 const html = globalGenerateMedicalCertificateHtml(printData, rec, branchesData, currentBranch, staffData);
-                printWindow.document.write(html);
+                const docTitle = `ใบรับรองแพทย์ - ${printData?.hn || printData?.id}`;
+                const topBar = `<div class="anping-print-action-bar" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: white; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; z-index: 99999; box-shadow: 0 4px 14px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Kanit', sans-serif;"><div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;"><span style="font-size: 18px;">🖨️</span><span>${docTitle}</span></div><div style="display: flex; align-items: center; gap: 8px;"><button onclick="window.print()" style="background: #0ea5e9; color: white; border: none; padding: 7px 16px; border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer;">พิมพ์เอกสาร</button><button onclick="window.close()" style="background: rgba(255,255,255,0.15); color: white; border: none; padding: 7px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer;">✕ ปิด</button></div></div><style>@media print { .anping-print-action-bar { display: none !important; } }</style>`;
+                printWindow.document.write(html.includes('<body>') ? html.replace('<body>', `<body>${topBar}`) : topBar + html);
                 printWindow.document.close();
                 setTimeout(() => { if (printWindow.print) printWindow.print(); }, 500);
             } catch (e) {

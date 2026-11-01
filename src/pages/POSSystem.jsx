@@ -3666,7 +3666,7 @@ const POSSystem = ({
 
           {/* --- แก้ไข: Middle Area (รวมรายการบิล และ หน้าต่างตั้งค่าส่วนลดแบบ Overlay) --- */}
           {/* แก้ไข 2: ถอด overflow-hidden ออก และเพิ่ม z-20 เพื่อให้แท็บยืดทะลุไปบังคอร์สคงเหลือได้แบบอิสระ */}
-          <div className="flex-1 min-h-0 relative flex flex-col bg-slate-50/70 z-20">
+          <div className="flex-1 min-h-0 relative flex flex-col bg-slate-100/70 z-20">
             
             {/* 1. Cart Items List (อยู่ด้านหลังเสมอ) */}
             {/* Spacer div ดันด้านล่าง 100px ป้องกันรายการสุดท้ายโดนบัง */}
@@ -3680,21 +3680,21 @@ const POSSystem = ({
                         key={idx} 
                         className={`flex flex-col gap-3 relative group p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border-2 transition-all shadow-xs hover:shadow-md ${
                           item.product.isNote
-                            ? 'bg-gradient-to-br from-amber-50/80 via-white to-amber-50/30 border-amber-200 hover:border-amber-300'
+                            ? 'bg-gradient-to-r from-amber-50/60 via-white to-white border-amber-200/90 border-l-[6px] border-l-amber-500 hover:border-amber-400'
                             : item.product.isRedeem
-                              ? 'bg-gradient-to-br from-indigo-50/80 via-white to-indigo-50/30 border-indigo-200 hover:border-indigo-300'
-                              : 'bg-gradient-to-br from-sky-50/80 via-sky-50/40 to-white border-sky-200/90 hover:border-sky-400'
+                              ? 'bg-gradient-to-r from-indigo-50/60 via-white to-white border-indigo-200/90 border-l-[6px] border-l-indigo-600 hover:border-indigo-400'
+                              : 'bg-gradient-to-r from-sky-50/60 via-white to-white border-sky-200/90 border-l-[6px] border-l-sky-500 hover:border-sky-400'
                         }`}
                       >
                          
                          {/* ส่วนบน: ไอคอน + รายละเอียด + ปุ่มลบ */}
                          <div className="flex gap-3 sm:gap-4 items-start">
-                             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+                             <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
                                item.product.isNote 
-                                 ? 'bg-amber-500 text-white shadow-amber-500/20' 
+                                 ? 'bg-gradient-to-tr from-amber-500 to-amber-600 text-white shadow-amber-500/25' 
                                  : item.product.isRedeem 
-                                   ? 'bg-indigo-500 text-white shadow-indigo-500/20' 
-                                   : 'bg-sky-500 text-white shadow-sky-500/25'
+                                   ? 'bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white shadow-indigo-500/25' 
+                                   : 'bg-gradient-to-tr from-sky-500 to-sky-600 text-white shadow-sky-500/30'
                              }`}>
                                 <CartItemIcon size={24} className="sm:w-7 sm:h-7 stroke-[1.8]" />
                              </div>
@@ -3837,7 +3837,7 @@ const POSSystem = ({
                                 {(Number(item.quantity) || 0) > 1 && !item.product.isRedeem && (
                                     <span className="text-[10px] text-slate-400 font-data mb-0.5 tracking-tight">{formatCurrency(item.product.price)} / หน่วย</span>
                                 )}
-                                <span className={`font-black text-lg sm:text-xl font-data leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-600' : 'text-sky-600'}`}>
+                                <span className={`font-black text-xl sm:text-2xl font-mono leading-none tracking-tight ${item.product.isRedeem ? 'text-indigo-600' : 'text-sky-600'}`}>
                                   {item.product.isRedeem ? '0.00' : formatCurrency(item.product.price * (Number(item.quantity) || 0))}
                                 </span>
                               </div>

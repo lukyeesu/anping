@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 // --- สไตล์พื้นฐาน (Design Tokens) ---
-import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, formatTreatmentRecord, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, parseRecordKey, buildReceiptPrintUrl, openExternalPrint, getSortedOpdRecords, cachePrintPayload, getCachedPrintPayload } from './global/helpers';
+import { rAFThrottle, formatDate, formatDateTime, formatStatNumber, formatTreatmentRecord, getDynamicTextSize, parsePatientName, getPatientFullName, generateNextHN, getAgeString, getPatientId, useModal, useSwipeDown, getPatientLastVisitStr, formatCurPrint, bahtTextPrint, globalGenerateInformedConsentHtml, globalGenerateRecordHtml, globalGenerateOpdHtml, globalGenerateMedicalCertificateHtml, globalGenerateReceiptHtml, getEffectiveApptStatus, getEffectiveApptDatetimeStr, getEffectiveApptIsoDate, parseThaiDateToISO, parseAnyDate, isSameDay, formatFinTime, formatFinCurrency, getFinDynamicTextClass, parseRecordKey, getRecordDateCode, buildReceiptPrintUrl, openExternalPrint, getSortedOpdRecords, cachePrintPayload, getCachedPrintPayload } from './global/helpers';
 
 // ... other imports if any
 import ProfileManager from './pages/ProfileManager';
@@ -1721,11 +1721,15 @@ export default function App() {
             visitNumber = 1;
           }
 
+          targetRecord = formatTreatmentRecord(targetRecord) || targetRecord;
           if (!targetRecord.cc) {
             targetRecord.cc = targetRecord.chief_complaint || targetRecord.chiefComplaint || patient.chief_complaint || patient.chiefComplaint || '';
           }
-          if (!targetRecord.tx) {
+          if (!targetRecord.tx || (Array.isArray(targetRecord.tx) && targetRecord.tx.length === 0)) {
             targetRecord.tx = targetRecord.prescription || targetRecord.treatment_detail || [];
+          }
+          if (!targetRecord.doctor) {
+            targetRecord.doctor = targetRecord.doctor_name || targetRecord.doctorName || patient.doctor || patient.responsibleDoctor || '';
           }
 
           const html = globalGenerateOpdHtml(patient, targetRecord, visitNumber, safeBranches, currentBranch);
@@ -1764,8 +1768,27 @@ export default function App() {
         window.__autoPrintRecordDone = true;
 
         const executePrintRecordRoute = async () => {
-          const sessionToken = localStorage.getItem('clinic_session_token') || '';
+          const urlAuthToken = urlParams.get('auth_token');
+          const sessionToken = urlAuthToken || localStorage.getItem('clinic_session_token') || '';
+          if (urlAuthToken && typeof window !== 'undefined' && window.localStorage) {
+            try {
+              localStorage.setItem('clinic_session_token', urlAuthToken);
+              const authUid = urlParams.get('auth_uid');
+              const authName = urlParams.get('auth_name');
+              const authRole = urlParams.get('auth_role');
+              if (authUid || authName || authRole) {
+                localStorage.setItem('clinic_currentUser', JSON.stringify({
+                  id: authUid || '',
+                  name: authName || '',
+                  username: authName || '',
+                  role: authRole || 'staff'
+                }));
+              }
+            } catch (_) {}
+          }
+
           const targetHn = recParsed.hn.trim().toLowerCase();
+          const recIdParam = urlParams.get('rec_id') || urlParams.get('record_id') || '';
 
           let patient = (Array.isArray(patientsData) ? patientsData : []).find(p => 
             String(p.hn || p.id || '').trim().toLowerCase() === targetHn
@@ -1780,7 +1803,7 @@ export default function App() {
           }
 
           // 1. ถ้ายังไม่มีใน memory ให้ลองดึงผ่าน /api/db (Admin Service Role ทะลุ RLS)
-          if (!patient) {
+          if (!patient || !Array.isArray(patient.opdRecords) || patient.opdRecords.length === 0) {
             try {
               const apiRes = await fetch('/api/db', {
                 method: 'POST',
@@ -1790,7 +1813,7 @@ export default function App() {
                 },
                 body: JSON.stringify({
                   action: 'GET_PRINT_PAYLOAD',
-                  payload: { printType: 'opd', id: targetHn },
+                  payload: { printType: 'opd', id: targetHn, recordId: recIdParam },
                   token: sessionToken
                 })
               });
@@ -1802,15 +1825,12 @@ export default function App() {
               if (apiRes.ok) {
                 const apiJson = await apiRes.json();
                 if (apiJson && apiJson.status === 'success' && apiJson.patient) {
+                  const rawTrts = Array.isArray(apiJson.treatments) && apiJson.treatments.length > 0
+                    ? apiJson.treatments 
+                    : (Array.isArray(apiJson.patient.opdRecords) ? apiJson.patient.opdRecords : []);
                   patient = {
                     ...apiJson.patient,
-                    opdRecords: apiJson.patient.opdRecords || (Array.isArray(apiJson.treatments) ? apiJson.treatments.map(t => ({
-                      ...t,
-                      datetime: t.treatment_date || t.treatmentDate || t.date || (t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH') : '-'),
-                      doctor: t.doctor_name || t.doctorName || t.doctor || '-',
-                      cc: t.chief_complaint || t.chiefComplaint || '',
-                      tx: t.prescription || t.treatment_detail || []
-                    })) : [])
+                    opdRecords: rawTrts.map(formatTreatmentRecord).filter(Boolean)
                   };
                   if (apiJson.branches && apiJson.branches.length > 0) safeBranches = apiJson.branches;
                 }
@@ -1821,34 +1841,33 @@ export default function App() {
           }
 
           // 2. ถ้ายังไม่ได้ ให้ fallback ไปที่ Supabase
-          if (!patient && supabase) {
+          if ((!patient || !Array.isArray(patient.opdRecords) || patient.opdRecords.length === 0) && supabase) {
             try {
               const { data: pRow } = await supabase
                 .from('patients')
                 .select('*')
-                .or(`id.ilike.%${targetHn}%,hn.ilike.%${targetHn}%`)
+                .or(`id.ilike.%${targetHn}%,name.ilike.%${targetHn}%`)
                 .maybeSingle();
 
               if (pRow) {
                 const targetPatientId = pRow.id || targetHn;
                 const targetPatientHn = pRow.hn || pRow.id || targetHn;
 
-                const { data: txRows } = await supabase
-                  .from('treatments')
-                  .select('*')
-                  .or(`patient_id.ilike.%${targetPatientId}%,hn.ilike.%${targetPatientId}%,patient_id.ilike.%${targetPatientHn}%,hn.ilike.%${targetPatientHn}%`)
-                  .order('created_at', { ascending: false });
+                const idFilters = Array.from(new Set([targetPatientId, targetPatientHn, targetHn])).filter(Boolean);
+                const orClause = idFilters.map(cid => `patient_id.ilike.%${cid}%`).join(',');
+                let txQuery = supabase.from('treatments').select('*');
+                if (recIdParam) {
+                  txQuery = txQuery.or(`${orClause},id.eq.${recIdParam}`);
+                } else {
+                  txQuery = txQuery.or(orClause);
+                }
+
+                const { data: txRows } = await txQuery.order('created_at', { ascending: false });
 
                 patient = {
                   ...pRow,
                   hn: pRow.hn || pRow.id,
-                  opdRecords: (txRows || []).map(t => ({
-                    ...t,
-                    datetime: t.treatment_date || t.treatmentDate || t.date || (t.created_at ? new Date(t.created_at).toLocaleDateString('th-TH') : '-'),
-                    doctor: t.doctor_name || t.doctorName || t.doctor || '-',
-                    cc: t.chief_complaint || t.chiefComplaint || pRow.chief_complaint || '',
-                    tx: t.prescription || t.treatment_detail || []
-                  }))
+                  opdRecords: (txRows || []).map(formatTreatmentRecord).filter(Boolean)
                 };
               }
             } catch (e) {
@@ -1894,10 +1913,38 @@ export default function App() {
               const visitNum = parseInt(recParsed.visitCode, 10) || 1;
               const opds = Array.isArray(patient.opdRecords) ? patient.opdRecords : [];
               const sortedOpds = getSortedOpdRecords(opds);
-              const targetIdx = sortedOpds.length - visitNum;
-              const targetRec = (targetIdx >= 0 && targetIdx < sortedOpds.length) 
-                ? sortedOpds[targetIdx] 
-                : (sortedOpds[0] || { datetime: new Date().toLocaleDateString('th-TH'), cc: '', tx: [] });
+
+              let targetRec = null;
+              if (recIdParam) {
+                targetRec = sortedOpds.find(o => String(o?.id || '').trim() === recIdParam);
+              }
+              if (!targetRec && recParsed.dateCode && sortedOpds.length > 0) {
+                const dateMatches = sortedOpds.filter(opd => {
+                  const dCode = getRecordDateCode(opd.datetime || opd.date || opd.created_at);
+                  return dCode === recParsed.dateCode;
+                });
+                if (dateMatches.length === 1) {
+                  targetRec = dateMatches[0];
+                } else if (dateMatches.length > 1) {
+                  const subIdx = sortedOpds.length - visitNum;
+                  targetRec = (subIdx >= 0 && subIdx < sortedOpds.length) ? sortedOpds[subIdx] : dateMatches[0];
+                }
+              }
+              if (!targetRec) {
+                const targetIdx = sortedOpds.length - visitNum;
+                targetRec = (targetIdx >= 0 && targetIdx < sortedOpds.length) 
+                  ? sortedOpds[targetIdx] 
+                  : (sortedOpds[0] || null);
+              }
+              if (!targetRec) {
+                targetRec = {
+                  datetime: new Date().toLocaleDateString('th-TH'),
+                  doctor: patient.doctor || patient.responsibleDoctor || '',
+                  cc: patient.chief_complaint || patient.chiefComplaint || '',
+                  tx: []
+                };
+              }
+              targetRec = formatTreatmentRecord(targetRec) || targetRec;
 
               if (isCert) {
                 docTitle = `ใบรับรองแพทย์ - ${patient.hn || patient.id}`;
@@ -2872,7 +2919,7 @@ export default function App() {
                 };
                 setPatientsData(curr => [updatedP, ...curr.filter(p => String(p.id || p.hn).trim().toLowerCase() !== patientId.toLowerCase())]);
               } else if (supabase) {
-                supabase.from('patients').select('*').or(`id.eq.${patientId},hn.eq.${patientId}`).then(({ data: pData }) => {
+                supabase.from('patients').select('*').eq('id', patientId).then(({ data: pData }) => {
                   if (pData && pData[0]) {
                     const jsP = rowToJS(pData[0]);
                     jsP.opdRecords = [formattedTrt];

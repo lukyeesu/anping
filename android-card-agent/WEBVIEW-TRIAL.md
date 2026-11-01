@@ -1,8 +1,27 @@
-# WebView รุ่น 1.6.32
+# WebView รุ่น 1.6.34
 
-Release 1.6.32 วันที่ 31/10/2026: ปรับปรุงหน้าจอลูกค้า (Customer Display), Sidebar และการ์ดสินค้าในตะกร้า POS
-SHA-256: `F70DA3F3190E8702F8643560A32A0A879561154244EB8B7308D35C5A46049D96`
-ไฟล์ติดตั้ง: `../public/AnpingClinic.apk` — package `com.anping.clinic`, versionCode `55`
+Release 1.6.34 วันที่ 01/11/2026: ปรับปรุงหน้าพิมพ์เอกสาร ลบปุ่มพิมพ์ที่ซ้อนทับกัน
+SHA-256: `E24CA04CB3FC2A1CEBDF278B6FA5D95E297C8CE5F727443EB65FF00CA7256AC3`
+ไฟล์ติดตั้ง: `../public/AnpingClinic.apk` — package `com.anping.clinic`, versionCode `57`
+
+## 1.6.34: ปรับปรุงหน้าพิมพ์เอกสาร ลบปุ่มซ้อนทับ และปรับโครงสร้าง Action Bar
+- **แก้ไขปุ่มพิมพ์เอกสารซ้อนทับกัน (Double Print Buttons Overlap)**:
+  - แก้ไขปัญหาปุ่มพิมพ์เอกสารและปุ่มปิดแบบลอยตัว (Floating `.no-print-bar`) แสดงผลซ้อนทับกับแถบ Action Bar ด้านบนในหน้าพิมพ์เอกสาร
+  - นำปุ่มซ้อนทับด้านบนออก คงเหลือเฉพาะแถบ Action Bar สีดำด้านบนสุดที่สมบูรณ์แบบ มีชื่อเอกสาร ปุ่มสั่งพิมพ์ และปุ่มปิด/ย้อนกลับอย่างสวยงาม
+  - ซิงค์โครงสร้าง Action Bar ให้เหมือนกันทั้งการพิมพ์ผ่านเบราว์เซอร์ภายนอก และการพิมพ์ผ่านหน้าต่างป็อปอัปของระบบ
+
+## 1.6.33: แก้ไขระบบพิมพ์เอกสารและยกระดับคอนทราสต์การ์ดตะกร้า POS
+- **แก้ไขระบบพิมพ์เอกสาร (OPD Card / เวชระเบียน / ใบรับรองแพทย์)**:
+  - แก้ไขปัญหาชื่อแพทย์ อาการสำคัญ (CC) และการรักษาที่ให้ (Tx) ไม่ขึ้นเมื่อสั่งพิมพ์จากเบราว์เซอร์ภายนอก/WebView
+  - แก้ไขข้อผิดพลาดคิวรี PostgreSQL (42703 `column treatments.hn does not exist` และ `column patients.hn does not exist`) โดยปรับการค้นหาใช้ `patient_id` และ `id` ตามโครงสร้างจริงของ Supabase ทำให้ดึงประวัติการรักษาได้อย่างสมบูรณ์แบบ 100%
+  - เพิ่มการส่งต่อ `auth_token` และพารามิเตอร์ `rec_id` ใน URL การพิมพ์ ทำให้ค้นพบรายการรักษาที่เลือกพิมพ์ได้ถูกต้องตรงจุด ไม่เกิดปัญหาแสดงค่าว่าง
+  - เพิ่มระบบ Normalization และ Fallback รองรับชื่อแพทย์ อาการ และการรักษาจากทุกรูปแบบข้อมูล (`doctor`, `doctor_name`, `staffName`, `cc`, `chief_complaint`, `prescription`, `tx`, `treatment_detail`)
+- **ปรับปรุงการ์ดสินค้าในตะกร้าแคชเชียร์ POS (Cart Item Cards)**:
+  - เพิ่มแถบสี Accent ด้านซ้ายหนา 6px (`border-l-[6px] border-l-sky-500` / `border-l-indigo-600` / `border-l-amber-500`) ให้การ์ดแยกชั้นตัดกับพื้นหลังชัดเจน
+  - ปรับพื้นหลังแคนวาสตะกร้าเป็น `bg-slate-100/70` เพิ่มคอนทราสต์ระดับสูง
+  - ไอคอน Solid Gradient สดใสพร้อมเงา (`bg-gradient-to-tr from-sky-500 to-sky-600 shadow-sky-500/30`)
+  - ขยายตัวเลขราคาให้เด่นและคมชัดเป็นพิเศษด้วย `font-mono text-xl sm:text-2xl font-black text-sky-600`
+  - ทำการ Bundle Web Assets ใหม่ลงในตัว Release APK โดยตรง เพื่อให้หน้าตาบน Android WebView อัปเดตตรงตาม Webapp ทันที
 
 ## 1.6.32: ปรับปรุง Customer Display, Sidebar, การ์ดตะกร้า POS และระบบแจ้งเตือนอัปเดตอัตโนมัติ
 - **ปรับปรุงการ์ดสินค้าในตะกร้าแคชเชียร์ POS (Cart Item Cards)**:

@@ -260,7 +260,7 @@ export default async function handler(req, res) {
 
     switch (action) {
       case 'GET_PRINT_PAYLOAD': {
-        const { printType, id } = payload || {};
+        const { printType, id, recordId } = payload || {};
         if (!id) return res.status(400).json({ status: 'error', message: 'ID required' });
 
         // ตรวจสอบความปลอดภัย: บังคับให้ต้องล็อกอินก่อนเสมอ (ป้องกันคนภายนอกเดา URL พารามิเตอร์ ตามกฎหมาย PDPA)
@@ -313,7 +313,7 @@ export default async function handler(req, res) {
               const { data: pRow } = await supabaseAdmin
                 .from('patients')
                 .select('*')
-                .or(`id.ilike.%${targetHn}%,hn.ilike.%${targetHn}%`)
+                .or(`id.ilike.%${targetHn}%,name.ilike.%${targetHn}%`)
                 .maybeSingle();
               if (pRow) patient = pRow;
             }
@@ -332,7 +332,7 @@ export default async function handler(req, res) {
           const { data: pRow } = await supabaseAdmin
             .from('patients')
             .select('*')
-            .or(`id.ilike.%${cleanId}%,hn.ilike.%${cleanId}%,name.ilike.%${cleanId}%`)
+            .or(`id.ilike.%${cleanId}%,name.ilike.%${cleanId}%`)
             .maybeSingle();
 
           let treatments = [];
@@ -348,22 +348,40 @@ export default async function handler(req, res) {
             const targetPatientId = pRow.id || cleanId;
             const targetPatientHn = pRow.hn || pRow.id || cleanId;
 
+            // ค้นหารายการรักษาที่เจาะจงด้วย recordId (ถ้าส่งมา)
+            let specificTrt = null;
+            if (recordId) {
+              const { data: recRow } = await supabaseAdmin
+                .from('treatments')
+                .select('*')
+                .eq('id', recordId)
+                .maybeSingle();
+              if (recRow) specificTrt = recRow;
+            }
+
+            // ค้นหารายการรักษาทั้งหมดของคนไข้ (ใช้เฉพาะ patient_id เพราะไม่มีคอลัมน์ hn ใน treatments)
+            const idFilters = Array.from(new Set([targetPatientId, targetPatientHn, cleanId])).filter(Boolean);
+            const orClause = idFilters.map(cid => `patient_id.ilike.%${cid}%`).join(',');
+
             const [trtRes, bRes] = await Promise.all([
               supabaseAdmin
                 .from('treatments')
                 .select('*')
-                .or(`patient_id.ilike.%${targetPatientId}%,hn.ilike.%${targetPatientId}%,patient_id.ilike.%${targetPatientHn}%,hn.ilike.%${targetPatientHn}%`)
+                .or(orClause)
                 .order('created_at', { ascending: false }),
               supabaseAdmin.from('branches').select('*')
             ]);
             treatments = trtRes.data || [];
+            if (specificTrt && !treatments.some(t => t.id === specificTrt.id)) {
+              treatments.unshift(specificTrt);
+            }
             branches = bRes.data || [];
           }
 
           return res.status(200).json({
             status: 'success',
-            patient: pRow,
-            treatments,
+            patient: pRow ? rowToJS(pRow) : null,
+            treatments: (treatments || []).map(rowToJS),
             branches
           });
         }
