@@ -2175,72 +2175,59 @@ async function logFailedLogin(usernameInput, reason, staffObj = null) {
 
 
     case 'UPLOAD_FILE': {
-      // 1. ถ้ามีการตั้งค่า GOOGLE_SCRIPT_URL ที่เป็น Google Script ของจริง ให้ใช้ Google Drive เป็นหลัก
-      if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.includes('script.google.com')) {
-        try {
-          const rawToken = localStorage.getItem('clinic_session_token') || 'recovery-token';
-          const gasToken = (rawToken.startsWith('ey') || rawToken.startsWith('supa') || rawToken.startsWith('sec')) ? 'recovery-token' : rawToken;
+      // ผู้ใช้กำหนดให้บันทึกไฟล์เฉพาะบน Google Drive
+      const targetScriptUrl = (payload?.scriptUrl || 
+                              (typeof localStorage !== 'undefined' && localStorage.getItem('clinic_google_script_url')) || 
+                              GOOGLE_SCRIPT_URL || '').trim();
 
-          const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'UPLOAD_FILE', sheetName, payload, token: gasToken })
-          });
-          const responseText = await response.text();
-          if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE html>')) {
-            throw new Error('สิทธิ์การบันทึกภาพลง Google Drive ไม่ถูกต้อง');
-          }
-          const result = JSON.parse(responseText);
-          if (result.status === 'error') throw new Error(result.message);
-          return result;
-        } catch (err) {
-          console.error("Google Drive upload failed:", err);
-          throw new Error('การอัปโหลดไป Google Drive ล้มเหลว: ' + err.message);
-        }
+      if (!targetScriptUrl || !targetScriptUrl.includes('script.google.com')) {
+        throw new Error('ยังไม่ได้กำหนด Web App URL สำหรับ Google Drive ในหน้าตั้งค่าระบบ หรือ .env.local');
       }
 
-      // 2. ถ้าไม่ได้ตั้งค่า Google Script ไว้ ให้ใช้ Supabase Storage แทน
       try {
-        const { fileName, mimeType, data: base64Data } = payload;
-        if (!fileName || !base64Data) throw new Error('ข้อมูลไฟล์ไม่ครบถ้วน');
+        const rawToken = localStorage.getItem('clinic_session_token') || 'recovery-token';
+        const gasToken = (rawToken.startsWith('ey') || rawToken.startsWith('supa') || rawToken.startsWith('sec')) ? 'recovery-token' : rawToken;
 
-        const byteCharacters = atob(base64Data);
-        const byteArrays = [];
-        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-          const slice = byteCharacters.slice(offset, offset + 512);
-          const byteNumbers = new Array(slice.length);
-          for (let i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
-          }
-          byteArrays.push(new Uint8Array(byteNumbers));
-        }
-        const blob = new Blob(byteArrays, { type: mimeType || 'image/png' });
+        const gasPayload = { ...payload };
+        delete gasPayload.file; // ป้องกัน raw File object ส่งผ่าน JSON
+        delete gasPayload.scriptUrl;
 
-        let bucketName = 'uploads';
-        try {
-          const { data: buckets } = await supabase.storage.listBuckets();
-          if (buckets && buckets.length > 0) {
-             const preferred = buckets.find(b => b.name === 'uploads' || b.name === 'images' || b.name === 'public');
-             bucketName = preferred ? preferred.name : buckets[0].name;
-          }
-        } catch (e) {
-          console.warn('Failed to list buckets', e);
+        if (!gasPayload.data) {
+          throw new Error('ข้อมูลไฟล์ไม่ครบถ้วน (ไม่พบข้อมูล base64)');
         }
 
-        const safeFileName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const filePath = `clinic_uploads/${Date.now()}_${safeFileName}`;
-
-        const { data, error } = await supabase.storage.from(bucketName).upload(filePath, blob, {
-          contentType: mimeType || 'image/png',
-          upsert: true
+        const response = await fetch(targetScriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'UPLOAD_FILE', sheetName, payload: gasPayload, token: gasToken })
         });
 
-        if (error) throw new Error(error.message);
+        const responseText = await response.text();
 
-        const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-        return { status: 'success', fileUrl: publicUrlData.publicUrl };
+        // ตรวจสอบกรณี Google Apps Script ส่ง HTML กลับมา (เช่น หน้า Login "ต้องมีสิทธิ์เข้าถึง")
+        if (responseText.trim().startsWith('<') || responseText.includes('<!DOCTYPE html>')) {
+          throw new Error('สิทธิ์ Google Apps Script ไม่ถูกต้อง (Google ปฏิเสธการเข้าถึง): กรุณาไปที่ Google Apps Script > Deploy (การทำให้ใช้งานได้) > แก้ไขให้ "Who has access (ผู้มีสิทธิ์เข้าถึง)" เป็น "Anyone (ทุกคน)" หรือคัดลอก Web App URL ตัวใหม่มาใส่ในหน้าตั้งค่า');
+        }
+
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (jsonErr) {
+          throw new Error('ไม่สามารถแปลงข้อมูลตอบกลับจาก Google Apps Script เป็น JSON ได้: ' + responseText.substring(0, 100));
+        }
+
+        if (result.status === 'error') {
+          throw new Error(result.message || 'Google Drive ปฏิเสธการบันทึกไฟล์');
+        }
+
+        return result;
       } catch (err) {
-        throw new Error(`อัปโหลดไฟล์ไป Supabase Storage ล้มเหลว: ${err.message}`);
+        console.error("Google Drive upload failed:", err);
+        const errMsg = String(err?.message || err);
+        if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError')) {
+          throw new Error('การอัปโหลดไป Google Drive ล้มเหลว (Failed to fetch): Google Apps Script ปฏิเสธการเชื่อมต่อ (HTTP 403) เนื่องจากยังไม่ได้ตั้งค่า Deploy สิทธิ์ "Who has access" เป็น "Anyone (ทุกคน)" หรือ URL ของ Web App ในระบบไม่ตรงกับเวอร์ชันล่าสุดที่ Deploy');
+        }
+        throw new Error('การอัปโหลดไป Google Drive ล้มเหลว: ' + errMsg);
       }
     }
 

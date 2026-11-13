@@ -98,7 +98,13 @@ const SettingsManager = ({
   const [isSyncingQuota, setIsSyncingQuota] = useState(false);
   const [testingDiscordId, setTestingDiscordId] = useState(null);
   const [showBotTokens, setShowBotTokens] = useState({});
-  const [localGdriveTokens, setLocalGdriveTokens] = useState({ generalDriveFolderId: '', pdpaDriveFolderId: '' });
+  const [localGdriveTokens, setLocalGdriveTokens] = useState(() => ({
+    generalDriveFolderId: '',
+    pdpaDriveFolderId: '',
+    scriptUrl: typeof localStorage !== 'undefined' ? (localStorage.getItem('clinic_google_script_url') || '') : ''
+  }));
+  const [isTestingGas, setIsTestingGas] = useState(false);
+  const [gasTestResult, setGasTestResult] = useState(null);
 
   // POS QR Code Accounts State
   const [localPosQrSettings, setLocalPosQrSettings] = useState(() => {
@@ -230,7 +236,13 @@ const SettingsManager = ({
   }, [integrationTokens, isIntegrationsDirty]);
 
   useEffect(() => {
-    if (gdriveTokens) setLocalGdriveTokens({ ...gdriveTokens });
+    if (gdriveTokens) {
+      setLocalGdriveTokens(prev => ({
+        ...prev,
+        ...gdriveTokens,
+        scriptUrl: gdriveTokens.scriptUrl || prev.scriptUrl || (typeof localStorage !== 'undefined' ? localStorage.getItem('clinic_google_script_url') || '' : '')
+      }));
+    }
   }, [gdriveTokens]);
 
   useEffect(() => {
@@ -1138,6 +1150,9 @@ const SettingsManager = ({
   const saveGdriveTokens = async () => {
     setIsSaving(true);
     try {
+      if (localGdriveTokens.scriptUrl) {
+        localStorage.setItem('clinic_google_script_url', localGdriveTokens.scriptUrl.trim());
+      }
       if (supabase) {
         const { error: sbErr } = await supabase
           .from('settings')
@@ -1160,6 +1175,42 @@ const SettingsManager = ({
       showToast(`บันทึกไม่สำเร็จ: ${e.message}`, 'danger');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTestGasConnection = async () => {
+    const urlToTest = (localGdriveTokens.scriptUrl || import.meta.env.VITE_GOOGLE_SCRIPT_URL || '').trim();
+    if (!urlToTest) {
+      showToast('กรุณาระบุ Web App URL ของ Google Apps Script ก่อนทดสอบ', 'warning');
+      return;
+    }
+    setIsTestingGas(true);
+    setGasTestResult(null);
+    try {
+      const response = await fetch(urlToTest, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'PING', token: 'test-token' })
+      });
+      const text = await response.text();
+      if (text.includes('<!DOCTYPE html>') || text.includes('ต้องมีสิทธิ์เข้าถึง') || text.includes('ServiceLogin')) {
+        setGasTestResult({
+          ok: false,
+          message: 'Google ปฏิเสธการเข้าถึง (403 Forbidden): สคริปต์นี้ยังติดสิทธิ์เข้าถึง กรุณาตรวจสอบว่าใน Apps Script ได้เลือก "Who has access (ผู้มีสิทธิ์เข้าถึง)" เป็น "Anyone (ทุกคน)" หรือยัง'
+        });
+      } else {
+        setGasTestResult({
+          ok: true,
+          message: 'เชื่อมต่อ Google Apps Script สำเร็จ! พร้อมอัปโหลดไฟล์ลง Google Drive'
+        });
+      }
+    } catch (err) {
+      setGasTestResult({
+        ok: false,
+        message: `การเชื่อมต่อล้มเหลว (${err.message}): เว็บบราวเซอร์ถูกบล็อกไม่ให้เชื่อมต่อ (มักเกิดจาก Deploy ยังไม่ได้ตั้งค่า Who has access เป็น Anyone)`
+      });
+    } finally {
+      setIsTestingGas(false);
     }
   };
 
@@ -2891,6 +2942,42 @@ const SettingsManager = ({
                 </div>
 
                 <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">
+                      Google Apps Script Web App URL (สำหรับอัปโหลดไฟล์ลง Drive)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={localGdriveTokens.scriptUrl ?? ''}
+                        onChange={(e) => {
+                          setLocalGdriveTokens({ ...localGdriveTokens, scriptUrl: e.target.value });
+                          setGasTestResult(null);
+                        }}
+                        placeholder="ตัวอย่าง: https://script.google.com/macros/s/.../exec"
+                        className="flex-1 bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-sky-500 focus:border-sky-500 block p-3 kanit-text outline-none transition-all font-mono text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleTestGasConnection}
+                        disabled={isTestingGas}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold kanit-text text-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
+                      >
+                        {isTestingGas ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                        <span>ทดสอบเชื่อมต่อ</span>
+                      </button>
+                    </div>
+                    {gasTestResult && (
+                      <div className={`mt-2 p-3 rounded-xl text-xs kanit-text flex items-start gap-2 ${gasTestResult.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                        <span>{gasTestResult.ok ? '✅' : '⚠️'}</span>
+                        <div className="flex-1">{gasTestResult.message}</div>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-slate-400 mt-1 kanit-text">
+                      * ต้องตั้งค่าสิทธิ์ใน Google Apps Script ให้ "Who has access (ผู้มีสิทธิ์เข้าถึง)" เป็น "Anyone (ทุกคน)" เพื่อให้สามารถอัปโหลดได้โดยไม่ต้องล็อกอิน
+                    </p>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2 kanit-text">Google Drive Folder ID (ทั่วไป)</label>
                     <input

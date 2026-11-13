@@ -604,11 +604,11 @@ export default function DisplayAdsManager({
 
     const folderId = gdriveTokens?.generalDriveFolderId;
     if (!folderId) {
-      showToast?.('ยังไม่ได้ระบุ Google Drive Folder ID (ทั่วไป) ในหน้าตั้งค่าระบบ', 'warning');
+      showToast?.('คำเตือน: ยังไม่ได้ระบุ Google Drive Folder ID ในหน้าตั้งค่าระบบ', 'warning');
     }
 
     setIsUploading(true);
-    setUploadProgressText(`กำลังเตรียมไฟล์ ${file.name}...`);
+    setUploadProgressText(isVideo ? 'กำลังเตรียมไฟล์วิดีโอ...' : 'กำลังเตรียมไฟล์รูปภาพ...');
 
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -619,7 +619,7 @@ export default function DisplayAdsManager({
         return;
       }
 
-      setUploadProgressText('กำลังอัปโหลดไปยัง Google Drive (Zero-Egress)...');
+      setUploadProgressText(isVideo ? 'กำลังอัปโหลดวิดีโอไปยัง Google Drive...' : 'กำลังอัปโหลดรูปภาพไปยัง Google Drive...');
 
       try {
         if (typeof callAppScript === 'function') {
@@ -630,7 +630,8 @@ export default function DisplayAdsManager({
             fileName,
             mimeType: file.type,
             data: base64Data,
-            folderId: folderId || undefined
+            folderId: folderId || undefined,
+            scriptUrl: gdriveTokens?.scriptUrl || undefined
           });
 
           if (response?.status === 'success' && response.fileUrl) {
